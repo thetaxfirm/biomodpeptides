@@ -1,5 +1,6 @@
+import inventorySql from './inventory-statements.json';
 import { quote, CartLine } from './commerce';
-import { one, run, uid, timestamp, runtime, parse } from './runtime';
+import { one, run, uid, timestamp, runtime, parse, database } from './runtime';
 import { createChaseAdapter, chaseOrderReference } from './chase-payments';
 import { z } from 'zod';
 export const addressSchema = z.object({ name: z.string().trim().min(2).max(100), line1: z.string().trim().min(3).max(150), line2: z.string().trim().max(150).default(''), city: z.string().trim().min(2).max(100), state: z.string().regex(/^[A-Z]{2}$/), zip: z.string().regex(/^\d{5}(-\d{4})?$/), country: z.literal('US'), phone: z.string().trim().min(7).max(30) });
@@ -71,7 +72,13 @@ export async function checkout(owner: string, lines: CartLine[], body: Record<st
     }>('SELECT data FROM campaigns WHERE id=?', campaignId))?.data, {}) : null;
     const saved = { ...q, fingerprint, environment: runtime().CHASE_ENVIRONMENT, campaignId, campaignLimit: campaign?.maxPerCustomer || null, unitCount: lines.reduce((s, l) => s + l.quantity, 0) };
     const id = uid();
-    await run('INSERT INTO orders(id,owner,request_key,status,data,total,checkout_ref,created,updated) VALUES(?,?,?,?,?,?,?,?,?)', id, owner, body.requestKey, 'creating', JSON.stringify(saved), q.total, chaseOrderReference(id), timestamp(), timestamp());
+    const db=database();
+    try { await db.batch([
+      db.prepare(inventorySql.insertOrder).bind(id,owner,body.requestKey,'creating',JSON.stringify(saved),q.total,chaseOrderReference(id),timestamp(),timestamp()),
+      db.prepare(inventorySql.reserve).bind(id),
+      db.prepare(inventorySql.checkReservation).bind(id,id,id),
+      db.prepare(inventorySql.clearGuard).bind(id)
+    ]); } catch { throw new Error('Inventory, presale limits, or an existing checkout prevented this order. Refresh your cart and check your orders.'); }
     try {
         const result = await adapter.createCheckout({ id, totalCents: q.total, currency: 'USD' }, runtime().CHASE_RETURN_URL!);
         await run('UPDATE orders SET status=?,checkout_ref=?,checkout_url=?,updated=? WHERE id=?', 'awaiting_payment', result.providerReference, result.url, timestamp(), id);
@@ -96,4 +103,8 @@ export async function reconcile(owner: string, id: string) { const row = await o
     await run('UPDATE orders SET status=?,updated=? WHERE id=?', 'review', timestamp(), id);
     throw new Error('This payment is outside the online verification window. Contact Biomod for reconciliation.');
 } const result = await createChaseAdapter(runtime()).verifyPayment({ id, totalCents: row.total, currency: 'USD' }, row.checkout_ref); if (result.state === 'paid' && (!result.notificationId || !result.providerReference))
-    throw new Error('Payment requires review.'); const state = result.state === 'failed' ? 'review' : result.state; await run('UPDATE orders SET status=?,payment_ref=?,notification_id=?,updated=? WHERE id=? AND status NOT IN (?,?,?)', state, result.state === 'paid' ? result.providerReference : null, result.notificationId || null, timestamp(), id, 'paid', 'shipped', 'delivered'); return { status: state, message: result.state === 'failed' ? 'The payment attempt failed. This order is held for review before inventory is released.' : result.message }; }
+    throw new Error('Payment requires review.'); const state = result.state === 'failed' ? 'review' : result.state; const db=database();await db.batch([
+ db.prepare(inventorySql.paymentStatus).bind(state,result.state==='paid'?result.providerReference:null,result.notificationId||null,timestamp(),id),
+ db.prepare(inventorySql.settleInventory).bind(id,id,id),
+ db.prepare(inventorySql.clearSettledReservation).bind(id,id)
+]); return { status: state, message: result.state === 'failed' ? 'The payment attempt failed. This order is held for review before inventory is released.' : result.message }; }

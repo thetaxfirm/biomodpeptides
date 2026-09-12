@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
-import { sqliteTable, text, integer, index, uniqueIndex, primaryKey } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, index, uniqueIndex, primaryKey, check } from 'drizzle-orm/sqlite-core';
 export const sessions = sqliteTable('sessions', { id: text('id').primaryKey(), cart: text('cart').notNull().default('[]'), wishlist: text('wishlist').notNull().default('[]'), updated: integer('updated').notNull() });
-export const profiles = sqliteTable('profiles', { id: text('id').primaryKey(), cart: text('cart').notNull().default('[]'), name: text('name').notNull().default(''), phone: text('phone').notNull().default(''), company: text('company').notNull().default(''), researchAccepted: integer('research_accepted').notNull().default(0), wishlist: text('wishlist').notNull().default('[]'), created: integer('created').notNull() });
+export const profiles = sqliteTable('profiles', { id: text('id').primaryKey(), name: text('name').notNull().default(''), phone: text('phone').notNull().default(''), company: text('company').notNull().default(''), researchAccepted: integer('research_accepted').notNull().default(0), wishlist: text('wishlist').notNull().default('[]'), created: integer('created').notNull() });
 export const addresses = sqliteTable('addresses', { id: text('id').primaryKey(), owner: text('owner').notNull(), data: text('data').notNull(), created: integer('created').notNull() }, t => [index('addresses_owner').on(t.owner)]);
 export const settings = sqliteTable('settings', { key: text('key').primaryKey(), value: text('value').notNull() });
 export const overrides = sqliteTable('product_overrides', { id: integer('id').primaryKey(), data: text('data').notNull() });
@@ -11,3 +11,6 @@ export const orders = sqliteTable('orders', { id: text('id').primaryKey(), owner
 export const rewards = sqliteTable('rewards', { id: text('id').primaryKey(), owner: text('owner').notNull(), points: integer('points').notNull(), reason: text('reason').notNull(), created: integer('created').notNull() }, t => [index('rewards_owner').on(t.owner)]);
 export const rateLimits = sqliteTable('rate_limits', { key: text('key').primaryKey(), count: integer('count').notNull().default(1), expires: integer('expires').notNull() });
 export const reservations = sqliteTable('inventory_reservations', { orderId: text('order_id').notNull(), productId: integer('product_id').notNull(), quantity: integer('quantity').notNull() }, t => [primaryKey({ columns: [t.orderId, t.productId] }), index('reservations_product').on(t.productId)]);
+
+export const customerCarts=sqliteTable('customer_carts',{id:text('id').primaryKey(),cart:text('cart').notNull().default('[]'),updated:integer('updated').notNull()});
+export const guards=sqliteTable('transaction_guards',{id:text('id').primaryKey(),valid:integer('valid').notNull()},t=>[check('valid_transaction',sql`${t.valid}=1`)]);

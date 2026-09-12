@@ -1,0 +1,11 @@
+{
+  "insertOrder": "INSERT INTO orders(id,owner,request_key,status,data,total,checkout_ref,created,updated) VALUES(?,?,?,?,?,?,?,?,?)",
+  "reserve": "INSERT INTO inventory_reservations(order_id,product_id,quantity) SELECT orders.id,json_extract(item.value,'$.id'),SUM(json_extract(item.value,'$.quantity')) FROM orders,json_each(orders.data,'$.items') item WHERE orders.id=? GROUP BY orders.id,json_extract(item.value,'$.id')",
+  "checkReservation": "INSERT INTO transaction_guards(id,valid) SELECT ?, CASE WHEN EXISTS (SELECT 1 FROM inventory_reservations current LEFT JOIN product_overrides p ON p.id=current.product_id WHERE current.order_id=? AND (json_extract(p.data,'$.stockQuantity') IS NULL OR (SELECT SUM(quantity) FROM inventory_reservations r WHERE r.product_id=current.product_id)>json_extract(p.data,'$.stockQuantity'))) THEN 0 WHEN EXISTS (SELECT 1 FROM orders n WHERE n.id=? AND json_extract(n.data,'$.campaignId') IS NOT NULL AND (SELECT SUM(json_extract(o.data,'$.unitCount')) FROM orders o WHERE o.owner=n.owner AND json_extract(o.data,'$.campaignId')=json_extract(n.data,'$.campaignId') AND o.status NOT IN ('failed','cancelled'))>json_extract(n.data,'$.campaignLimit')) THEN 0 ELSE 1 END",
+  "clearGuard": "DELETE FROM transaction_guards WHERE id=?",
+  "paymentStatus": "UPDATE orders SET status=?,payment_ref=?,notification_id=?,updated=? WHERE id=? AND status NOT IN ('paid','shipped','delivered')",
+  "settleInventory": "UPDATE product_overrides SET data=json_set(data,'$.stockQuantity',json_extract(data,'$.stockQuantity')-COALESCE((SELECT quantity FROM inventory_reservations r WHERE r.order_id=? AND r.product_id=product_overrides.id),0)) WHERE id IN (SELECT product_id FROM inventory_reservations WHERE order_id=?) AND EXISTS(SELECT 1 FROM orders WHERE id=? AND status='paid')",
+  "clearSettledReservation": "DELETE FROM inventory_reservations WHERE order_id=? AND EXISTS(SELECT 1 FROM orders WHERE id=? AND status='paid')",
+  "checkInventoryEdit": "INSERT INTO transaction_guards(id,valid) SELECT ?,CASE WHEN COALESCE(?,0)>=COALESCE((SELECT SUM(quantity) FROM inventory_reservations WHERE product_id=?),0) AND ? IS (SELECT json_extract(data,'$.stockQuantity') FROM product_overrides WHERE id=?) THEN 1 ELSE 0 END",
+  "updateProduct": "INSERT INTO product_overrides(id,data) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data"
+}

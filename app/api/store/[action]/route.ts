@@ -1,9 +1,10 @@
+import inventorySql from '@/lib/inventory-statements.json';
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { z } from 'zod';
 import { session, customer, requireCustomer, requireAdmin, authReady, authCall, storeAuth, rateLimit } from '@/lib/auth';
 import { catalog, config, quote, validateLines } from '@/lib/commerce';
-import { all, one, run, uid, timestamp, parse, runtime } from '@/lib/runtime';
+import { all, one, run, uid, timestamp, parse, runtime, database } from '@/lib/runtime';
 import { checkout, reconcile, addressSchema, issueQuote } from '@/lib/checkout';
 import { getChasePaymentStatus } from '@/lib/chase-payments';
 export const dynamic = 'force-dynamic';
@@ -23,10 +24,11 @@ export async function GET(req: NextRequest, { params }: {
             const ps = await catalog();
             const cfg = await config();
             if (u)
-                await run('INSERT OR IGNORE INTO profiles(id,name,cart,wishlist,created) VALUES(?,?,?,?,?)', u.id, u.name, s.cart, s.wishlist, timestamp());
+                await run('INSERT OR IGNORE INTO profiles(id,name,wishlist,created) VALUES(?,?,?,?)', u.id, u.name, s.wishlist, timestamp());
+            if(u)await run('INSERT OR IGNORE INTO customer_carts(id,cart,updated) VALUES(?,?,?)',u.id,s.cart,timestamp());
             const cart = u ? parse((await one<{
                 cart: string;
-            }>('SELECT cart FROM profiles WHERE id=?', u.id))?.cart, []) : parse(s.cart, []);
+            }>('SELECT cart FROM customer_carts WHERE id=?', u.id))?.cart, []) : parse(s.cart, []);
             const wishlist = u ? parse((await one<{
                 wishlist: string;
             }>('SELECT wishlist FROM profiles WHERE id=?', u.id))?.wishlist, []) : parse(s.wishlist, []);
@@ -115,7 +117,7 @@ export async function POST(req: NextRequest, { params }: {
             await run('UPDATE sessions SET cart=?,updated=? WHERE id=?', JSON.stringify(lines), timestamp(), s.id);
             const u = await customer();
             if (u)
-                await run('INSERT INTO profiles(id,cart,created) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET cart=excluded.cart', u.id, JSON.stringify(lines), timestamp());
+                await run('INSERT INTO customer_carts(id,cart,updated) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET cart=excluded.cart,updated=excluded.updated', u.id, JSON.stringify(lines), timestamp());
             return j({ cart: lines, totals });
         }
         if (action === 'wishlist') {
@@ -223,13 +225,13 @@ export async function POST(req: NextRequest, { params }: {
             const u = await requireCustomer();
             return j(await issueQuote(u.id, validateLines(parse((await one<{
                 cart: string;
-            }>('SELECT cart FROM profiles WHERE id=?', (await requireCustomer()).id))?.cart, [])), b.address));
+            }>('SELECT cart FROM customer_carts WHERE id=?', (await requireCustomer()).id))?.cart, [])), b.address));
         }
         if (action === 'checkout') {
             const u = await requireCustomer();
             return j(await checkout(u.id, validateLines(parse((await one<{
                 cart: string;
-            }>('SELECT cart FROM profiles WHERE id=?', u.id))?.cart, [])), b));
+            }>('SELECT cart FROM customer_carts WHERE id=?', u.id))?.cart, [])), b));
         }
         if (action === 'resume') {
             const u = await requireCustomer();
@@ -259,7 +261,7 @@ export async function POST(req: NextRequest, { params }: {
                 const data = z.object({ price: z.number().int().min(1).max(9999999), inStock: z.boolean(), purchasable: z.boolean(), stockQuantity: z.number().int().min(0).max(100000).nullable(), maxQuantity: z.number().int().min(1).max(100) }).parse(b);
                 if (!(await catalog()).some(p => p.id === b.id))
                     throw new Error('Product not found.');
-                await run('INSERT INTO product_overrides(id,data) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data', b.id, JSON.stringify(data));
+                const db=database();const guard=uid();try{await db.batch([db.prepare(inventorySql.checkInventoryEdit).bind(guard,data.stockQuantity,b.id,b.expectedStock??null,b.id),db.prepare(inventorySql.updateProduct).bind(b.id,JSON.stringify(data)),db.prepare(inventorySql.clearGuard).bind(guard)]);}catch{throw new Error('Inventory cannot be reduced below stock reserved by existing orders.');}
                 return j({ message: 'Product updated.' });
             }
             if (action === 'admin-campaign') {

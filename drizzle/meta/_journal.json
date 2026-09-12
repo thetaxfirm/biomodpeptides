@@ -15,6 +15,13 @@
       "when": 1789175351093,
       "tag": "0001_lively_the_santerians",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1789176549307,
+      "tag": "0002_thick_squirrel_girl",
+      "breakpoints": true
     }
   ]
 }
