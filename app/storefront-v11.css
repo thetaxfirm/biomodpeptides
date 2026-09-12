@@ -1,0 +1,19 @@
+.brand-about-photo{max-width:1024px;width:100%;height:auto;object-fit:contain;margin:0 auto;border-radius:4px}
+.locations-overview{display:grid;grid-template-columns:.8fr 1.2fr;gap:40px;align-items:center;margin:0 0 45px}
+.locations-original .locations-heading{max-width:none;padding:0}
+.locations-original-photo{display:block;width:100%;max-width:1024px;height:auto;margin:0;border-radius:4px}
+.locations-original .locations-grid{gap:24px}
+.locations-original .locations-grid section{background:#eee5d9;padding:35px;min-width:0}
+.location-heading-row{display:flex;justify-content:space-between;gap:18px;align-items:baseline;width:100%;margin-bottom:18px}
+.location-heading-row .location-region{margin:0;font-size:16px}
+.location-status{font-size:14px;color:#715c46;line-height:1.5;text-align:right}
+.locations-original .locations-grid h2{margin-bottom:22px;font-weight:500;letter-spacing:-.025em}
+.locations-original .locations-grid address{font-size:19px;margin-bottom:28px}
+.locations-original .locations-grid .location-planned{background:#342a21;color:#fff4e6;padding-top:28px;padding-bottom:28px}
+.location-planned .location-region,.location-planned .location-status{color:#d3bfa8}
+.locations-original .location-planned h2{margin-bottom:15px}
+.locations-original .locations-grid .location-planned>p{margin-bottom:0;font-size:17px;color:#decbb7}
+.locations-original .locations-contact{display:block;margin-top:35px}
+.locations-original .locations-contact p{margin-bottom:10px;color:#655747;font-size:17px}
+@media(max-width:800px){.locations-overview{grid-template-columns:1fr;gap:28px}.locations-original .locations-heading{max-width:680px}}
+@media(max-width:640px){.locations-overview{margin-bottom:28px}.locations-original .locations-heading{padding-top:5px;padding-bottom:0}.locations-original .locations-grid{grid-template-columns:1fr;gap:18px}.locations-original .locations-grid section{padding:25px}.location-heading-row{margin-bottom:18px;gap:14px}.locations-original .locations-grid h2{font-size:34px}.locations-original .locations-grid address{font-size:18px}.locations-original .location-planned{padding:25px}.locations-original .locations-contact p{font-size:16px}.brand-about-photo{height:auto}}

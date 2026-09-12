@@ -9,6 +9,13 @@
     "locations": "D420",
     "terms": "D418"
   },
-  "status": "Owner confirmation requested; disputed suite and unverified hours omitted.",
-  "localBusinessSchema": false
+  "status": "Owner selected the original Locations page as the source on September 12, 2026. Display D420 as published there; no hours inferred.",
+  "localBusinessSchema": false,
+  "photo": {
+    "source": "https://biomodpeptides.com/wp-content/uploads/2026/06/contact-banner.jpeg",
+    "local": "/brand/original-locations-v11.jpeg",
+    "width": 1024,
+    "height": 559,
+    "usage": "Original Locations page banner, reused without edits. No claim that the scene identifies a particular address."
+  }
 }
