@@ -76,7 +76,7 @@ export async function quote(lines: CartLine[]) {
         const target = ls[0].packSize!;
         const kind = ls[0].packKind || 'mixed';
         if (!packSizes.includes(target as any) || ls.some(l => l.packSize !== target || (l.packKind || 'mixed') !== kind || !supportsPacks(byId.get(l.id)!)) || ls.reduce((s, l) => s + l.quantity, 0) !== target)
-            throw new Error('Complete every slot in your research peptide pack.');
+            throw new Error('Complete every slot in your pack.');
         if (kind === 'fixed' && ls.length !== 1) throw new Error('A fixed pack must contain one product.');
         const base = ls.reduce((s, l) => s + byId.get(l.id)!.price * l.quantity, 0);
         const savings = kind === 'fixed' ? base - fixedPackPrice(byId.get(ls[0].id)!, target) : Math.round(base * (cfg.packDiscounts[String(target)] ?? 0) / 100);

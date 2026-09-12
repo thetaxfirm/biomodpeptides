@@ -25,7 +25,7 @@ try:
  assert sum(i['lineTotal'] for i in data['totals']['items'])==data['totals']['total']==8910
  for l in mixed:l['packKind']='fixed'
  assert call('cart',{'cart':mixed})[0]==400
- ordinary=next(x for x in ps if x['categories'][0]['slug']=='softgels')
+ ordinary=next(x for x in ps if x['categories'][0]['slug']=='aminos-liquids')
  assert call('cart',{'cart':[{'id':ordinary['id'],'quantity':3,'packId':'fixed-v2','packSize':3,'packKind':'fixed'}]})[0]==400
  assert call('cart',{'cart':[{'id':p['id'],'quantity':100},{'id':p['id'],'quantity':3,'packId':'fixed-v2','packSize':3,'packKind':'fixed'}]})[0]==400
  audit=json.loads(Path('docs/crush-pricing-v2.json').read_text())

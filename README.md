@@ -6,7 +6,7 @@ A custom React storefront following the observed Crush Research shopping layout,
 
 - Responsive homepage, catalog search, category/availability/size/price filters, sorting and grid/list views.
 - Product details, quantities, price per mg where the labeled unit supports it, wishlist and cart drawer.
-- Fixed single-product 1/3/5/10-vial packs with complete pack totals, per-vial and per-mg pricing on product cards and detail pages. Separate 1/3/5/10 mix-and-match selector with horizontal slots and 0/10/15/20% discounts.
+- Fixed single-product 1/3/5/10 packs across 31 peptide, 8 softgel and 10 spray products. Peptides count vials; softgels and sprays count complete bottles. Pack totals and per-vial/per-bottle prices appear on cards and detail pages, with per-mg pricing only for applicable peptide vials. Separate 1/3/5/10 mix-and-match selector covering all three product categories with horizontal slots and 0/10/15/20% discounts.
 - Seventeen sourced compound/strength/form price comparisons. Singles match Crush where Biomod was higher; existing lower prices remain. Fixed packs use the lower of the matched Crush tier and standard bulk pricing, with non-increasing per-vial prices. Unmatched singles stay unchanged. Sources and applied values: `docs/crush-pricing-v2.json`.
 - Durable guest cart/wishlist and customer-owned account records using Cloudflare D1.
 - Testing library for 50 products, 26 linked certificate PDFs, source-reported results, lot-mismatch handling, search, filtering, and PDF viewing controls.
