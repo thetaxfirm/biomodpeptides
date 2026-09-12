@@ -1,0 +1,9 @@
+import source from './coas-source-v1.json';
+export const batchRecords = source.records as any[];
+export const laboratoryDocuments = source.documents as any[];
+export const batchFor = (id:number) => batchRecords.find(r=>r.product_id===id);
+export const certificateFor = (r:any) => r && laboratoryDocuments.find(d=>d.document_id===r.document_id&&d.is_certificate);
+export const batchStatus = (r:any) => !certificateFor(r)?'pending':r.lot_match==='matches'?'matched':'mismatch';
+export const batchStatusLabel = (r:any) => batchStatus(r)==='matched'?'Matching-lot certificate':batchStatus(r)==='mismatch'?'Lot needs confirmation':'Documentation pending';
+export const reportedResult = (d:any,kind:string) => d?.results?.filter((r:any)=>r.kind===kind).map((r:any)=>r.result+(r.unit&&!r.result.includes(r.unit)?' '+r.unit:'')).join('; ') || 'Not reported';
+export const batchPath = (r:any) => '/testing/'+encodeURIComponent(r.product_lot && !/^pending|not listed$/i.test(r.product_lot)?r.product_lot:r.record_id)+'?product='+r.product_id;

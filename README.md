@@ -1,6 +1,16 @@
 # Biomod Peptides custom storefront
 
-A custom React storefront following the observed Crush Research shopping layout, using 50 real Biomod products, the approved Biomod brand graphics, and published Biomod laboratory documents. There is no WooCommerce or WordPress runtime integration. Source URLs are retained only as provenance and original public certificate links.
+A custom React storefront with an original Biomod campaign, using 50 real Biomod products, approved brand graphics, source-grounded product descriptions, and published laboratory documents. There is no WooCommerce or WordPress runtime integration. Source URLs are retained only as provenance and original public certificate links.
+
+## September 2026 redesign
+
+- Original black and bronze campaign image generated from real AZURE, BPC-157 and FORGE product graphics. Collection routes, product presentation, mobile selectors and testing library rebuilt for Biomod.
+- Compound identities visible and searchable across shop, pack builder and product details. Editorial provenance and unresolved source conflicts are retained in `lib/product-editorial-v1.json`.
+- Up to four products can be compared by compound, format, contents, documentation and 1/3/5/10 pack pricing.
+- Named packs persist in D1 for the guest shopping session or signed-in customer. Load, edit, save a copy, remove and download selections. Updates and deletion enforce owner isolation; guest selections transfer to the customer on sign-in.
+- Product batch records include original certificates, matching-lot status, copyable links and downloadable QR codes. Twenty matching-lot PDFs, six lot mismatches and twenty-four missing PDFs are distinguished. No verification claim is inferred from a mismatched document.
+- Paid, shipped and delivered orders can be reordered at current validated prices and quantities. No actual orders were fabricated for verification.
+- Checkout, account and guest restock states have useful routes when external services are not configured; unavailable carts can be cleared safely.
 
 ## Working storefront
 
@@ -36,6 +46,8 @@ Node 22.13+; install with `npm run install:ci`. Use port 3056 or another availab
 - `node tests/payments-v1.mjs` uses isolated notifications and no network.
 - `python3 tests/packs-v2.py` verifies fixed and mixed totals, price authority, pack validation and sourced competitive schedules.
 - `python3 tests/http-v1.py` targets only `http://localhost:3056` and never submits an order.
-- `npm run build`
+- `python3 tests/bottle-packs-v3.py` verifies every softgel and spray pack total.
+- `python3 tests/saved-packs-v6.py` verifies durable saved selections, owner isolation, update/delete, invalid selections and CSRF.
+- Build with the installed Sites `scripts/build-site.mjs` helper.
 
 Secret key names, without values, are documented in `.env.example`. Local `.env` is ignored. Site-owned IDs and logical binding declarations are in `.openai/hosting.json`.

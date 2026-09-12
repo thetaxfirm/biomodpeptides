@@ -13,4 +13,5 @@ export const rateLimits = sqliteTable('rate_limits', { key: text('key').primaryK
 export const reservations = sqliteTable('inventory_reservations', { orderId: text('order_id').notNull(), productId: integer('product_id').notNull(), quantity: integer('quantity').notNull() }, t => [primaryKey({ columns: [t.orderId, t.productId] }), index('reservations_product').on(t.productId)]);
 
 export const customerCarts=sqliteTable('customer_carts',{id:text('id').primaryKey(),cart:text('cart').notNull().default('[]'),updated:integer('updated').notNull()});
+export const savedPacks=sqliteTable('saved_packs',{id:text('id').primaryKey(),owner:text('owner').notNull(),name:text('name').notNull(),products:text('products').notNull(),updated:integer('updated').notNull()},t=>[index('saved_packs_owner_updated').on(t.owner,t.updated)]);
 export const guards=sqliteTable('transaction_guards',{id:text('id').primaryKey(),valid:integer('valid').notNull()},t=>[check('valid_transaction',sql`${t.valid}=1`)]);

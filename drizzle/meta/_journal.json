@@ -22,6 +22,13 @@
       "when": 1789176549307,
       "tag": "0002_thick_squirrel_girl",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1789198054517,
+      "tag": "0003_clever_micromacro",
+      "breakpoints": true
     }
   ]
 }

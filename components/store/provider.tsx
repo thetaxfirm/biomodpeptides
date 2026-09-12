@@ -12,6 +12,7 @@ type Store = {
     config: StoreConfig;
     cart: CartLine[];
     wishlist: number[];
+    savedPacks: {id:string;name:string;products:number[];updated:number}[];
     customer: {
         id: string;
         email: string;
@@ -28,7 +29,7 @@ type Store = {
     cartError: string;
     campaigns: any[];
 };
-const defaults: Store = { products: initialProducts, config: initialConfig, cart: [], wishlist: [], customer: null, authReady: false, googleReady: false, admin: false, payment: { enabled: false, state: 'not_configured' }, totals: null, cartError: '', campaigns: [] };
+const defaults: Store = { products: initialProducts, config: initialConfig, cart: [], wishlist: [], savedPacks: [], customer: null, authReady: false, googleReady: false, admin: false, payment: { enabled: false, state: 'not_configured' }, totals: null, cartError: '', campaigns: [] };
 const Context = createContext<{
     store: Store;
     ready: boolean;
@@ -37,6 +38,7 @@ const Context = createContext<{
     add: (p: Product, quantity?: number, presaleId?: string) => Promise<void>;
     addFixedPack: (p: Product, count: number, packs?: number) => Promise<void>;
     addMixedPack: (ids: number[]) => Promise<void>;
+    reorder: (items: CartLine[]) => Promise<void>;
     wish: (id: number) => Promise<void>;
 } | null>(null);
 export function StoreProvider({ children }: {
@@ -72,7 +74,8 @@ export function StoreProvider({ children }: {
         toast.success('Your ' + ids.length + '-pack has been added to cart', { action: { label: 'View cart', onClick: () => location.assign('/cart') } });
     }
     async function wish(id: number) { const ids = store.wishlist.includes(id) ? store.wishlist.filter(i => i !== id) : [...store.wishlist, id]; await api('wishlist', { ids }); await refresh(); toast.success(ids.includes(id) ? 'Added to your wishlist' : 'Removed from your wishlist'); }
-    return <Context.Provider value={{ store, ready, refresh, saveCart, add, addFixedPack, addMixedPack, wish }}>{children}<Toaster position="bottom-right" richColors/></Context.Provider>;
+    async function reorder(items:CartLine[]){const groups=new Map<string,string>();const lines=items.map(l=>{if(l.presaleId)throw new Error('Presale orders cannot be reordered. Choose currently released products from the shop.');if(l.packId&&!groups.has(l.packId))groups.set(l.packId,crypto.randomUUID());return {id:l.id,quantity:l.quantity,...(l.packId?{packId:groups.get(l.packId),packSize:l.packSize,packKind:l.packKind||'mixed' as const}:{})};});await enqueueCart(cart=>[...cart,...lines]);toast.success('Order added at current prices. Review your cart before checkout.');}
+    return <Context.Provider value={{ store, ready, refresh, saveCart, add, addFixedPack, addMixedPack, reorder, wish }}>{children}<Toaster position="bottom-right" richColors/></Context.Provider>;
 }
 export const useStore = () => useContext(Context)!;
 export const report = (e: unknown) => toast.error(e instanceof Error ? e.message : 'Please try again.');

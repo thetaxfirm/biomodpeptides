@@ -7,6 +7,7 @@ import { catalog, config, quote, validateLines } from '@/lib/commerce';
 import { all, one, run, uid, timestamp, parse, runtime, database } from '@/lib/runtime';
 import { checkout, reconcile, addressSchema, issueQuote } from '@/lib/checkout';
 import { getChasePaymentStatus } from '@/lib/chase-payments';
+import { packSizes, supportsPacks } from '@/lib/packs';
 export const dynamic = 'force-dynamic';
 const j = (value: unknown, status = 200) => NextResponse.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
 const str = (v: unknown, max = 2000) => z.string().trim().min(1).max(max).parse(v);
@@ -41,7 +42,10 @@ export async function GET(req: NextRequest, { params }: {
                 cartError = (e as Error).message;
             }
             const payment = getChasePaymentStatus(runtime());
-            return j({ products: ps, config: cfg, cart, wishlist, customer: u, authReady: authReady(), googleReady: authReady() && runtime().GOOGLE_SIGNIN_ENABLED === 'true', payment: { state: payment.state, enabled: payment.checkoutEnabled }, totals, cartError, campaigns: (await all<{
+            const packOwner = u ? 'customer:' + u.id : 'guest:' + s.id;
+            if(u) await run('UPDATE saved_packs SET owner=? WHERE owner=?',packOwner,'guest:'+s.id);
+            const savedPacks = (await all<{id:string;name:string;products:string;updated:number}>('SELECT id,name,products,updated FROM saved_packs WHERE owner=? ORDER BY updated DESC',packOwner)).map(p=>({...p,products:parse(p.products,[])}));
+            return j({ products: ps, config: cfg, cart, wishlist, savedPacks, customer: u, authReady: authReady(), googleReady: authReady() && runtime().GOOGLE_SIGNIN_ENABLED === 'true', payment: { state: payment.state, enabled: payment.checkoutEnabled }, totals, cartError, campaigns: (await all<{
                     id: string;
                     data: string;
                     active: number;
@@ -111,6 +115,17 @@ export async function POST(req: NextRequest, { params }: {
         const secure = req.nextUrl.protocol === 'https:';
         const s = await session(secure);
         await rateLimit(action + ':' + (req.headers.get('cf-connecting-ip') || s.id), action.startsWith('auth') ? 12 : 120);
+        if (action === 'saved-pack') {
+            const u = await customer(); const owner = u ? 'customer:'+u.id : 'guest:'+s.id;
+            const id = b.id === undefined ? uid() : z.string().uuid().parse(b.id);
+            if(b.remove===true){await run('DELETE FROM saved_packs WHERE id=? AND owner=?',id,owner);return j({ok:true});}
+            const name = str(b.name,60); const ids = z.array(z.number().int().positive()).max(10).parse(b.products);
+            const ps = await catalog();
+            if(!packSizes.includes(ids.length as any)||ids.some(id=>!ps.some(p=>p.id===id&&supportsPacks(p)))) throw new Error('Save a complete 1, 3, 5, or 10-product pack.');
+            if(b.id){const result=await run('UPDATE saved_packs SET name=?,products=?,updated=? WHERE id=? AND owner=?',name,JSON.stringify(ids),timestamp(),id,owner);if(!result.meta.changes) return j({error:'Saved pack not found.'},404);}
+            else {const result=await run('INSERT INTO saved_packs(id,owner,name,products,updated) SELECT ?,?,?,?,? WHERE (SELECT COUNT(*) FROM saved_packs WHERE owner=?) < 30',id,owner,name,JSON.stringify(ids),timestamp(),owner);if(!result.meta.changes) throw new Error('You can save up to 30 packs. Remove one before saving another.');}
+            return j({id,message:'Pack saved.'});
+        }
         if (action === 'cart') {
             const lines = validateLines(b.cart);
             const totals = await quote(lines);

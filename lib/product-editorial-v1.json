@@ -1,0 +1,412 @@
+{
+  "products": {
+    "glow-spray": {
+      "name": "GLOW",
+      "identity": "GHK-Cu",
+      "format": "Spray solution",
+      "description": "GHK-Cu spray solution with a listed total content of 100 mg per bottle.",
+      "sourceBasis": [
+        "catalog-source-v1.json:description",
+        "coas-source-v1.json:records.product_facts"
+      ],
+      "ambiguities": [],
+      "hasCertificatePdf": false
+    },
+    "softgel-eraser-tesofensine": {
+      "name": "ERASER",
+      "identity": "Tesofensine",
+      "format": "Softgel capsules",
+      "description": "Tesofensine in a 60-capsule softgel format.",
+      "sourceBasis": [
+        "catalog-source-v1.json:description",
+        "coas-source-v1.json:records.product_facts"
+      ],
+      "ambiguities": [],
+      "hasCertificatePdf": false
+    },
+    "softgel-delta-pinealon-epithalon": {
+      "name": "DELTA",
+      "identity": "Pinealon + Epitalon",
+      "format": "Softgel capsules",
+      "description": "A two-compound softgel containing Pinealon and Epitalon, supplied as 30 capsules.",
+      "sourceBasis": [
+        "catalog-source-v1.json:description",
+        "coas-source-v1.json:records.product_facts"
+      ],
+      "ambiguities": [
+        "description and product facts use Epitalon; shortDescription and slug use Epithalon. The mapping follows description/product facts."
+      ],
+      "hasCertificatePdf": false
+    },
+    "softgel-nexus-dihexa-j-147": {
+      "name": "NEXUS",
+      "identity": "Dihexa + J-147",
+      "format": "Softgel capsules",
+      "description": "Dihexa and J-147 combined in a 30-capsule softgel format.",
+      "sourceBasis": [
+        "catalog-source-v1.json:description",
+        "coas-source-v1.json:records.product_facts"
+      ],
+      "ambiguities": [],
+      "hasCertificatePdf": false
+    },
+    "softgel-methylene-blue-usp": {
+      "name": "AZURE",
+      "identity": "Methylene Blue",
+      "format": "Softgel capsules",
+      "description": "Methylene Blue in a 60-capsule softgel format.",
+      "sourceBasis": [
+        "catalog-source-v1.json:description",
+        "coas-source-v1.json:records.product_facts"
+      ],
+      "ambiguities": [],
+      "hasCertificatePdf": false
+    },
+    "softgel-sculptor-atx-304": {
+      "name": "SCULPTOR",
+      "identity": "O-304 (ATX-304)",
+      "format": "Softgel capsules",
+      "description": "O-304, also listed as ATX-304, supplied as 60 softgel capsules.",
+      "sourceBasis": [
+        "catalog-source-v1.json:description",
+        "coas-source-v1.json:records.product_facts"
+      ],
+      "ambiguities": [],
+      "hasCertificatePdf": false
+    },
+    "softgel-lumen-ghk-cu-ahk-cu-astaxanthin-vitamin-e": {
+      "name": "LUMEN",
+      "identity": "GHK-Cu + AHK-Cu + Astaxanthin + Vitamin E",
+      "format": "Softgel capsules",
+      "description": "A four-component formula of GHK-Cu, AHK-Cu, astaxanthin and vitamin E, supplied as 60 softgel capsules.",
+      "sourceBasis": [
+        "catalog-source-v1.json:description",
+        "coas-source-v1.json:records.product_facts"
+      ],
+      "ambiguities": [
+        "Astaxanthin is 6 mg in description and 60 mg in shortDescription. Product facts state 6 mg (10% oil) per unit but 3,600 mg total for 60 caps. This may mix active amount and oil amount, but the supplied source does not reconcile it. Do not display an astaxanthin mass until clarified. Vitamin E mass is omitted in catalog but product facts list 7.5 mg per unit."
+      ],
+      "hasCertificatePdf": false
+    },
+    "softgel-bionic-bpc-157-arginate-kpv-vitamin-e": {
+      "name": "BIONIC",
+      "identity": "BPC-157 Arginate + KPV + Vitamin E",
+      "format": "Softgel capsules",
+      "description": "BPC-157 Arginate, KPV and vitamin E combined in a 60-capsule softgel format.",
+      "sourceBasis": [
+        "catalog-source-v1.json:description",
+        "coas-source-v1.json:records.product_facts"
+      ],
+      "ambiguities": [],
+      "hasCertificatePdf": false
+    },
+    "noctis-blend-spray": {
+      "name": "NOCTIS",
+      "identity": "Pinealon + Selank + DSIP + Oxytocin + Melatonin",
+      "format": "Spray solution",
+      "description": "A spray formula combining Pinealon, Selank, DSIP, oxytocin and melatonin.",
+      "sourceBasis": [
+        "catalog-source-v1.json:description",
+        "coas-source-v1.json:records.product_facts"
+      ],
+      "ambiguities": [
+        "description and sizes list 110 mg per bottle; product facts list 111 mg. Keep mass out of description pending confirmation. Melatonin appears in description and product facts, but not shortDescription; only product facts include its CAS."
+      ],
+      "hasCertificatePdf": false
+    },
+    "solara-melanotan-ii-spray": {
+      "name": "SOLARA",
+      "identity": "Melanotan II",
+      "format": "Spray solution",
+      "description": "Melanotan II spray solution with a listed total content of 20 mg per bottle.",
+      "sourceBasis": [
+        "catalog-source-v1.json:description",
+        "coas-source-v1.json:records.product_facts"
+      ],
+      "ambiguities": [],
+      "hasCertificatePdf": false
+    },
+    "forge-bpc-157-spray": {
+      "name": "FORGE",
+      "identity": "BPC-157",
+      "format": "Spray solution",
+      "description": "BPC-157 in a spray format with a listed total content of 50 mg per bottle.",
+      "sourceBasis": [
+        "catalog-source-v1.json:description",
+        "coas-source-v1.json:records.product_facts"
+      ],
+      "ambiguities": [],
+      "hasCertificatePdf": false
+    },
+    "flux-nad-spray": {
+      "name": "FLUX",
+      "identity": "NAD+ (Nicotinamide Adenine Dinucleotide)",
+      "format": "Spray solution",
+      "description": "NAD+ spray solution with a listed total content of 1,000 mg per bottle.",
+      "sourceBasis": [
+        "catalog-source-v1.json:description",
+        "coas-source-v1.json:records.product_facts"
+      ],
+      "ambiguities": [],
+      "hasCertificatePdf": false
+    },
+    "equil-selank-spray": {
+      "name": "EQUIL",
+      "identity": "Selank",
+      "format": "Spray solution",
+      "description": "Selank spray solution with a listed total content of 60 mg per bottle.",
+      "sourceBasis": [
+        "catalog-source-v1.json:description",
+        "coas-source-v1.json:records.product_facts"
+      ],
+      "ambiguities": [],
+      "hasCertificatePdf": false
+    },
+    "apex-semax-spray": {
+      "name": "APEX",
+      "identity": "Semax",
+      "format": "Spray solution",
+      "description": "Semax spray solution with a listed total content of 60 mg per bottle.",
+      "sourceBasis": [
+        "catalog-source-v1.json:description",
+        "coas-source-v1.json:records.product_facts"
+      ],
+      "ambiguities": [],
+      "hasCertificatePdf": false
+    },
+    "zenith-semax-selank-spray": {
+      "name": "ZENITH",
+      "identity": "Semax + Selank",
+      "format": "Spray solution",
+      "description": "A spray solution combining Semax and Selank.",
+      "sourceBasis": [
+        "catalog-source-v1.json:description",
+        "coas-source-v1.json:records.product_facts"
+      ],
+      "ambiguities": [
+        "description, sizes and product facts agree on 100 mg per bottle; shortDescription says 20 mg. Mapping omits quantity to avoid silently resolving the source conflict."
+      ],
+      "hasCertificatePdf": false
+    },
+    "klow-spray": {
+      "name": "KLOW",
+      "identity": "GHK-Cu + BPC-157 + KPV",
+      "format": "Spray solution",
+      "description": "GHK-Cu, BPC-157 and KPV combined in a spray formula with 140 mg listed per bottle.",
+      "sourceBasis": [
+        "catalog-source-v1.json:description",
+        "coas-source-v1.json:records.product_facts"
+      ],
+      "ambiguities": [],
+      "hasCertificatePdf": false
+    },
+    "ignite-pt-141-oxytocin-spray": {
+      "name": "IGNITE",
+      "identity": "PT-141 + Oxytocin",
+      "format": "Spray solution",
+      "description": "A spray formula combining PT-141 and oxytocin, with a listed total content of 35 mg per bottle.",
+      "sourceBasis": [
+        "catalog-source-v1.json:description",
+        "coas-source-v1.json:records.product_facts"
+      ],
+      "ambiguities": [
+        "Catalog Active compound field names only Bremelanotide; catalog title, slug, CAS list and product facts specify PT-141 + Oxytocin. Mapping follows the two-component identity supported by title and product facts."
+      ],
+      "hasCertificatePdf": false
+    },
+    "wolverine-10mg": {
+      "name": "Wolverine",
+      "identity": "BPC-157 + TB-500",
+      "format": "Lyophilized powder",
+      "description": "BPC-157 and TB-500 combined in a 10 mg lyophilized powder format.",
+      "sourceBasis": [
+        "catalog-source-v1.json:description",
+        "coas-source-v1.json:records.product_facts"
+      ],
+      "ambiguities": [],
+      "hasCertificatePdf": true
+    },
+    "run-gun-10mg": {
+      "name": "Run & Gun",
+      "identity": "Ipamorelin + CJC-1295 No DAC",
+      "format": "Lyophilized powder",
+      "description": "Ipamorelin and CJC-1295 No DAC combined in a 10 mg lyophilized powder format.",
+      "sourceBasis": [
+        "catalog-source-v1.json:description",
+        "coas-source-v1.json:records.product_facts"
+      ],
+      "ambiguities": [
+        "Linked certificate belongs to batch 001-B, while published product lot is 501-10-0001. Its 5/5 mg component quantities must not be attached to the product lot without reconciliation."
+      ],
+      "hasCertificatePdf": true
+    },
+    "c-heat-10mg": {
+      "name": "C-HEAT",
+      "identity": "Cagrilintide",
+      "format": "Lyophilized powder",
+      "description": "Cagrilintide in a 10 mg lyophilized powder format.",
+      "sourceBasis": [
+        "catalog-source-v1.json:description",
+        "coas-source-v1.json:records.product_facts",
+        "coas-source-v1.json:documents.sample_name, matched by document_id and matching lot"
+      ],
+      "ambiguities": [
+        "Product description/product facts abbreviate identity as CAG. Matching-lot certificate document sample_name explicitly says Cagrilintide."
+      ],
+      "hasCertificatePdf": true
+    },
+    "c-heat-s-10mg": {
+      "name": "C-HEAT-S",
+      "identity": "Cagrilintide + Semaglutide",
+      "format": "Lyophilized powder",
+      "description": "Cagrilintide and semaglutide combined in a 10 mg lyophilized powder format.",
+      "sourceBasis": [
+        "catalog-source-v1.json:description",
+        "coas-source-v1.json:records.product_facts",
+        "coas-source-v1.json:documents.sample_name, matched by document_id and matching lot"
+      ],
+      "ambiguities": [
+        "Catalog description and product facts omit active-compound identity; shortDescription says CAG + SEMA DUAL GLP. Matching-lot certificate sample_name explicitly says Cagrilintide/Semaglutide."
+      ],
+      "hasCertificatePdf": true
+    },
+    "heat-t-20mg": {
+      "name": "HEAT-T",
+      "identity": "HEAT-T",
+      "format": "Lyophilized powder",
+      "description": "HEAT-T in a 20 mg lyophilized powder format.",
+      "sourceBasis": [
+        "catalog-source-v1.json:description",
+        "coas-source-v1.json:records.product_facts"
+      ],
+      "ambiguities": [
+        "Common compound name is not stated in provided records or certificate object. shortDescription says GLP2T; linked certificate sample_name says Heat T. Do not expand the identity from CAS without another source."
+      ],
+      "hasCertificatePdf": true
+    },
+    "heat-r-30mg": {
+      "name": "HEAT-R 30mg",
+      "identity": "HEAT-R",
+      "format": "Lyophilized powder",
+      "description": "HEAT-R in a 30 mg lyophilized powder format.",
+      "sourceBasis": [
+        "catalog-source-v1.json:description",
+        "coas-source-v1.json:records.product_facts"
+      ],
+      "ambiguities": [
+        "Common compound name is not stated in provided catalog, product facts or certificate object; sample_name is HEAT-R. Do not expand identity from CAS without another source."
+      ],
+      "hasCertificatePdf": true
+    },
+    "heat-r-20mg": {
+      "name": "HEAT-R 20mg",
+      "identity": "HEAT-R",
+      "format": "Lyophilized powder",
+      "description": "HEAT-R in a 20 mg lyophilized powder format.",
+      "sourceBasis": [
+        "catalog-source-v1.json:description",
+        "coas-source-v1.json:records.product_facts"
+      ],
+      "ambiguities": [
+        "Common compound name is not stated in provided catalog, product facts or certificate object; sample_name is HEAT-R. Do not expand identity from CAS without another source.",
+        "description, name, sizes and product facts say 20 mg; shortDescription says 30 mg. Mapping uses the consistent 20 mg package identity, with the conflict retained here."
+      ],
+      "hasCertificatePdf": true
+    },
+    "softgel-chisel-aod-9604": {
+      "name": "CHISEL",
+      "identity": "AOD 9604",
+      "format": "Softgel capsules",
+      "description": "AOD 9604 in a 60-capsule softgel format.",
+      "sourceBasis": [
+        "catalog-source-v1.json:description",
+        "coas-source-v1.json:records.product_facts"
+      ],
+      "ambiguities": [],
+      "hasCertificatePdf": false
+    }
+  },
+  "certificateMismatches": [
+    {
+      "slug": "nad-500mg",
+      "productLot": "405-500-0001",
+      "certificateLot": "001-B",
+      "certificateFile": "NAD-500mg.pdf",
+      "reportId": "COA-2026-956701",
+      "sourceUrl": "https://biomodpeptides.com/wp-content/uploads/2026/05/NAD-500mg.pdf",
+      "matchingAlternativeDocumentsInSource": [],
+      "resolution": "Requires original matching-lot certificate, or documented authoritative batch-ID reconciliation. No crosswalk or matching alternate certificate is present in supplied sources."
+    },
+    {
+      "slug": "tesamorelin-10mg",
+      "productLot": "301-10-0001",
+      "certificateLot": "001-B",
+      "certificateFile": "TESAMORELIN-10mg.pdf",
+      "reportId": "COA-2026-956704",
+      "sourceUrl": "https://biomodpeptides.com/wp-content/uploads/2026/05/TESAMORELIN-10mg.pdf",
+      "matchingAlternativeDocumentsInSource": [],
+      "resolution": "Requires original matching-lot certificate, or documented authoritative batch-ID reconciliation. No crosswalk or matching alternate certificate is present in supplied sources."
+    },
+    {
+      "slug": "run-gun-10mg",
+      "productLot": "501-10-0001",
+      "certificateLot": "001-B",
+      "certificateFile": "CJC-IPA-10MG.pdf",
+      "reportId": "COA-2026-956703",
+      "sourceUrl": "https://biomodpeptides.com/wp-content/uploads/2026/05/CJC-IPA-10MG.pdf",
+      "matchingAlternativeDocumentsInSource": [],
+      "resolution": "Requires original matching-lot certificate, or documented authoritative batch-ID reconciliation. No crosswalk or matching alternate certificate is present in supplied sources."
+    },
+    {
+      "slug": "klow-80mg",
+      "productLot": "503-80-0001",
+      "certificateLot": "001-B",
+      "certificateFile": "KLOW-80mg.pdf",
+      "reportId": "COA-2026-956702",
+      "sourceUrl": "https://biomodpeptides.com/wp-content/uploads/2026/05/KLOW-80mg.pdf",
+      "matchingAlternativeDocumentsInSource": [],
+      "resolution": "Requires original matching-lot certificate, or documented authoritative batch-ID reconciliation. No crosswalk or matching alternate certificate is present in supplied sources."
+    },
+    {
+      "slug": "selank",
+      "productLot": "LYO-028-2608-02",
+      "certificateLot": "001-b",
+      "certificateFile": "Selank-10mg.pdf",
+      "reportId": "COA-2026-956699",
+      "sourceUrl": "https://biomodpeptides.com/wp-content/uploads/2026/05/Selank-10mg.pdf",
+      "matchingAlternativeDocumentsInSource": [],
+      "resolution": "Requires original matching-lot certificate, or documented authoritative batch-ID reconciliation. No crosswalk or matching alternate certificate is present in supplied sources."
+    },
+    {
+      "slug": "semax",
+      "productLot": "LYO-029-2608-01",
+      "certificateLot": "001-R",
+      "certificateFile": "Semax-10mg.pdf",
+      "reportId": "COA-2026-956700",
+      "sourceUrl": "https://biomodpeptides.com/wp-content/uploads/2026/05/Semax-10mg.pdf",
+      "matchingAlternativeDocumentsInSource": [],
+      "resolution": "Requires original matching-lot certificate, or documented authoritative batch-ID reconciliation. No crosswalk or matching alternate certificate is present in supplied sources."
+    }
+  ],
+  "certificateGaps": [
+    {
+      "slug": "5-amino-1mq-50mg",
+      "issues": [
+        "Open COA link points to a product photograph, not a certificate.",
+        "Hub says Active COA but no valid certificate PDF is linked."
+      ]
+    },
+    {
+      "slug": "mots-c-40mg",
+      "issues": [
+        "Hub says Active COA but no valid certificate PDF is linked."
+      ]
+    }
+  ],
+  "notes": [
+    "All 8 softgels and all 10 sprays have has_certificate_pdf=false. Product-page facts are source statements, not laboratory verification.",
+    "Use generic capsule/spray format; no administration instructions or inferred benefits are included.",
+    "Descriptions intentionally omit purity, testing and manufacturing claims.",
+    "catalog.ts currently replaces shortDescription with description; this hides original conflicts in rendered output but does not resolve them."
+  ]
+}

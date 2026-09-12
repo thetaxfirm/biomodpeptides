@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Header } from "@/components/store/header";
 import "./globals.css";
+import "./storefront-v6.css";
 import {AgeGate} from "@/components/store/age-gate";
 import {StoreProvider} from "@/components/store/provider";
 import {Footer} from "@/components/store/content";

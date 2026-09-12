@@ -1,5 +1,6 @@
 import source from './catalog-source-v1.json';
 import competitive from './competitive-pricing-v2.json';
+import editorial from './product-editorial-v1.json';
 export type Product = {
     id: number;
     name: string;
@@ -37,3 +38,9 @@ export const mass = (p: Product) => { if (p.categories[0]?.slug !== 'research-pe
     return null; const m = size(p).match(/^(\d+(?:\.\d+)?)\s*mg\b/i); return m ? Number(m[1]) : null; };
 export const imagePath = (p: Product) => '/products/' + p.image.filename;
 export const cas = (p: Product) => p.description.match(/CAS:\s*([\d\s/\-]+)[.]/)?.[1]?.trim() || '';
+type Editorial = { identity: string; description: string; format: string; ambiguities: string[] };
+export const productEditorial = (p: Product) => (editorial.products as Record<string, Editorial>)[p.slug];
+export const compound = (p: Product) => productEditorial(p)?.identity || p.description.match(/Active compounds?:\s*([^\n]+?)(?:\.\s+[A-Z]|$)/i)?.[1]?.trim() || p.name;
+export const productFormat = (p: Product) => p.categories.some(c => c.slug === 'softgels') ? 'Softgels' : p.categories.some(c => c.slug === 'spray-products') ? 'Spray' : p.categories.some(c => c.slug === 'research-peptides') ? 'Vial' : 'Research supply';
+export const productSummary = (p: Product) => productEditorial(p)?.description || `${compound(p)} supplied as ${size(p) || 'a research supply'}. Review the product specifications and available batch documentation below.`;
+export const specificationNote = (p: Product) => p.slug === 'softgel-lumen-ghk-cu-ahk-cu-astaxanthin-vitamin-e' ? 'Astaxanthin quantities differ between the source specifications. Confirm the current formulation with Biomod before ordering.' : p.slug === 'noctis-blend-spray' ? 'Source documents list both 110 mg and 111 mg per bottle. Confirm the current bottle specification with Biomod.' : '';
