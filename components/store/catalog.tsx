@@ -12,7 +12,7 @@ import { Choice, Check, Blank } from './primitives';
 import { toast } from 'sonner';
 import { BatchPassport } from './batch-record';
 import { ProductComparison } from './comparison';
-import { listingImage } from '@/lib/product-imagery';
+import { ProductImage } from './product-image';
 import { ProductGallery } from './product-gallery';
 import { SoftgelCollectionIntro, SoftgelProductStory } from './brand-story';
 function PackSelector({ product: p, value, onChange }: { product: Product; value: number; onChange: (n: number) => void }) {
@@ -28,7 +28,7 @@ export function ProductCard({ product, onAdd, pack = false, compared = false, on
     const { store, add, addFixedPack, wish, ready } = useStore(); const [busy, setBusy] = useState(false); const [count, setCount] = useState(1);
     const p = store.products.find(current => current.id === product.id) || product;
     const packed = supportsPacks(p) && !onAdd; const price = packed ? fixedPackPrice(p, count) : p.price;
-    return <article className="product-card"><a className="product-image" data-format={p.categories[0]?.slug} href={'/product/' + p.slug}><img src={listingImage(p)} alt={p.name + (p.categories.some(c => c.slug === 'softgels') ? ' bottle' : '')} width={480} height={480} loading="lazy"/></a><button className="wishlist-button" aria-label={(store.wishlist.includes(p.id) ? 'Remove ' : 'Save ') + p.name + ' to wishlist'} aria-pressed={store.wishlist.includes(p.id)} onClick={() => wish(p.id).catch(report)}><Heart size={20} fill={store.wishlist.includes(p.id) ? 'currentColor' : 'none'}/></button><div className="product-info"><p className="product-category">{p.categories[0]?.name}</p><h3><a href={'/product/' + p.slug}>{p.name}</a></h3><p className="product-identity">{compound(p)}</p><p className="product-size">{packContents(p) || 'Research supply'}</p>
+    return <article className="product-card"><a className="product-image" data-format={p.categories[0]?.slug} href={'/product/' + p.slug}><ProductImage product={p} alt={p.name + (p.categories.some(c => c.slug === 'softgels') ? ' bottle' : '')}/></a><button className="wishlist-button" aria-label={(store.wishlist.includes(p.id) ? 'Remove ' : 'Save ') + p.name + ' to wishlist'} aria-pressed={store.wishlist.includes(p.id)} onClick={() => wish(p.id).catch(report)}><Heart size={20} fill={store.wishlist.includes(p.id) ? 'currentColor' : 'none'}/></button><div className="product-info"><p className="product-category">{p.categories[0]?.name}</p><h3><a href={'/product/' + p.slug}>{p.name}</a></h3><p className="product-identity">{compound(p)}</p><p className="product-size">{packContents(p) || 'Research supply'}</p>
     {packed ? <PackSelector product={p} value={count} onChange={setCount}/> : <><strong className="product-price">{money(price)}</strong><small>{mass(p) ? money(price / mass(p)!) + ' / mg' : p.inStock ? 'In stock' : 'Unavailable'}</small></>}
     <button className="button button-dark" disabled={!p.inStock || !p.purchasable || busy || !ready || (packed && count > packUnitLimit(p))} onClick={async () => { setBusy(true); try { if (onAdd) onAdd(p); else if (packed) await addFixedPack(p, count); else await add(p); } catch (e) { report(e); } finally { setBusy(false); } }}>{busy ? 'Adding…' : !p.inStock ? 'Out of stock' : pack ? 'Add to pack' : count > 1 ? 'Add ' + count + '-pack' : 'Add to cart'}<Plus size={16}/></button>{onCompare&&<button className="compare-toggle" aria-pressed={compared} onClick={()=>onCompare(p.id)}>{compared?'✓ Added to comparison':'+ Compare'}</button>}</div></article>;
 }

@@ -4,7 +4,7 @@ import { Plus, X, Search, ChevronDown } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { compound, money } from '@/lib/catalog';
-import { listingImage } from '@/lib/product-imagery';
+import { ProductImage } from './product-image';
 import { packSizes, supportsPacks, packContents, packUnitLimit } from '@/lib/packs';
 import { useStore, report } from './provider';
 import { SavedPackTools } from './saved-packs';
@@ -64,7 +64,7 @@ export function PackBuilder({ initialSize = 3 }: { initialSize?: number }) {
           <CollapsibleTrigger className="pack-review-toggle">{reviewOpen ? 'Hide products' : 'Review products'}<ChevronDown size={17}/></CollapsibleTrigger>
           <CollapsibleContent forceMount className="pack-review-content">
             <ol className="pack-selected-products" aria-label="Selected pack products">
-              {selected.map((id, i) => { const p = store.products.find(p => p.id === id); return <li key={i}><span className="pack-position">{i + 1}</span>{p ? <img src={listingImage(p)} alt="" width={62} height={72}/> : <span/>}<div><strong>{p?.name || 'Unavailable product'}</strong><small>{invalidIds.has(id) ? 'Remove or reduce this quantity' : p ? packContents(p) : ''}</small></div><button className="icon-button" aria-label={'Remove ' + (p?.name || 'unavailable product') + ' from slot ' + (i + 1)} disabled={busy} onClick={() => setSelected(items => items.filter((_, index) => index !== i))}><X size={16}/></button></li>; })}
+              {selected.map((id, i) => { const p = store.products.find(p => p.id === id); return <li key={i}><span className="pack-position">{i + 1}</span>{p ? <ProductImage product={p} alt="" width={62} height={72}/> : <span/>}<div><strong>{p?.name || 'Unavailable product'}</strong><small>{invalidIds.has(id) ? 'Remove or reduce this quantity' : p ? packContents(p) : ''}</small></div><button className="icon-button" aria-label={'Remove ' + (p?.name || 'unavailable product') + ' from slot ' + (i + 1)} disabled={busy} onClick={() => setSelected(items => items.filter((_, index) => index !== i))}><X size={16}/></button></li>; })}
             </ol>
             {!selected.length && <p className="pack-empty">Your products will appear here as you add them.</p>}
           </CollapsibleContent>
@@ -81,7 +81,7 @@ export function PackBuilder({ initialSize = 3 }: { initialSize?: number }) {
           const used = selected.filter(id => id === p.id).length;
           const remaining = packUnitLimit(p) - used - store.cart.filter(line => line.id === p.id).reduce((sum, line) => sum + line.quantity, 0);
           return <article className="pack-product-card" data-selected={used > 0} key={p.id}>
-            <a href={'/product/' + p.slug} className="pack-product-image" data-format={f.id} aria-label={'View ' + p.name}><img src={listingImage(p)} alt={p.name + (f.id === 'softgels' ? ' bottle' : '')} width={480} height={480} loading="lazy"/></a>
+            <a href={'/product/' + p.slug} className="pack-product-image" data-format={f.id} aria-label={'View ' + p.name}><ProductImage product={p} alt={p.name + (f.id === 'softgels' ? ' bottle' : '')}/></a>
             <div className="pack-product-copy"><h3><a href={'/product/' + p.slug}>{p.name}</a></h3><p className="pack-product-identity">{compound(p)}</p><p className="pack-product-contents">{packContents(p)}</p><div className="pack-product-price"><strong>{money(p.price - Math.round(p.price * percent / 100))}</strong>{percent > 0 && <del>{money(p.price)}</del>}</div><button className="pack-product-add" disabled={selected.length >= count || remaining <= 0 || busy || !ready} onClick={() => setSelected(items => [...items, p.id])} aria-label={'Add ' + p.name + ' to pack'}><span>{remaining <= 0 ? 'Limit reached' : selected.length >= count ? (used ? used + ' in your pack' : 'Pack complete') : used ? 'Add another · ' + used + ' in pack' : 'Add to pack'}</span><Plus size={16}/></button></div>
           </article>;
         })}</div></section>; })}
