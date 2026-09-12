@@ -1,6 +1,6 @@
 # Biomod Peptides custom storefront
 
-A custom React storefront with an original Biomod campaign, using 50 real Biomod products, approved brand graphics, source-grounded product descriptions, and published laboratory documents. There is no WooCommerce or WordPress runtime integration. Source URLs are retained only as provenance and original public certificate links.
+A custom React storefront with an original Biomod campaign, using 45 real Biomod products, approved brand graphics, source-grounded product descriptions, and published laboratory documents. There is no WooCommerce or WordPress runtime integration. Source URLs are retained only as provenance and original public certificate links.
 
 ## Search and imagery update
 
@@ -23,10 +23,10 @@ A custom React storefront with an original Biomod campaign, using 50 real Biomod
 
 - Responsive homepage, catalog search, category/availability/size/price filters, sorting and grid/list views.
 - Product details, quantities, price per mg where the labeled unit supports it, wishlist and cart drawer.
-- Fixed single-product 1/3/5/10 packs across 31 peptide, 8 softgel and 10 spray products. Peptides count vials; softgels and sprays count complete bottles. Pack totals and per-vial/per-bottle prices appear on cards and detail pages, with per-mg pricing only for applicable peptide vials. Separate 1/3/5/10 mix-and-match selector covering all three product categories with horizontal slots and 0/10/15/20% discounts.
+- Fixed single-product 1/3/5/10 packs across 26 peptide, 8 softgel and 10 spray products. Peptides count vials; softgels and sprays count complete bottles. Pack totals and per-vial/per-bottle prices appear on cards and detail pages, with per-mg pricing only for applicable peptide vials. Separate 1/3/5/10 mix-and-match selector covering all three product categories with horizontal slots and 0/10/15/20% discounts.
 - Seventeen sourced compound/strength/form price comparisons. Singles match Crush where Biomod was higher; existing lower prices remain. Fixed packs use the lower of the matched Crush tier and standard bulk pricing, with non-increasing per-vial prices. Unmatched singles stay unchanged. Sources and applied values: `docs/crush-pricing-v2.json`.
 - Durable guest cart/wishlist and customer-owned account records using Cloudflare D1.
-- Testing library for 50 products, 26 linked certificate PDFs, source-reported results, lot-mismatch handling, search, filtering, and PDF viewing controls.
+- Testing library for 45 products, 21 linked certificate PDFs, source-reported results, lot-mismatch handling, search, filtering, and PDF viewing controls.
 - Account screens for profile, addresses, orders, wishlist, rewards, applications and notifications.
 - Presale campaign creation, opening/closing dates, separate carts and cumulative customer limits.
 - Administrator allowlist, product price/inventory controls, pack discounts, shipping settings, campaigns, customer requests, order fulfillment and manual Chase reconciliation.
@@ -58,3 +58,9 @@ Node 22.13+; install with `npm run install:ci`. Use port 3056 or another availab
 - Build with the installed Sites `scripts/build-site.mjs` helper.
 
 Secret key names, without values, are documented in `.env.example`. Local `.env` is ignored. Site-owned IDs and logical binding declarations are in `.openai/hosting.json`.
+
+## Catalog withdrawal controls
+
+Five withdrawn listings, their product images and complete certificate records are excluded from published data. Cart, wishlist, saved-pack and presale paths use current product IDs; retired order product snapshots are projected as archived items while financial ledgers remain intact. Existing checkout links cannot be reissued for unavailable products. Server response projections remove withdrawn references from saved free text. The original legacy WordPress server is separate and requires authenticated administration for source-file removal.
+
+Validation: `node tests/catalog-removal-v8.cjs`, `python3 tests/catalog-removal-http-v8.py`, the pack and SEO checks.

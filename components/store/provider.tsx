@@ -27,6 +27,7 @@ type Store = {
     };
     totals: any;
     cartError: string;
+    cartNotice?: string;
     campaigns: any[];
 };
 const defaults: Store = { products: initialProducts, config: initialConfig, cart: [], wishlist: [], savedPacks: [], customer: null, authReady: false, googleReady: false, admin: false, payment: { enabled: false, state: 'not_configured' }, totals: null, cartError: '', campaigns: [] };
@@ -74,7 +75,7 @@ export function StoreProvider({ children }: {
         toast.success('Your ' + ids.length + '-pack has been added to cart', { action: { label: 'View cart', onClick: () => location.assign('/cart') } });
     }
     async function wish(id: number) { const ids = store.wishlist.includes(id) ? store.wishlist.filter(i => i !== id) : [...store.wishlist, id]; await api('wishlist', { ids }); await refresh(); toast.success(ids.includes(id) ? 'Added to your wishlist' : 'Removed from your wishlist'); }
-    async function reorder(items:CartLine[]){const groups=new Map<string,string>();const lines=items.map(l=>{if(l.presaleId)throw new Error('Presale orders cannot be reordered. Choose currently released products from the shop.');if(l.packId&&!groups.has(l.packId))groups.set(l.packId,crypto.randomUUID());return {id:l.id,quantity:l.quantity,...(l.packId?{packId:groups.get(l.packId),packSize:l.packSize,packKind:l.packKind||'mixed' as const}:{})};});await enqueueCart(cart=>[...cart,...lines]);toast.success('Order added at current prices. Review your cart before checkout.');}
+    async function reorder(items:CartLine[]){const groups=new Map<string,string>();const lines=items.map(l=>{if(!stateRef.current.products.some(p=>p.id===l.id))throw new Error('This order contains an unavailable product.');if(l.presaleId)throw new Error('Presale orders cannot be reordered. Choose currently released products from the shop.');if(l.packId&&!groups.has(l.packId))groups.set(l.packId,crypto.randomUUID());return {id:l.id,quantity:l.quantity,...(l.packId?{packId:groups.get(l.packId),packSize:l.packSize,packKind:l.packKind||'mixed' as const}:{})};});await enqueueCart(cart=>[...cart,...lines]);toast.success('Order added at current prices. Review your cart before checkout.');}
     return <Context.Provider value={{ store, ready, refresh, saveCart, add, addFixedPack, addMixedPack, reorder, wish }}>{children}<Toaster position="bottom-right" richColors/></Context.Provider>;
 }
 export const useStore = () => useContext(Context)!;

@@ -1,3 +1,4 @@
+import { unavailableOrder } from './catalog-visibility';
 import inventorySql from './inventory-statements.json';
 import { quote, CartLine } from './commerce';
 import { one, run, uid, timestamp, runtime, parse, database } from './runtime';
@@ -36,6 +37,7 @@ export async function checkout(owner: string, lines: CartLine[], body: Record<st
         throw new Error('Confirm that you are 21 or older and purchasing for laboratory research only.');
     if (typeof body.requestKey !== 'string' || !/^[a-f0-9-]{36}$/.test(body.requestKey))
         throw new Error('Refresh checkout and try again.');
+    await quote(lines);
     const current = addressSchema.parse(body.address);
     const fingerprint = JSON.stringify({ lines, address: current });
     const old = await one<{
@@ -46,6 +48,7 @@ export async function checkout(owner: string, lines: CartLine[], body: Record<st
     }>('SELECT id,status,checkout_url,data FROM orders WHERE owner=? AND (request_key=? OR status IN (?,?,?,?)) ORDER BY created DESC LIMIT 1', owner, body.requestKey, 'creating', 'awaiting_payment', 'pending', 'review');
     if (old) {
         const saved = parse<Record<string, any>>(old.data, {});
+        if (unavailableOrder(saved)) throw new Error('This order contains an unavailable product and requires review.');
         if (saved.environment !== runtime().CHASE_ENVIRONMENT)
             throw new Error('An existing payment requires review before a new checkout can begin.');
         if (old.checkout_url && ['awaiting_payment', 'pending'].includes(old.status) && saved.fingerprint === fingerprint && saved.total === body.expectedTotal)

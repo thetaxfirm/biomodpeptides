@@ -22,9 +22,6 @@ export const pageRecords: Record<string, { title: string; description: string; e
 };
 export const productReviewBlocks: Record<string, string> = {
   'softgel-methylene-blue-usp': 'Package image states dietary supplement and cognitive support; classification and marketing must be reconciled with the research-only site policy.',
-  'heat-r-20mg': 'Full compound identity and container specification require confirmation.',
-  'heat-r-30mg': 'Full compound identity requires confirmation.',
-  'heat-t-20mg': 'Full compound identity requires confirmation.',
   'softgel-lumen-ghk-cu-ahk-cu-astaxanthin-vitamin-e': 'Astaxanthin specification conflict requires resolution.',
   'noctis-blend-spray': '110 mg / 111 mg container specification conflict requires resolution.',
   'zenith-semax-selank-spray': '100 mg / 20 mg source specification conflict requires resolution.',

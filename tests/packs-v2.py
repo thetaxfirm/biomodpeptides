@@ -36,5 +36,5 @@ try:
   assert applied==row['appliedBiomodPackTotalsCents']
   for count,price in row['crushPackTotalsCents'].items():assert applied[count]<=price
   assert all(applied[str(a)]*b>=applied[str(b)]*a for a,b in [(1,3),(3,5),(5,10)])
- print('PASS: fixed 1/3/5/10 prices, distinct mixed discounts, line totals, tampering rejection, pack eligibility, aggregate quantities and 17 sourced competitive schedules')
+ print('PASS: fixed 1/3/5/10 prices, distinct mixed discounts, line totals, tampering rejection, pack eligibility, aggregate quantities and 15 sourced competitive schedules')
 finally:call('cart',{'cart':[]})

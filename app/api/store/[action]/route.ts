@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { z } from 'zod';
 import { session, customer, requireCustomer, requireAdmin, authReady, authCall, storeAuth, rateLimit } from '@/lib/auth';
+import { presentationData } from '@/lib/private-presentation';
+import { currentCart, currentProductId, currentSelection, orderView, unavailableOrder } from '@/lib/catalog-visibility';
 import { catalog, config, quote, validateLines } from '@/lib/commerce';
 import { all, one, run, uid, timestamp, parse, runtime, database } from '@/lib/runtime';
 import { checkout, reconcile, addressSchema, issueQuote } from '@/lib/checkout';
@@ -26,16 +28,24 @@ export async function GET(req: NextRequest, { params }: {
             const ps = await catalog();
             const cfg = await config();
             if (u)
-                await run('INSERT OR IGNORE INTO profiles(id,name,wishlist,created) VALUES(?,?,?,?)', u.id, u.name, s.wishlist, timestamp());
-            if(u)await run('INSERT OR IGNORE INTO customer_carts(id,cart,updated) VALUES(?,?,?)',u.id,s.cart,timestamp());
-            const cart = u ? parse((await one<{
+                await run('INSERT OR IGNORE INTO profiles(id,name,wishlist,created) VALUES(?,?,?,?)', u.id, u.name, JSON.stringify(parse<number[]>(s.wishlist, []).filter(currentProductId)), timestamp());
+            if(u)await run('INSERT OR IGNORE INTO customer_carts(id,cart,updated) VALUES(?,?,?)',u.id,JSON.stringify(currentCart(validateLines(parse(s.cart,[])))),timestamp());
+            const storedCart = u ? parse((await one<{
                 cart: string;
             }>('SELECT cart FROM customer_carts WHERE id=?', u.id))?.cart, []) : parse(s.cart, []);
-            const wishlist = u ? parse((await one<{
+            const storedWishlist = u ? parse((await one<{
                 wishlist: string;
             }>('SELECT wishlist FROM profiles WHERE id=?', u.id))?.wishlist, []) : parse(s.wishlist, []);
+            const cart = currentCart(validateLines(storedCart));
+            const wishlist = (storedWishlist as number[]).filter(currentProductId);
+            const cartChanged = JSON.stringify(cart) !== JSON.stringify(storedCart);
+            if (cartChanged) {
+                await run('UPDATE sessions SET cart=?,updated=? WHERE id=?', JSON.stringify(cart), timestamp(), s.id);
+                if(u) await run('UPDATE customer_carts SET cart=?,updated=? WHERE id=?', JSON.stringify(cart), timestamp(), u.id);
+            }
             let totals = null;
             let cartError = '';
+            const cartNotice = cartChanged ? 'Unavailable products or packs were removed. Review the remaining items before checkout.' : '';
             try {
                 totals = await quote(validateLines(cart));
             }
@@ -45,12 +55,12 @@ export async function GET(req: NextRequest, { params }: {
             const payment = getChasePaymentStatus(runtime());
             const packOwner = u ? 'customer:' + u.id : 'guest:' + s.id;
             if(u) await run('UPDATE saved_packs SET owner=? WHERE owner=?',packOwner,'guest:'+s.id);
-            const savedPacks = (await all<{id:string;name:string;products:string;updated:number}>('SELECT id,name,products,updated FROM saved_packs WHERE owner=? ORDER BY updated DESC',packOwner)).map(p=>({...p,products:parse(p.products,[])}));
-            return j({ products: ps, config: cfg, cart, wishlist, savedPacks, customer: u, authReady: authReady(), googleReady: authReady() && runtime().GOOGLE_SIGNIN_ENABLED === 'true', payment: { state: payment.state, enabled: payment.checkoutEnabled }, totals, cartError, campaigns: (await all<{
+            const savedPacks = (await all<{id:string;name:string;products:string;updated:number}>('SELECT id,name,products,updated FROM saved_packs WHERE owner=? ORDER BY updated DESC',packOwner)).map(p=>({...p,products:parse(p.products,[])})).filter(p=>currentSelection(p.products)).map(p=>presentationData(p));
+            return j({ products: ps, config: cfg, cart, wishlist, savedPacks, customer: u, authReady: authReady(), googleReady: authReady() && runtime().GOOGLE_SIGNIN_ENABLED === 'true', payment: { state: payment.state, enabled: payment.checkoutEnabled }, totals, cartError, cartNotice, campaigns: (await all<{
                     id: string;
                     data: string;
                     active: number;
-                }>('SELECT id,data,active FROM campaigns WHERE active=1')).map(c => ({ ...parse(c.data, {}), id: c.id })), admin: Boolean(u && (runtime().STORE_ADMIN_EMAILS || '').toLowerCase().split(',').map(v => v.trim()).includes(u.email.toLowerCase())) });
+                }>('SELECT id,data,active FROM campaigns WHERE active=1')).map<Record<string, any>>(c => ({ ...parse<Record<string, any>>(c.data, {}), id: c.id })).filter(c=>currentSelection(c.productIds)).map(c=>presentationData(c)), admin: Boolean(u && (runtime().STORE_ADMIN_EMAILS || '').toLowerCase().split(',').map(v => v.trim()).includes(u.email.toLowerCase())) });
         }
         if (action === 'account') {
             const user = await requireCustomer();
@@ -59,19 +69,19 @@ export async function GET(req: NextRequest, { params }: {
                     data: string;
                 }>('SELECT id,data FROM addresses WHERE owner=? ORDER BY created DESC', user.id)).map(a => ({ id: a.id, ...parse(a.data, {}) })), orders: (await all<{
                     data: string;
-                }>('SELECT id,status,total,data,created FROM orders WHERE owner=? ORDER BY created DESC LIMIT 100', user.id)).map(o => ({ ...o, data: parse(o.data, {}) })), requests: (await all<{
+                }>('SELECT id,status,total,data,created FROM orders WHERE owner=? ORDER BY created DESC LIMIT 100', user.id)).map(o => ({ ...o, data: orderView(parse(o.data, {})) })), requests: (await all<{
                     data: string;
-                }>('SELECT id,kind,data,status,created FROM requests WHERE owner=? AND kind!=\'quote\' ORDER BY created DESC LIMIT 100', user.id)).map(r => ({ ...r, data: parse(r.data, {}) })), rewards: await all('SELECT points,reason,created FROM rewards WHERE owner=? ORDER BY created DESC LIMIT 100', user.id) });
+                }>('SELECT id,kind,data,status,created FROM requests WHERE owner=? AND kind!=\'quote\' ORDER BY created DESC LIMIT 100', user.id)).map(r => ({ ...r, data: presentationData(parse(r.data, {})) })), rewards: presentationData(await all('SELECT points,reason,created FROM rewards WHERE owner=? ORDER BY created DESC LIMIT 100', user.id)) });
         }
         if (action === 'admin') {
             await requireAdmin();
             return j({ searchPublishing: searchReport(seoConfig(runtime())), config: await config(), products: await catalog(), orders: (await all<{
                     data: string;
-                }>('SELECT id,owner,status,total,data,created FROM orders ORDER BY created DESC LIMIT 200')).map(o => ({ ...o, data: parse(o.data, {}) })), requests: (await all<{
+                }>('SELECT id,owner,status,total,data,created FROM orders ORDER BY created DESC LIMIT 200')).map(o => ({ ...o, data: orderView(parse(o.data, {})) })), requests: (await all<{
                     data: string;
-                }>('SELECT * FROM requests WHERE kind!=\'quote\' ORDER BY created DESC LIMIT 200')).map(o => ({ ...o, data: parse(o.data, {}) })), campaigns: (await all<{
+                }>('SELECT * FROM requests WHERE kind!=\'quote\' ORDER BY created DESC LIMIT 200')).map(o => ({ ...o, data: presentationData(parse(o.data, {})) })), campaigns: (await all<{
                     data: string;
-                }>('SELECT * FROM campaigns')).map(o => ({ ...o, ...parse(o.data, {}) })) });
+                }>('SELECT * FROM campaigns')).map<Record<string, any>>(o => { const {data, ...row}=o; return { ...row, ...parse<Record<string, any>>(data, {}) }; }).filter(c=>currentSelection(c.productIds)).map(c=>presentationData(c)) });
         }
         return j({ error: 'Not found.' }, 404);
     }
@@ -256,7 +266,7 @@ export async function POST(req: NextRequest, { params }: {
                 status: string;
                 data: string;
             }>('SELECT checkout_url,status,data FROM orders WHERE id=? AND owner=?', str(b.id, 50), u.id);
-            if (!o || !o.checkout_url || !['awaiting_payment', 'pending'].includes(o.status) || parse<Record<string, any>>(o.data, {}).environment !== runtime().CHASE_ENVIRONMENT)
+            if (!o || unavailableOrder(parse(o.data, {})) || !o.checkout_url || !['awaiting_payment', 'pending'].includes(o.status) || parse<Record<string, any>>(o.data, {}).environment !== runtime().CHASE_ENVIRONMENT)
                 throw new Error('This payment requires review.');
             return j({ url: o.checkout_url });
         }
@@ -283,6 +293,7 @@ export async function POST(req: NextRequest, { params }: {
             }
             if (action === 'admin-campaign') {
                 const data = z.object({ title: z.string().min(2).max(100), starts: z.string().datetime(), ends: z.string().datetime(), ships: z.string().min(2).max(100), productIds: z.array(z.number().int()).min(1), maxPerCustomer: z.number().int().min(1).max(100) }).parse(b);
+                if (!currentSelection(data.productIds)) throw new Error('Choose products from the current catalog.');
                 if (Date.parse(data.ends) <= Date.parse(data.starts))
                     throw new Error('Closing date must follow opening date.');
                 const id = typeof b.id === 'string' ? b.id : uid();

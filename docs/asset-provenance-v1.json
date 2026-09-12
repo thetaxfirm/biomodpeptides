@@ -14,8 +14,8 @@
     "No product categories or attributes were invented."
   ],
   "counts": {
-    "products": 50,
-    "primaryImages": 50,
+    "products": 45,
+    "primaryImages": 45,
     "failedImages": 0,
     "brandAssets": 4
   },
@@ -33,13 +33,6 @@
       "slug": "zenith-semax-selank-spray",
       "issues": [
         "Published shortDescription size (20mg / bottle) differs from description size (100mg / bottle). Sizes field follows description. Confirm before launch."
-      ]
-    },
-    {
-      "id": 1389,
-      "slug": "heat-r-20mg",
-      "issues": [
-        "Published shortDescription size (30mg) differs from description size (20mg). Sizes field follows description. Confirm before launch."
       ]
     }
   ],
@@ -746,86 +739,6 @@
       "width": 1080,
       "height": 1080,
       "originalSha256": "2760879d32ad2433799cf2cdae300ec3929e7dacd3fea27f05065f50726a7ffe",
-      "transformation": "Sharp WebP quality 88, max 1280px within original dimensions, auto-orient; no cropping or graphic edits."
-    },
-    {
-      "id": 747,
-      "filename": "c-heat-10mg-v1.webp",
-      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/C-HEAT-1.jpg",
-      "status": "downloaded",
-      "bytes": 24938,
-      "sha256": "fd89ed316e54f72410a45af51d4e9bb8c4b76e072028b7bcf63a2dcfbd31d507",
-      "originalFilename": "originals/c-heat-10mg-v1.jpg",
-      "originalBytes": 44440,
-      "originalWidth": 1080,
-      "originalHeight": 1080,
-      "width": 1080,
-      "height": 1080,
-      "originalSha256": "d99937f30c97ab2b54207ee2ec2b47646d2949ed0149757ce2cf234cac94adcd",
-      "transformation": "Sharp WebP quality 88, max 1280px within original dimensions, auto-orient; no cropping or graphic edits."
-    },
-    {
-      "id": 746,
-      "filename": "c-heat-s-10mg-v1.webp",
-      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/C-HEAT-S.jpg",
-      "status": "downloaded",
-      "bytes": 25674,
-      "sha256": "0f3a58abde37851b16294dd56911b7687c1707b23e08acbb09e8c56217a2d9ad",
-      "originalFilename": "originals/c-heat-s-10mg-v1.jpg",
-      "originalBytes": 44594,
-      "originalWidth": 1080,
-      "originalHeight": 1080,
-      "width": 1080,
-      "height": 1080,
-      "originalSha256": "0dff03feddc0c79c32fd4d0bb444a5820b23db0aac557cb1f2536eac4a688e28",
-      "transformation": "Sharp WebP quality 88, max 1280px within original dimensions, auto-orient; no cropping or graphic edits."
-    },
-    {
-      "id": 744,
-      "filename": "heat-t-20mg-v1.webp",
-      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/HEAT-T-1.jpg",
-      "status": "downloaded",
-      "bytes": 25652,
-      "sha256": "ec57d9a06ccf3f458bd758fe97898c3c8cad8d22070c8098e90d91d04ff85c95",
-      "originalFilename": "originals/heat-t-20mg-v1.jpg",
-      "originalBytes": 44552,
-      "originalWidth": 1080,
-      "originalHeight": 1080,
-      "width": 1080,
-      "height": 1080,
-      "originalSha256": "b2f1ca24ed50466bc85d4225df2eb6deae5d753395a98af9b74c06576f605a55",
-      "transformation": "Sharp WebP quality 88, max 1280px within original dimensions, auto-orient; no cropping or graphic edits."
-    },
-    {
-      "id": 745,
-      "filename": "heat-r-30mg-v1.webp",
-      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/HEAT-R-1.jpg",
-      "status": "downloaded",
-      "bytes": 25530,
-      "sha256": "6934da029afe8698c5082d8676221f8da2b52722527e483eaad7b6a20b6ba934",
-      "originalFilename": "originals/heat-r-30mg-v1.jpg",
-      "originalBytes": 44537,
-      "originalWidth": 1080,
-      "originalHeight": 1080,
-      "width": 1080,
-      "height": 1080,
-      "originalSha256": "bccedad5f9c5efedb121e3ee823cb6ad470cd13ef0bf9d57141445bca8cbce55",
-      "transformation": "Sharp WebP quality 88, max 1280px within original dimensions, auto-orient; no cropping or graphic edits."
-    },
-    {
-      "id": 1389,
-      "filename": "heat-r-20mg-v1.webp",
-      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/HEAT-R-20MG.jpg",
-      "status": "downloaded",
-      "bytes": 25656,
-      "sha256": "237cb024f8e5384d59e777eab242949ffe39fee95429b07f231e41290533484d",
-      "originalFilename": "originals/heat-r-20mg-v1.jpg",
-      "originalBytes": 44843,
-      "originalWidth": 1080,
-      "originalHeight": 1080,
-      "width": 1080,
-      "height": 1080,
-      "originalSha256": "b9d925e3758d8afc3bd9b91ff9e7ced93a08c33b75a99043d79e0f7319052826",
       "transformation": "Sharp WebP quality 88, max 1280px within original dimensions, auto-orient; no cropping or graphic edits."
     },
     {

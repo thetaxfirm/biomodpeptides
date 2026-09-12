@@ -16,6 +16,7 @@ function validPath(path: string) {
 }
 export async function generateMetadata({ params, searchParams }: Props) {
   const { path } = await params;
+  if (!validPath(path.join('/'))) notFound();
   return routeMetadata('/' + path.join('/'), queryParams(await searchParams), await requestSEO());
 }
 export default async function Page({ params, searchParams }: Props) {
