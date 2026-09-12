@@ -5,11 +5,12 @@ import { Testing } from './testing';
 import { Contact, ContentPage } from './content';
 import { Admin } from './admin';
 import { Locations } from './locations';
+import { Softgels } from './softgels';
 import { Blank } from './primitives';
 export function Experience({ path, query }: {
     path: string;
     query: Record<string, string>;
-}) { if (path === 'locations') return <Locations/>; if (path === 'shop')
+}) { if (path === 'softgels') return <Softgels/>; if (path === 'locations') return <Locations/>; if (path === 'shop')
     return <Shop search={query.q || ''} category={query.category||''}/>; if (path.startsWith('product/'))
     return <ProductPage slug={path.slice(8)}/>; if (path === 'multi-pack')
     return <PackBuilder initialSize={Number(query.size || query.items) || 3}/>; if (path === 'presales')

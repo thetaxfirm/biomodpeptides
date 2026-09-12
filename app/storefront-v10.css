@@ -1,0 +1,92 @@
+/* BIOMOD's formulation story: copper packaging, glass and the softgel cutaway. */
+.trademark-symbol{font-size:.38em;vertical-align:super;letter-spacing:0;margin-left:.08em}
+.brand-campaign .campaign-copy{width:49%;max-width:720px;top:16%}
+.brand-campaign .campaign-copy h1{font-size:clamp(40px,4.9vw,74px);line-height:1.1;letter-spacing:-.035em}
+.brand-campaign .campaign-copy p{max-width:460px;font-size:18px}
+.brand-campaign{background:#0c0b0a}
+.brand-campaign .campaign-image{left:auto;right:0;width:68%;height:100%;object-fit:contain;mix-blend-mode:lighten;mask-image:linear-gradient(to right,transparent,#000 12%,#000 100%),linear-gradient(to bottom,transparent,#000 17%,#000 70%,transparent 93%);mask-composite:intersect}
+.main-nav>.wrap{gap:6px}
+.main-nav a{padding-left:9px;padding-right:9px}
+.brand-trademarks{font-size:14px;line-height:1.7;color:#6e6053;max-width:800px}
+.footer-brand{padding-top:32px;padding-bottom:25px}
+.footer-brand .brand-trademarks{color:#cbbcac}
+.home-origin{display:grid;grid-template-columns:1.1fr 1fr;gap:9%;padding-top:30px;padding-bottom:95px}
+.home-origin h2{font-size:clamp(32px,3.6vw,52px);line-height:1.16;letter-spacing:-.03em}
+.home-origin>div>p{max-width:610px;margin:25px 0;font-size:18px;line-height:1.7;color:#65594d}
+.origin-facts{display:grid;gap:28px;align-content:center}
+.origin-facts>div{padding:24px 28px;background:#eee5d9;border-radius:4px}
+.origin-facts>div:nth-child(2){background:#342a21;color:#fff5e9}
+.origin-facts strong{font-size:21px;font-weight:500}
+.origin-facts p{margin:10px 0 15px;max-width:390px}
+.origin-facts a{display:inline-flex;align-items:center;gap:8px;font-size:14px}
+.shop-brand-line{margin:24px 0 0;padding:20px 25px;background:#30261e;color:#faf1e5;border-radius:4px}
+.shop-brand-line>a{display:flex;justify-content:space-between;align-items:center;gap:20px;font-size:23px;font-weight:500}
+.shop-brand-line span{font-size:15px;color:#dec5a5}
+.softgel-collection-intro{display:grid;grid-template-columns:1fr 230px;align-items:center;gap:30px;padding:30px 40px;margin-top:25px;background:#30261e;color:#fff7ec;border-radius:4px}
+.softgel-collection-intro h2{font-size:clamp(29px,3.2vw,45px);line-height:1.15;font-weight:500;letter-spacing:-.02em}
+.softgel-collection-intro p{max-width:640px;margin:18px 0;color:#dfccba;font-size:17px}
+.softgel-collection-intro img{width:230px;border-radius:3px}
+.softgel-product-story{display:grid;grid-template-columns:1fr 1.15fr;gap:50px;padding:40px;background:#eee5d9;margin:55px 0 0;border-radius:4px}
+.softgel-signature{font-size:17px;color:#69513c;margin-bottom:15px}
+.softgel-product-story h2{font-size:32px;line-height:1.18;font-weight:500;letter-spacing:-.02em}
+.softgel-product-story>div>p:not(.softgel-signature){font-size:17px;line-height:1.75;margin-bottom:20px;max-width:690px}
+.softgel-story-page{max-width:1360px;margin:0 auto}
+.softgel-story-hero{background:#151310;color:#fff7eb;padding:50px 55px 22px;border-radius:4px;position:relative}
+.softgel-story-hero>div{position:relative;z-index:1;display:grid;grid-template-columns:1.4fr 1fr;gap:24px 45px;align-items:center}
+.softgel-story-hero h1{font-size:clamp(38px,5.2vw,74px);font-weight:500;line-height:1.08;letter-spacing:-.035em;grid-row:span 2}
+.softgel-story-hero>div>p{font-size:18px;line-height:1.7;color:#ded0c0;max-width:390px}
+.softgel-story-hero .button{justify-self:start}
+.softgel-story-hero figure{margin:15px auto 0;max-width:1150px}
+.softgel-story-hero figure img{width:100%;height:auto;mask-image:linear-gradient(to bottom,transparent,#000 15%,#000 83%,transparent);mix-blend-mode:lighten}
+.softgel-story-hero figcaption{font-size:14px;color:#c2b5a7;text-align:center;margin:0 0 8px}
+.softgel-manufacturing{display:flex;flex-wrap:wrap;justify-content:space-between;gap:15px 28px;padding:26px 8px;font-size:15px;color:#635344}
+.softgel-manufacturing strong{font-weight:500;color:#392a1e}
+.softgel-manufacturing a{display:flex;align-items:center;gap:8px}
+.softgel-formulation-section{padding:70px 0 80px}
+.softgel-section-opening{display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:end;margin-bottom:45px}
+.softgel-section-opening h2,.softgel-design h2,.softgel-origin-line h2{font-size:clamp(32px,4vw,52px);font-weight:500;line-height:1.14;letter-spacing:-.03em}
+.softgel-section-opening p{font-size:18px;line-height:1.75;max-width:540px;color:#65594d}
+.softgel-formulation-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px}
+.softgel-formulation-grid>article{display:grid;grid-template-rows:subgrid;grid-row:span 6;gap:13px;min-width:0}
+.softgel-formulation-grid>article>a:first-child{background:#fff;outline:1px solid #e9e3da;outline-offset:-1px;border-radius:4px;overflow:hidden;margin-bottom:10px}
+.softgel-formulation-grid img{width:100%;height:auto}
+.softgel-formulation-grid h3{font-size:29px;line-height:1.1;letter-spacing:.025em;font-weight:500}
+.softgel-formulation-grid .formula-identity{font-weight:500;color:#34291f}
+.softgel-formulation-grid p{font-size:16px;line-height:1.65;color:#6a5c4f}
+.softgel-formulation-grid strong{font-size:15px;font-weight:500;color:#78522e}
+.softgel-formulation-grid .editorial-link{margin-top:5px}
+.softgel-design{padding:55px;background:#eee5d9;border-radius:4px;display:grid;grid-template-columns:1fr 1.05fr;gap:30px 8%;margin:0 0 80px}
+.softgel-design-intro p{font-size:18px;line-height:1.7;margin-top:25px;color:#655344;max-width:450px}
+.softgel-layer-key{margin:0;display:grid;gap:24px}
+.softgel-layer-key dt{font-size:21px;font-weight:500}
+.softgel-layer-key dt span{display:block;font-size:14px;font-weight:400;color:#7a6550;margin-top:3px}
+.softgel-layer-key dd{font-size:16px;line-height:1.65;margin:10px 0 0;color:#5c4d40}
+.softgel-science-note{grid-column:1/-1;background:#fff8ee;border-radius:3px;margin-top:10px}
+.softgel-science-note summary{font-size:17px;font-weight:500;cursor:pointer;padding:20px 25px}
+.softgel-science-note>div{padding:0 25px 25px;max-width:960px}
+.softgel-science-note p{line-height:1.7;margin-bottom:18px}
+.softgel-science-note .softgel-science-source{font-size:14px;color:#705c47;margin:20px 0 0}
+.softgel-science-source a{text-decoration:underline;text-underline-offset:3px}
+.softgel-full-collection{scroll-margin-top:25px}
+.softgel-full-collection .section-intro p{font-size:17px}
+.softgel-origin-line{display:grid;grid-template-columns:1.1fr 1fr;gap:25px 8%;padding:70px 0 40px;align-items:start}
+.softgel-origin-line p{font-size:18px;line-height:1.7;color:#665749}
+.softgel-origin-line .editorial-link{grid-column:2}
+.softgel-story-page>.brand-trademarks{margin-bottom:25px}
+.brand-about{max-width:1180px;margin:auto}
+.brand-about-heading{display:grid;grid-template-columns:1.3fr 1fr;gap:7%;align-items:end;padding:15px 0 45px}
+.brand-about-heading h1{font-size:clamp(40px,5.8vw,76px);line-height:1.1;letter-spacing:-.035em;font-weight:500}
+.brand-about-heading p{font-size:21px;line-height:1.7;color:#67574a;padding-bottom:5px}
+.brand-about-photo{width:100%;height:430px;object-fit:cover;border-radius:4px}
+.brand-about-body{padding:30px 0}
+.brand-about-body section{display:grid;grid-template-columns:1fr 1.2fr;column-gap:8%;padding:35px 0}
+.brand-about-body h2{font-size:clamp(29px,3vw,40px);line-height:1.18;font-weight:500;letter-spacing:-.025em;grid-column:1;grid-row:span 3}
+.brand-about-body p{grid-column:2;margin-bottom:22px;font-size:18px;line-height:1.8;color:#66574a}
+.brand-about-body .editorial-link{grid-column:2;justify-self:start}
+.brand-about>.brand-trademarks{margin-bottom:35px}
+@media(max-width:1100px){.main-nav>.wrap{gap:0}.main-nav a{font-size:13px;padding-left:8px;padding-right:8px}.softgel-story-hero{padding:38px 35px 20px}.softgel-story-hero>div{gap:20px 30px}.softgel-story-hero h1{font-size:4.9vw}.softgel-story-hero>div>p{font-size:16px}.softgel-design{padding:35px;column-gap:40px}}
+@media(max-width:1000px){.brand-campaign .campaign-image{width:100%;height:auto;top:auto;bottom:0;mask-image:linear-gradient(to bottom,transparent,#000 14%,#000 100%)}}
+@media(min-width:641px) and (max-width:1000px){.brand-campaign .campaign-copy{top:35px;width:90%;max-width:720px}.brand-campaign .campaign-copy h1{font-size:58px}.brand-campaign .campaign-copy p{margin:18px 0 22px}}
+@media(max-width:800px){.softgel-story-hero>div{grid-template-columns:1fr}.softgel-story-hero h1{grid-row:auto;font-size:clamp(36px,7.8vw,58px)}.softgel-story-hero>div>p{max-width:560px}.softgel-story-hero figure{margin-top:25px}.softgel-manufacturing{justify-content:flex-start}.home-origin{gap:35px}.origin-facts>div{padding:23px}.softgel-section-opening{gap:30px}.softgel-collection-intro{grid-template-columns:1fr 150px;padding:28px;gap:20px}.softgel-collection-intro img{width:150px}.softgel-product-story{gap:30px;padding:30px}.brand-about-heading{gap:30px}.brand-about-heading p{font-size:18px}.brand-about-body section{column-gap:40px}}
+@media(max-width:640px){.brand-campaign .campaign-copy{top:30px;left:24px;width:calc(100% - 48px);max-width:none}.brand-campaign .campaign-copy h1{font-size:clamp(30px,7.8vw,45px);letter-spacing:-.03em}.brand-campaign .campaign-copy p{font-size:16px;margin:17px 0 20px;line-height:1.65}.home-origin{grid-template-columns:1fr;gap:25px;padding-top:0;padding-bottom:55px}.home-origin>div>p{font-size:16px;margin:20px 0}.origin-facts{gap:15px}.origin-facts p{font-size:16px}.shop-brand-line{padding:22px}.shop-brand-line>a{display:block;font-size:24px;line-height:1.25}.shop-brand-line span{display:block;margin-top:12px}.softgel-collection-intro{grid-template-columns:minmax(0,1fr) 95px;padding:22px;gap:15px}.softgel-collection-intro h2{font-size:25px}.softgel-collection-intro p{font-size:15px}.softgel-collection-intro .editorial-link{font-size:14px}.softgel-product-story{grid-template-columns:1fr;gap:20px;padding:25px;margin-top:35px}.softgel-product-story h2{font-size:28px}.softgel-product-story>div>p:not(.softgel-signature){font-size:16px}.softgel-story-hero{padding:28px 22px 20px}.softgel-story-hero>div{gap:19px}.softgel-story-hero h1{font-size:clamp(27px,7.2vw,43px)}.softgel-story-hero figure{margin-left:-12px;margin-right:-12px}.softgel-story-hero figcaption{padding:0 12px;text-align:left;font-size:13px}.softgel-story-hero .button{font-size:14px;padding:13px 16px}.softgel-manufacturing{display:grid;gap:10px;padding:22px 0;font-size:14px}.softgel-formulation-section{padding:35px 0 50px}.softgel-section-opening{grid-template-columns:1fr;gap:20px;margin-bottom:30px}.softgel-section-opening p{font-size:16px}.softgel-formulation-grid{grid-template-columns:1fr;gap:34px}.softgel-formulation-grid>article{grid-template-columns:110px minmax(0,1fr);grid-template-rows:auto;grid-row:auto;gap:10px 18px}.softgel-formulation-grid>article>a:first-child{grid-column:1;grid-row:1/7;align-self:start;margin:0}.softgel-formulation-grid>article>:not(a:first-child){grid-column:2}.softgel-formulation-grid h3{font-size:26px}.softgel-formulation-grid p{font-size:15px}.softgel-formulation-grid strong{font-size:14px}.softgel-design{padding:26px 22px;grid-template-columns:1fr;gap:30px;margin-bottom:50px}.softgel-design h2{font-size:31px}.softgel-design-intro p{font-size:16px;margin-top:20px}.softgel-layer-key{gap:25px}.softgel-science-note summary{padding:17px;font-size:16px}.softgel-science-note>div{padding:0 17px 20px}.softgel-science-note p{font-size:15px}.softgel-full-collection .section-intro{align-items:start;gap:15px}.softgel-full-collection .section-intro p{font-size:16px}.softgel-origin-line{grid-template-columns:1fr;gap:20px;padding:50px 0 30px}.softgel-origin-line p{font-size:16px}.softgel-origin-line .editorial-link{grid-column:1}.brand-about-heading{grid-template-columns:1fr;gap:25px;padding:5px 0 30px}.brand-about-heading p{font-size:18px}.brand-about-photo{height:270px}.brand-about-body{padding:10px 0}.brand-about-body section{grid-template-columns:1fr;gap:22px;padding:28px 0}.brand-about-body h2{grid-column:1;grid-row:auto;font-size:32px}.brand-about-body p{grid-column:1;font-size:16px;margin:0}.brand-about-body .editorial-link{grid-column:1}.brand-about>.brand-trademarks{margin-top:15px}.footer-brand{padding-top:25px;padding-bottom:15px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
