@@ -2,6 +2,13 @@
 
 A custom React storefront with an original Biomod campaign, using 50 real Biomod products, approved brand graphics, source-grounded product descriptions, and published laboratory documents. There is no WooCommerce or WordPress runtime integration. Source URLs are retained only as provenance and original public certificate links.
 
+## Search and imagery update
+
+- Added three labeled AI product illustrations, product-gallery controls and a sourced Locations page in navigation.
+- Replaced generic slogans and removed raw promotional source descriptions from the public catalog/API.
+- Added server metadata, canonical URLs, sitemap/robots routes, structured data, real 404s and protected search-publication controls. Preview indexing remains disabled. See `docs/seo-publication-v7.md` for configuration, source conflicts and review requirements.
+- Verify with `node tests/seo-v7.cjs` and `python3 tests/seo-http-v7.py` against the local preview.
+
 ## September 2026 redesign
 
 - Original black and bronze campaign image generated from real AZURE, BPC-157 and FORGE product graphics. Collection routes, product presentation, mobile selectors and testing library rebuilt for Biomod.

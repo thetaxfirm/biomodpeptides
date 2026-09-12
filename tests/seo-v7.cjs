@@ -1,0 +1,35 @@
+/* Publication eligibility tests. No network, credentials, or live configuration. */
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const ts = require('typescript');
+require.extensions['.ts'] = (module, filename) => module._compile(ts.transpileModule(fs.readFileSync(filename, 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText, filename);
+const { seoConfig, mayIndex, sitemapPaths, pageInfo, canonicalPath, productReviewBlocks } = require('../lib/seo-policy.ts');
+const { products, mass, specificationNote } = require('../lib/catalog.ts');
+const query = new URLSearchParams();
+assert.equal(seoConfig().enabled, false);
+assert.deepEqual(sitemapPaths(seoConfig()), []);
+const base = { SEO_PUBLIC_ORIGIN: 'https://biomodpeptides.com', SEO_PUBLIC_LAUNCH_APPROVED: 'true', SEO_INDEXING_ENABLED: 'true', SEO_REVIEWED_PRODUCT_SLUGS: 'bpc-157-10mg,noctis-blend-spray,softgel-methylene-blue-usp' };
+for (const origin of ['http://biomodpeptides.com','https://biomodpeptides.com.evil.invalid','https://biomodpeptides.com@evil.invalid','https://biomodpeptides.com/shop','https://biomodpeptides.com?x=1','https://biomod-peptides.xovanova.chatgpt.site','https://localhost']) assert.equal(seoConfig({...base,SEO_PUBLIC_ORIGIN:origin}).enabled,false,origin);
+assert.equal(seoConfig({...base,SEO_PUBLIC_LAUNCH_APPROVED:'false'}).enabled,false);
+assert.equal(seoConfig({...base,SEO_INDEXING_ENABLED:'false'}).enabled,false);
+const live=seoConfig(base);
+assert.equal(mayIndex('/',query,live),true);
+assert.equal(mayIndex('/product/bpc-157-10mg',query,live),true);
+assert.equal(mayIndex('/product/ghk-cu-50mg',query,live),false);
+for (const slug of Object.keys(productReviewBlocks)) assert.equal(mayIndex('/product/'+slug,query,seoConfig({...base,SEO_REVIEWED_PRODUCT_SLUGS:slug})),false,slug);
+for (const path of ['/cart','/checkout','/account','/account/orders','/admin','/api/store/state','/auth/google','/payment/return','/login','/register','/multi-pack','/locations','/terms-of-sale','/privacy-policy','/fake','/product/does-not-exist','/testing/201-10-0001','/about-biomod','/coa']) assert.equal(mayIndex(path,query,live),false,path);
+assert.equal(mayIndex('/',new URLSearchParams('q=test'),live),false);
+assert.equal(mayIndex('/shop',new URLSearchParams('q=weight+loss'),live),false);
+assert.equal(mayIndex('/shop',new URLSearchParams('category=softgels'),live),false);
+assert.equal(mayIndex('/product/bpc-157-10mg',new URLSearchParams('pack=10'),live),false);
+assert.equal(canonicalPath('/about-biomod'),'/about');
+assert.equal(canonicalPath('/testing/201-10-0001'),'/testing');
+assert(sitemapPaths(live).includes('/product/bpc-157-10mg'));
+assert(!sitemapPaths(live).some(p=>p.includes('noctis')||p.includes('azure')||p.includes('cart')));
+assert(!seoConfig({...base,SEO_REVIEWED_PRODUCT_SLUGS:'*'}).approvedProducts.size);
+for(const p of products){const metadata=pageInfo('/product/'+p.slug);assert(!/Purity:|weight loss|fat loss|treats|heals|cognitive support|anti-aging|FDA.approved/i.test(metadata.description),p.slug);assert(!/Purity:|CAS:|dosage|cognitive support/i.test(p.description),p.slug);}
+const heat = products.find(p=>p.slug==='heat-r-20mg');
+assert.equal(mass(heat),null);
+assert.match(specificationNote(heat),/20 mg and 30 mg/);
+assert.match(heat.description,/require confirmation/);
+console.log('PASS: preview defaults, strict origin validation, launch gates, product-specific allowlist, specification holds, private and query routes, sitemap eligibility, and factual metadata');

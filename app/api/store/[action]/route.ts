@@ -8,6 +8,7 @@ import { all, one, run, uid, timestamp, parse, runtime, database } from '@/lib/r
 import { checkout, reconcile, addressSchema, issueQuote } from '@/lib/checkout';
 import { getChasePaymentStatus } from '@/lib/chase-payments';
 import { packSizes, supportsPacks } from '@/lib/packs';
+import { searchReport, seoConfig } from '@/lib/seo-policy';
 export const dynamic = 'force-dynamic';
 const j = (value: unknown, status = 200) => NextResponse.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
 const str = (v: unknown, max = 2000) => z.string().trim().min(1).max(max).parse(v);
@@ -64,7 +65,7 @@ export async function GET(req: NextRequest, { params }: {
         }
         if (action === 'admin') {
             await requireAdmin();
-            return j({ config: await config(), products: await catalog(), orders: (await all<{
+            return j({ searchPublishing: searchReport(seoConfig(runtime())), config: await config(), products: await catalog(), orders: (await all<{
                     data: string;
                 }>('SELECT id,owner,status,total,data,created FROM orders ORDER BY created DESC LIMIT 200')).map(o => ({ ...o, data: parse(o.data, {}) })), requests: (await all<{
                     data: string;

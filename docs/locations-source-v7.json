@@ -1,0 +1,14 @@
+{
+  "reviewedOn": "2026-09-12",
+  "sources": [
+    "https://biomodpeptides.com/locations/",
+    "https://biomodpeptides.com/terms-of-sale/",
+    "https://biomodpeptides.com/contact/"
+  ],
+  "suiteConflict": {
+    "locations": "D420",
+    "terms": "D418"
+  },
+  "status": "Owner confirmation requested; disputed suite and unverified hours omitted.",
+  "localBusinessSchema": false
+}

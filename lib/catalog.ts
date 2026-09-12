@@ -1,9 +1,10 @@
-import source from './catalog-source-v1.json';
+import source from './catalog-facts-v2.json';
 import competitive from './competitive-pricing-v2.json';
-import editorial from './product-editorial-v1.json';
 export type Product = {
     id: number;
     name: string;
+    identity: string;
+    casNumber: string;
     slug: string;
     categories: {
         name: string;
@@ -37,10 +38,8 @@ export const size = (p: Product) => p.sizes[0] || '';
 export const mass = (p: Product) => { if (p.categories[0]?.slug !== 'research-peptides')
     return null; const m = size(p).match(/^(\d+(?:\.\d+)?)\s*mg\b/i); return m ? Number(m[1]) : null; };
 export const imagePath = (p: Product) => '/products/' + p.image.filename;
-export const cas = (p: Product) => p.description.match(/CAS:\s*([\d\s/\-]+)[.]/)?.[1]?.trim() || '';
-type Editorial = { identity: string; description: string; format: string; ambiguities: string[] };
-export const productEditorial = (p: Product) => (editorial.products as Record<string, Editorial>)[p.slug];
-export const compound = (p: Product) => productEditorial(p)?.identity || p.description.match(/Active compounds?:\s*([^\n]+?)(?:\.\s+[A-Z]|$)/i)?.[1]?.trim() || p.name;
+export const cas = (p: Product) => p.casNumber || '';
+export const compound = (p: Product) => p.identity || p.name;
 export const productFormat = (p: Product) => p.categories.some(c => c.slug === 'softgels') ? 'Softgels' : p.categories.some(c => c.slug === 'spray-products') ? 'Spray' : p.categories.some(c => c.slug === 'research-peptides') ? 'Vial' : 'Research supply';
-export const productSummary = (p: Product) => productEditorial(p)?.description || `${compound(p)} supplied as ${size(p) || 'a research supply'}. Review the product specifications and available batch documentation below.`;
-export const specificationNote = (p: Product) => p.slug === 'softgel-lumen-ghk-cu-ahk-cu-astaxanthin-vitamin-e' ? 'Astaxanthin quantities differ between the source specifications. Confirm the current formulation with Biomod before ordering.' : p.slug === 'noctis-blend-spray' ? 'Source documents list both 110 mg and 111 mg per bottle. Confirm the current bottle specification with Biomod.' : '';
+export const productSummary = (p: Product) => p.description;
+export const specificationNote = (p: Product) => p.slug === 'softgel-lumen-ghk-cu-ahk-cu-astaxanthin-vitamin-e' ? 'Astaxanthin quantities differ between the source specifications. Confirm the current formulation with Biomod before ordering.' : p.slug === 'noctis-blend-spray' ? 'Source documents list both 110 mg and 111 mg per bottle. Confirm the current bottle specification with Biomod.' : p.slug === 'zenith-semax-selank-spray' ? 'The full specification lists 100 mg per bottle; an older product summary lists 20 mg. Confirm the current label before ordering.' : p.slug === 'heat-r-20mg' ? 'Published records list both 20 mg and 30 mg and do not state a full compound identity. Confirm the compound and current vial content with Biomod before ordering.' : p.slug.startsWith('heat-r-') || p.slug === 'heat-t-20mg' ? 'The available records use this product name without stating a full compound identity. Contact Biomod for the complete identity before ordering.' : '';

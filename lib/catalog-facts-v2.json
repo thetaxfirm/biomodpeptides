@@ -1,0 +1,1850 @@
+[
+  {
+    "id": 5026,
+    "name": "SLU-PP-332",
+    "slug": "slu-pp-332",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 7900,
+    "regularPrice": 7900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-026",
+    "permalink": "https://biomodpeptides.com/product/slu-pp-332/",
+    "image": {
+      "filename": "slu-pp-332-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/08/SLU-PP-332-5MG.jpg",
+      "alt": "SLU-PP-332",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/08/SLU-PP-332-5MG.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "5mg / vial"
+    ],
+    "identity": "SLU-PP-332 (ERR agonist)",
+    "casNumber": "2245445-83-6",
+    "description": "SLU-PP-332 (ERR agonist) in a 5 mg vial.",
+    "shortDescription": "SLU-PP-332 (ERR agonist) in a 5 mg vial.",
+    "sourceIssues": []
+  },
+  {
+    "id": 4357,
+    "name": "GLOW",
+    "slug": "glow-spray",
+    "categories": [
+      {
+        "name": "Spray Products",
+        "slug": "spray-products"
+      }
+    ],
+    "price": 9900,
+    "regularPrice": 9900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-SPR-002",
+    "permalink": "https://biomodpeptides.com/product/glow-spray/",
+    "image": {
+      "filename": "glow-spray-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/08/GLOW-1.png",
+      "alt": "GLOW",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/08/GLOW-1.png"
+    ],
+    "attributes": [],
+    "sizes": [
+      "100mg / bottle"
+    ],
+    "identity": "GHK-Cu",
+    "casNumber": "49557-75-7",
+    "description": "GHK-Cu spray solution with a listed total content of 100 mg per bottle.",
+    "shortDescription": "GHK-Cu spray solution with a listed total content of 100 mg per bottle.",
+    "sourceIssues": []
+  },
+  {
+    "id": 1095,
+    "name": "Acetic Acid Solution 1%",
+    "slug": "acetic-acid-solution-1",
+    "categories": [
+      {
+        "name": "Aminos & Liquids",
+        "slug": "aminos-liquids"
+      }
+    ],
+    "price": 800,
+    "regularPrice": 800,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LAB-002",
+    "permalink": "https://biomodpeptides.com/product/acetic-acid-solution-1/",
+    "image": {
+      "filename": "acetic-acid-solution-1-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/Acetic-Acid.png",
+      "alt": "Acetic Acid Solution 1%",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/Acetic-Acid.png"
+    ],
+    "attributes": [],
+    "sizes": [],
+    "identity": "Acetic Acid Solution 1%",
+    "casNumber": "",
+    "description": "Acetic Acid Solution 1%.",
+    "shortDescription": "Acetic Acid Solution 1%.",
+    "sourceIssues": []
+  },
+  {
+    "id": 852,
+    "name": "ERASER",
+    "slug": "softgel-eraser-tesofensine",
+    "categories": [
+      {
+        "name": "Softgels",
+        "slug": "softgels"
+      }
+    ],
+    "price": 17900,
+    "regularPrice": 17900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-SOF-001",
+    "permalink": "https://biomodpeptides.com/product/softgel-eraser-tesofensine/",
+    "image": {
+      "filename": "softgel-eraser-tesofensine-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/Eraser-scaled.jpg",
+      "alt": "ERASER",
+      "width": 1280,
+      "height": 854
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/Eraser-scaled.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "60 caps"
+    ],
+    "identity": "Tesofensine",
+    "casNumber": "457657-66-8",
+    "description": "Tesofensine in a 60-capsule softgel format.",
+    "shortDescription": "Tesofensine in a 60-capsule softgel format.",
+    "sourceIssues": []
+  },
+  {
+    "id": 788,
+    "name": "SEMAX",
+    "slug": "semax",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 7900,
+    "regularPrice": 7900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-029",
+    "permalink": "https://biomodpeptides.com/product/semax/",
+    "image": {
+      "filename": "semax-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/Semax.jpg",
+      "alt": "SEMAX",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/Semax.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10mg / vial"
+    ],
+    "identity": "Semax (ACTH 4–10 analog)",
+    "casNumber": "80714-61-0",
+    "description": "Semax (ACTH 4–10 analog) in a 10 mg vial.",
+    "shortDescription": "Semax (ACTH 4–10 analog) in a 10 mg vial.",
+    "sourceIssues": []
+  },
+  {
+    "id": 787,
+    "name": "MOTS-C 40mg",
+    "slug": "mots-c-40mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 9900,
+    "regularPrice": 9900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-018-40",
+    "permalink": "https://biomodpeptides.com/product/mots-c-40mg/",
+    "image": {
+      "filename": "mots-c-40mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/MOTS-C-40MG.jpg",
+      "alt": "MOTS-C 40mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/MOTS-C-40MG.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "40mg"
+    ],
+    "identity": "MOTS-c",
+    "casNumber": "1627580-64-6",
+    "description": "MOTS-c in a 40 mg vial.",
+    "shortDescription": "MOTS-c in a 40 mg vial.",
+    "sourceIssues": []
+  },
+  {
+    "id": 786,
+    "name": "Glutathione",
+    "slug": "glutathione-reduced-l-glutathione",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 7900,
+    "regularPrice": 7900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-EXT-004",
+    "permalink": "https://biomodpeptides.com/product/glutathione-reduced-l-glutathione/",
+    "image": {
+      "filename": "glutathione-reduced-l-glutathione-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/GLUTATHIONE-1500MG.jpg",
+      "alt": "Glutathione",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/GLUTATHIONE-1500MG.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "1500mg / vial"
+    ],
+    "identity": "Reduced L-Glutathione",
+    "casNumber": "70-18-8",
+    "description": "Reduced L-Glutathione in a 1500 mg vial.",
+    "shortDescription": "Reduced L-Glutathione in a 1500 mg vial.",
+    "sourceIssues": []
+  },
+  {
+    "id": 785,
+    "name": "SELANK",
+    "slug": "selank",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 7900,
+    "regularPrice": 7900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-028",
+    "permalink": "https://biomodpeptides.com/product/selank/",
+    "image": {
+      "filename": "selank-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/Selank.jpg",
+      "alt": "SELANK",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/Selank.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10mg / vial"
+    ],
+    "identity": "Selank",
+    "casNumber": "129954-34-3",
+    "description": "Selank in a 10 mg vial.",
+    "shortDescription": "Selank in a 10 mg vial.",
+    "sourceIssues": []
+  },
+  {
+    "id": 784,
+    "name": "Lipo-C w/B12",
+    "slug": "lipo-c-w-b12",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 7900,
+    "regularPrice": 7900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-027",
+    "permalink": "https://biomodpeptides.com/product/lipo-c-w-b12/",
+    "image": {
+      "filename": "lipo-c-w-b12-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/LIPO-C-B12.jpg",
+      "alt": "Lipo-C w/B12",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/LIPO-C-B12.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10ml"
+    ],
+    "identity": "MIC Blend + Methylcobalamin",
+    "casNumber": "59-18-2 / 87-89-8 / 67-41-1 / 13422-55-4",
+    "description": "MIC Blend + Methylcobalamin in a 10 ml vial.",
+    "shortDescription": "MIC Blend + Methylcobalamin in a 10 ml vial.",
+    "sourceIssues": []
+  },
+  {
+    "id": 783,
+    "name": "5-Amino-1MQ",
+    "slug": "5-amino-1mq-50mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 7900,
+    "regularPrice": 7900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-025",
+    "permalink": "https://biomodpeptides.com/product/5-amino-1mq-50mg/",
+    "image": {
+      "filename": "5-amino-1mq-50mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/5-Amino-1MQ-50MG-1.jpg",
+      "alt": "5-Amino-1MQ",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/5-Amino-1MQ-50MG-1.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "50mg / vial"
+    ],
+    "identity": "5-Amino-1-Methylquinolinium",
+    "casNumber": "331717-54-1",
+    "description": "5-Amino-1-Methylquinolinium in a 50 mg vial.",
+    "shortDescription": "5-Amino-1-Methylquinolinium in a 50 mg vial.",
+    "sourceIssues": []
+  },
+  {
+    "id": 781,
+    "name": "DELTA",
+    "slug": "softgel-delta-pinealon-epithalon",
+    "categories": [
+      {
+        "name": "Softgels",
+        "slug": "softgels"
+      }
+    ],
+    "price": 17900,
+    "regularPrice": 17900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-SOF-007",
+    "permalink": "https://biomodpeptides.com/product/softgel-delta-pinealon-epithalon/",
+    "image": {
+      "filename": "softgel-delta-pinealon-epithalon-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/Delta-scaled.jpg",
+      "alt": "DELTA",
+      "width": 1280,
+      "height": 854
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/Delta-scaled.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "30 caps"
+    ],
+    "identity": "Pinealon + Epitalon",
+    "casNumber": "147551-89-5 / 307297-39-8",
+    "description": "A two-compound softgel containing Pinealon and Epitalon, supplied as 30 capsules.",
+    "shortDescription": "A two-compound softgel containing Pinealon and Epitalon, supplied as 30 capsules.",
+    "sourceIssues": []
+  },
+  {
+    "id": 780,
+    "name": "NEXUS",
+    "slug": "softgel-nexus-dihexa-j-147",
+    "categories": [
+      {
+        "name": "Softgels",
+        "slug": "softgels"
+      }
+    ],
+    "price": 21900,
+    "regularPrice": 21900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-SOF-006",
+    "permalink": "https://biomodpeptides.com/product/softgel-nexus-dihexa-j-147/",
+    "image": {
+      "filename": "softgel-nexus-dihexa-j-147-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/Nexus-scaled.jpg",
+      "alt": "NEXUS",
+      "width": 1280,
+      "height": 854
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/Nexus-scaled.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "30 caps"
+    ],
+    "identity": "Dihexa + J-147",
+    "casNumber": "1401708-83-5 / 1146963-51-0",
+    "description": "Dihexa and J-147 combined in a 30-capsule softgel format.",
+    "shortDescription": "Dihexa and J-147 combined in a 30-capsule softgel format.",
+    "sourceIssues": []
+  },
+  {
+    "id": 779,
+    "name": "AZURE",
+    "slug": "softgel-methylene-blue-usp",
+    "categories": [
+      {
+        "name": "Softgels",
+        "slug": "softgels"
+      }
+    ],
+    "price": 16900,
+    "regularPrice": 16900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-SOF-005",
+    "permalink": "https://biomodpeptides.com/product/softgel-methylene-blue-usp/",
+    "image": {
+      "filename": "softgel-methylene-blue-usp-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/Azure-scaled.jpg",
+      "alt": "AZURE",
+      "width": 1280,
+      "height": 854
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/Azure-scaled.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "60 caps"
+    ],
+    "identity": "Methylene Blue",
+    "casNumber": "61-73-4",
+    "description": "Methylene Blue in a 60-capsule softgel format.",
+    "shortDescription": "Methylene Blue in a 60-capsule softgel format.",
+    "sourceIssues": []
+  },
+  {
+    "id": 778,
+    "name": "SCULPTOR",
+    "slug": "softgel-sculptor-atx-304",
+    "categories": [
+      {
+        "name": "Softgels",
+        "slug": "softgels"
+      }
+    ],
+    "price": 23900,
+    "regularPrice": 23900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-SOF-004",
+    "permalink": "https://biomodpeptides.com/product/softgel-sculptor-atx-304/",
+    "image": {
+      "filename": "softgel-sculptor-atx-304-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/Sculptor-scaled.jpg",
+      "alt": "SCULPTOR",
+      "width": 1280,
+      "height": 854
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/Sculptor-scaled.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "60 caps"
+    ],
+    "identity": "O-304 (ATX-304)",
+    "casNumber": "1261289-04-6",
+    "description": "O-304, also listed as ATX-304, supplied as 60 softgel capsules.",
+    "shortDescription": "O-304, also listed as ATX-304, supplied as 60 softgel capsules.",
+    "sourceIssues": []
+  },
+  {
+    "id": 777,
+    "name": "LUMEN",
+    "slug": "softgel-lumen-ghk-cu-ahk-cu-astaxanthin-vitamin-e",
+    "categories": [
+      {
+        "name": "Softgels",
+        "slug": "softgels"
+      }
+    ],
+    "price": 22900,
+    "regularPrice": 22900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-SOF-003",
+    "permalink": "https://biomodpeptides.com/product/softgel-lumen-ghk-cu-ahk-cu-astaxanthin-vitamin-e/",
+    "image": {
+      "filename": "softgel-lumen-ghk-cu-ahk-cu-astaxanthin-vitamin-e-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/Lumen-scaled.jpg",
+      "alt": "LUMEN",
+      "width": 1280,
+      "height": 854
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/Lumen-scaled.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "60 caps"
+    ],
+    "identity": "GHK-Cu + AHK-Cu + Astaxanthin + Vitamin E",
+    "casNumber": "49557-75-7 / 89030-95-5 / 472-61-7",
+    "description": "A four-component formula of GHK-Cu, AHK-Cu, astaxanthin and vitamin E, supplied as 60 softgel capsules.",
+    "shortDescription": "A four-component formula of GHK-Cu, AHK-Cu, astaxanthin and vitamin E, supplied as 60 softgel capsules.",
+    "sourceIssues": []
+  },
+  {
+    "id": 776,
+    "name": "BIONIC",
+    "slug": "softgel-bionic-bpc-157-arginate-kpv-vitamin-e",
+    "categories": [
+      {
+        "name": "Softgels",
+        "slug": "softgels"
+      }
+    ],
+    "price": 18900,
+    "regularPrice": 18900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-SOF-002",
+    "permalink": "https://biomodpeptides.com/product/softgel-bionic-bpc-157-arginate-kpv-vitamin-e/",
+    "image": {
+      "filename": "softgel-bionic-bpc-157-arginate-kpv-vitamin-e-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/Bionic-scaled.jpg",
+      "alt": "BIONIC",
+      "width": 1280,
+      "height": 854
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/Bionic-scaled.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "60 caps"
+    ],
+    "identity": "BPC-157 Arginate + KPV + Vitamin E",
+    "casNumber": "137525-51-0 / 67727-97-3",
+    "description": "BPC-157 Arginate, KPV and vitamin E combined in a 60-capsule softgel format.",
+    "shortDescription": "BPC-157 Arginate, KPV and vitamin E combined in a 60-capsule softgel format.",
+    "sourceIssues": []
+  },
+  {
+    "id": 775,
+    "name": "NOCTIS",
+    "slug": "noctis-blend-spray",
+    "categories": [
+      {
+        "name": "Spray Products",
+        "slug": "spray-products"
+      }
+    ],
+    "price": 11900,
+    "regularPrice": 11900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-SPR-009",
+    "permalink": "https://biomodpeptides.com/product/noctis-blend-spray/",
+    "image": {
+      "filename": "noctis-blend-spray-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/NOCTIS-2.png",
+      "alt": "NOCTIS",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/NOCTIS-2.png"
+    ],
+    "attributes": [],
+    "sizes": [
+      "Bottle; content specification pending confirmation"
+    ],
+    "identity": "Pinealon + Selank + DSIP + Oxytocin + Melatonin",
+    "casNumber": "147551-89-5 / 129954-34-3 / 62568-57-4 / 50-56-6",
+    "description": "A spray formula combining Pinealon, Selank, DSIP, oxytocin and melatonin.",
+    "shortDescription": "A spray formula combining Pinealon, Selank, DSIP, oxytocin and melatonin.",
+    "sourceIssues": []
+  },
+  {
+    "id": 774,
+    "name": "SOLARA",
+    "slug": "solara-melanotan-ii-spray",
+    "categories": [
+      {
+        "name": "Spray Products",
+        "slug": "spray-products"
+      }
+    ],
+    "price": 7900,
+    "regularPrice": 7900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-SPR-010",
+    "permalink": "https://biomodpeptides.com/product/solara-melanotan-ii-spray/",
+    "image": {
+      "filename": "solara-melanotan-ii-spray-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/SOLARA.png",
+      "alt": "SOLARA",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/SOLARA.png"
+    ],
+    "attributes": [],
+    "sizes": [
+      "20mg / bottle"
+    ],
+    "identity": "Melanotan II",
+    "casNumber": "121062-08-6",
+    "description": "Melanotan II spray solution with a listed total content of 20 mg per bottle.",
+    "shortDescription": "Melanotan II spray solution with a listed total content of 20 mg per bottle.",
+    "sourceIssues": []
+  },
+  {
+    "id": 773,
+    "name": "FORGE",
+    "slug": "forge-bpc-157-spray",
+    "categories": [
+      {
+        "name": "Spray Products",
+        "slug": "spray-products"
+      }
+    ],
+    "price": 8900,
+    "regularPrice": 8900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-SPR-001",
+    "permalink": "https://biomodpeptides.com/product/forge-bpc-157-spray/",
+    "image": {
+      "filename": "forge-bpc-157-spray-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/FORGE-3.png",
+      "alt": "FORGE",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/FORGE-3.png"
+    ],
+    "attributes": [],
+    "sizes": [
+      "50mg / bottle"
+    ],
+    "identity": "BPC-157",
+    "casNumber": "137525-51-0",
+    "description": "BPC-157 in a spray format with a listed total content of 50 mg per bottle.",
+    "shortDescription": "BPC-157 in a spray format with a listed total content of 50 mg per bottle.",
+    "sourceIssues": []
+  },
+  {
+    "id": 772,
+    "name": "FLUX",
+    "slug": "flux-nad-spray",
+    "categories": [
+      {
+        "name": "Spray Products",
+        "slug": "spray-products"
+      }
+    ],
+    "price": 13900,
+    "regularPrice": 13900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-SPR-007",
+    "permalink": "https://biomodpeptides.com/product/flux-nad-spray/",
+    "image": {
+      "filename": "flux-nad-spray-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/FLUX-2.png",
+      "alt": "FLUX",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/FLUX-2.png"
+    ],
+    "attributes": [],
+    "sizes": [
+      "1000mg / bottle"
+    ],
+    "identity": "NAD+ (Nicotinamide Adenine Dinucleotide)",
+    "casNumber": "53-84-9",
+    "description": "NAD+ spray solution with a listed total content of 1,000 mg per bottle.",
+    "shortDescription": "NAD+ spray solution with a listed total content of 1,000 mg per bottle.",
+    "sourceIssues": []
+  },
+  {
+    "id": 771,
+    "name": "EQUIL",
+    "slug": "equil-selank-spray",
+    "categories": [
+      {
+        "name": "Spray Products",
+        "slug": "spray-products"
+      }
+    ],
+    "price": 7500,
+    "regularPrice": 7500,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-SPR-005",
+    "permalink": "https://biomodpeptides.com/product/equil-selank-spray/",
+    "image": {
+      "filename": "equil-selank-spray-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/EQUIL-2.png",
+      "alt": "EQUIL",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/EQUIL-2.png"
+    ],
+    "attributes": [],
+    "sizes": [
+      "60mg / bottle"
+    ],
+    "identity": "Selank",
+    "casNumber": "129954-34-3",
+    "description": "Selank spray solution with a listed total content of 60 mg per bottle.",
+    "shortDescription": "Selank spray solution with a listed total content of 60 mg per bottle.",
+    "sourceIssues": []
+  },
+  {
+    "id": 770,
+    "name": "APEX",
+    "slug": "apex-semax-spray",
+    "categories": [
+      {
+        "name": "Spray Products",
+        "slug": "spray-products"
+      }
+    ],
+    "price": 9900,
+    "regularPrice": 9900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-SPR-004",
+    "permalink": "https://biomodpeptides.com/product/apex-semax-spray/",
+    "image": {
+      "filename": "apex-semax-spray-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/APEX-2.png",
+      "alt": "APEX",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/APEX-2.png"
+    ],
+    "attributes": [],
+    "sizes": [
+      "60mg / bottle"
+    ],
+    "identity": "Semax",
+    "casNumber": "80714-61-0",
+    "description": "Semax spray solution with a listed total content of 60 mg per bottle.",
+    "shortDescription": "Semax spray solution with a listed total content of 60 mg per bottle.",
+    "sourceIssues": []
+  },
+  {
+    "id": 769,
+    "name": "ZENITH",
+    "slug": "zenith-semax-selank-spray",
+    "categories": [
+      {
+        "name": "Spray Products",
+        "slug": "spray-products"
+      }
+    ],
+    "price": 10900,
+    "regularPrice": 10900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-SPR-006",
+    "permalink": "https://biomodpeptides.com/product/zenith-semax-selank-spray/",
+    "image": {
+      "filename": "zenith-semax-selank-spray-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/ZENITH-2.png",
+      "alt": "ZENITH",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/ZENITH-2.png"
+    ],
+    "attributes": [],
+    "sizes": [
+      "Bottle; content specification pending confirmation"
+    ],
+    "identity": "Semax + Selank",
+    "casNumber": "80714-61-0 / 129954-34-3",
+    "description": "A spray solution combining Semax and Selank.",
+    "shortDescription": "A spray solution combining Semax and Selank.",
+    "sourceIssues": []
+  },
+  {
+    "id": 768,
+    "name": "KLOW",
+    "slug": "klow-spray",
+    "categories": [
+      {
+        "name": "Spray Products",
+        "slug": "spray-products"
+      }
+    ],
+    "price": 14900,
+    "regularPrice": 14900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-SPR-003",
+    "permalink": "https://biomodpeptides.com/product/klow-spray/",
+    "image": {
+      "filename": "klow-spray-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/KLOW.png",
+      "alt": "KLOW",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/KLOW.png"
+    ],
+    "attributes": [],
+    "sizes": [
+      "140mg / bottle"
+    ],
+    "identity": "GHK-Cu + BPC-157 + KPV",
+    "casNumber": "49557-75-7 / 137525-51-0 / 67727-97-3",
+    "description": "GHK-Cu, BPC-157 and KPV combined in a spray formula with 140 mg listed per bottle.",
+    "shortDescription": "GHK-Cu, BPC-157 and KPV combined in a spray formula with 140 mg listed per bottle.",
+    "sourceIssues": []
+  },
+  {
+    "id": 767,
+    "name": "IGNITE",
+    "slug": "ignite-pt-141-oxytocin-spray",
+    "categories": [
+      {
+        "name": "Spray Products",
+        "slug": "spray-products"
+      }
+    ],
+    "price": 12900,
+    "regularPrice": 12900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-SPR-008",
+    "permalink": "https://biomodpeptides.com/product/ignite-pt-141-oxytocin-spray/",
+    "image": {
+      "filename": "ignite-pt-141-oxytocin-spray-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/IGNITE-2.png",
+      "alt": "IGNITE",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/IGNITE-2.png"
+    ],
+    "attributes": [],
+    "sizes": [
+      "35mg / bottle"
+    ],
+    "identity": "PT-141 + Oxytocin",
+    "casNumber": "189691-06-3 / 50-56-6",
+    "description": "A spray formula combining PT-141 and oxytocin, with a listed total content of 35 mg per bottle.",
+    "shortDescription": "A spray formula combining PT-141 and oxytocin, with a listed total content of 35 mg per bottle.",
+    "sourceIssues": []
+  },
+  {
+    "id": 766,
+    "name": "GLOW",
+    "slug": "glow-70mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 12900,
+    "regularPrice": 12900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-023",
+    "permalink": "https://biomodpeptides.com/product/glow-70mg/",
+    "image": {
+      "filename": "glow-70mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/GLOW-1.jpg",
+      "alt": "GLOW 70mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/GLOW-1.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "70mg"
+    ],
+    "identity": "BPC-157 + GHK-Cu + TB-500",
+    "casNumber": "137525-51-0 / 49557-75-7 / 885340-08-9",
+    "description": "BPC-157 + GHK-Cu + TB-500 in a 70 mg vial.",
+    "shortDescription": "BPC-157 + GHK-Cu + TB-500 in a 70 mg vial.",
+    "sourceIssues": []
+  },
+  {
+    "id": 765,
+    "name": "KLOW",
+    "slug": "klow-80mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 14900,
+    "regularPrice": 14900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-022",
+    "permalink": "https://biomodpeptides.com/product/klow-80mg/",
+    "image": {
+      "filename": "klow-80mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/KLOW-1.jpg",
+      "alt": "KLOW 80mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/KLOW-1.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "80mg"
+    ],
+    "identity": "BPC-157 + GHK-Cu + TB-500 + KPV",
+    "casNumber": "137525-51-0 / 49557-75-7 / 885340-08-9 / 67727-97-3",
+    "description": "BPC-157 + GHK-Cu + TB-500 + KPV in a 80 mg vial.",
+    "shortDescription": "BPC-157 + GHK-Cu + TB-500 + KPV in a 80 mg vial.",
+    "sourceIssues": []
+  },
+  {
+    "id": 764,
+    "name": "Wolverine",
+    "slug": "wolverine-10mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 7900,
+    "regularPrice": 7900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-021",
+    "permalink": "https://biomodpeptides.com/product/wolverine-10mg/",
+    "image": {
+      "filename": "wolverine-10mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/BPC-5mg-TB-5mg-2.jpg",
+      "alt": "Wolverine 10mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/BPC-5mg-TB-5mg-2.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10mg"
+    ],
+    "identity": "BPC-157 + TB-500",
+    "casNumber": "137525-51-0 / 885340-08-9",
+    "description": "BPC-157 and TB-500 combined in a 10 mg lyophilized powder format.",
+    "shortDescription": "BPC-157 and TB-500 combined in a 10 mg lyophilized powder format.",
+    "sourceIssues": []
+  },
+  {
+    "id": 763,
+    "name": "Run & Gun",
+    "slug": "run-gun-10mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 7900,
+    "regularPrice": 7900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-020",
+    "permalink": "https://biomodpeptides.com/product/run-gun-10mg/",
+    "image": {
+      "filename": "run-gun-10mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/IPA-5mg-CJC-5mg-1.jpg",
+      "alt": "Run & Gun 10mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/IPA-5mg-CJC-5mg-1.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10mg"
+    ],
+    "identity": "Ipamorelin + CJC-1295 No DAC",
+    "casNumber": "170851-70-4 / 863288-34-0",
+    "description": "Ipamorelin and CJC-1295 No DAC combined in a 10 mg lyophilized powder format.",
+    "shortDescription": "Ipamorelin and CJC-1295 No DAC combined in a 10 mg lyophilized powder format.",
+    "sourceIssues": []
+  },
+  {
+    "id": 762,
+    "name": "DSIP",
+    "slug": "dsip-10mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 8900,
+    "regularPrice": 8900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-019",
+    "permalink": "https://biomodpeptides.com/product/dsip-10mg/",
+    "image": {
+      "filename": "dsip-10mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/DSIP.jpg",
+      "alt": "DSIP 10mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/DSIP.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10mg"
+    ],
+    "identity": "Delta Sleep-Inducing Peptide",
+    "casNumber": "62568-57-4",
+    "description": "Delta Sleep-Inducing Peptide in a 10 mg vial.",
+    "shortDescription": "Delta Sleep-Inducing Peptide in a 10 mg vial.",
+    "sourceIssues": []
+  },
+  {
+    "id": 761,
+    "name": "MOTS-c",
+    "slug": "mots-c-10mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 4900,
+    "regularPrice": 4900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-018",
+    "permalink": "https://biomodpeptides.com/product/mots-c-10mg/",
+    "image": {
+      "filename": "mots-c-10mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/MOTS-c.jpg",
+      "alt": "MOTS-c 10mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/MOTS-c.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10mg"
+    ],
+    "identity": "MOTS-c",
+    "casNumber": "1627580-64-6",
+    "description": "MOTS-c in a 10 mg vial.",
+    "shortDescription": "MOTS-c in a 10 mg vial.",
+    "sourceIssues": []
+  },
+  {
+    "id": 760,
+    "name": "SS-31",
+    "slug": "ss-31-10mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 4900,
+    "regularPrice": 4900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-017",
+    "permalink": "https://biomodpeptides.com/product/ss-31-10mg/",
+    "image": {
+      "filename": "ss-31-10mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/SS-31.jpg",
+      "alt": "SS-31 10mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/SS-31.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10mg"
+    ],
+    "identity": "Elamipretide",
+    "casNumber": "736992-21-5",
+    "description": "Elamipretide in a 10 mg vial.",
+    "shortDescription": "Elamipretide in a 10 mg vial.",
+    "sourceIssues": []
+  },
+  {
+    "id": 759,
+    "name": "Epitalon",
+    "slug": "epitalon-50mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 4900,
+    "regularPrice": 4900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-016",
+    "permalink": "https://biomodpeptides.com/product/epitalon-50mg/",
+    "image": {
+      "filename": "epitalon-50mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/Epitalon.jpg",
+      "alt": "Epitalon 50mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/Epitalon.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "50mg"
+    ],
+    "identity": "Epitalon Tetrapeptide",
+    "casNumber": "307297-39-8",
+    "description": "Epitalon Tetrapeptide in a 50 mg vial.",
+    "shortDescription": "Epitalon Tetrapeptide in a 50 mg vial.",
+    "sourceIssues": []
+  },
+  {
+    "id": 758,
+    "name": "AOD 9604",
+    "slug": "aod-9604-10mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 4900,
+    "regularPrice": 4900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-015",
+    "permalink": "https://biomodpeptides.com/product/aod-9604-10mg/",
+    "image": {
+      "filename": "aod-9604-10mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/AOD-9604-1.jpg",
+      "alt": "AOD 9604 10mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/AOD-9604-1.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10mg"
+    ],
+    "identity": "Fragment 176-191",
+    "casNumber": "221231-10-3",
+    "description": "Fragment 176-191 in a 10 mg vial.",
+    "shortDescription": "Fragment 176-191 in a 10 mg vial.",
+    "sourceIssues": []
+  },
+  {
+    "id": 757,
+    "name": "CJC-1295 No DAC",
+    "slug": "cjc-1295-no-dac-10mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 7900,
+    "regularPrice": 7900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-014",
+    "permalink": "https://biomodpeptides.com/product/cjc-1295-no-dac-10mg/",
+    "image": {
+      "filename": "cjc-1295-no-dac-10mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/CJC-1295-No-DAC-1.jpg",
+      "alt": "CJC-1295 No DAC 10mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/CJC-1295-No-DAC-1.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10mg"
+    ],
+    "identity": "Mod GRF 1-29",
+    "casNumber": "863288-34-0",
+    "description": "Mod GRF 1-29 in a 10 mg vial.",
+    "shortDescription": "Mod GRF 1-29 in a 10 mg vial.",
+    "sourceIssues": []
+  },
+  {
+    "id": 756,
+    "name": "GHK-Cu",
+    "slug": "ghk-cu-50mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 3900,
+    "regularPrice": 3900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-013",
+    "permalink": "https://biomodpeptides.com/product/ghk-cu-50mg/",
+    "image": {
+      "filename": "ghk-cu-50mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/GHK-Cu-1.jpg",
+      "alt": "GHK-Cu 50mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/GHK-Cu-1.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "50mg"
+    ],
+    "identity": "Copper Tripeptide-1",
+    "casNumber": "49557-75-7",
+    "description": "Copper Tripeptide-1 in a 50 mg vial.",
+    "shortDescription": "Copper Tripeptide-1 in a 50 mg vial.",
+    "sourceIssues": []
+  },
+  {
+    "id": 755,
+    "name": "Tesamorelin",
+    "slug": "tesamorelin-10mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 8900,
+    "regularPrice": 8900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-012",
+    "permalink": "https://biomodpeptides.com/product/tesamorelin-10mg/",
+    "image": {
+      "filename": "tesamorelin-10mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/Tesamorelin-1.jpg",
+      "alt": "Tesamorelin 10mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/Tesamorelin-1.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10mg"
+    ],
+    "identity": "Tesamorelin",
+    "casNumber": "218949-48-5",
+    "description": "Tesamorelin in a 10 mg vial.",
+    "shortDescription": "Tesamorelin in a 10 mg vial.",
+    "sourceIssues": []
+  },
+  {
+    "id": 754,
+    "name": "TB500",
+    "slug": "tb500-10mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 4900,
+    "regularPrice": 4900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-011",
+    "permalink": "https://biomodpeptides.com/product/tb500-10mg/",
+    "image": {
+      "filename": "tb500-10mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/TB500-1.jpg",
+      "alt": "TB500 10mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/TB500-1.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10mg"
+    ],
+    "identity": "Thymosin Beta-4",
+    "casNumber": "885340-08-9",
+    "description": "Thymosin Beta-4 in a 10 mg vial.",
+    "shortDescription": "Thymosin Beta-4 in a 10 mg vial.",
+    "sourceIssues": []
+  },
+  {
+    "id": 753,
+    "name": "BPC-157",
+    "slug": "bpc-157-10mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 4900,
+    "regularPrice": 4900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-010",
+    "permalink": "https://biomodpeptides.com/product/bpc-157-10mg/",
+    "image": {
+      "filename": "bpc-157-10mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/BPC-157-1.jpg",
+      "alt": "BPC-157 10mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/BPC-157-1.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10mg"
+    ],
+    "identity": "Body Protection Compound",
+    "casNumber": "137525-51-0",
+    "description": "Body Protection Compound in a 10 mg vial.",
+    "shortDescription": "Body Protection Compound in a 10 mg vial.",
+    "sourceIssues": []
+  },
+  {
+    "id": 752,
+    "name": "NAD+",
+    "slug": "nad-500mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 5900,
+    "regularPrice": 5900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-009",
+    "permalink": "https://biomodpeptides.com/product/nad-500mg/",
+    "image": {
+      "filename": "nad-500mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/NAD.jpg",
+      "alt": "NAD+ 500mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/NAD.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "500mg"
+    ],
+    "identity": "Nicotinamide Adenine Dinucleotide",
+    "casNumber": "53-84-9",
+    "description": "Nicotinamide Adenine Dinucleotide in a 500 mg vial.",
+    "shortDescription": "Nicotinamide Adenine Dinucleotide in a 500 mg vial.",
+    "sourceIssues": []
+  },
+  {
+    "id": 751,
+    "name": "Kisspeptin",
+    "slug": "kisspeptin-10mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 3900,
+    "regularPrice": 3900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-008",
+    "permalink": "https://biomodpeptides.com/product/kisspeptin-10mg/",
+    "image": {
+      "filename": "kisspeptin-10mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/Kisspeptin.jpg",
+      "alt": "Kisspeptin 10mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/Kisspeptin.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10mg"
+    ],
+    "identity": "Kisspeptin-10",
+    "casNumber": "374675-21-5",
+    "description": "Kisspeptin-10 in a 10 mg vial.",
+    "shortDescription": "Kisspeptin-10 in a 10 mg vial.",
+    "sourceIssues": []
+  },
+  {
+    "id": 750,
+    "name": "PT-141",
+    "slug": "pt-141-10mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 4900,
+    "regularPrice": 4900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-007",
+    "permalink": "https://biomodpeptides.com/product/pt-141-10mg/",
+    "image": {
+      "filename": "pt-141-10mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/PT-141.jpg",
+      "alt": "PT-141 10mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/PT-141.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10mg"
+    ],
+    "identity": "Bremelanotide",
+    "casNumber": "189691-06-3",
+    "description": "Bremelanotide in a 10 mg vial.",
+    "shortDescription": "Bremelanotide in a 10 mg vial.",
+    "sourceIssues": []
+  },
+  {
+    "id": 749,
+    "name": "KPV",
+    "slug": "kpv-10mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 4900,
+    "regularPrice": 4900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-006",
+    "permalink": "https://biomodpeptides.com/product/kpv-10mg/",
+    "image": {
+      "filename": "kpv-10mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/KPV-1.jpg",
+      "alt": "KPV 10mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/KPV-1.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10mg"
+    ],
+    "identity": "Lys-Pro-Val",
+    "casNumber": "67727-97-3",
+    "description": "Lys-Pro-Val in a 10 mg vial.",
+    "shortDescription": "Lys-Pro-Val in a 10 mg vial.",
+    "sourceIssues": []
+  },
+  {
+    "id": 748,
+    "name": "Thymosin Alpha-1",
+    "slug": "thymosin-alpha-1-10mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 5900,
+    "regularPrice": 5900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-005",
+    "permalink": "https://biomodpeptides.com/product/thymosin-alpha-1-10mg/",
+    "image": {
+      "filename": "thymosin-alpha-1-10mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/Thymosin-Alpha-1-1.jpg",
+      "alt": "Thymosin Alpha-1 10mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/Thymosin-Alpha-1-1.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10mg"
+    ],
+    "identity": "Thymosin Alpha-1",
+    "casNumber": "62304-98-7",
+    "description": "Thymosin Alpha-1 in a 10 mg vial.",
+    "shortDescription": "Thymosin Alpha-1 in a 10 mg vial.",
+    "sourceIssues": []
+  },
+  {
+    "id": 747,
+    "name": "C-HEAT",
+    "slug": "c-heat-10mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 11900,
+    "regularPrice": 11900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-004",
+    "permalink": "https://biomodpeptides.com/product/c-heat-10mg/",
+    "image": {
+      "filename": "c-heat-10mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/C-HEAT-1.jpg",
+      "alt": "C-HEAT 10mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/C-HEAT-1.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10mg"
+    ],
+    "identity": "Cagrilintide",
+    "casNumber": "1415456-99-3",
+    "description": "Cagrilintide in a 10 mg lyophilized powder format.",
+    "shortDescription": "Cagrilintide in a 10 mg lyophilized powder format.",
+    "sourceIssues": []
+  },
+  {
+    "id": 746,
+    "name": "C-HEAT-S",
+    "slug": "c-heat-s-10mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 12500,
+    "regularPrice": 12500,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-003",
+    "permalink": "https://biomodpeptides.com/product/c-heat-s-10mg/",
+    "image": {
+      "filename": "c-heat-s-10mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/C-HEAT-S.jpg",
+      "alt": "C-HEAT-S 10mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/C-HEAT-S.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10mg"
+    ],
+    "identity": "Cagrilintide + Semaglutide",
+    "casNumber": "1415456-99-3 / 910463-68-2",
+    "description": "Cagrilintide and semaglutide combined in a 10 mg lyophilized powder format.",
+    "shortDescription": "Cagrilintide and semaglutide combined in a 10 mg lyophilized powder format.",
+    "sourceIssues": []
+  },
+  {
+    "id": 744,
+    "name": "HEAT-T",
+    "slug": "heat-t-20mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 8900,
+    "regularPrice": 8900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-001",
+    "permalink": "https://biomodpeptides.com/product/heat-t-20mg/",
+    "image": {
+      "filename": "heat-t-20mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/HEAT-T-1.jpg",
+      "alt": "HEAT-T 20mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/HEAT-T-1.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "20mg"
+    ],
+    "identity": "HEAT-T",
+    "casNumber": "2023788-19-2",
+    "description": "HEAT-T in a 20 mg lyophilized powder format.",
+    "shortDescription": "HEAT-T in a 20 mg lyophilized powder format.",
+    "sourceIssues": []
+  },
+  {
+    "id": 745,
+    "name": "HEAT-R 30mg",
+    "slug": "heat-r-30mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 9900,
+    "regularPrice": 17900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-002",
+    "permalink": "https://biomodpeptides.com/product/heat-r-30mg/",
+    "image": {
+      "filename": "heat-r-30mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/HEAT-R-1.jpg",
+      "alt": "HEAT-R 30mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/HEAT-R-1.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "30mg"
+    ],
+    "identity": "HEAT-R",
+    "casNumber": "2381089-83-2",
+    "description": "HEAT-R in a 30 mg lyophilized powder format.",
+    "shortDescription": "HEAT-R in a 30 mg lyophilized powder format.",
+    "sourceIssues": []
+  },
+  {
+    "id": 1389,
+    "name": "HEAT-R 20mg",
+    "slug": "heat-r-20mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 8900,
+    "regularPrice": 12900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-002-20",
+    "permalink": "https://biomodpeptides.com/product/heat-r-20mg/",
+    "image": {
+      "filename": "heat-r-20mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/HEAT-R-20MG.jpg",
+      "alt": "HEAT-R 20MG",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/HEAT-R-20MG.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "Vial; content specification pending confirmation"
+    ],
+    "identity": "HEAT-R",
+    "casNumber": "2381089-83-2",
+    "description": "HEAT-R lyophilized powder. Compound identity and vial content require confirmation because the published specifications conflict.",
+    "shortDescription": "HEAT-R lyophilized powder. Compound identity and vial content require confirmation because the published specifications conflict.",
+    "sourceIssues": []
+  },
+  {
+    "id": 782,
+    "name": "CHISEL",
+    "slug": "softgel-chisel-aod-9604",
+    "categories": [
+      {
+        "name": "Softgels",
+        "slug": "softgels"
+      }
+    ],
+    "price": 16900,
+    "regularPrice": 16900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-SOF-008",
+    "permalink": "https://biomodpeptides.com/product/softgel-chisel-aod-9604/",
+    "image": {
+      "filename": "softgel-chisel-aod-9604-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/04/Chisel-scaled.jpg",
+      "alt": "CHISEL",
+      "width": 1280,
+      "height": 854
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/04/Chisel-scaled.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "60 caps"
+    ],
+    "identity": "AOD 9604",
+    "casNumber": "221231-10-3",
+    "description": "AOD 9604 in a 60-capsule softgel format.",
+    "shortDescription": "AOD 9604 in a 60-capsule softgel format.",
+    "sourceIssues": []
+  }
+]
