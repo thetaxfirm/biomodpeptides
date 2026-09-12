@@ -3,6 +3,7 @@ import { Header } from "@/components/store/header";
 import "./globals.css";
 import "./storefront-v6.css";
 import "./storefront-v7.css";
+import "./storefront-v9.css";
 import {AgeGate} from "@/components/store/age-gate";
 import {StoreProvider} from "@/components/store/provider";
 import {Footer} from "@/components/store/content";
