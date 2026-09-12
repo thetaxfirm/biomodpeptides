@@ -1,0 +1,99 @@
+import { quote, CartLine } from './commerce';
+import { one, run, uid, timestamp, runtime, parse } from './runtime';
+import { createChaseAdapter, chaseOrderReference } from './chase-payments';
+import { z } from 'zod';
+export const addressSchema = z.object({ name: z.string().trim().min(2).max(100), line1: z.string().trim().min(3).max(150), line2: z.string().trim().max(150).default(''), city: z.string().trim().min(2).max(100), state: z.string().regex(/^[A-Z]{2}$/), zip: z.string().regex(/^\d{5}(-\d{4})?$/), country: z.literal('US'), phone: z.string().trim().min(7).max(30) });
+export async function deliveryQuote(lines: CartLine[], raw: unknown) {
+    const address = addressSchema.parse(raw);
+    const q = await quote(lines);
+    if (!lines.length)
+        throw new Error('Your cart is empty.');
+    const shipping = q.total >= q.config.freeShippingAt ? 0 : q.config.shippingCents;
+    if (shipping === null)
+        throw new Error('Delivery pricing is being finalized. Please contact us for help.');
+    // Tax is calculated by the connected tax service; an unavailable service never becomes zero tax.
+    if (!runtime().TAXJAR_API_TOKEN || !runtime().STORE_ORIGIN_ZIP || !runtime().STORE_ORIGIN_STATE)
+        throw new Error('Checkout is not accepting orders yet. Tax and delivery setup is pending.');
+    const r = await fetch('https://api.taxjar.com/v2/taxes', { method: 'POST', headers: { Authorization: 'Bearer ' + runtime().TAXJAR_API_TOKEN, 'Content-Type': 'application/json' }, body: JSON.stringify({ from_country: 'US', from_zip: runtime().STORE_ORIGIN_ZIP, from_state: runtime().STORE_ORIGIN_STATE, to_country: 'US', to_zip: address.zip, to_state: address.state, to_city: address.city, to_street: address.line1, amount: q.total / 100, shipping: shipping / 100 }) });
+    if (!r.ok)
+        throw new Error('Tax could not be calculated. Please try again later.');
+    const d = await r.json() as {
+        tax?: {
+            amount_to_collect?: number;
+        };
+    };
+    const t = d.tax?.amount_to_collect;
+    if (typeof t !== 'number' || !Number.isFinite(t) || t < 0)
+        throw new Error('Tax could not be verified.');
+    const tax = Math.round(t * 100);
+    return { items: q.items, subtotal: q.subtotal, discount: q.discount, shipping, tax, total: q.total + shipping + tax, address };
+}
+const quoteFingerprint = (q: Record<string, any>) => JSON.stringify({ items: q.items.map((i: any) => ({ id: i.id, quantity: i.quantity, packId: i.packId || null, packSize: i.packSize || null, presaleId: i.presaleId || null, price: i.product.price })), address: q.address, shipping: q.shipping, tax: q.tax, total: q.total });
+export async function issueQuote(owner: string, lines: CartLine[], address: unknown) { const q = await deliveryQuote(lines, address); const id = uid(); await run('INSERT INTO requests(id,owner,kind,data,created) VALUES(?,?,?,?,?)', id, owner, 'quote', JSON.stringify({ fingerprint: quoteFingerprint(q) }), timestamp()); return { ...q, quoteId: id }; }
+export async function checkout(owner: string, lines: CartLine[], body: Record<string, any>) {
+    if (body.accepted !== true)
+        throw new Error('Confirm that you are 21 or older and purchasing for laboratory research only.');
+    if (typeof body.requestKey !== 'string' || !/^[a-f0-9-]{36}$/.test(body.requestKey))
+        throw new Error('Refresh checkout and try again.');
+    const current = addressSchema.parse(body.address);
+    const fingerprint = JSON.stringify({ lines, address: current });
+    const old = await one<{
+        id: string;
+        status: string;
+        checkout_url: string;
+        data: string;
+    }>('SELECT id,status,checkout_url,data FROM orders WHERE owner=? AND (request_key=? OR status IN (?,?,?,?)) ORDER BY created DESC LIMIT 1', owner, body.requestKey, 'creating', 'awaiting_payment', 'pending', 'review');
+    if (old) {
+        const saved = parse<Record<string, any>>(old.data, {});
+        if (saved.environment !== runtime().CHASE_ENVIRONMENT)
+            throw new Error('An existing payment requires review before a new checkout can begin.');
+        if (old.checkout_url && ['awaiting_payment', 'pending'].includes(old.status) && saved.fingerprint === fingerprint && saved.total === body.expectedTotal)
+            return { id: old.id, url: old.checkout_url };
+        throw new Error('You already have an unresolved checkout. Open your orders to verify payment before placing another order.');
+    }
+    const adapter = createChaseAdapter(runtime());
+    if (!adapter.getStatus().checkoutEnabled)
+        throw new Error('Chase checkout is being connected. No payment has been taken.');
+    const q = await deliveryQuote(lines, current);
+    const receipt = await one<{
+        data: string;
+        created: number;
+    }>('SELECT data,created FROM requests WHERE id=? AND owner=? AND kind=?', String(body.quoteId || ''), owner, 'quote');
+    if (!receipt || timestamp() - receipt.created > 600000 || parse<Record<string, string>>(receipt.data, {}).fingerprint !== quoteFingerprint(q))
+        throw new Error('Your checkout quote changed or expired. Recalculate delivery and review the order again.');
+    if (!Number.isInteger(body.expectedTotal) || body.expectedTotal !== q.total)
+        throw new Error('Your total changed. Recalculate delivery and review the updated total before paying.');
+    if (q.items.some(i => i.product.stockQuantity == null))
+        throw new Error('Inventory is awaiting verification. Please contact us before ordering.');
+    const campaignId = lines[0]?.presaleId || null;
+    const campaign = campaignId ? parse<Record<string, any>>((await one<{
+        data: string;
+    }>('SELECT data FROM campaigns WHERE id=?', campaignId))?.data, {}) : null;
+    const saved = { ...q, fingerprint, environment: runtime().CHASE_ENVIRONMENT, campaignId, campaignLimit: campaign?.maxPerCustomer || null, unitCount: lines.reduce((s, l) => s + l.quantity, 0) };
+    const id = uid();
+    await run('INSERT INTO orders(id,owner,request_key,status,data,total,checkout_ref,created,updated) VALUES(?,?,?,?,?,?,?,?,?)', id, owner, body.requestKey, 'creating', JSON.stringify(saved), q.total, chaseOrderReference(id), timestamp(), timestamp());
+    try {
+        const result = await adapter.createCheckout({ id, totalCents: q.total, currency: 'USD' }, runtime().CHASE_RETURN_URL!);
+        await run('UPDATE orders SET status=?,checkout_ref=?,checkout_url=?,updated=? WHERE id=?', 'awaiting_payment', result.providerReference, result.url, timestamp(), id);
+        return { id, url: result.url };
+    }
+    catch {
+        await run('UPDATE orders SET status=?,updated=? WHERE id=?', 'review', timestamp(), id);
+        throw new Error('Checkout could not be confirmed. Please contact us with order ' + id.slice(0, 8) + '. Do not submit another payment.');
+    }
+}
+export async function reconcile(owner: string, id: string) { const row = await one<{
+    id: string;
+    total: number;
+    status: string;
+    checkout_ref: string;
+    data: string;
+    created: number;
+}>('SELECT id,total,status,checkout_ref,data,created FROM orders WHERE id=? AND owner=?', id, owner); if (!row)
+    throw new Error('Order not found.'); if (['paid', 'shipped', 'delivered'].includes(row.status))
+    return { status: row.status }; const saved = parse<Record<string, any>>(row.data, {}); if (saved.environment !== runtime().CHASE_ENVIRONMENT)
+    throw new Error('This order belongs to another payment environment and requires review.'); if (timestamp() - row.created > 29 * 86400000) {
+    await run('UPDATE orders SET status=?,updated=? WHERE id=?', 'review', timestamp(), id);
+    throw new Error('This payment is outside the online verification window. Contact Biomod for reconciliation.');
+} const result = await createChaseAdapter(runtime()).verifyPayment({ id, totalCents: row.total, currency: 'USD' }, row.checkout_ref); if (result.state === 'paid' && (!result.notificationId || !result.providerReference))
+    throw new Error('Payment requires review.'); const state = result.state === 'failed' ? 'review' : result.state; await run('UPDATE orders SET status=?,payment_ref=?,notification_id=?,updated=? WHERE id=? AND status NOT IN (?,?,?)', state, result.state === 'paid' ? result.providerReference : null, result.notificationId || null, timestamp(), id, 'paid', 'shipped', 'delivered'); return { status: state, message: result.state === 'failed' ? 'The payment attempt failed. This order is held for review before inventory is released.' : result.message }; }

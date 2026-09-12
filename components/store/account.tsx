@@ -1,0 +1,88 @@
+'use client';
+import { useEffect, useState, FormEvent } from 'react';
+import { Eye, EyeOff, Trash2, Minus, Plus } from 'lucide-react';
+import { useStore, api, report } from './provider';
+import { money, imagePath } from '@/lib/catalog';
+import { Field, Check, Blank, Choice, formData } from './primitives';
+import { toast } from 'sonner';
+import { ProductCard } from './catalog';
+export function AuthPage({ mode = 'login', returnTo = '/account' }: {
+    mode?: string;
+    returnTo?: string;
+}) { const { store } = useStore(); const [show, setShow] = useState(false); const [accepted, setAccepted] = useState(false); const [busy, setBusy] = useState(false); const [message, setMessage] = useState(''); const register = mode === 'register', recover = mode === 'forgot-password', reset = mode === 'reset-password'; const title = register ? 'Create an account' : recover ? 'Reset your password' : reset ? 'Choose a new password' : 'Sign in'; async function submit(e: FormEvent<HTMLFormElement>) { e.preventDefault(); setBusy(true); setMessage(''); try {
+    const fields = formData(e.currentTarget);
+    const fragment = new URLSearchParams(location.hash.slice(1));
+    const d = await api('auth-' + (register ? 'register' : recover ? 'recover' : reset ? 'reset' : 'login'), { ...fields, accepted, returnTo, token: fragment.get('access_token') });
+    if (d.returnTo)
+        location.assign(d.returnTo);
+    else
+        setMessage(d.message);
+}
+catch (e) {
+    report(e);
+}
+finally {
+    setBusy(false);
+} } return <div className="auth-page"><h1>{title}</h1>{!store.authReady && <p className="notice">Customer sign-in is being connected. Account forms will become available when setup is complete.</p>}<form onSubmit={submit} className="store-form">{register && <><Field label="Full name" name="name"/><div className="form-row"><Field label="Phone" name="phone" type="tel"/><Field label="Date of birth" name="dob" type="date"/></div><Field label="Institution / company" name="company"/></>}{!reset && <Field label="Email address" name="email" type="email"/>}{!recover && <><label className="field"><span>Password {register && '(at least 8 characters)'}</span><div className="password-field"><input name="password" type={show ? 'text' : 'password'} required minLength={register || reset ? 8 : undefined} autoComplete={register ? 'new-password' : 'current-password'}/><button type="button" aria-label={show ? 'Hide password' : 'Show password'} onClick={() => setShow(!show)}>{show ? <EyeOff size={20}/> : <Eye size={20}/>}</button></div></label>{(register || reset) && <Field label="Confirm password" name="confirmPassword" type="password"/>}</>}{register && <Check checked={accepted} onChange={setAccepted}>I am 21 or older. I agree to the <a href="/terms-of-sale">terms of sale</a> and will purchase only for laboratory research.</Check>}<button className="button button-dark" disabled={busy || !store.authReady || (register && !accepted)}>{busy ? 'Please wait…' : title}</button>{message && <p className="notice" role="status">{message}</p>}</form>{mode === 'login' ? <div className="auth-links">{store.googleReady && <a className="button button-dark" href="/auth/google">Continue with Google</a>}<a href="/forgot-password">Forgot password?</a><p>New to Biomod? <a href="/register">Create an account</a></p></div> : <a href="/login">Back to sign in</a>}</div>; }
+export function Cart() { const { store, ready, saveCart } = useStore(); const [busy, setBusy] = useState(false); const q = store.totals; async function update(index: number, delta: number) { const next = store.cart.map((l, i) => i === index ? { ...l, quantity: l.quantity + delta } : l).filter(l => l.quantity > 0); setBusy(true); try {
+    await saveCart(next);
+}
+catch (e) {
+    report(e);
+}
+finally {
+    setBusy(false);
+} } async function remove(index: number) { const line = store.cart[index]; setBusy(true); try {
+    await saveCart(store.cart.filter((l, i) => line.packId ? l.packId !== line.packId : i !== index));
+}
+catch (e) {
+    report(e);
+}
+finally {
+    setBusy(false);
+} } return <><div className="page-heading"><h1>Your Cart</h1></div>{!ready ? <p>Loading your saved cart…</p> : !store.cart.length ? <Blank title="Your cart is empty."><a className="button button-dark" href="/shop">Explore products</a></Blank> : <div className="cart-layout"><div>{store.cartError && <p className="notice error">{store.cartError}</p>}{store.cart.map((l, i) => { const p = store.products.find(p => p.id === l.id); return p ? <article className="cart-line" key={i}><a href={'/product/' + p.slug}><img src={imagePath(p)} alt={p.name}/></a><div><h2><a href={'/product/' + p.slug}>{p.name}</a></h2><p>{p.sizes[0]}{l.packId ? ` · ${l.packSize}-pack` : l.presaleId ? ' · Presale' : ''}</p><strong>{money(p.price * l.quantity)}</strong></div>{l.packId ? <span>Qty {l.quantity}</span> : <div className="quantity"><button disabled={busy} aria-label={'Decrease ' + p.name} onClick={() => update(i, -1)}><Minus size={14}/></button><span>{l.quantity}</span><button disabled={busy} aria-label={'Increase ' + p.name} onClick={() => update(i, 1)}><Plus size={14}/></button></div>}<button className="icon-button" disabled={busy} aria-label={l.packId ? 'Remove entire ' + l.packSize + '-pack' : 'Remove ' + p.name} onClick={() => remove(i)}><Trash2 size={19}/></button></article> : null; })}<a className="text-button" href="/shop">Continue shopping</a></div><aside className="order-summary"><h2>Order Summary</h2><div className="summary-lines"><p><span>Subtotal</span><strong>{money(q?.subtotal || 0)}</strong></p>{q?.discount > 0 && <p><span>Pack savings</span><strong>−{money(q.discount)}</strong></p>}<p><span>Shipping</span><span>{q?.total >= store.config.freeShippingAt ? 'Free' : 'At checkout'}</span></p><p><span>Tax</span><span>At checkout</span></p><p className="total"><span>Items total</span><strong>{money(q?.total || 0)}</strong></p></div>{q?.total < store.config.freeShippingAt && <p className="muted">Add {money(store.config.freeShippingAt - (q?.total || 0))} for free standard shipping.</p>}<a className="button button-gold" href="/checkout">Proceed to checkout</a><p className="muted">Secure payment with Chase when checkout opens.</p></aside></div>}</>; }
+export function AddressFields({ initial = {} }: {
+    initial?: Record<string, string>;
+}) { return <><Field label="Full name" name="name" defaultValue={initial.name}/><Field label="Street address" name="line1" defaultValue={initial.line1}/><Field label="Apartment / suite (optional)" name="line2" defaultValue={initial.line2} required={false}/><div className="form-row"><Field label="City" name="city" defaultValue={initial.city}/><Field label="State (2 letters)" name="state" defaultValue={initial.state} placeholder="CA"/><Field label="ZIP code" name="zip" defaultValue={initial.zip}/></div><Field label="Phone" name="phone" type="tel" defaultValue={initial.phone}/><input type="hidden" name="country" value="US"/><p className="muted">United States delivery only.</p></>; }
+export function Checkout() { const { store, ready } = useStore(); const [accepted, setAccepted] = useState(false); const [busy, setBusy] = useState(false); const [delivery, setDelivery] = useState<any>(null); const [address, setAddress] = useState<any>(null); const [requestKey, setRequestKey] = useState(''); useEffect(() => setRequestKey(crypto.randomUUID()), []); if (!ready)
+    return <p>Loading checkout…</p>; if (!store.customer)
+    return <AuthPage returnTo="/checkout"/>; if (!store.cart.length)
+    return <Blank title="Your cart is empty."><a href="/shop">Shop products</a></Blank>; async function submit(e: FormEvent<HTMLFormElement>) { e.preventDefault(); setBusy(true); try {
+    const fields = formData(e.currentTarget);
+    const data = await api('delivery', { address: fields });
+    setAddress(fields);
+    setDelivery(data);
+}
+catch (e) {
+    report(e);
+}
+finally {
+    setBusy(false);
+} } return <><div className="page-heading"><h1>Checkout</h1></div>{!store.payment.enabled && <p className="notice">Checkout is not accepting payments yet. Chase, delivery, and tax setup must be completed before orders can be placed.</p>}<div className="cart-layout"><form className="store-form" onSubmit={submit} onChange={() => { setDelivery(null); setAddress(null); }}><h2>Delivery address</h2><AddressFields initial={{ name: store.customer.name }}/><button className="button button-dark" disabled={busy}>{busy ? 'Calculating…' : 'Calculate delivery and tax'}</button></form><aside className="order-summary"><h2>Your order</h2>{store.totals?.items.map((l: any, i: number) => <p className="summary-product" key={i}><span>{l.product.name} × {l.quantity}</span><strong>{money(l.product.price * l.quantity)}</strong></p>)}<div className="summary-lines"><p><span>Items</span><strong>{money(store.totals?.total || 0)}</strong></p><p><span>Shipping</span><strong>{delivery ? money(delivery.shipping) : 'Pending address'}</strong></p><p><span>Tax</span><strong>{delivery ? money(delivery.tax) : 'Pending address'}</strong></p>{delivery && <p className="total"><span>Total</span><strong>{money(delivery.total)}</strong></p>}</div><Check checked={accepted} onChange={setAccepted}>I am 21 or older and purchasing exclusively for laboratory research. I agree to the <a href="/terms-of-sale">terms of sale</a>.</Check><button className="button button-gold" disabled={!delivery || !accepted || busy || !store.payment.enabled} onClick={async () => { setBusy(true); try {
+    const d = await api('checkout', { address, accepted, requestKey, expectedTotal: delivery.total, quoteId: delivery.quoteId });
+    location.assign(d.url);
+}
+catch (e) {
+    report(e);
+    setBusy(false);
+} }}>Continue to Chase</button><p className="muted">Card information is entered on Chase’s secure payment page.</p></aside></div></>; }
+const accountNav = [['Overview', ''], ['Orders', 'orders'], ['Addresses', 'addresses'], ['Wishlist', 'wishlist'], ['Rewards', 'rewards'], ['Affiliate', 'affiliate'], ['Notifications', 'notifications'], ['Profile', 'profile']];
+export function Account({ section = '' }: {
+    section?: string;
+}) { const { store, ready, refresh } = useStore(); const [data, setData] = useState<any>(null); const [busy, setBusy] = useState(false); const [accepted, setAccepted] = useState(false); async function load() { const d = await api('account'); setData(d); setAccepted(Boolean(d.profile?.research_accepted)); } useEffect(() => { if (store.customer)
+    load().catch(report); }, [store.customer?.id]); async function submit(e: FormEvent<HTMLFormElement>, action: string) { e.preventDefault(); setBusy(true); try {
+    const d = await api(action, { ...formData(e.currentTarget), accepted });
+    toast.success(d.message);
+    await load();
+}
+catch (e) {
+    report(e);
+}
+finally {
+    setBusy(false);
+} } if (section === 'wishlist')
+    return <><div className="page-heading"><h1>Your Wishlist</h1></div>{store.wishlist.length ? <div className="product-grid">{store.products.filter(p => store.wishlist.includes(p.id)).map(p => <ProductCard key={p.id} product={p}/>)}</div> : <Blank title="Your wishlist is empty.">Use the heart on a product to save it here.</Blank>}</>; if (!ready)
+    return <p>Loading your account…</p>; if (!store.customer)
+    return <AuthPage returnTo={'/account/' + section}/>; return <><div className="page-heading"><h1>My Account</h1></div><div className="account-layout"><aside className="account-nav"><p>{store.customer.email}</p>{accountNav.map(([name, path]) => <a className={section === path ? 'active' : ''} key={path} href={'/account/' + path}>{name}</a>)}{store.admin && <a href="/admin">Store administration</a>}<button onClick={() => api('auth-logout', {}).then(() => location.assign('/login')).catch(report)}>Sign out</button></aside><div className="account-body">{!data ? <p>Loading account details…</p> : section === 'orders' ? <><h2>Orders</h2>{!data.orders.length ? <Blank title="No orders yet."><a href="/shop">Explore the catalog</a></Blank> : data.orders.map((o: any) => <article className="account-record" key={o.id}><h3>Order {o.id.slice(0, 8)}</h3><p>{new Date(o.created).toLocaleDateString()} · {o.status.replaceAll('_', ' ')} · {money(o.total)}</p>{o.data.items?.map((i: any, n: number) => <p key={n}>{i.product.name} × {i.quantity}</p>)}{o.data.tracking && <p>Tracking: {o.data.tracking}</p>}{['awaiting_payment', 'pending'].includes(o.status) && <button className="button button-dark" onClick={() => api('resume', { id: o.id }).then(d => location.assign(d.url)).catch(report)}>Resume Chase checkout</button>}{!['paid', 'shipped', 'delivered'].includes(o.status) && <button className="button button-dark" onClick={() => api('reconcile', { id: o.id }).then(d => { toast.info(d.message || d.status); load(); }).catch(report)}>Check payment status</button>}</article>)}</> : section === 'addresses' ? <><h2>Saved addresses</h2>{data.addresses.map((a: any) => <article className="account-record" key={a.id}><strong>{a.name}</strong><p>{a.line1} {a.line2}<br />{a.city}, {a.state} {a.zip}</p><button className="text-button" onClick={() => api('address', { id: a.id, remove: true }).then(load).catch(report)}>Remove</button></article>)}<form className="store-form" onSubmit={e => submit(e, 'address')}><h3>Add an address</h3><AddressFields /><button className="button button-dark" disabled={busy}>Save address</button></form></> : section === 'profile' ? <form className="store-form" onSubmit={e => submit(e, 'profile')}><h2>Profile</h2><Field label="Full name" name="name" defaultValue={data.profile?.name || store.customer.name}/><Field label="Phone" name="phone" type="tel" defaultValue={data.profile?.phone}/><Field label="Institution / company" name="company" defaultValue={data.profile?.company}/><Check checked={accepted} onChange={setAccepted}>My purchases are exclusively for laboratory research.</Check><button className="button button-dark" disabled={busy}>Save profile</button></form> : section === 'rewards' ? <><h2>Rewards</h2>{!store.config.rewardsEnabled ? <Blank title="Rewards are not active yet.">Program details will appear here when released.</Blank> : <><p className="reward-total">{data.rewards.reduce((s: number, r: any) => s + r.points, 0)} points</p>{data.rewards.length ? data.rewards.map((r: any, i: number) => <p key={i}>{r.reason}: {r.points} points · {new Date(r.created).toLocaleDateString()}</p>) : <p>No rewards have been earned yet.</p>}</>}</> : section === 'notifications' ? <><h2>Notifications</h2>{data.requests.length ? data.requests.map((r: any) => <article className="account-record" key={r.id}><strong>{r.kind === 'stock' ? 'Restock request' : r.kind === 'affiliate' ? 'Partner application' : 'Support message'}</strong><p>{r.status} · {new Date(r.created).toLocaleDateString()}</p></article>) : <Blank title="No notifications.">Your requests and updates will appear here.</Blank>}</> : section === 'affiliate' ? <><h2>Affiliate program</h2><p>Apply to partner with Biomod. Applications are reviewed before program access is granted.</p><form className="store-form" onSubmit={e => submit(e, 'affiliate')}><Field label="Website or profile URL" name="website" type="url"/><Field label="Tell us about your audience" name="message"><textarea name="message" required rows={5}/></Field><button className="button button-dark" disabled={busy}>Submit application</button></form></> : <><h2>Welcome{store.customer.name ? ', ' + store.customer.name : ''}.</h2><p>Manage your orders, addresses, saved products, and research account.</p><div className="account-overview"><a href="/account/orders"><strong>{data.orders.length}</strong>Orders</a><a href="/account/wishlist"><strong>{store.wishlist.length}</strong>Saved products</a><a href="/account/addresses"><strong>{data.addresses.length}</strong>Addresses</a></div></>}</div></div></>; }
+export function PaymentReturn() { const { store } = useStore(); const [orders, setOrders] = useState<any[]>([]); useEffect(() => { if (store.customer)
+    api('account').then(d => setOrders(d.orders)).catch(report); }, [store.customer?.id]); return <><h1>Payment status</h1><p>Your return from Chase does not by itself confirm a payment. Open your order to verify its status.</p>{orders.filter(o => !['paid', 'shipped', 'delivered'].includes(o.status)).map(o => <article className="account-record" key={o.id}><h2>Order {o.id.slice(0, 8)}</h2><p>{money(o.total)} · {o.status}</p><button className="button button-dark" onClick={() => api('reconcile', { id: o.id }).then(d => toast.info(d.message || d.status)).catch(report)}>Verify payment</button></article>)}<a href="/account/orders">View my orders</a></>; }

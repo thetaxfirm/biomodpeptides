@@ -1,0 +1,1757 @@
+[
+  {
+    "id": 5026,
+    "name": "SLU-PP-332",
+    "slug": "slu-pp-332",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 7900,
+    "regularPrice": 7900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-026",
+    "description": "SLU-PP-332 . Lyophilized vial. Active compound: SLU-PP-332 (ERR agonist). Size: 5mg / vial. Purity: >98% HPLC. CAS: 2245445-83-6. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "SLU-PP-332 . Lyophilized vial. Active compound: SLU-PP-332 (ERR agonist). Size: 5mg / vial. Purity: >98% HPLC. CAS: 2245445-83-6. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/slu-pp-332/",
+    "image": {
+      "filename": "slu-pp-332-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/08/SLU-PP-332-5MG.jpg",
+      "alt": "SLU-PP-332",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/08/SLU-PP-332-5MG.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "5mg / vial"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 4357,
+    "name": "GLOW",
+    "slug": "glow-spray",
+    "categories": [
+      {
+        "name": "Spray Products",
+        "slug": "spray-products"
+      }
+    ],
+    "price": 9900,
+    "regularPrice": 9900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-SPR-002",
+    "description": "GLOW — GHK-Cu Spray. Spray bottle. Active compound: GHK-Cu. Size: 100mg / bottle. Purity: >98% HPLC. CAS: 49557-75-7. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "GLOW — GHK-Cu Spray. Spray bottle. Active compound: GHK-Cu. Size: 100mg / bottle. Purity: >98% HPLC. CAS: 49557-75-7. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/glow-spray/",
+    "image": {
+      "filename": "glow-spray-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/08/GLOW-1.png",
+      "alt": "GLOW",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/08/GLOW-1.png"
+    ],
+    "attributes": [],
+    "sizes": [
+      "100mg / bottle"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 1095,
+    "name": "Acetic Acid Solution 1%",
+    "slug": "acetic-acid-solution-1",
+    "categories": [
+      {
+        "name": "Aminos & Liquids",
+        "slug": "aminos-liquids"
+      }
+    ],
+    "price": 800,
+    "regularPrice": 800,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LAB-002",
+    "description": "Acetic Acid Solution 1% laboratory support product.",
+    "shortDescription": "",
+    "permalink": "https://biomodpeptides.com/product/acetic-acid-solution-1/",
+    "image": {
+      "filename": "acetic-acid-solution-1-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/Acetic-Acid.png",
+      "alt": "Acetic Acid Solution 1%",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/Acetic-Acid.png"
+    ],
+    "attributes": [],
+    "sizes": [],
+    "sourceIssues": [
+      "Published short description is empty.",
+      "No explicit package size in description; sizes left empty."
+    ]
+  },
+  {
+    "id": 852,
+    "name": "ERASER",
+    "slug": "softgel-eraser-tesofensine",
+    "categories": [
+      {
+        "name": "Softgels",
+        "slug": "softgels"
+      }
+    ],
+    "price": 17900,
+    "regularPrice": 17900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-SOF-001",
+    "description": "ERASER — Tesofensine Softgel. Softgel capsule. Active compound: Tesofensine 0.5mg. Size: 60 caps. Purity: >98% HPLC. CAS: 457657-66-8. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "ERASER — Tesofensine Softgel. Softgel capsule. Active compound: Tesofensine 0.5mg. Size: 60 caps. Purity: >98% HPLC. CAS: 457657-66-8. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/softgel-eraser-tesofensine/",
+    "image": {
+      "filename": "softgel-eraser-tesofensine-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/Eraser-scaled.jpg",
+      "alt": "ERASER",
+      "width": 1280,
+      "height": 854
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/Eraser-scaled.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "60 caps"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 788,
+    "name": "SEMAX",
+    "slug": "semax",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 7900,
+    "regularPrice": 7900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-029",
+    "description": "Semax (ACTH 4–10 analog). Lyophilized vial. Active compound: Semax (ACTH 4–10 analog). Size: 10mg / vial. Purity: >98% HPLC. CAS: 80714-61-0. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "Semax (ACTH 4–10 analog). Lyophilized vial. Active compound: Semax (ACTH 4–10 analog). Size: 10mg / vial. Purity: >98% HPLC. CAS: 80714-61-0. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/semax/",
+    "image": {
+      "filename": "semax-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/Semax.jpg",
+      "alt": "SEMAX",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/Semax.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10mg / vial"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 787,
+    "name": "MOTS-C 40mg",
+    "slug": "mots-c-40mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 9900,
+    "regularPrice": 9900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-018-40",
+    "description": "MOTS-C 40mg. Lyophilized vial. Active compound: MOTS-c. Size:40mg. Purity: >98% HPLC. CAS: 1627580-64-6. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "MOTS-C 40mg. Lyophilized vial. Active compound: MOTS-c. Size:40mg. Purity: >98% HPLC. CAS: 1627580-64-6. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/mots-c-40mg/",
+    "image": {
+      "filename": "mots-c-40mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/MOTS-C-40MG.jpg",
+      "alt": "MOTS-C 40mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/MOTS-C-40MG.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "40mg"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 786,
+    "name": "Glutathione",
+    "slug": "glutathione-reduced-l-glutathione",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 7900,
+    "regularPrice": 7900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-EXT-004",
+    "description": "Glutathione — Reduced L-Glutathione. Lyophilized vial. Active compound: Reduced L-Glutathione. Size: 1500mg / vial. Purity: >98% HPLC. CAS: 70-18-8. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "Glutathione — Reduced L-Glutathione. Lyophilized vial. Active compound: Reduced L-Glutathione. Size: 1500mg / vial. Purity: >98% HPLC. CAS: 70-18-8. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/glutathione-reduced-l-glutathione/",
+    "image": {
+      "filename": "glutathione-reduced-l-glutathione-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/GLUTATHIONE-1500MG.jpg",
+      "alt": "Glutathione",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/GLUTATHIONE-1500MG.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "1500mg / vial"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 785,
+    "name": "SELANK",
+    "slug": "selank",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 7900,
+    "regularPrice": 7900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-028",
+    "description": "Selank vial. Active compound: Selank. Size: 10mg / vial. Purity: >98% HPLC. CAS: 129954-34-3. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "Selank vial. Active compound: Selank. Size: 10mg / vial. Purity: >98% HPLC. CAS: 129954-34-3. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/selank/",
+    "image": {
+      "filename": "selank-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/Selank.jpg",
+      "alt": "SELANK",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/Selank.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10mg / vial"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 784,
+    "name": "Lipo-C w/B12",
+    "slug": "lipo-c-w-b12",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 7900,
+    "regularPrice": 7900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-027",
+    "description": "Lipo-C w/B12. Lyophilized vial. Active compound: MIC Blend + Methylcobalamin. Size: 10ml. Purity: >98% HPLC. CAS: 59-18-2 / 87-89-8 / 67-41-1 / 13422-55-4. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "Lipo-C w/B12. Lyophilized vial. Active compound: MIC Blend + Methylcobalamin. Size: 10ml. Purity: >98% HPLC. CAS: 59-18-2 / 87-89-8 / 67-41-1 / 13422-55-4. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/lipo-c-w-b12/",
+    "image": {
+      "filename": "lipo-c-w-b12-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/LIPO-C-B12.jpg",
+      "alt": "Lipo-C w/B12",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/LIPO-C-B12.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10ml"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 783,
+    "name": "5-Amino-1MQ",
+    "slug": "5-amino-1mq-50mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 7900,
+    "regularPrice": 7900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-025",
+    "description": "5-Amino-1-Methylquinolinium. Lyophilized vial. Active compound: 5-Amino-1-Methylquinolinium. Size: 50mg / vial. Purity: >98% HPLC. CAS: 331717-54-1. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "5-Amino-1-Methylquinolinium. Lyophilized vial. Active compound: 5-Amino-1-Methylquinolinium. Size: 50mg / vial. Purity: >98% HPLC. CAS: 331717-54-1. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/5-amino-1mq-50mg/",
+    "image": {
+      "filename": "5-amino-1mq-50mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/5-Amino-1MQ-50MG-1.jpg",
+      "alt": "5-Amino-1MQ",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/5-Amino-1MQ-50MG-1.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "50mg / vial"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 781,
+    "name": "DELTA",
+    "slug": "softgel-delta-pinealon-epithalon",
+    "categories": [
+      {
+        "name": "Softgels",
+        "slug": "softgels"
+      }
+    ],
+    "price": 17900,
+    "regularPrice": 17900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-SOF-007",
+    "description": "DELTA — Pinealon + Epitalon Softgel. Softgel capsule. Active compound: Pinealon 1mg + Epitalon 2.5mg. Size: 30 caps. Purity: >98% HPLC. CAS: 147551-89-5 / 307297-39-8. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "DELTA — Pinealon + Epithalon Softgel. Softgel capsule. Active compound: Pinealon 1mg + Epithalon 2.5mg. Size: 30 caps. Purity: >98% HPLC. CAS: 147551-89-5 / 307297-39-8. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/softgel-delta-pinealon-epithalon/",
+    "image": {
+      "filename": "softgel-delta-pinealon-epithalon-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/Delta-scaled.jpg",
+      "alt": "DELTA",
+      "width": 1280,
+      "height": 854
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/Delta-scaled.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "30 caps"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 780,
+    "name": "NEXUS",
+    "slug": "softgel-nexus-dihexa-j-147",
+    "categories": [
+      {
+        "name": "Softgels",
+        "slug": "softgels"
+      }
+    ],
+    "price": 21900,
+    "regularPrice": 21900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-SOF-006",
+    "description": "NEXUS — Dihexa + J-147 Softgel. Softgel capsule. Active compound: Dihexa 30mg + J-147 10mg. Size: 30 caps. Purity: >98% HPLC. CAS: 1401708-83-5 / 1146963-51-0. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "NEXUS — Dihexa + J-147 Softgel. Softgel capsule. Active compound: Dihexa 30mg + J-147 10mg. Size: 30 caps. Purity: >98% HPLC. CAS: 1401708-83-5 / 1146963-51-0. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/softgel-nexus-dihexa-j-147/",
+    "image": {
+      "filename": "softgel-nexus-dihexa-j-147-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/Nexus-scaled.jpg",
+      "alt": "NEXUS",
+      "width": 1280,
+      "height": 854
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/Nexus-scaled.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "30 caps"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 779,
+    "name": "AZURE",
+    "slug": "softgel-methylene-blue-usp",
+    "categories": [
+      {
+        "name": "Softgels",
+        "slug": "softgels"
+      }
+    ],
+    "price": 16900,
+    "regularPrice": 16900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-SOF-005",
+    "description": "AZURE — Methylene Blue Softgel. Softgel capsule. Active compound: Methylene Blue USP 12.5mg. Size: 60 caps. Purity: >98% HPLC. CAS: 61-73-4. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "AZURE — Methylene Blue Softgel. Softgel capsule. Active compound: Methylene Blue USP 12.5mg. Size: 60 caps. Purity: >98% HPLC. CAS: 61-73-4. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/softgel-methylene-blue-usp/",
+    "image": {
+      "filename": "softgel-methylene-blue-usp-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/Azure-scaled.jpg",
+      "alt": "AZURE",
+      "width": 1280,
+      "height": 854
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/Azure-scaled.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "60 caps"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 778,
+    "name": "SCULPTOR",
+    "slug": "softgel-sculptor-atx-304",
+    "categories": [
+      {
+        "name": "Softgels",
+        "slug": "softgels"
+      }
+    ],
+    "price": 23900,
+    "regularPrice": 23900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-SOF-004",
+    "description": "SCULPTOR — O-304 (ATX-304) Softgel. Softgel capsule. Active compound: O-304 (ATX-304) 50mg. Size: 60 caps. Purity: >98% HPLC. CAS: 1261289-04-6. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "SCULPTOR — O-304 (ATX-304)Softgel. Softgel capsule. Active compound: O-304 (ATX-304) 50mg. Size: 60 caps. Purity: >98% HPLC. CAS: 1261289-04-6. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/softgel-sculptor-atx-304/",
+    "image": {
+      "filename": "softgel-sculptor-atx-304-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/Sculptor-scaled.jpg",
+      "alt": "SCULPTOR",
+      "width": 1280,
+      "height": 854
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/Sculptor-scaled.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "60 caps"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 777,
+    "name": "LUMEN",
+    "slug": "softgel-lumen-ghk-cu-ahk-cu-astaxanthin-vitamin-e",
+    "categories": [
+      {
+        "name": "Softgels",
+        "slug": "softgels"
+      }
+    ],
+    "price": 22900,
+    "regularPrice": 22900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-SOF-003",
+    "description": "LUMEN — GHK-Cu + AHK-Cu + Astaxanthin + Vitamin E Softgel. Softgel capsule. Active compound: GHK-Cu 5mg + AHK-Cu 2.5mg + Astaxanthin 6mg + Vitamin E. Size: 60 caps. Purity: >98% HPLC. CAS: 49557-75-7 / 89030-95-5 / 472-61-7. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "LUMEN — GHK-Cu + AHK-Cu + Astaxanthin Softgel + Vitamin E. Softgel capsule. Active compound: GHK-Cu 5mg + AHK-Cu 2.5mg + Astaxanthin 60mg + Vitamin E. Size: 60 caps. Purity: >98% HPLC. CAS: 49557-75-7 / 89030-95-5 / 472-61-7. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/softgel-lumen-ghk-cu-ahk-cu-astaxanthin-vitamin-e/",
+    "image": {
+      "filename": "softgel-lumen-ghk-cu-ahk-cu-astaxanthin-vitamin-e-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/Lumen-scaled.jpg",
+      "alt": "LUMEN",
+      "width": 1280,
+      "height": 854
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/Lumen-scaled.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "60 caps"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 776,
+    "name": "BIONIC",
+    "slug": "softgel-bionic-bpc-157-arginate-kpv-vitamin-e",
+    "categories": [
+      {
+        "name": "Softgels",
+        "slug": "softgels"
+      }
+    ],
+    "price": 18900,
+    "regularPrice": 18900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-SOF-002",
+    "description": "BIONIC — BPC-157 Arginate + KPV + Vitamin E. Active compound: BPC-157 Arginate 750mcg + KPV 1mg + Vitamin E 5 mg. Size: 60 caps. Purity: >98% HPLC. CAS: 137525-51-0 / 67727-97-3. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "BIONIC — BPC-157 Arginate + KPV + Vitamin E Softgel. Softgel capsule. Active compound: BPC-157 Arginate 750mcg + KPV 1mg + Vitamin E 5 mg. Size: 60 caps. Purity: >98% HPLC. CAS: 137525-51-0 / 67727-97-3. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/softgel-bionic-bpc-157-arginate-kpv-vitamin-e/",
+    "image": {
+      "filename": "softgel-bionic-bpc-157-arginate-kpv-vitamin-e-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/Bionic-scaled.jpg",
+      "alt": "BIONIC",
+      "width": 1280,
+      "height": 854
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/Bionic-scaled.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "60 caps"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 775,
+    "name": "NOCTIS",
+    "slug": "noctis-blend-spray",
+    "categories": [
+      {
+        "name": "Spray Products",
+        "slug": "spray-products"
+      }
+    ],
+    "price": 11900,
+    "regularPrice": 11900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-SPR-009",
+    "description": "NOCTIS — Noctis Blend Formula Spray. Spray bottle. Active compound: Pinealon + Selank + DSIP + Oxytocin + Melatonin. Size: 110mg / bottle. Purity: >98% HPLC. CAS: 147551-89-5 / 129954-34-3 / 62568-57-4 / 50-56-6. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "NOCTIS — Noctis Blend Formula Spray. Spray bottle. Active compound: Pinealon + Selank + DSIP + Oxytocin. Size: 110mg / bottle. Purity: >98% HPLC. CAS: 147551-89-5 / 129954-34-3 / 62568-57-4 / 50-56-6. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/noctis-blend-spray/",
+    "image": {
+      "filename": "noctis-blend-spray-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/NOCTIS-2.png",
+      "alt": "NOCTIS",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/NOCTIS-2.png"
+    ],
+    "attributes": [],
+    "sizes": [
+      "110mg / bottle"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 774,
+    "name": "SOLARA",
+    "slug": "solara-melanotan-ii-spray",
+    "categories": [
+      {
+        "name": "Spray Products",
+        "slug": "spray-products"
+      }
+    ],
+    "price": 7900,
+    "regularPrice": 7900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-SPR-010",
+    "description": "SOLARA — Melanotan II Spray. Spray bottle. Active compound: Melanotan II. Size: 20mg / bottle. Purity: >98% HPLC. CAS: 121062-08-6. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "SOLARA — Melanotan II Spray. Spray bottle. Active compound: Melanotan II. Size: 20mg / bottle. Purity: >98% HPLC. CAS: 121062-08-6. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/solara-melanotan-ii-spray/",
+    "image": {
+      "filename": "solara-melanotan-ii-spray-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/SOLARA.png",
+      "alt": "SOLARA",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/SOLARA.png"
+    ],
+    "attributes": [],
+    "sizes": [
+      "20mg / bottle"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 773,
+    "name": "FORGE",
+    "slug": "forge-bpc-157-spray",
+    "categories": [
+      {
+        "name": "Spray Products",
+        "slug": "spray-products"
+      }
+    ],
+    "price": 8900,
+    "regularPrice": 8900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-SPR-001",
+    "description": "FORGE — BPC-157 Spray. Spray bottle. Active compound: BPC-157. Size: 50mg / bottle. Purity: >98% HPLC. CAS: 137525-51-0. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "FORGE — BPC-157 Spray. Spray bottle. Active compound: BPC-157. Size: 50mg / bottle. Purity: >98% HPLC. CAS: 137525-51-0. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/forge-bpc-157-spray/",
+    "image": {
+      "filename": "forge-bpc-157-spray-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/FORGE-3.png",
+      "alt": "FORGE",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/FORGE-3.png"
+    ],
+    "attributes": [],
+    "sizes": [
+      "50mg / bottle"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 772,
+    "name": "FLUX",
+    "slug": "flux-nad-spray",
+    "categories": [
+      {
+        "name": "Spray Products",
+        "slug": "spray-products"
+      }
+    ],
+    "price": 13900,
+    "regularPrice": 13900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-SPR-007",
+    "description": "FLUX — NAD+ Spray. Spray bottle. Active compound: Nicotinamide Adenine Dinucleotide. Size: 1000mg / bottle. Purity: >98% HPLC. CAS: 53-84-9. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "FLUX — NAD+ Spray. Spray bottle. Active compound: Nicotinamide Adenine Dinucleotide. Size: 1000mg / bottle. Purity: >98% HPLC. CAS: 53-84-9. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/flux-nad-spray/",
+    "image": {
+      "filename": "flux-nad-spray-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/FLUX-2.png",
+      "alt": "FLUX",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/FLUX-2.png"
+    ],
+    "attributes": [],
+    "sizes": [
+      "1000mg / bottle"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 771,
+    "name": "EQUIL",
+    "slug": "equil-selank-spray",
+    "categories": [
+      {
+        "name": "Spray Products",
+        "slug": "spray-products"
+      }
+    ],
+    "price": 7500,
+    "regularPrice": 7500,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-SPR-005",
+    "description": "EQUIL — Selank Spray. Spray bottle. Active compound: Selank. Size: 60mg / bottle. Purity: >98% HPLC. CAS: 129954-34-3. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "EQUIL — Selank Spray. Spray bottle. Active compound: Selank. Size: 60mg / bottle. Purity: >98% HPLC. CAS: 129954-34-3. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/equil-selank-spray/",
+    "image": {
+      "filename": "equil-selank-spray-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/EQUIL-2.png",
+      "alt": "EQUIL",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/EQUIL-2.png"
+    ],
+    "attributes": [],
+    "sizes": [
+      "60mg / bottle"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 770,
+    "name": "APEX",
+    "slug": "apex-semax-spray",
+    "categories": [
+      {
+        "name": "Spray Products",
+        "slug": "spray-products"
+      }
+    ],
+    "price": 9900,
+    "regularPrice": 9900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-SPR-004",
+    "description": "APEX — Semax Spray. Spray bottle. Active compound: Semax (ACTH 4-10 analog). Size: 60mg / bottle. Purity: >98% HPLC. CAS: 80714-61-0. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "APEX — Semax Spray. Spray bottle. Active compound: Semax (ACTH 4-10 analog). Size: 60mg / bottle. Purity: >98% HPLC. CAS: 80714-61-0. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/apex-semax-spray/",
+    "image": {
+      "filename": "apex-semax-spray-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/APEX-2.png",
+      "alt": "APEX",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/APEX-2.png"
+    ],
+    "attributes": [],
+    "sizes": [
+      "60mg / bottle"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 769,
+    "name": "ZENITH",
+    "slug": "zenith-semax-selank-spray",
+    "categories": [
+      {
+        "name": "Spray Products",
+        "slug": "spray-products"
+      }
+    ],
+    "price": 10900,
+    "regularPrice": 10900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-SPR-006",
+    "description": "ZENITH — Semax + Selank Spray. Spray bottle. Active compound: Semax + Selank. Size: 100mg / bottle. Purity: >98% HPLC. CAS: 80714-61-0 / 129954-34-3. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "ZENITH — Semax + Selank Spray. Spray bottle. Active compound: Semax + Selank. Size: 20mg / bottle. Purity: >98% HPLC. CAS: 80714-61-0 / 129954-34-3. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/zenith-semax-selank-spray/",
+    "image": {
+      "filename": "zenith-semax-selank-spray-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/ZENITH-2.png",
+      "alt": "ZENITH",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/ZENITH-2.png"
+    ],
+    "attributes": [],
+    "sizes": [
+      "100mg / bottle"
+    ],
+    "sourceIssues": [
+      "Published shortDescription size (20mg / bottle) differs from description size (100mg / bottle). Sizes field follows description. Confirm before launch."
+    ]
+  },
+  {
+    "id": 768,
+    "name": "KLOW",
+    "slug": "klow-spray",
+    "categories": [
+      {
+        "name": "Spray Products",
+        "slug": "spray-products"
+      }
+    ],
+    "price": 14900,
+    "regularPrice": 14900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-SPR-003",
+    "description": "KLOW — GHK-Cu + BPC-157 + KPV Spray. Spray bottle. Active compound: GHK-Cu + BPC-157 + KPV. Size: 140mg / bottle. Purity: >98% HPLC. CAS: 49557-75-7 / 137525-51-0 / 67727-97-3. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "KLOW — GHK-Cu + BPC-157 + KPV Spray. Spray bottle. Active compound: GHK-Cu + BPC-157 + KPV. Size: 140mg / bottle. Purity: >98% HPLC. CAS: 49557-75-7 / 137525-51-0 / 67727-97-3. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/klow-spray/",
+    "image": {
+      "filename": "klow-spray-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/KLOW.png",
+      "alt": "KLOW",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/KLOW.png"
+    ],
+    "attributes": [],
+    "sizes": [
+      "140mg / bottle"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 767,
+    "name": "IGNITE",
+    "slug": "ignite-pt-141-oxytocin-spray",
+    "categories": [
+      {
+        "name": "Spray Products",
+        "slug": "spray-products"
+      }
+    ],
+    "price": 12900,
+    "regularPrice": 12900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-SPR-008",
+    "description": "IGNITE — PT-141 + Oxytocin Spray. Spray bottle. Active compound: Bremelanotide. Size: 35mg / bottle. Purity: >98% HPLC. CAS: 189691-06-3 / 50-56-6. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "IGNITE — PT-141 + Oxytocin Spray. Spray bottle. Active compound: Bremelanotide. Size: 35mg / bottle. Purity: >98% HPLC. CAS: 189691-06-3 / 50-56-6. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/ignite-pt-141-oxytocin-spray/",
+    "image": {
+      "filename": "ignite-pt-141-oxytocin-spray-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/IGNITE-2.png",
+      "alt": "IGNITE",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/IGNITE-2.png"
+    ],
+    "attributes": [],
+    "sizes": [
+      "35mg / bottle"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 766,
+    "name": "GLOW",
+    "slug": "glow-70mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 12900,
+    "regularPrice": 12900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-023",
+    "description": "GLOW 70mg. Lyophilized powder. Active compound: BPC-157 + GHK-Cu + TB-500. Size: 70mg. Purity: >98% HPLC. CAS: 137525-51-0 / 49557-75-7 / 885340-08-9. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "GLOW 70mg. Lyophilized powder. Active compound: BPC-157 + GHK-Cu + TB-500. Size: 70mg. Purity: >98% HPLC. CAS: 137525-51-0 / 49557-75-7 / 885340-08-9. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/glow-70mg/",
+    "image": {
+      "filename": "glow-70mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/GLOW-1.jpg",
+      "alt": "GLOW 70mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/GLOW-1.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "70mg"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 765,
+    "name": "KLOW",
+    "slug": "klow-80mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 14900,
+    "regularPrice": 14900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-022",
+    "description": "KLOW 80mg. Lyophilized powder. Active compound: BPC-157 + GHK-Cu + TB-500 + KPV. Size: 80mg. Purity: >98% HPLC. CAS: 137525-51-0 / 49557-75-7 / 885340-08-9 / 67727-97-3. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "KLOW 80mg. Lyophilized powder. Active compound: BPC-157 + GHK-Cu + TB-500 + KPV. Size: 80mg. Purity: >98% HPLC. CAS: 137525-51-0 / 49557-75-7 / 885340-08-9 / 67727-97-3. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/klow-80mg/",
+    "image": {
+      "filename": "klow-80mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/KLOW-1.jpg",
+      "alt": "KLOW 80mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/KLOW-1.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "80mg"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 764,
+    "name": "Wolverine",
+    "slug": "wolverine-10mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 7900,
+    "regularPrice": 7900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-021",
+    "description": "Wolverine 10mg. Lyophilized powder. Active compound: BPC-157 + TB-500. Size: 10mg. Purity: >98% HPLC. CAS: 137525-51-0 / 885340-08-9. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "Wolverine 10mg. Lyophilized powder. Active compound: BPC-157 + TB-500. Size: 10mg. Purity: >98% HPLC. CAS: 137525-51-0 / 885340-08-9. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/wolverine-10mg/",
+    "image": {
+      "filename": "wolverine-10mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/BPC-5mg-TB-5mg-2.jpg",
+      "alt": "Wolverine 10mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/BPC-5mg-TB-5mg-2.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10mg"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 763,
+    "name": "Run & Gun",
+    "slug": "run-gun-10mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 7900,
+    "regularPrice": 7900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-020",
+    "description": "Run & Gun 10mg. Lyophilized powder. Active compound: Ipamorelin + CJC-1295 No DAC. Size: 10mg. Purity: >98% HPLC. CAS: 170851-70-4 / 863288-34-0. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "Run & Gun 10mg. Lyophilized powder. Active compound: Ipamorelin + CJC-1295 No DAC. Size: 10mg. Purity: >98% HPLC. CAS: 170851-70-4 / 863288-34-0. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/run-gun-10mg/",
+    "image": {
+      "filename": "run-gun-10mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/IPA-5mg-CJC-5mg-1.jpg",
+      "alt": "Run & Gun 10mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/IPA-5mg-CJC-5mg-1.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10mg"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 762,
+    "name": "DSIP",
+    "slug": "dsip-10mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 8900,
+    "regularPrice": 8900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-019",
+    "description": "DSIP 10mg. Lyophilized powder. Active compound: Delta Sleep-Inducing Peptide. Size: 10mg. Purity: >98% HPLC. CAS: 62568-57-4. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "DSIP 10mg. Lyophilized powder. Active compound: Delta Sleep-Inducing Peptide. Size: 10mg. Purity: >98% HPLC. CAS: 62568-57-4. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/dsip-10mg/",
+    "image": {
+      "filename": "dsip-10mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/DSIP.jpg",
+      "alt": "DSIP 10mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/DSIP.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10mg"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 761,
+    "name": "MOTS-c",
+    "slug": "mots-c-10mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 4900,
+    "regularPrice": 4900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-018",
+    "description": "MOTS-c 10mg. Lyophilized powder. Active compound: MOTS-c. Size: 10mg. Purity: >98% HPLC. CAS: 1627580-64-6. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "MOTS-c 10mg. Lyophilized powder. Active compound: MOTS-c. Size: 10mg. Purity: >98% HPLC. CAS: 1627580-64-6. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/mots-c-10mg/",
+    "image": {
+      "filename": "mots-c-10mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/MOTS-c.jpg",
+      "alt": "MOTS-c 10mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/MOTS-c.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10mg"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 760,
+    "name": "SS-31",
+    "slug": "ss-31-10mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 4900,
+    "regularPrice": 4900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-017",
+    "description": "SS-31 10mg. Lyophilized powder. Active compound: Elamipretide. Size: 10mg. Purity: >98% HPLC. CAS: 736992-21-5. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "SS-31 10mg. Lyophilized powder. Active compound: Elamipretide. Size: 10mg. Purity: >98% HPLC. CAS: 736992-21-5. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/ss-31-10mg/",
+    "image": {
+      "filename": "ss-31-10mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/SS-31.jpg",
+      "alt": "SS-31 10mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/SS-31.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10mg"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 759,
+    "name": "Epitalon",
+    "slug": "epitalon-50mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 4900,
+    "regularPrice": 4900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-016",
+    "description": "Epitalon 50mg. Lyophilized powder. Active compound: Epitalon Tetrapeptide. Size: 50mg. Purity: >98% HPLC. CAS: 307297-39-8. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "Epitalon 50mg. Lyophilized powder. Active compound: Epitalon Tetrapeptide. Size: 50mg. Purity: >98% HPLC. CAS: 307297-39-8. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/epitalon-50mg/",
+    "image": {
+      "filename": "epitalon-50mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/Epitalon.jpg",
+      "alt": "Epitalon 50mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/Epitalon.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "50mg"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 758,
+    "name": "AOD 9604",
+    "slug": "aod-9604-10mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 4900,
+    "regularPrice": 4900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-015",
+    "description": "AOD 9604 10mg. Lyophilized powder. Active compound: Fragment 176-191. Size: 10mg. Purity: >98% HPLC. CAS: 221231-10-3. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "AOD 9604 10mg. Lyophilized powder. Active compound: Fragment 176-191. Size: 10mg. Purity: >98% HPLC. CAS: 221231-10-3. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/aod-9604-10mg/",
+    "image": {
+      "filename": "aod-9604-10mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/AOD-9604-1.jpg",
+      "alt": "AOD 9604 10mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/AOD-9604-1.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10mg"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 757,
+    "name": "CJC-1295 No DAC",
+    "slug": "cjc-1295-no-dac-10mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 7900,
+    "regularPrice": 7900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-014",
+    "description": "CJC-1295 No DAC 10mg. Lyophilized powder. Active compound: Mod GRF 1-29. Size: 10mg. Purity: >98% HPLC. CAS: 863288-34-0. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "CJC-1295 No DAC 10mg. Lyophilized powder. Active compound: Mod GRF 1-29. Size: 10mg. Purity: >98% HPLC. CAS: 863288-34-0. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/cjc-1295-no-dac-10mg/",
+    "image": {
+      "filename": "cjc-1295-no-dac-10mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/CJC-1295-No-DAC-1.jpg",
+      "alt": "CJC-1295 No DAC 10mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/CJC-1295-No-DAC-1.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10mg"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 756,
+    "name": "GHK-Cu",
+    "slug": "ghk-cu-50mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 3900,
+    "regularPrice": 3900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-013",
+    "description": "GHK-Cu 50mg. Lyophilized powder. Active compound: Copper Tripeptide-1. Size: 50mg. Purity: >98% HPLC. CAS: 49557-75-7. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "GHK-Cu 50mg. Lyophilized powder. Active compound: Copper Tripeptide-1. Size: 50mg. Purity: >98% HPLC. CAS: 49557-75-7. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/ghk-cu-50mg/",
+    "image": {
+      "filename": "ghk-cu-50mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/GHK-Cu-1.jpg",
+      "alt": "GHK-Cu 50mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/GHK-Cu-1.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "50mg"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 755,
+    "name": "Tesamorelin",
+    "slug": "tesamorelin-10mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 8900,
+    "regularPrice": 8900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-012",
+    "description": "Tesamorelin 10mg. Lyophilized powder. Active compound: Tesamorelin. Size: 10mg. Purity: >98% HPLC. CAS: 218949-48-5. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "Tesamorelin 10mg. Lyophilized powder. Active compound: Tesamorelin. Size: 10mg. Purity: >98% HPLC. CAS: 218949-48-5. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/tesamorelin-10mg/",
+    "image": {
+      "filename": "tesamorelin-10mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/Tesamorelin-1.jpg",
+      "alt": "Tesamorelin 10mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/Tesamorelin-1.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10mg"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 754,
+    "name": "TB500",
+    "slug": "tb500-10mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 4900,
+    "regularPrice": 4900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-011",
+    "description": "TB500 10mg. Lyophilized powder. Active compound: Thymosin Beta-4. Size: 10mg. Purity: >98% HPLC. CAS: 885340-08-9. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "TB500 10mg. Lyophilized powder. Active compound: Thymosin Beta-4. Size: 10mg. Purity: >98% HPLC. CAS: 885340-08-9. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/tb500-10mg/",
+    "image": {
+      "filename": "tb500-10mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/TB500-1.jpg",
+      "alt": "TB500 10mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/TB500-1.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10mg"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 753,
+    "name": "BPC-157",
+    "slug": "bpc-157-10mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 4900,
+    "regularPrice": 4900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-010",
+    "description": "BPC-157 10mg. Lyophilized powder. Active compound: Body Protection Compound. Size: 10mg. Purity: >98% HPLC. CAS: 137525-51-0. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "BPC-157 10mg. Lyophilized powder. Active compound: Body Protection Compound. Size: 10mg. Purity: >98% HPLC. CAS: 137525-51-0. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/bpc-157-10mg/",
+    "image": {
+      "filename": "bpc-157-10mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/BPC-157-1.jpg",
+      "alt": "BPC-157 10mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/BPC-157-1.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10mg"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 752,
+    "name": "NAD+",
+    "slug": "nad-500mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 5900,
+    "regularPrice": 5900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-009",
+    "description": "NAD+ 500mg. Lyophilized powder. Active compound: Nicotinamide Adenine Dinucleotide. Size: 500mg. Purity: >98% HPLC. CAS: 53-84-9. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "NAD+ 500mg. Lyophilized powder. Active compound: Nicotinamide Adenine Dinucleotide. Size: 500mg. Purity: >98% HPLC. CAS: 53-84-9. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/nad-500mg/",
+    "image": {
+      "filename": "nad-500mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/NAD.jpg",
+      "alt": "NAD+ 500mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/NAD.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "500mg"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 751,
+    "name": "Kisspeptin",
+    "slug": "kisspeptin-10mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 3900,
+    "regularPrice": 3900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-008",
+    "description": "Kisspeptin 10mg. Lyophilized powder. Active compound: Kisspeptin-10. Size: 10mg. Purity: >98% HPLC. CAS: 374675-21-5. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "Kisspeptin 10mg. Lyophilized powder. Active compound: Kisspeptin-10. Size: 10mg. Purity: >98% HPLC. CAS: 374675-21-5. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/kisspeptin-10mg/",
+    "image": {
+      "filename": "kisspeptin-10mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/Kisspeptin.jpg",
+      "alt": "Kisspeptin 10mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/Kisspeptin.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10mg"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 750,
+    "name": "PT-141",
+    "slug": "pt-141-10mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 4900,
+    "regularPrice": 4900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-007",
+    "description": "PT-141 10mg. Lyophilized powder. Active compound: Bremelanotide. Size: 10mg. Purity: >98% HPLC. CAS: 189691-06-3. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "PT-141 10mg. Lyophilized powder. Active compound: Bremelanotide. Size: 10mg. Purity: >98% HPLC. CAS: 189691-06-3. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/pt-141-10mg/",
+    "image": {
+      "filename": "pt-141-10mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/PT-141.jpg",
+      "alt": "PT-141 10mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/PT-141.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10mg"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 749,
+    "name": "KPV",
+    "slug": "kpv-10mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 4900,
+    "regularPrice": 4900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-006",
+    "description": "KPV 10mg. Lyophilized powder. Active compound: Lys-Pro-Val. Size: 10mg. Purity: >98% HPLC. CAS: 67727-97-3. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "KPV 10mg. Lyophilized powder. Active compound: Lys-Pro-Val. Size: 10mg. Purity: >98% HPLC. CAS: 67727-97-3. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/kpv-10mg/",
+    "image": {
+      "filename": "kpv-10mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/KPV-1.jpg",
+      "alt": "KPV 10mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/KPV-1.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10mg"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 748,
+    "name": "Thymosin Alpha-1",
+    "slug": "thymosin-alpha-1-10mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 5900,
+    "regularPrice": 5900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-005",
+    "description": "Thymosin Alpha-1 10mg. Lyophilized powder. Active compound: Thymosin Alpha-1. Size: 10mg. Purity: >98% HPLC. CAS: 62304-98-7. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "Thymosin Alpha-1 10mg. Lyophilized powder. Active compound: Thymosin Alpha-1. Size: 10mg. Purity: >98% HPLC. CAS: 62304-98-7. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/thymosin-alpha-1-10mg/",
+    "image": {
+      "filename": "thymosin-alpha-1-10mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/Thymosin-Alpha-1-1.jpg",
+      "alt": "Thymosin Alpha-1 10mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/Thymosin-Alpha-1-1.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10mg"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 747,
+    "name": "C-HEAT",
+    "slug": "c-heat-10mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 11900,
+    "regularPrice": 11900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-004",
+    "description": "C-HEAT 10mg. Lyophilized powder. Active compound: CAG. Size: 10mg. Purity: >98% HPLC. CAS: 1415456-99-3. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "C-HEAT 10mg. Lyophilized powder. Active compound: CAG. Size: 10mg. Purity: >98% HPLC. CAS: 1415456-99-3. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/c-heat-10mg/",
+    "image": {
+      "filename": "c-heat-10mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/C-HEAT-1.jpg",
+      "alt": "C-HEAT 10mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/C-HEAT-1.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10mg"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 746,
+    "name": "C-HEAT-S",
+    "slug": "c-heat-s-10mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 12500,
+    "regularPrice": 12500,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-003",
+    "description": "C-HEAT-S 10mg. Lyophilized powder. Size: 10mg. Purity: >98% HPLC. CAS: 1415456-99-3 / 910463-68-2. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "C-HEAT-S 10mg. Lyophilized powder. Active compound: CAG + SEMA DUAL GLP. Size: 10mg. Purity: >98% HPLC. CAS: 1415456-99-3 / 910463-68-2. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/c-heat-s-10mg/",
+    "image": {
+      "filename": "c-heat-s-10mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/C-HEAT-S.jpg",
+      "alt": "C-HEAT-S 10mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/C-HEAT-S.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "10mg"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 744,
+    "name": "HEAT-T",
+    "slug": "heat-t-20mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 8900,
+    "regularPrice": 8900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-001",
+    "description": "HEAT-T 20mg. Lyophilized powder. Size: 20mg. Purity: >98% HPLC. CAS: 2023788-19-2. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "HEAT-T 20mg. Lyophilized powder. Active compound: GLP2T. Size: 20mg. Purity: >98% HPLC. CAS: 2023788-19-2. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/heat-t-20mg/",
+    "image": {
+      "filename": "heat-t-20mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/HEAT-T-1.jpg",
+      "alt": "HEAT-T 20mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/HEAT-T-1.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "20mg"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 745,
+    "name": "HEAT-R 30mg",
+    "slug": "heat-r-30mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 9900,
+    "regularPrice": 17900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-002",
+    "description": "HEAT-R 30mg. Lyophilized powder. Size: 30mg. Purity: >98% HPLC. CAS: 2381089-83-2. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "HEAT-R 30mg. Lyophilized powder. Size: 30mg. Purity: >98% HPLC. CAS: 2381089-83-2. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/heat-r-30mg/",
+    "image": {
+      "filename": "heat-r-30mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/HEAT-R-1.jpg",
+      "alt": "HEAT-R 30mg",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/HEAT-R-1.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "30mg"
+    ],
+    "sourceIssues": []
+  },
+  {
+    "id": 1389,
+    "name": "HEAT-R 20mg",
+    "slug": "heat-r-20mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 8900,
+    "regularPrice": 12900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-LYO-002-20",
+    "description": "HEAT-R 20mg. Lyophilized powder. Size: 20mg. Purity: >98% HPLC. CAS: 2381089-83-2. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "HEAT-R 20mg. Lyophilized powder. Size: 30mg. Purity: >98% HPLC. CAS: 2381089-83-2. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/heat-r-20mg/",
+    "image": {
+      "filename": "heat-r-20mg-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/05/HEAT-R-20MG.jpg",
+      "alt": "HEAT-R 20MG",
+      "width": 1080,
+      "height": 1080
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/05/HEAT-R-20MG.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "20mg"
+    ],
+    "sourceIssues": [
+      "Published shortDescription size (30mg) differs from description size (20mg). Sizes field follows description. Confirm before launch."
+    ]
+  },
+  {
+    "id": 782,
+    "name": "CHISEL",
+    "slug": "softgel-chisel-aod-9604",
+    "categories": [
+      {
+        "name": "Softgels",
+        "slug": "softgels"
+      }
+    ],
+    "price": 16900,
+    "regularPrice": 16900,
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "sku": "BM-SOF-008",
+    "description": "CHISEL — AOD 9604 Softgel. Softgel capsule. Active compound: AOD 9604 500mcg. Size: 60 caps. Purity: >98% HPLC. CAS: 221231-10-3. For laboratory research use only. Not for human or animal consumption.",
+    "shortDescription": "CHISEL — AOD 9604 Softgel. Softgel capsule. Active compound: AOD 9604 500mcg. Size: 60 caps. Purity: >98% HPLC. CAS: 221231-10-3. For laboratory research use only. Not for human or animal consumption.",
+    "permalink": "https://biomodpeptides.com/product/softgel-chisel-aod-9604/",
+    "image": {
+      "filename": "softgel-chisel-aod-9604-v1.webp",
+      "source": "https://biomodpeptides.com/wp-content/uploads/2026/04/Chisel-scaled.jpg",
+      "alt": "CHISEL",
+      "width": 1280,
+      "height": 854
+    },
+    "gallery": [
+      "https://biomodpeptides.com/wp-content/uploads/2026/04/Chisel-scaled.jpg"
+    ],
+    "attributes": [],
+    "sizes": [
+      "60 caps"
+    ],
+    "sourceIssues": []
+  }
+]
