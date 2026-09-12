@@ -1,0 +1,41 @@
+.softgel-gallery-stage{background:#f0f0f0;border-radius:5px;overflow:hidden}
+.softgel-view-enlarge{position:relative;width:100%;aspect-ratio:1;display:block;padding:20px 18px 45px;cursor:zoom-in}
+.packaging-viewport{display:block;width:100%;height:100%;overflow:hidden}
+.softgel-view-enlarge>span{position:absolute;right:18px;bottom:15px;display:flex;align-items:center;gap:8px;color:#554d43;font-size:14px}
+.softgel-gallery-controls{display:flex;align-items:center;justify-content:space-between;gap:15px;margin:12px 0}
+.softgel-gallery-controls>button{display:grid;place-items:center;width:44px;height:44px;background:#f1ece5;border-radius:4px;color:#493c2f}
+.softgel-gallery-controls>button:hover{background:#e5d8c8}
+.softgel-gallery-controls>p{font-size:15px;font-weight:500;text-align:center}
+.softgel-gallery-controls>p>span{color:#7b6e60;margin-left:10px;font-size:14px;font-weight:400}
+.softgel-gallery-thumbnails{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px}
+.softgel-gallery-thumbnails>button{min-width:0;display:flex;flex-direction:column;background:#f6f3ee;border-radius:4px;padding:5px 5px 9px;outline:1px solid #e8e0d5;outline-offset:-1px;text-align:center;color:#5b4d3e}
+.softgel-gallery-thumbnails>button[aria-pressed=true]{outline:2px solid #765434;outline-offset:-2px;background:#eee3d6;color:#292018}
+.softgel-gallery-thumbnails>button:focus-visible,.softgel-gallery-controls>button:focus-visible{outline:3px solid #30271f;outline-offset:3px}
+.softgel-view-enlarge:focus-visible{outline:3px solid #30271f;outline-offset:-5px}
+.softgel-thumbnail-image{height:75px;display:block;padding:6px;width:100%}
+.softgel-thumbnail-label{font-size:13px;line-height:1.35;padding:5px 0 0;margin-top:auto}
+.ingredient-thumbnail{display:flex;align-items:center;justify-content:center;flex-direction:column;height:100%;font-size:12px;font-weight:600;line-height:1.4}
+.ingredient-thumbnail small{font-size:11px;font-weight:400;color:#746453;margin-top:4px}
+.softgel-product-gallery>.gallery-caption{font-size:14px;line-height:1.65;margin-top:18px;max-width:570px;color:#6e6050}
+.softgel-ingredient-panel{padding:32px;background:#fbfaf7;color:#30271f;min-height:500px}
+.ingredient-panel-heading{margin-bottom:25px}
+.ingredient-panel-heading h2{font-size:32px;line-height:1.15;font-weight:500;letter-spacing:.02em}
+.ingredient-panel-heading p{font-size:19px;margin-top:8px}
+.ingredient-panel-heading>span{display:block;font-size:15px;color:#78634e;margin-top:8px}
+.softgel-ingredient-panel table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:16px}
+.softgel-ingredient-panel caption{text-align:left;font-size:14px;color:#766554;padding-bottom:12px}
+.softgel-ingredient-panel thead{background:#ebe2d6}
+.softgel-ingredient-panel th,.softgel-ingredient-panel td{text-align:left;padding:12px 13px;font-weight:400;vertical-align:top;overflow-wrap:anywhere}
+.softgel-ingredient-panel th:first-child{width:60%}
+.softgel-ingredient-panel thead th{font-size:14px;font-weight:600}
+.softgel-ingredient-panel tbody tr:nth-child(even){background:#f3ede4}
+.softgel-ingredient-panel dl{display:grid;gap:17px;margin:25px 0;font-size:15px;line-height:1.65}
+.softgel-ingredient-panel dt{font-weight:600;margin-bottom:4px}
+.softgel-ingredient-panel dd{margin:0;color:#65513f}
+.ingredient-artwork-note,.ingredient-specification-note{font-size:14px;line-height:1.65;color:#75614b;margin:20px 0}
+.ingredient-specification-note{background:#eee1cf;padding:15px;color:#604321}
+.softgel-ingredient-panel>a{font-size:15px;text-decoration:underline;text-underline-offset:4px;display:inline-block;min-height:32px}
+.expanded-packaging-view{height:min(65dvh,760px);width:100%;background:#f0f0f0;padding:20px}
+.softgel-image-dialog{gap:16px}
+.softgel-image-dialog>.button{justify-self:start}
+@media(max-width:640px){.softgel-gallery-stage{border-radius:4px}.softgel-view-enlarge{padding:15px 12px 40px}.softgel-gallery-thumbnails{grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}.softgel-thumbnail-image{height:73px}.softgel-thumbnail-label{font-size:14px}.ingredient-thumbnail{font-size:14px}.ingredient-thumbnail small{font-size:12px}.softgel-ingredient-panel{padding:23px;min-height:0}.softgel-ingredient-panel th,.softgel-ingredient-panel td{padding:11px 9px;font-size:15px}.softgel-ingredient-panel th:first-child{width:55%}.ingredient-panel-heading h2{font-size:28px}.expanded-packaging-view{height:60dvh;padding:12px}.softgel-gallery-controls>p{font-size:14px}}
