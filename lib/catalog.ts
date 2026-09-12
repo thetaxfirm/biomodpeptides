@@ -1,4 +1,5 @@
 import source from './catalog-source-v1.json';
+import competitive from './competitive-pricing-v2.json';
 export type Product = {
     id: number;
     name: string;
@@ -9,6 +10,7 @@ export type Product = {
     }[];
     price: number;
     regularPrice: number;
+    packPrices?: Record<string, number | null>;
     currency: string;
     inStock: boolean;
     purchasable: boolean;
@@ -27,7 +29,7 @@ export type Product = {
     maxQuantity?: number;
     presaleId?: string | null;
 };
-export const products: Product[] = (source as Product[]).map(p => ({ ...p, shortDescription: p.description, description: p.description.replaceAll('—', '-') })).sort((a, b) => a.name.localeCompare(b.name));
+export const products: Product[] = (source as Product[]).map(p => ({ ...p, ...(competitive as Record<string, Pick<Product, 'price' | 'packPrices'>>)[p.slug], shortDescription: p.description, description: p.description.replaceAll('—', '-') })).sort((a, b) => a.name.localeCompare(b.name));
 export const categories = [{ slug: 'research-peptides', name: 'Research Peptides' }, { slug: 'softgels', name: 'Softgels' }, { slug: 'spray-products', name: 'Spray Products' }, { slug: 'aminos-liquids', name: 'Aminos & Liquids' }];
 export const money = (c: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(c / 100);
 export const size = (p: Product) => p.sizes[0] || '';

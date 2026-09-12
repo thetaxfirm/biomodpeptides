@@ -6,7 +6,8 @@ A custom React storefront following the observed Crush Research shopping layout,
 
 - Responsive homepage, catalog search, category/availability/size/price filters, sorting and grid/list views.
 - Product details, quantities, price per mg where the labeled unit supports it, wishlist and cart drawer.
-- Three-, five-, and ten-product pack builder. All discount settings initially null; no discount is assumed.
+- Fixed single-product 1/3/5/10-vial packs with complete pack totals, per-vial and per-mg pricing on product cards and detail pages. Separate 1/3/5/10 mix-and-match selector with horizontal slots and 0/10/15/20% discounts.
+- Seventeen sourced compound/strength/form price comparisons. Singles match Crush where Biomod was higher; existing lower prices remain. Fixed packs use the lower of the matched Crush tier and standard bulk pricing, with non-increasing per-vial prices. Unmatched singles stay unchanged. Sources and applied values: `docs/crush-pricing-v2.json`.
 - Durable guest cart/wishlist and customer-owned account records using Cloudflare D1.
 - Testing library for 50 products, 26 linked certificate PDFs, source-reported results, lot-mismatch handling, search, filtering, and PDF viewing controls.
 - Account screens for profile, addresses, orders, wishlist, rewards, applications and notifications.
@@ -33,6 +34,7 @@ Node 22.13+; install with `npm run install:ci`. Use port 3056 or another availab
 - `npx tsc --noEmit`
 - `python3 tests/inventory-v1.py` uses isolated in-memory SQLite.
 - `node tests/payments-v1.mjs` uses isolated notifications and no network.
+- `python3 tests/packs-v2.py` verifies fixed and mixed totals, price authority, pack validation and sourced competitive schedules.
 - `python3 tests/http-v1.py` targets only `http://localhost:3056` and never submits an order.
 - `npm run build`
 

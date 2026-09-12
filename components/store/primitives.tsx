@@ -21,13 +21,14 @@ export function Blank({ title, children }: {
     title: string;
     children?: ReactNode;
 }) { return <Empty className="blank"><EmptyHeader><EmptyTitle>{title}</EmptyTitle></EmptyHeader><div className="blank-description">{children}</div></Empty>; }
-export function Field({ label, name, type = 'text', required = true, defaultValue, placeholder, children }: {
+export function Field({ label, name, type = 'text', required = true, defaultValue, placeholder, step, children }: {
     label: string;
     name: string;
     type?: string;
     required?: boolean;
     defaultValue?: string;
     placeholder?: string;
+    step?: number | string;
     children?: ReactNode;
-}) { return <label className="field"><span>{label}</span>{children || <input name={name} type={type} required={required} defaultValue={defaultValue} placeholder={placeholder}/>}</label>; }
+}) { return <label className="field"><span>{label}</span>{children || <input name={name} type={type} required={required} defaultValue={defaultValue} placeholder={placeholder} step={step}/>}</label>; }
 export const formData = (form: HTMLFormElement) => Object.fromEntries(new FormData(form));

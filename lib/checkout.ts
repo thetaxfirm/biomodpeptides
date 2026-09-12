@@ -29,7 +29,7 @@ export async function deliveryQuote(lines: CartLine[], raw: unknown) {
     const tax = Math.round(t * 100);
     return { items: q.items, subtotal: q.subtotal, discount: q.discount, shipping, tax, total: q.total + shipping + tax, address };
 }
-const quoteFingerprint = (q: Record<string, any>) => JSON.stringify({ items: q.items.map((i: any) => ({ id: i.id, quantity: i.quantity, packId: i.packId || null, packSize: i.packSize || null, presaleId: i.presaleId || null, price: i.product.price })), address: q.address, shipping: q.shipping, tax: q.tax, total: q.total });
+const quoteFingerprint = (q: Record<string, any>) => JSON.stringify({ items: q.items.map((i: any) => ({ id: i.id, quantity: i.quantity, packId: i.packId || null, packSize: i.packSize || null, packKind: i.packKind || null, lineTotal: i.lineTotal, presaleId: i.presaleId || null, price: i.product.price })), address: q.address, shipping: q.shipping, tax: q.tax, total: q.total });
 export async function issueQuote(owner: string, lines: CartLine[], address: unknown) { const q = await deliveryQuote(lines, address); const id = uid(); await run('INSERT INTO requests(id,owner,kind,data,created) VALUES(?,?,?,?,?)', id, owner, 'quote', JSON.stringify({ fingerprint: quoteFingerprint(q) }), timestamp()); return { ...q, quoteId: id }; }
 export async function checkout(owner: string, lines: CartLine[], body: Record<string, any>) {
     if (body.accepted !== true)

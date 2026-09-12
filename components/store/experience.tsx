@@ -11,7 +11,7 @@ export function Experience({ path, query }: {
 }) { if (path === 'shop')
     return <Shop search={query.q || ''}/>; if (path.startsWith('product/'))
     return <ProductPage slug={path.slice(8)}/>; if (path === 'multi-pack')
-    return <PackBuilder initialSize={Number(query.size) || 3}/>; if (path === 'presales')
+    return <PackBuilder initialSize={Number(query.size || query.items) || 3}/>; if (path === 'presales')
     return <Presales />; if (path === 'testing' || path === 'coa' || path.startsWith('testing/'))
     return <Testing product={query.product} lot={path.startsWith('testing/') ? decodeURIComponent(path.slice(8)) : ''}/>; if (path === 'cart')
     return <Cart />; if (path === 'checkout')
