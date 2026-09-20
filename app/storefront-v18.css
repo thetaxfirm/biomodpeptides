@@ -1,22 +1,65 @@
-/* Sitewide navy and blue palette v18. Keep original product artwork intact. */
-:root{--foreground:#12243a;--card-foreground:#12243a;--popover-foreground:#12243a;--ink:#12243a;--primary:#0f62fe;--primary-foreground:#fff;--secondary:#edf3fa;--secondary-foreground:#12243a;--muted:#f3f6fa;--muted-foreground:#506176;--accent:#e5efff;--accent-foreground:#123d75;--ring:#0f62fe;--border:#d7e1ed;--input:#d7e1ed}
-body{color:#12243a}
-.veteran-band,.site-footer,.research-campaign,.brand-campaign,.softgel-story-hero,.collection-image{background:#12243a}
-.veteran-band{color:#e4eaf2}.site-footer{color:#f5f8ff}.footer-grid p,.footer-bottom,.footer-brand,.site-footer .brand-trademarks{color:#c6d5e8}.footer-bottom{border-color:#36506d}
+/* Navy palette, refined v20. Color roles stay consistent across storefront flows. */
+:root{
+ --bm-navy:#142c45;--bm-ink:#18324c;--bm-action:#294f75;--bm-hover:#1d3d5d;
+ --bm-secondary:#526579;--bm-surface:#f5f8fb;--bm-selected:#e5edf5;--bm-line:#d4dfe9;--bm-on-dark:#cad8e6;
+ --background:var(--bm-surface);--foreground:var(--bm-ink);--card:#fff;--card-foreground:var(--bm-ink);--popover:#fff;--popover-foreground:var(--bm-ink);
+ --ink:var(--bm-ink);--primary:var(--bm-action);--primary-foreground:#fff;--secondary:var(--bm-selected);--secondary-foreground:var(--bm-ink);
+ --muted:var(--bm-surface);--muted-foreground:var(--bm-secondary);--accent:var(--bm-selected);--accent-foreground:var(--bm-ink);--ring:#52799e;--border:var(--bm-line);--input:var(--bm-line)
+}
+body{color:var(--bm-ink);background:var(--bm-surface)}
+.site-header,.main-nav{background:#fff;box-shadow:none}.main-nav{border-color:var(--bm-line)}
+.veteran-band,.site-footer,.research-campaign,.brand-campaign,.softgel-story-hero,.collection-image,.collection-description{background:var(--bm-navy)}
+.veteran-band{color:var(--bm-on-dark)}.site-footer,.collection-description{color:#fff}.footer-grid p,.footer-bottom,.footer-brand,.site-footer .brand-trademarks,.collection-description p{color:var(--bm-on-dark)}.footer-bottom{border-color:#35516b}
 .research-campaign .campaign-image{mask-image:linear-gradient(to right,transparent,#000 34%)}
-.research-campaign .campaign-copy p{color:#e4eaf2}
-.head-actions,.main-nav,.page-heading h1,.home-collection-heading h2,.home-format-navigation>a{color:#12243a}
-.main-nav a:hover,.category-switch button:hover{background:#edf3fa;color:#0043ce}
-.announcement{background:#edf3fa;color:#29435f}.announcement a,.editorial-link,.home-format-navigation>a:hover,.text-button{color:#0043ce}
-.button-gold,.button-dark{background:#0f62fe;color:#fff}.button-gold:hover,.button-dark:hover{background:#0043ce;color:#fff}
-.cart-count{background:#0f62fe;color:#fff}
-.compact-pack-option[data-selected=true],.mix-size-option[data-selected=true],.category-switch button[aria-pressed=true]{background:#12243a;border-color:#12243a;color:#fff}
-.compact-pack-option:focus-within,a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline-color:#0f62fe}
-.site-search,.account-nav,.order-summary,.mix-totals,.detail-copy .research-note{background:#f3f6fa;border-color:#d7e1ed}
-.pack-offers a:hover,.mix-slot.filled,.mix-product:hover:not(:disabled){background:#edf3fa;border-color:#8aaddb}
-.product-category,.product-size,.product-identity,.selected-pack-note,.selected-pack-price>span,.page-heading p,.home-collection-heading p,.home-format-navigation>span{color:#506176}
-.selected-pack-note>span:last-child:not(:first-child),.pack-offers strong{color:#365d88}
-@media(max-width:800px){.research-campaign .campaign-image{mask-image:linear-gradient(to bottom,transparent,#000 16%)}}
-
-/* Transparent footer lockup with white lettering. */
+.research-campaign .campaign-copy p{color:var(--bm-on-dark)}
+.head-actions,.main-nav,.page-heading h1,.home-collection-heading h2,.home-format-navigation>a{color:var(--bm-ink)}
+.main-nav a:hover,.category-switch button:hover{background:var(--bm-surface);color:var(--bm-action)}
+.announcement{background:#eaf0f6;color:var(--bm-secondary)}
+.announcement a,.editorial-link,.home-format-navigation>a:hover,.text-button{color:var(--bm-action)}
+.button-gold,.button-dark,.pack-add-button{background:var(--bm-action);border:1px solid var(--bm-action);color:#fff;box-shadow:none}
+.button-gold:hover,.button-dark:hover,.pack-add-button:hover{background:var(--bm-hover);border-color:var(--bm-hover);color:#fff}
+.research-campaign .button,.pack-review .pack-add-button{background:#dce7f1;color:var(--bm-ink);border-color:#dce7f1}
+.research-campaign .button:hover,.pack-review .pack-add-button:hover{background:#fff;color:var(--bm-ink);border-color:#fff}
+.cart-count{background:var(--bm-action);color:#fff}
+.compact-pack-option,.fixed-pack-option,.mix-size-option{background:transparent;border-color:var(--bm-line);color:var(--bm-ink)}
+.compact-pack-option[data-selected=true],.fixed-pack-option[data-selected=true],.mix-size-option[data-selected=true],.category-switch button[aria-pressed=true]{background:var(--bm-selected);border-color:#91a7bc;color:var(--bm-ink)}
+.compact-pack-option:hover,.fixed-pack-option:hover{border-color:#91a7bc}
+.compact-pack-option:focus-within,.pack-size-tile:focus-within,a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline-color:#52799e}
+.site-search,.account-nav,.order-summary,.mix-totals,.detail-copy .research-note,.pack-search-field{background:#eaf0f6;border-color:var(--bm-line)}
+.site-search button,.wishlist-button,.wishlist-button[aria-pressed=true]{color:var(--bm-secondary)}.wishlist-button[aria-pressed=true]{color:var(--bm-action)}
+.product-card{background:transparent}.product-image,.product-gallery .detail-image{background:#fff;box-shadow:none;outline-color:#e7edf3}
+.product-category,.product-size,.product-identity,.selected-pack-note,.selected-pack-price>span,.page-heading p,.home-collection-heading p,.home-format-navigation>span,
+.brand-principles,.research-footer-note,.pack-story p,.pack-intro p,.pack-product-identity,.pack-product-contents,.pack-result-count,.pack-group-heading>span,.pack-format-tabs button,.pack-format-tabs span,
+.prose,.faq-list [data-slot=accordion-content],.gallery-enlarge>span,.mix-product>span,.mix-totals span,.pack-option-mass{color:var(--bm-secondary)}
+.selected-pack-note>span:last-child:not(:first-child),.pack-offers strong{color:var(--bm-secondary)}
+.pack-offers{border-color:var(--bm-line)}.pack-offers a{background:transparent}.pack-offers a:not(:last-child){border-color:var(--bm-line)}
+.pack-offers a:hover,.mix-slot.filled,.mix-product:hover:not(:disabled){background:var(--bm-selected);border-color:#91a7bc}
+.documentation-story{background-color:var(--bm-navy);color:#fff}.documentation-story:before{background:linear-gradient(90deg,#142c45f5,#142c45ef 55%,#142c45e8)}
+.documentation-layout>div>p,.document-route p{color:var(--bm-on-dark)}.documentation-story .editorial-link,.document-route>a>svg{color:#e0ebf5}
+.document-route>a{background:#ffffff08;box-shadow:none}.document-route>a:hover{background:#ffffff12}
+.pack-size-display>a,.pack-size-display>a:nth-child(2),.pack-size-display>a:nth-child(3),.pack-size-display>a:nth-child(4){background:#e5edf5;color:var(--bm-ink);box-shadow:none}
+.pack-size-display small,.pack-size-display>a:nth-child(4) small{color:var(--bm-secondary)}
+.pack-size-display>a:hover{background:#d8e4ef;color:var(--bm-ink)}.pack-size-display>a:hover small{color:var(--bm-secondary)}
+.pack-size-bar,.pack-review,.pack-mobile-summary{background:var(--bm-navy);color:#fff;box-shadow:none}
+.pack-size-tile,.pack-size-tile small,.pack-review-heading .text-button,.pack-progress-copy,.pack-selected-products small,.pack-selected-products .icon-button,.pack-empty,.pack-price-summary>div,.pack-position,.pack-shipping-note,.pack-review-toggle,.pack-mobile-summary span{color:var(--bm-on-dark)}
+.pack-size-tile[data-selected=true]{background:#dce7f1;color:var(--bm-ink);box-shadow:none}.pack-size-tile[data-selected=true] small{color:#40566c}
+.pack-size-tile:hover:not([data-selected=true]){background:#28465f}.pack-progress-copy strong,.pack-price-summary .pack-final-price{color:#fff}
+.pack-progress-track>span{background:#35516b}.pack-progress-track>span[data-filled=true]{background:#b7cde0}
+.pack-add-button:disabled,.pack-review .pack-add-button:disabled{background:#35516b;color:#cad8e6;border-color:#35516b}
+.pack-product-card{outline-color:var(--bm-line);box-shadow:none}.pack-product-card[data-selected=true]{outline-color:#7895b1}
+.pack-product-add,.pack-product-card[data-selected=true] .pack-product-add{background:var(--bm-selected);color:var(--bm-ink)}.pack-product-add:hover:not(:disabled){background:#d4e1ee}.pack-product-add:disabled{background:#edf2f7;color:var(--bm-secondary)}
+.softgel-gallery-thumbnails>button[aria-pressed=true]{outline-color:#7895b1;background:var(--bm-selected);color:var(--bm-ink)}
+/* The footer uses the original copper symbol with a white, transparent wordmark. */
 .footer-grid>div:first-child>a:first-child{background:transparent;padding:0;border-radius:0}
+@media(max-width:800px){.research-campaign .campaign-image{mask-image:linear-gradient(to bottom,transparent,#000 16%)}}
+/* Shared secondary surfaces and captions, including the less-visited collections. */
+.muted,small,.breadcrumbs,.detail-size,.gallery-caption,.softgel-product-gallery>.gallery-caption,.compare-toggle,.compare-toggle[aria-pressed=true],.softgel-ingredient-panel caption,.softgel-ingredient-panel dd,.softgel-science-note .softgel-science-source{color:var(--bm-secondary)}
+.field input:focus,.field textarea:focus{outline-color:#52799e}
+.batch-passport,.testing-counts,.saved-packs,.softgel-design,.softgel-product-story,.softgel-science-note,.softgel-ingredient-panel{background:#eaf0f6;color:var(--bm-ink)}
+.testing-counts button[aria-pressed=true],.softgel-ingredient-panel thead{background:#dce7f1;color:var(--bm-ink)}
+.softgel-ingredient-panel tbody tr:nth-child(even){background:#f5f8fb}
+.softgel-product-story p,.softgel-design p,.softgel-science-note p{color:var(--bm-secondary)}
+.specification-note{background:#eaf0f6;color:var(--bm-secondary)}
+.campaign-copy h1{color:#fff}
+.pack-size-tile small,.pack-selected-products small,.pack-mobile-summary small,.collection-description small{color:var(--bm-on-dark)}
+.pack-size-tile[data-selected=true] small{color:#40566c}
