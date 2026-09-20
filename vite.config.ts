@@ -13,15 +13,18 @@ const { d1, r2 } = hostingConfig;
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
 const managedLinux = readExecutionProfile() === "managed-linux";
 
+const production = process.env.BIOMOD_DEPLOY === "true";
 const localBindingConfig = {
+  ...(production ? { name: "biomod-peptides", account_id: "4ec3ef3700a8eb3d013bd83c658d838f", vars: { COMMERCE_MODE: "preview" } } : {}),
   main: "vinext/server/fetch-handler",
   compatibility_flags: ["nodejs_compat"],
   d1_databases: d1
     ? [
         {
           binding: d1,
-          database_name: "site-creator-d1",
-          database_id: SITE_CREATOR_PLACEHOLDER_DATABASE_ID,
+          database_name: production ? "biomod-peptides" : "site-creator-d1",
+          database_id: production ? "a04509c9-cee2-4605-bd10-3ed541960e74" : SITE_CREATOR_PLACEHOLDER_DATABASE_ID,
+          migrations_dir: production ? "../../drizzle" : "drizzle",
         },
       ]
     : [],
