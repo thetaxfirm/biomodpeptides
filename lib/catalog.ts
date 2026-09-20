@@ -1,5 +1,5 @@
 import source from './catalog-facts-v2.json';
-import competitive from './competitive-pricing-v2.json';
+import competitive from './competitive-pricing-v3.json';
 export type Product = {
     id: number;
     name: string;
