@@ -33,7 +33,7 @@ export function routeMetadata(path: string, query: URLSearchParams = new URLSear
 export function routeStructuredData(path: string, config: SEOConfig = currentSEO()) {
   const clean = canonicalPath(path), info = pageInfo(path), p = productAt(path);
   if (!mayIndex(path, new URLSearchParams(), config)) return null;
-  const organization = { '@type': 'Organization', '@id': config.origin + '/#organization', name: 'BIOMOD Peptides', url: config.origin, logo: config.origin + '/brand/logo-v1.svg', email: 'contact@biomodpeptides.com' };
+  const organization = { '@type': 'Organization', '@id': config.origin + '/#organization', name: 'BIOMOD Peptides', url: config.origin, logo: config.origin + '/brand/logo-navy-tm-v4.svg', email: 'contact@biomodpeptides.com' };
   const graph: Record<string, unknown>[] = [organization,
     { '@type': 'WebSite', '@id': config.origin + '/#website', url: config.origin, name: 'BIOMOD Peptides', publisher: { '@id': organization['@id'] } },
     { '@type': 'WebPage', '@id': config.origin + clean + '#page', url: config.origin + clean, name: info.title, description: info.description, isPartOf: { '@id': config.origin + '/#website' } },
