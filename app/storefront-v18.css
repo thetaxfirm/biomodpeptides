@@ -17,3 +17,6 @@ body{color:#12243a}
 .product-category,.product-size,.product-identity,.selected-pack-note,.selected-pack-price>span,.page-heading p,.home-collection-heading p,.home-format-navigation>span{color:#506176}
 .selected-pack-note>span:last-child:not(:first-child),.pack-offers strong{color:#365d88}
 @media(max-width:800px){.research-campaign .campaign-image{mask-image:linear-gradient(to bottom,transparent,#000 16%)}}
+
+/* Transparent footer lockup with white lettering. */
+.footer-grid>div:first-child>a:first-child{background:transparent;padding:0;border-radius:0}
