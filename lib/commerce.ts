@@ -1,3 +1,4 @@
+import { applySale } from './sales';
 import { products, Product } from './catalog';
 import { all, one, setting, parse } from './runtime';
 import { packDiscounts, packSizes, fixedPackPrice, supportsPacks } from './packs';
@@ -19,10 +20,10 @@ export type StoreConfig = {
 };
 export const defaultConfig: StoreConfig = { packDiscounts: { ...packDiscounts }, shippingCents: null, freeShippingAt: 20000, presalesEnabled: false, rewardsEnabled: false, affiliateEnabled: false };
 export async function config(): Promise<StoreConfig> { const stored = await setting<Partial<StoreConfig>>('store', {}); return { ...defaultConfig, ...stored, packDiscounts: { ...defaultConfig.packDiscounts, ...stored.packDiscounts, '1': 0 } }; }
-export async function catalog(): Promise<Product[]> { const rows = await all<{
+export async function catalog(withSales = true): Promise<Product[]> { const rows = await all<{
     id: number;
     data: string;
-}>('SELECT id,data FROM product_overrides'); const map = new Map(rows.map(r => [r.id, parse<Partial<Product>>(r.data, {})])); return products.map(p => { const override = map.get(p.id) || {}; const editable = ['price', 'packPrices', 'inStock', 'purchasable', 'stockQuantity', 'maxQuantity'] as const; const product = { ...p, ...Object.fromEntries(editable.filter(key => override[key] !== undefined).map(key => [key, override[key]])) };  return { ...product, inStock: product.inStock && (product.stockQuantity == null || product.stockQuantity > 0) }; }); }
+}>('SELECT id,data FROM product_overrides'); const map = new Map(rows.map(r => [r.id, parse<Partial<Product>>(r.data, {})])); return products.map(p => { const override = map.get(p.id) || {}; const editable = ['price', 'packPrices', 'sale', 'inStock', 'purchasable', 'stockQuantity', 'maxQuantity'] as const; const product = { ...p, ...Object.fromEntries(editable.filter(key => override[key] !== undefined).map(key => [key, override[key]])) };  const available = { ...product, inStock: product.inStock && (product.stockQuantity == null || product.stockQuantity > 0) }; return withSales ? applySale(available) : available; }); }
 export function validateLines(value: unknown): CartLine[] {
     if (!Array.isArray(value) || value.length > 100) throw new Error('Your cart contains too many items.');
     return value.map(l => {

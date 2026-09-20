@@ -12,6 +12,8 @@ export type Product = {
     }[];
     price: number;
     regularPrice: number;
+    sale?: { enabled: boolean; percentOff: number; starts: string; ends: string } | null;
+    activeSale?: { percentOff: number; ends: string; basePrice: number; basePackPrices?: Record<string, number | null> };
     packPrices?: Record<string, number | null>;
     currency: string;
     inStock: boolean;

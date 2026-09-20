@@ -75,7 +75,7 @@ export async function GET(req: NextRequest, { params }: {
         }
         if (action === 'admin') {
             await requireAdmin();
-            return j({ searchPublishing: searchReport(seoConfig(runtime())), config: await config(), products: await catalog(), orders: (await all<{
+            return j({ searchPublishing: searchReport(seoConfig(runtime())), config: await config(), products: await catalog(false), orders: (await all<{
                     data: string;
                 }>('SELECT id,owner,status,total,data,created FROM orders ORDER BY created DESC LIMIT 200')).map(o => ({ ...o, data: orderView(parse(o.data, {})) })), requests: (await all<{
                     data: string;
@@ -284,7 +284,8 @@ export async function POST(req: NextRequest, { params }: {
                 return j({ message: 'Store settings saved.' });
             }
             if (action === 'admin-product') {
-                const data = z.object({ price: z.number().int().min(1).max(9999999), packPrices: z.record(z.number().int().min(1).max(99999999).nullable()).optional(), inStock: z.boolean(), purchasable: z.boolean(), stockQuantity: z.number().int().min(0).max(100000).nullable(), maxQuantity: z.number().int().min(1).max(100) }).parse(b);
+                const data = z.object({ sale: z.object({ enabled: z.boolean(), percentOff: z.number().min(0.01).max(99), starts: z.string().datetime(), ends: z.string().datetime() }).nullable().optional(), price: z.number().int().min(1).max(9999999), packPrices: z.record(z.number().int().min(1).max(99999999).nullable()).optional(), inStock: z.boolean(), purchasable: z.boolean(), stockQuantity: z.number().int().min(0).max(100000).nullable(), maxQuantity: z.number().int().min(1).max(100) }).parse(b);
+                if (data.sale && Date.parse(data.sale.ends) <= Date.parse(data.sale.starts)) throw new Error('Sale end must follow its start.');
                 if (Object.keys(data.packPrices || {}).some(n => !['3','5','10'].includes(n))) throw new Error('Unknown pack size.');
                 if (!(await catalog()).some(p => p.id === b.id))
                     throw new Error('Product not found.');

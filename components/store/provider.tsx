@@ -51,6 +51,13 @@ export function StoreProvider({ children }: {
     const queue = useRef<Promise<void>>(Promise.resolve());
     async function refresh() { const d = await api('state'); stateRef.current = d; setStore(d); setReady(true); }
     useEffect(() => { api('auth-refresh', {}).catch(() => null).then(refresh).catch(() => toast.error('Saved cart is temporarily unavailable. Please refresh to try again.')); }, []);
+    useEffect(() => {
+        const boundaries = store.products.flatMap(p => p.sale?.enabled ? [Date.parse(p.sale.starts), Date.parse(p.sale.ends)] : []).filter(t => t > Date.now());
+        if (!boundaries.length) return;
+        const timer = setTimeout(() => { refresh().catch(report); }, Math.min(2147483647, Math.max(100, Math.min(...boundaries) - Date.now() + 100)));
+        return () => clearTimeout(timer);
+    }, [store.products]);
+    useEffect(() => { const update = () => { if (document.visibilityState === 'visible') refresh().catch(report); }; document.addEventListener('visibilitychange', update); return () => document.removeEventListener('visibilitychange', update); }, []);
     async function saveCart(cart: CartLine[]) { await api('cart', { cart }); await refresh(); }
     async function add(p: Product, quantity = 1, presaleId?: string) { const operation = queue.current.catch(() => { }).then(async () => { const cart = [...stateRef.current.cart]; const at = cart.findIndex(l => l.id === p.id && !l.packId && l.presaleId === presaleId); if (at >= 0)
         cart[at] = { ...cart[at], quantity: cart[at].quantity + quantity };

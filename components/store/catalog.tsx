@@ -1,5 +1,5 @@
 'use client';
-import { useState, useMemo, useId } from 'react';
+import { useState, useMemo, useId, useEffect } from 'react';
 import { Heart, Grid2X2, List, Plus, Minus, ArrowRight } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
@@ -15,21 +15,41 @@ import { ProductComparison } from './comparison';
 import { ProductImage } from './product-image';
 import { ProductGallery } from './product-gallery';
 import { SoftgelCollectionIntro, SoftgelProductStory } from './brand-story';
+function SaleNotice({ product }: { product: Product }) {
+    const [now, setNow] = useState(Date.now());
+    useEffect(() => { if (!product.activeSale) return; const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, [product.activeSale?.ends]);
+    const sale = product.activeSale;
+    if (!sale || Date.parse(sale.ends) <= now) return null;
+    const seconds = Math.max(0, Math.floor((Date.parse(sale.ends) - now) / 1000));
+    return <div className="sale-notice"><strong>{sale.percentOff}% off</strong><span>Sale ends in <time dateTime={sale.ends}>{Math.floor(seconds/86400)}d {Math.floor(seconds/3600)%24}h {Math.floor(seconds/60)%60}m {seconds%60}s</time></span></div>;
+}
 function PackSelector({ product: p, value, onChange }: { product: Product; value: number; onChange: (n: number) => void }) {
     const id = useId();
-    return <div className="pack-choice"><RadioGroup className="compact-pack-options" aria-label={'Pack size for ' + p.name} value={String(value)} onValueChange={v => onChange(Number(v))}>
-        {packSizes.map(n => { const available = p.inStock && p.purchasable && n <= packUnitLimit(p); return <label className="compact-pack-option" data-selected={value === n} data-unavailable={!available} htmlFor={id + '-' + n} key={n}>
-            <RadioGroupItem value={String(n)} id={id + '-' + n} disabled={!available}/>
-            <span>{n === 1 ? 'Single' : n + '-pack'}</span>
-        </label>; })}
-    </RadioGroup><div className="selected-pack-price" aria-live="polite"><strong>{money(fixedPackPrice(p,value))}</strong><span>{money(fixedPackPrice(p,value)/value)} / {packUnit(p)}</span></div><div className="selected-pack-note"><span>{value} {packUnit(p)}{value===1?'':'s'}{mass(p) ? ' · '+money(fixedPackPrice(p,value)/(value*mass(p)!))+' / mg' : ''}</span>{value>1&&p.price*value>fixedPackPrice(p,value)&&<span>Save {money(p.price*value-fixedPackPrice(p,value))}</span>}</div></div>;
+    return <div className="pack-choice"><RadioGroup className="compact-pack-options price-tile-options" aria-label={'Pack size for ' + p.name} value={String(value)} onValueChange={v => onChange(Number(v))}>
+        {packSizes.map(n => {
+            const available = p.inStock && p.purchasable && n <= packUnitLimit(p);
+            const total = fixedPackPrice(p,n);
+            const baseline = p.activeSale ? fixedPackPrice({ ...p, price: p.activeSale.basePrice, packPrices: p.activeSale.basePackPrices }, n) : p.price*n;
+            const savings = p.price*n-total;
+            return <label className="compact-pack-option price-tile" data-selected={value === n} data-unavailable={!available} htmlFor={id + '-' + n} key={n}>
+                <RadioGroupItem value={String(n)} id={id + '-' + n} aria-label={n === 1 ? 'Single' : n + '-pack'} disabled={!available}/>
+                <span className="tile-title">{n === 1 ? 'Single' : n + '-pack'}</span>
+                <span className="tile-baseline">{baseline>total ? <><s>{money(baseline)}</s><span>{p.activeSale?'Before sale':'Bought singly'}</span></> : 'Single unit'}</span>
+                <strong className="tile-price">{money(total)}</strong>
+                <span className="tile-unit">{money(total/n)} / {packUnit(p)}</span>
+                {mass(p) ? <span className="tile-mass">{money(total/(n*mass(p)!))} / mg</span> : null}
+                <span className="tile-saving">{savings>0 ? 'Pack saves '+money(savings) : '\u00a0'}</span>
+                <span className="tile-stock">{available ? 'Available' : !p.inStock ? 'Out of stock' : !p.purchasable ? 'Unavailable' : 'Over quantity limit'}</span>
+            </label>;
+        })}
+    </RadioGroup><div className="selected-pack-note" aria-live="polite"><span>Selected: {value === 1 ? 'Single' : value + '-pack'}</span><strong>{money(fixedPackPrice(p,value))}</strong></div></div>;
 }
 export function ProductCard({ product, onAdd, pack = false, compared = false, onCompare }: { product: Product; onAdd?: (p: Product) => void; pack?: boolean; compared?:boolean; onCompare?:(id:number)=>void; }) {
     const { store, add, addFixedPack, wish, ready } = useStore(); const [busy, setBusy] = useState(false); const [count, setCount] = useState(1);
     const p = store.products.find(current => current.id === product.id) || product;
     const packed = supportsPacks(p) && !onAdd; const price = packed ? fixedPackPrice(p, count) : p.price;
     return <article className="product-card"><a className="product-image" data-format={p.categories[0]?.slug} href={'/product/' + p.slug}><ProductImage product={p} alt={p.name + (p.categories.some(c => c.slug === 'softgels') ? ' bottle' : '')}/></a><button className="wishlist-button" aria-label={(store.wishlist.includes(p.id) ? 'Remove ' : 'Save ') + p.name + ' to wishlist'} aria-pressed={store.wishlist.includes(p.id)} onClick={() => wish(p.id).catch(report)}><Heart size={20} fill={store.wishlist.includes(p.id) ? 'currentColor' : 'none'}/></button><div className="product-info"><p className="product-category">{p.categories[0]?.name}</p><h3><a href={'/product/' + p.slug}>{p.name}</a></h3><p className="product-identity">{compound(p)}</p><p className="product-size">{packContents(p) || 'Research supply'}</p>
-    {packed ? <PackSelector product={p} value={count} onChange={setCount}/> : <><strong className="product-price">{money(price)}</strong><small>{mass(p) ? money(price / mass(p)!) + ' / mg' : p.inStock ? 'In stock' : 'Unavailable'}</small></>}
+    <SaleNotice product={p}/>{packed ? <PackSelector product={p} value={count} onChange={setCount}/> : <><strong className="product-price">{money(price)}</strong><small>{mass(p) ? money(price / mass(p)!) + ' / mg' : p.inStock ? 'In stock' : 'Unavailable'}</small></>}
     <button className="button button-dark" disabled={!p.inStock || !p.purchasable || busy || !ready || (packed && count > packUnitLimit(p))} onClick={async () => { setBusy(true); try { if (onAdd) onAdd(p); else if (packed) await addFixedPack(p, count); else await add(p); } catch (e) { report(e); } finally { setBusy(false); } }}>{busy ? 'Adding…' : !p.inStock ? 'Out of stock' : pack ? 'Add to pack' : count > 1 ? 'Add ' + count + '-pack' : 'Add to cart'}<Plus size={16}/></button>{onCompare&&<button className="compare-toggle" aria-pressed={compared} onClick={()=>onCompare(p.id)}>{compared?'✓ Added to comparison':'+ Compare'}</button>}</div></article>;
 }
 export function PackOffers() { const { store } = useStore(); return <nav className="pack-offers" aria-label="Bundle offers">{packSizes.filter(n => n > 1).map(n => <a href={'/multi-pack?size=' + n} key={n}><span className="bundle-number">{n}</span><span className="bundle-label">{n}-Pack Bundle</span><strong>{store.config.packDiscounts[n] ? `Save ${store.config.packDiscounts[n]}% on your pack` : 'Choose your products'}</strong><span className="bundle-link">Mix &amp; match <ArrowRight size={17}/></span></a>)}</nav>; }
@@ -42,7 +62,7 @@ export function Shop({ search = '', category = '' }: {
 export function ProductPage({ slug }: {
     slug: string;
 }) { const { store, add, addFixedPack, ready } = useStore(); const [quantity, setQuantity] = useState(1); const [packSize, setPackSize] = useState(1); const [busy, setBusy] = useState(false); const p = store.products.find(p => p.slug === slug); if (!p)
-    return <Blank title="Product not found."><a href="/shop">Return to the catalog</a></Blank>; const packed = supportsPacks(p); const selectedSize = packed ? packSize : 1; const selectedPrice = packed ? fixedPackPrice(p, selectedSize) : p.price; const maxPacks = Math.floor(packUnitLimit(p) / selectedSize); return <><p className="breadcrumbs"><a href="/shop">Shop</a> / {p.categories[0]?.name} / {p.name}</p><div className="product-detail"><ProductGallery product={p}/><div className="detail-copy"><p className="product-category">{p.categories[0]?.name}</p><h1>{p.name}</h1><p className="detail-identity">{compound(p)}</p><p className="detail-size">{packContents(p)}</p><p className="muted">SKU: {p.sku || 'Not provided'}</p><p className="detail-price" aria-live="polite">{money(selectedPrice)}</p>{packed && <p>{money(selectedPrice / selectedSize)} / {packUnit(p)}{mass(p) ? ' · ' + money(selectedPrice / (selectedSize * mass(p)!)) + ' / mg' : ''}</p>}<p className={p.inStock ? 'stock' : 'muted'}>{p.inStock ? 'In stock' : 'Out of stock'}</p><p className="detail-description">{productSummary(p)}</p>{specificationNote(p)&&<p className="specification-note">{specificationNote(p)}</p>}<a className="coa-link" href={'/testing?product=' + p.id}>View testing documentation <ArrowRight size={17}/></a><>{packed && <div className="detail-pack-selector"><h2>Pack size</h2><PackSelector product={p} value={packSize} onChange={n => { setPackSize(n); setQuantity(1); }}/></div>}</><div className="add-row"><div className="quantity"><button aria-label="Decrease quantity" disabled={quantity <= 1} onClick={() => setQuantity(quantity - 1)}><Minus size={16}/></button><input aria-label={selectedSize > 1 ? 'Number of packs' : 'Quantity'} type="number" min="1" max={maxPacks} value={quantity} onChange={e => setQuantity(Math.max(1, Math.min(maxPacks, Number(e.target.value) || 1)))}/><button aria-label="Increase quantity" disabled={quantity >= maxPacks} onClick={() => setQuantity(quantity + 1)}><Plus size={16}/></button></div><button className="button button-gold" disabled={busy || !p.inStock || !p.purchasable || !ready || maxPacks < 1} onClick={async () => { setBusy(true); try {
+    return <Blank title="Product not found."><a href="/shop">Return to the catalog</a></Blank>; const packed = supportsPacks(p); const selectedSize = packed ? packSize : 1; const selectedPrice = packed ? fixedPackPrice(p, selectedSize) : p.price; const maxPacks = Math.floor(packUnitLimit(p) / selectedSize); return <><p className="breadcrumbs"><a href="/shop">Shop</a> / {p.categories[0]?.name} / {p.name}</p><div className="product-detail"><ProductGallery product={p}/><div className="detail-copy"><p className="product-category">{p.categories[0]?.name}</p><h1>{p.name}</h1><p className="detail-identity">{compound(p)}</p><p className="detail-size">{packContents(p)}</p><p className="muted">SKU: {p.sku || 'Not provided'}</p><SaleNotice product={p}/><p className="detail-price" aria-live="polite">{money(selectedPrice)}</p>{packed && <p>{money(selectedPrice / selectedSize)} / {packUnit(p)}{mass(p) ? ' · ' + money(selectedPrice / (selectedSize * mass(p)!)) + ' / mg' : ''}</p>}<p className={p.inStock ? 'stock' : 'muted'}>{p.inStock ? 'In stock' : 'Out of stock'}</p><p className="detail-description">{productSummary(p)}</p>{specificationNote(p)&&<p className="specification-note">{specificationNote(p)}</p>}<a className="coa-link" href={'/testing?product=' + p.id}>View testing documentation <ArrowRight size={17}/></a><>{packed && <div className="detail-pack-selector"><h2>Pack size</h2><PackSelector product={p} value={packSize} onChange={n => { setPackSize(n); setQuantity(1); }}/></div>}</><div className="add-row"><div className="quantity"><button aria-label="Decrease quantity" disabled={quantity <= 1} onClick={() => setQuantity(quantity - 1)}><Minus size={16}/></button><input aria-label={selectedSize > 1 ? 'Number of packs' : 'Quantity'} type="number" min="1" max={maxPacks} value={quantity} onChange={e => setQuantity(Math.max(1, Math.min(maxPacks, Number(e.target.value) || 1)))}/><button aria-label="Increase quantity" disabled={quantity >= maxPacks} onClick={() => setQuantity(quantity + 1)}><Plus size={16}/></button></div><button className="button button-gold" disabled={busy || !p.inStock || !p.purchasable || !ready || maxPacks < 1} onClick={async () => { setBusy(true); try {
     if (packed) await addFixedPack(p, selectedSize, quantity); else await add(p, quantity);
 }
 catch (e) {

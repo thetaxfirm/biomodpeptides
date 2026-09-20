@@ -10,6 +10,7 @@ import "./storefront-v12.css";
 import "./storefront-v14.css";
 import "./storefront-v18.css";
 import "./storefront-v23.css";
+import "./storefront-v24.css";
 import {AgeGate} from "@/components/store/age-gate";
 import {StoreProvider} from "@/components/store/provider";
 import {Footer} from "@/components/store/content";

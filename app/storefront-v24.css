@@ -1,0 +1,18 @@
+/* Price comparisons remain legible at every catalog width. */
+.price-tile-options.compact-pack-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.compact-pack-option.price-tile{position:relative;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:3px;padding:12px 10px;text-align:left;min-width:0;border:1px solid #c8dae5;border-radius:6px;background:#fff;cursor:pointer;white-space:normal}
+.compact-pack-option.price-tile[data-selected="true"]{background:#e1f5fc;border:2px solid #1476a0;padding:11px 9px;color:#142c45}
+.compact-pack-option.price-tile:focus-within{outline:3px solid #1476a0;outline-offset:3px}
+.price-tile .tile-title{font-size:13px;font-weight:700}
+.price-tile .tile-baseline{display:flex;flex-direction:column;font-size:11px;line-height:1.35;min-height:30px;color:#526579}
+.price-tile .tile-price{font-size:21px;line-height:1.2;letter-spacing:-.4px;color:#142c45}
+.price-tile .tile-unit,.price-tile .tile-mass{font-size:11px;line-height:1.5;color:#36566b}
+.price-tile .tile-saving{min-height:17px;font-size:10px;font-weight:600;color:#175781}
+.price-tile .tile-stock{font-size:11px;color:#176347;font-weight:600}
+.price-tile[data-unavailable="true"]{background:#f6f8fa;cursor:not-allowed}
+.price-tile[data-unavailable="true"] .tile-stock{color:#6b4650}
+.sale-notice{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin:8px 0 14px;padding:10px 12px;background:#fff1ed;color:#9b3224;border-radius:5px;font-size:12px}
+.sale-notice time{display:block;font-variant-numeric:tabular-nums;font-weight:700}
+.product-edit-dialog{max-height:90dvh;overflow-y:auto}
+.detail-pack-selector .price-tile-options{grid-template-columns:repeat(2,minmax(0,1fr))}
+.price-tile-options + .selected-pack-note{margin-top:9px;font-size:12px;color:#18324c}
