@@ -3,7 +3,7 @@ import { products, compound, type Product } from './catalog';
 export const previewOrigin = 'https://biomod-peptides.xovanova.chatgpt.site';
 export const reviewedOn = '2026-09-12';
 export const pageRecords: Record<string, { title: string; description: string; eligible: boolean }> = {
-  '/': { title: 'BIOMOD Peptides | The Original Peptide Softgel™', description: 'Meet BIOMOD: our own softgel formulations, California softgel manufacturing and Las Vegas retail roots. Research peptides, softgels and sprays.', eligible: true },
+  '/': { title: 'BIOMOD Peptides | Research-Only Vials', description: 'Explore BIOMOD lyophilized research peptide vials and batch documentation. For laboratory research only. Not for human or animal use.', eligible: true },
   '/softgels': { title: 'The Original Peptide Softgel™ by BIOMOD', description: 'Explore BIOMOD softgel formulations, enteric design and California manufacturing. Browse full bottles in 1, 3, 5 and 10 packs.', eligible: false },
   '/shop': { title: 'Research Product Catalog', description: 'Browse BIOMOD products by compound, format and container size. Compare specifications, pack totals and available batch documentation.', eligible: true },
   '/about': { title: 'BIOMOD | Las Vegas Roots and Our Softgel Story', description: 'A veteran-owned company with Las Vegas peptide retail roots and its own softgel formulations, manufactured in California under cGMP standards.', eligible: true },
