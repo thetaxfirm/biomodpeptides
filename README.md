@@ -65,13 +65,15 @@ Five withdrawn listings, their product images and complete certificate records a
 
 Validation: `node tests/catalog-removal-v8.cjs`, `python3 tests/catalog-removal-http-v8.py`, the pack and SEO checks.
 
-## Standalone launch v15
+## Custom-domain launch v16
 
 Source is now private at https://github.com/thetaxfirm/biomodpeptides.
-The existing Cloudflare runtime and D1 storage are deployed in Ash's Cloudflare account:
-https://biomod-peptides.biomodcompounds.workers.dev
+The Cloudflare runtime and D1 storage are deployed in the shared Cloudflare account that also owns biomodpro.com:
+https://trybiomod.com and https://www.trybiomod.com
 
-`trybiomod.com` uses a different Cloudflare account, and `biomodpeptides.com` uses dns-parking.com nameservers. Neither domain is present in the accessible Cloudflare accounts. Their DNS access is still needed for custom-domain launch. Do not transfer nameservers without checking existing mail and other records.
+`trybiomod.com` registration was moved into the shared account on September 19, 2026. It had no DNS records or enabled DNSSEC before the move. Both custom hostnames are configured on the `biomod-peptides` Worker. Existing preview D1 data was copied into the shared account's database before deployment. The previous deployment at https://biomod-peptides.biomodcompounds.workers.dev remains available as a fallback, with its separate database.
+
+`biomodpeptides.com` remains separate and uses dns-parking.com nameservers; it has not been changed.
 
 Publish updates from an authenticated Cloudflare CLI session:
 

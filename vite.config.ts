@@ -15,7 +15,16 @@ const managedLinux = readExecutionProfile() === "managed-linux";
 
 const production = process.env.BIOMOD_DEPLOY === "true";
 const localBindingConfig = {
-  ...(production ? { name: "biomod-peptides", account_id: "4ec3ef3700a8eb3d013bd83c658d838f", vars: { COMMERCE_MODE: "preview" } } : {}),
+  ...(production ? {
+    name: "biomod-peptides",
+    account_id: "99aaaddf04e12ed1467d146bb2467455",
+    workers_dev: false,
+    routes: [
+      { pattern: "trybiomod.com", custom_domain: true },
+      { pattern: "www.trybiomod.com", custom_domain: true },
+    ],
+    vars: { COMMERCE_MODE: "preview" },
+  } : {}),
   main: "vinext/server/fetch-handler",
   compatibility_flags: ["nodejs_compat"],
   d1_databases: d1
@@ -23,7 +32,7 @@ const localBindingConfig = {
         {
           binding: d1,
           database_name: production ? "biomod-peptides" : "site-creator-d1",
-          database_id: production ? "a04509c9-cee2-4605-bd10-3ed541960e74" : SITE_CREATOR_PLACEHOLDER_DATABASE_ID,
+          database_id: production ? "877af242-59d4-4122-a1ff-50fcf02a54dc" : SITE_CREATOR_PLACEHOLDER_DATABASE_ID,
           migrations_dir: production ? "../../drizzle" : "drizzle",
         },
       ]
