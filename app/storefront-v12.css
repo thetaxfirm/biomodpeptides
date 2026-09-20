@@ -1,23 +1,23 @@
 .softgel-gallery-stage{background:#f0f0f0;border-radius:5px;overflow:hidden}
 .softgel-view-enlarge{position:relative;width:100%;aspect-ratio:1;display:block;padding:20px 18px 45px;cursor:zoom-in}
 .packaging-viewport{display:block;width:100%;height:100%;overflow:hidden}
-.softgel-view-enlarge>span{position:absolute;right:18px;bottom:15px;display:flex;align-items:center;gap:8px;color:#554d43;font-size:14px}
+.softgel-view-enlarge>span{position:absolute;right:18px;bottom:15px;display:flex;align-items:center;gap:8px;color:#29435f;font-size:14px}
 .softgel-gallery-controls{display:flex;align-items:center;justify-content:space-between;gap:15px;margin:12px 0}
-.softgel-gallery-controls>button{display:grid;place-items:center;width:44px;height:44px;background:#f1ece5;border-radius:4px;color:#493c2f}
+.softgel-gallery-controls>button{display:grid;place-items:center;width:44px;height:44px;background:#f1ece5;border-radius:4px;color:#29435f}
 .softgel-gallery-controls>button:hover{background:#e5d8c8}
 .softgel-gallery-controls>p{font-size:15px;font-weight:500;text-align:center}
 .softgel-gallery-controls>p>span{color:#7b6e60;margin-left:10px;font-size:14px;font-weight:400}
 .softgel-gallery-thumbnails{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px}
 .softgel-gallery-thumbnails>button{min-width:0;display:flex;flex-direction:column;background:#f6f3ee;border-radius:4px;padding:5px 5px 9px;outline:1px solid #e8e0d5;outline-offset:-1px;text-align:center;color:#5b4d3e}
-.softgel-gallery-thumbnails>button[aria-pressed=true]{outline:2px solid #765434;outline-offset:-2px;background:#eee3d6;color:#292018}
-.softgel-gallery-thumbnails>button:focus-visible,.softgel-gallery-controls>button:focus-visible{outline:3px solid #30271f;outline-offset:3px}
-.softgel-view-enlarge:focus-visible{outline:3px solid #30271f;outline-offset:-5px}
+.softgel-gallery-thumbnails>button[aria-pressed=true]{outline:2px solid #765434;outline-offset:-2px;background:#eee3d6;color:#12243a}
+.softgel-gallery-thumbnails>button:focus-visible,.softgel-gallery-controls>button:focus-visible{outline:3px solid #12243a;outline-offset:3px}
+.softgel-view-enlarge:focus-visible{outline:3px solid #12243a;outline-offset:-5px}
 .softgel-thumbnail-image{height:75px;display:block;padding:6px;width:100%}
 .softgel-thumbnail-label{font-size:13px;line-height:1.35;padding:5px 0 0;margin-top:auto}
 .ingredient-thumbnail{display:flex;align-items:center;justify-content:center;flex-direction:column;height:100%;font-size:12px;font-weight:600;line-height:1.4}
 .ingredient-thumbnail small{font-size:11px;font-weight:400;color:#746453;margin-top:4px}
 .softgel-product-gallery>.gallery-caption{font-size:14px;line-height:1.65;margin-top:18px;max-width:570px;color:#6e6050}
-.softgel-ingredient-panel{padding:32px;background:#fbfaf7;color:#30271f;min-height:500px}
+.softgel-ingredient-panel{padding:32px;background:#fbfaf7;color:#12243a;min-height:500px}
 .ingredient-panel-heading{margin-bottom:25px}
 .ingredient-panel-heading h2{font-size:32px;line-height:1.15;font-weight:500;letter-spacing:.02em}
 .ingredient-panel-heading p{font-size:19px;margin-top:8px}

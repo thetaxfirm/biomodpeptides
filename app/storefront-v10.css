@@ -3,7 +3,7 @@
 .brand-campaign .campaign-copy{width:49%;max-width:720px;top:16%}
 .brand-campaign .campaign-copy h1{font-size:clamp(40px,4.9vw,74px);line-height:1.1;letter-spacing:-.035em}
 .brand-campaign .campaign-copy p{max-width:460px;font-size:18px}
-.brand-campaign{background:#0c0b0a}
+.brand-campaign{background:#12243a}
 .brand-campaign .campaign-image{left:auto;right:0;width:68%;height:100%;object-fit:contain;mix-blend-mode:lighten;mask-image:linear-gradient(to right,transparent,#000 12%,#000 100%),linear-gradient(to bottom,transparent,#000 17%,#000 70%,transparent 93%);mask-composite:intersect}
 .main-nav>.wrap{gap:6px}
 .main-nav a{padding-left:9px;padding-right:9px}
@@ -15,14 +15,14 @@
 .home-origin>div>p{max-width:610px;margin:25px 0;font-size:18px;line-height:1.7;color:#65594d}
 .origin-facts{display:grid;gap:28px;align-content:center}
 .origin-facts>div{padding:24px 28px;background:#eee5d9;border-radius:4px}
-.origin-facts>div:nth-child(2){background:#342a21;color:#fff5e9}
+.origin-facts>div:nth-child(2){background:#12243a;color:#fff5e9}
 .origin-facts strong{font-size:21px;font-weight:500}
 .origin-facts p{margin:10px 0 15px;max-width:390px}
 .origin-facts a{display:inline-flex;align-items:center;gap:8px;font-size:14px}
-.shop-brand-line{margin:24px 0 0;padding:20px 25px;background:#30261e;color:#faf1e5;border-radius:4px}
+.shop-brand-line{margin:24px 0 0;padding:20px 25px;background:#12243a;color:#faf1e5;border-radius:4px}
 .shop-brand-line>a{display:flex;justify-content:space-between;align-items:center;gap:20px;font-size:23px;font-weight:500}
 .shop-brand-line span{font-size:15px;color:#dec5a5}
-.softgel-collection-intro{display:grid;grid-template-columns:1fr 230px;align-items:center;gap:30px;padding:30px 40px;margin-top:25px;background:#30261e;color:#fff7ec;border-radius:4px}
+.softgel-collection-intro{display:grid;grid-template-columns:1fr 230px;align-items:center;gap:30px;padding:30px 40px;margin-top:25px;background:#12243a;color:#fff7ec;border-radius:4px}
 .softgel-collection-intro h2{font-size:clamp(29px,3.2vw,45px);line-height:1.15;font-weight:500;letter-spacing:-.02em}
 .softgel-collection-intro p{max-width:640px;margin:18px 0;color:#dfccba;font-size:17px}
 .softgel-collection-intro img{width:230px;border-radius:3px}
@@ -31,7 +31,7 @@
 .softgel-product-story h2{font-size:32px;line-height:1.18;font-weight:500;letter-spacing:-.02em}
 .softgel-product-story>div>p:not(.softgel-signature){font-size:17px;line-height:1.75;margin-bottom:20px;max-width:690px}
 .softgel-story-page{max-width:1360px;margin:0 auto}
-.softgel-story-hero{background:#151310;color:#fff7eb;padding:50px 55px 22px;border-radius:4px;position:relative}
+.softgel-story-hero{background:#12243a;color:#fff7eb;padding:50px 55px 22px;border-radius:4px;position:relative}
 .softgel-story-hero>div{position:relative;z-index:1;display:grid;grid-template-columns:1.4fr 1fr;gap:24px 45px;align-items:center}
 .softgel-story-hero h1{font-size:clamp(38px,5.2vw,74px);font-weight:500;line-height:1.08;letter-spacing:-.035em;grid-row:span 2}
 .softgel-story-hero>div>p{font-size:18px;line-height:1.7;color:#ded0c0;max-width:390px}
@@ -40,7 +40,7 @@
 .softgel-story-hero figure img{width:100%;height:auto;mask-image:linear-gradient(to bottom,transparent,#000 15%,#000 83%,transparent);mix-blend-mode:lighten}
 .softgel-story-hero figcaption{font-size:14px;color:#c2b5a7;text-align:center;margin:0 0 8px}
 .softgel-manufacturing{display:flex;flex-wrap:wrap;justify-content:space-between;gap:15px 28px;padding:26px 8px;font-size:15px;color:#635344}
-.softgel-manufacturing strong{font-weight:500;color:#392a1e}
+.softgel-manufacturing strong{font-weight:500;color:#12243a}
 .softgel-manufacturing a{display:flex;align-items:center;gap:8px}
 .softgel-formulation-section{padding:70px 0 80px}
 .softgel-section-opening{display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:end;margin-bottom:45px}
@@ -51,7 +51,7 @@
 .softgel-formulation-grid>article>a:first-child{background:#fff;outline:1px solid #e9e3da;outline-offset:-1px;border-radius:4px;overflow:hidden;margin-bottom:10px}
 .softgel-formulation-grid img{width:100%;height:auto}
 .softgel-formulation-grid h3{font-size:29px;line-height:1.1;letter-spacing:.025em;font-weight:500}
-.softgel-formulation-grid .formula-identity{font-weight:500;color:#34291f}
+.softgel-formulation-grid .formula-identity{font-weight:500;color:#12243a}
 .softgel-formulation-grid p{font-size:16px;line-height:1.65;color:#6a5c4f}
 .softgel-formulation-grid strong{font-size:15px;font-weight:500;color:#78522e}
 .softgel-formulation-grid .editorial-link{margin-top:5px}

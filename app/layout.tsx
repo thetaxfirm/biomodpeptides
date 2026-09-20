@@ -8,6 +8,7 @@ import "./storefront-v10.css";
 import "./storefront-v11.css";
 import "./storefront-v12.css";
 import "./storefront-v14.css";
+import "./storefront-v18.css";
 import {AgeGate} from "@/components/store/age-gate";
 import {StoreProvider} from "@/components/store/provider";
 import {Footer} from "@/components/store/content";

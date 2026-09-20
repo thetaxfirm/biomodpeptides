@@ -1,6 +1,6 @@
 .home-format-navigation{display:flex;align-items:center;gap:24px 40px;padding-top:32px;padding-bottom:26px;flex-wrap:wrap}
 .home-format-navigation>span{font-size:15px;color:#625d57;margin-right:auto}
-.home-format-navigation>a{display:inline-flex;align-items:center;gap:15px;min-height:44px;font-size:17px;font-weight:500;color:#292624}
+.home-format-navigation>a{display:inline-flex;align-items:center;gap:15px;min-height:44px;font-size:17px;font-weight:500;color:#12243a}
 .home-format-navigation>a:hover{color:#805936}
 .home-product-section{padding-top:36px;padding-bottom:72px;scroll-margin-top:22px}
 .home-product-section+.home-product-section{padding-top:44px}
@@ -32,7 +32,7 @@
 @media(max-width:640px){.home-format-navigation{gap:4px 20px;padding-top:20px;padding-bottom:14px}.home-format-navigation>span{font-size:14px;margin-bottom:7px}.home-format-navigation>a{font-size:15px;gap:9px}.home-format-navigation>a>svg{width:14px}.home-product-section{padding-top:25px;padding-bottom:38px}.home-product-section+.home-product-section{padding-top:32px}.home-collection-heading{display:block;margin-bottom:23px}.home-collection-heading h2{font-size:33px}.home-collection-heading p{font-size:15px;max-width:30ch;margin-top:10px}.home-collection-heading>a{font-size:14px;margin-top:10px}.home-product-grid{gap:27px 14px}.home-product-grid .product-info{padding-top:15px}.home-product-grid .product-info h3{font-size:21px}.home-product-grid .product-identity{min-height:56px}.home-product-grid .pack-choice{padding-top:7px}.home-product-grid .compact-pack-option{font-size:11px}}
 
 /* Research-vial homepage priority v17. Secondary formats require a collection click. */
-.research-campaign{display:grid;grid-template-columns:1fr 1fr;align-items:center;background:#0c0b0a;color:#fff;min-height:560px;overflow:hidden}
+.research-campaign{display:grid;grid-template-columns:1fr 1fr;align-items:center;background:#12243a;color:#fff;min-height:560px;overflow:hidden}
 .research-campaign .campaign-image{position:static;z-index:0;grid-column:2;grid-row:1;width:100%;height:100%;max-height:650px;object-fit:cover;mask-image:linear-gradient(to right,transparent,#000 20%)}
 .research-campaign .campaign-copy{position:static;grid-column:1;grid-row:1;width:auto;max-width:none;padding:64px 0 64px max(40px,calc((100vw - 1360px)/2));z-index:1}
 .research-campaign .campaign-copy h1{font-size:clamp(42px,4.6vw,72px);line-height:1.1;letter-spacing:-.035em}

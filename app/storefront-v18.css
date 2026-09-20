@@ -1,0 +1,19 @@
+/* Sitewide navy and blue palette v18. Keep original product artwork intact. */
+:root{--foreground:#12243a;--card-foreground:#12243a;--popover-foreground:#12243a;--ink:#12243a;--primary:#0f62fe;--primary-foreground:#fff;--secondary:#edf3fa;--secondary-foreground:#12243a;--muted:#f3f6fa;--muted-foreground:#506176;--accent:#e5efff;--accent-foreground:#123d75;--ring:#0f62fe;--border:#d7e1ed;--input:#d7e1ed}
+body{color:#12243a}
+.veteran-band,.site-footer,.research-campaign,.brand-campaign,.softgel-story-hero,.collection-image{background:#12243a}
+.veteran-band{color:#e4eaf2}.site-footer{color:#f5f8ff}.footer-grid p,.footer-bottom,.footer-brand,.site-footer .brand-trademarks{color:#c6d5e8}.footer-bottom{border-color:#36506d}
+.research-campaign .campaign-image{mask-image:linear-gradient(to right,transparent,#000 34%)}
+.research-campaign .campaign-copy p{color:#e4eaf2}
+.head-actions,.main-nav,.page-heading h1,.home-collection-heading h2,.home-format-navigation>a{color:#12243a}
+.main-nav a:hover,.category-switch button:hover{background:#edf3fa;color:#0043ce}
+.announcement{background:#edf3fa;color:#29435f}.announcement a,.editorial-link,.home-format-navigation>a:hover,.text-button{color:#0043ce}
+.button-gold,.button-dark{background:#0f62fe;color:#fff}.button-gold:hover,.button-dark:hover{background:#0043ce;color:#fff}
+.cart-count{background:#0f62fe;color:#fff}
+.compact-pack-option[data-selected=true],.mix-size-option[data-selected=true],.category-switch button[aria-pressed=true]{background:#12243a;border-color:#12243a;color:#fff}
+.compact-pack-option:focus-within,a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline-color:#0f62fe}
+.site-search,.account-nav,.order-summary,.mix-totals,.detail-copy .research-note{background:#f3f6fa;border-color:#d7e1ed}
+.pack-offers a:hover,.mix-slot.filled,.mix-product:hover:not(:disabled){background:#edf3fa;border-color:#8aaddb}
+.product-category,.product-size,.product-identity,.selected-pack-note,.selected-pack-price>span,.page-heading p,.home-collection-heading p,.home-format-navigation>span{color:#506176}
+.selected-pack-note>span:last-child:not(:first-child),.pack-offers strong{color:#365d88}
+@media(max-width:800px){.research-campaign .campaign-image{mask-image:linear-gradient(to bottom,transparent,#000 16%)}}
