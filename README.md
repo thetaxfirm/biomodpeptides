@@ -64,3 +64,21 @@ Secret key names, without values, are documented in `.env.example`. Local `.env`
 Five withdrawn listings, their product images and complete certificate records are excluded from published data. Cart, wishlist, saved-pack and presale paths use current product IDs; retired order product snapshots are projected as archived items while financial ledgers remain intact. Existing checkout links cannot be reissued for unavailable products. Server response projections remove withdrawn references from saved free text. The original legacy WordPress server is separate and requires authenticated administration for source-file removal.
 
 Validation: `node tests/catalog-removal-v8.cjs`, `python3 tests/catalog-removal-http-v8.py`, the pack and SEO checks.
+
+## Standalone launch v15
+
+Source is now private at https://github.com/thetaxfirm/biomodpeptides.
+The existing Cloudflare runtime and D1 storage are deployed in Ash's Cloudflare account:
+https://biomod-peptides.biomodcompounds.workers.dev
+
+`trybiomod.com` uses a different Cloudflare account, and `biomodpeptides.com` uses dns-parking.com nameservers. Neither domain is present in the accessible Cloudflare accounts. Their DNS access is still needed for custom-domain launch. Do not transfer nameservers without checking existing mail and other records.
+
+Publish updates from an authenticated Cloudflare CLI session:
+
+```sh
+BIOMOD_DEPLOY=true npm run build
+npx wrangler d1 migrations apply biomod-peptides --remote --config dist/server/wrangler.json
+npx wrangler deploy --config dist/server/wrangler.json
+```
+
+`COMMERCE_MODE=preview`: payment and customer sign-in remain unconfigured. Source control is on GitHub; automatic Cloudflare builds are not configured yet. Hosting currently remains on Cloudflare because this code uses its Workers and D1 APIs, not Vercel's Node runtime.
