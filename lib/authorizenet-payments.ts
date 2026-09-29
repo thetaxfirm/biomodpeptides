@@ -51,6 +51,8 @@ const PAID = new Set(['capturedPendingSettlement', 'settledSuccessfully']);
 const PENDING = new Set(['FDSPendingReview', 'FDSAuthorizedPendingReview', 'underReview', 'authorizedPendingRelease']);
 const FAILED = new Set(['declined', 'voided', 'expired', 'generalError', 'failedReview', 'communicationError', 'settlementError', 'couldNotVoid']);
 const LIST_LIMIT = 1000;
+// Authorize.net prefixes JSON responses with a byte-order mark (U+FEFF).
+const BOM = new RegExp('^' + String.fromCharCode(0xfeff));
 function object(value: unknown): Record<string, unknown> | null {
     return value !== null && typeof value === 'object' && !Array.isArray(value)
         ? (value as Record<string, unknown>)
@@ -282,7 +284,7 @@ export function createAnetAdapter(env: Environment = process.env, request: typeo
         let result: Record<string, unknown> | null = null;
         try {
             // Authorize.net prefixes JSON responses with a byte-order mark.
-            result = object(JSON.parse((await response.text()).replace(/^﻿/, '')));
+            result = object(JSON.parse((await response.text()).replace(BOM, '')));
         }
         catch {
             /* Never expose provider bodies. */

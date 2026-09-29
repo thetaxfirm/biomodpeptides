@@ -64,7 +64,7 @@ try {
 
   // Adapter with fake network (responses carry the BOM Authorize.net sends)
   const calls = [];
-  const ok = (extra) => new Response('﻿' + JSON.stringify({ ...extra, messages: { resultCode: 'Ok', message: [{ code: 'I00001', text: 'Successful.' }] } }), { status: 200 });
+  const ok = (extra) => new Response(String.fromCharCode(0xfeff) + JSON.stringify({ ...extra, messages: { resultCode: 'Ok', message: [{ code: 'I00001', text: 'Successful.' }] } }), { status: 200 });
   const fake = async (url, init) => {
     const req = JSON.parse(init.body); const kind = Object.keys(req)[0]; calls.push([url, kind]);
     if (kind === 'getHostedPaymentPageRequest') return ok({ token: 'TOKEN123' });
