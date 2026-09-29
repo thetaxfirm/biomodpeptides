@@ -32,6 +32,19 @@ A custom React storefront with an original Biomod campaign, using 45 real Biomod
 - Administrator allowlist, product price/inventory controls, pack discounts, shipping settings, campaigns, customer requests, order fulfillment and manual Chase reconciliation.
 - Support/application requests persist for administrator review; automated email delivery is not configured.
 
+## Authorize.net payments
+
+`PAYMENT_PROVIDER=authorizenet` (the default) uses Authorize.net Accept Hosted. Card details are typed only on Authorize.net's hosted page; this server never receives them. The Chase adapter remains available with `PAYMENT_PROVIDER=chase`.
+
+- Checkout saves the order and reserves stock, then sends the customer to `/api/store/pay?id=…`. That page requests a fresh single-use hosted-form token and posts the customer to Authorize.net. Before it issues a token, it checks Authorize.net and refuses when a capture or fraud-review hold already exists. `duplicateWindow` is set to 8 hours.
+- The invoice number is a stable 20-character hash of the order ID (`lib/authorizenet-payments.ts`).
+- An order is marked paid only after an authenticated `getTransactionDetails` read shows an `authCaptureTransaction` for this invoice, with response code 1, a captured or settled status and the exact order amount. Two captures, an amount mismatch, auth-only transactions or refunds go to review.
+- Webhook: register `https://trybiomod.com/api/payments/authorizenet` in Merchant Interface → Account → Webhooks for the `net.authorize.payment.*` events. Signatures are verified with HMAC-SHA512 using the Signature Key. The payload is treated only as a hint, and status is always re-read from the API. Declines leave the order open so the customer can try another card.
+- Customers and admins can also press *Verify payment*. That searches unsettled transactions, and settled batches for orders older than one hour.
+- Secrets: `AUTHORIZENET_API_LOGIN_ID`, `AUTHORIZENET_TRANSACTION_KEY`, `AUTHORIZENET_SIGNATURE_KEY`. Settings: `AUTHORIZENET_ENVIRONMENT` (`sandbox`/`live`) and `AUTHORIZENET_RETURN_URL` (`https://trybiomod.com/payment/return`). Set `AUTHORIZENET_CONNECTION_VERIFIED=true` only after a sandbox test purchase succeeds, and set `COMMERCE_MODE` to match the environment. Live mode also requires `COMMERCE_FULFILLMENT_VERIFIED=true`.
+- Test: `node tests/payments-authorizenet-v1.mjs` (no network).
+- Not automated: refunds and voids after payment are handled in the Authorize.net Merchant Interface, and an admin updates the order.
+
 ## Connections still required before public commerce
 
 The preview does not accept payments or fabricate signed-in accounts, purchases, rewards, certificates or presale campaigns. Supabase managed authentication is implemented through its HTTP API and requires the configured project, verified email delivery, approved redirect URLs, and Google configuration if enabled. Private preview access through Sites is separate from storefront customer accounts.
