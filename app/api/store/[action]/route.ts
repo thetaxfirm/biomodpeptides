@@ -8,7 +8,8 @@ import { currentCart, currentProductId, currentSelection, orderView, unavailable
 import { catalog, config, quote, validateLines } from '@/lib/commerce';
 import { all, one, run, uid, timestamp, parse, runtime, database } from '@/lib/runtime';
 import { checkout, reconcile, addressSchema, issueQuote } from '@/lib/checkout';
-import { getChasePaymentStatus } from '@/lib/chase-payments';
+import { getPaymentStatus, paymentEnvironment, paymentProvider } from '@/lib/payments';
+import { createAnetAdapter } from '@/lib/authorizenet-payments';
 import { packSizes, supportsPacks } from '@/lib/packs';
 import { searchReport, seoConfig } from '@/lib/seo-policy';
 export const dynamic = 'force-dynamic';
@@ -52,7 +53,7 @@ export async function GET(req: NextRequest, { params }: {
             catch (e) {
                 cartError = (e as Error).message;
             }
-            const payment = getChasePaymentStatus(runtime());
+            const payment = getPaymentStatus(runtime());
             const packOwner = u ? 'customer:' + u.id : 'guest:' + s.id;
             if(u) await run('UPDATE saved_packs SET owner=? WHERE owner=?',packOwner,'guest:'+s.id);
             const savedPacks = (await all<{id:string;name:string;products:string;updated:number}>('SELECT id,name,products,updated FROM saved_packs WHERE owner=? ORDER BY updated DESC',packOwner)).map(p=>({...p,products:parse(p.products,[])})).filter(p=>currentSelection(p.products)).map(p=>presentationData(p));
@@ -61,6 +62,38 @@ export async function GET(req: NextRequest, { params }: {
                     data: string;
                     active: number;
                 }>('SELECT id,data,active FROM campaigns WHERE active=1')).map<Record<string, any>>(c => ({ ...parse<Record<string, any>>(c.data, {}), id: c.id })).filter(c=>currentSelection(c.productIds)).map(c=>presentationData(c)), admin: Boolean(u && (runtime().STORE_ADMIN_EMAILS || '').toLowerCase().split(',').map(v => v.trim()).includes(u.email.toLowerCase())) });
+        }
+        if (action === 'pay') {
+            // Authorize.net Accept Hosted: issue a fresh single-use token and POST the customer to the hosted card form.
+            const page = (title: string, body: string, status = 200) => new NextResponse('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>' + title + '</title><style>body{font-family:system-ui,sans-serif;background:#0b0b0b;color:#f2ede4;display:grid;place-items:center;min-height:100vh;margin:0;padding:16px;text-align:center}a,button{color:#0b0b0b;background:#c8a46a;border:0;border-radius:6px;padding:12px 20px;font:inherit;text-decoration:none;cursor:pointer}</style></head><body><main>' + body + '</main></body></html>', { status, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer', 'X-Frame-Options': 'DENY' } });
+            const esc = (v: string) => v.replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
+            const fail = (message: string, status = 400) => page('Payment unavailable', '<h1>Payment unavailable</h1><p>' + esc(message) + '</p><p><a href="/account/orders">View my orders</a></p>', status);
+            if (!u)
+                return fail('Please sign in to continue.', 401);
+            if (paymentProvider(runtime()) !== 'authorizenet')
+                return fail('This checkout is not available.', 404);
+            const id = String(req.nextUrl.searchParams.get('id') || '');
+            if (!/^[a-f0-9-]{36}$/.test(id))
+                return fail('Order not found.', 404);
+            const o = await one<{ id: string; status: string; total: number; checkout_ref: string; data: string; created: number }>('SELECT id,status,total,checkout_ref,data,created FROM orders WHERE id=? AND owner=?', id, u.id);
+            const saved = parse<{ environment?: string; address?: Record<string, string> } & Record<string, unknown>>(o?.data, {});
+            if (!o || unavailableOrder(saved) || !['awaiting_payment', 'pending'].includes(o.status) || saved.environment !== paymentEnvironment(runtime()) || timestamp() - o.created > 7 * 86400000)
+                return fail('This payment requires review. Open your orders or contact us before paying again.');
+            const adapter = createAnetAdapter(runtime());
+            const order = { id: o.id, totalCents: o.total, currency: 'USD' as const };
+            try {
+                // Never offer a second payment form once Authorize.net shows a capture or a transaction under review.
+                const existing = await adapter.verifyPayment(order, o.checkout_ref, [], o.created);
+                if (existing.state === 'paid')
+                    return page('Payment received', '<h1>Payment received</h1><p>We already have a payment for this order.</p><p><a href="/payment/return">Check payment status</a></p>');
+                if (existing.state === 'review' || existing.underReview)
+                    return fail('This payment is being reviewed. Please do not pay again. Contact us with order ' + o.id.slice(0, 8) + '.');
+                const form = await adapter.hostedForm(order, { email: u.email, customerId: u.id, ...saved.address });
+                return page('Secure payment', '<h1>Opening secure payment…</h1><form id="pay" method="post" action="' + esc(form.action) + '"><input type="hidden" name="token" value="' + esc(form.token) + '"><button type="submit">Continue to secure payment</button></form><script>document.getElementById("pay").submit()</script>');
+            }
+            catch {
+                return fail('The payment page could not be opened. No payment has been taken. Please try again shortly.', 502);
+            }
         }
         if (action === 'account') {
             const user = await requireCustomer();
@@ -266,7 +299,7 @@ export async function POST(req: NextRequest, { params }: {
                 status: string;
                 data: string;
             }>('SELECT checkout_url,status,data FROM orders WHERE id=? AND owner=?', str(b.id, 50), u.id);
-            if (!o || unavailableOrder(parse(o.data, {})) || !o.checkout_url || !['awaiting_payment', 'pending'].includes(o.status) || parse<Record<string, any>>(o.data, {}).environment !== runtime().CHASE_ENVIRONMENT)
+            if (!o || unavailableOrder(parse(o.data, {})) || !o.checkout_url || !['awaiting_payment', 'pending'].includes(o.status) || parse<Record<string, any>>(o.data, {}).environment !== paymentEnvironment(runtime()))
                 throw new Error('This payment requires review.');
             return j({ url: o.checkout_url });
         }
