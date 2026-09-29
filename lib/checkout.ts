@@ -2,7 +2,7 @@ import { unavailableOrder } from './catalog-visibility';
 import inventorySql from './inventory-statements.json';
 import { quote, CartLine } from './commerce';
 import { one, run, uid, timestamp, runtime, parse, database } from './runtime';
-import { createChaseAdapter, chaseOrderReference } from './chase-payments';
+import { createPaymentAdapter, paymentEnvironment, paymentReturnUrl } from './payments';
 import { z } from 'zod';
 export const addressSchema = z.object({ name: z.string().trim().min(2).max(100), line1: z.string().trim().min(3).max(150), line2: z.string().trim().max(150).default(''), city: z.string().trim().min(2).max(100), state: z.string().regex(/^[A-Z]{2}$/), zip: z.string().regex(/^\d{5}(-\d{4})?$/), country: z.literal('US'), phone: z.string().trim().min(7).max(30) });
 export async function deliveryQuote(lines: CartLine[], raw: unknown) {
@@ -49,15 +49,15 @@ export async function checkout(owner: string, lines: CartLine[], body: Record<st
     if (old) {
         const saved = parse<Record<string, any>>(old.data, {});
         if (unavailableOrder(saved)) throw new Error('This order contains an unavailable product and requires review.');
-        if (saved.environment !== runtime().CHASE_ENVIRONMENT)
+        if (saved.environment !== paymentEnvironment(runtime()))
             throw new Error('An existing payment requires review before a new checkout can begin.');
         if (old.checkout_url && ['awaiting_payment', 'pending'].includes(old.status) && saved.fingerprint === fingerprint && saved.total === body.expectedTotal)
             return { id: old.id, url: old.checkout_url };
         throw new Error('You already have an unresolved checkout. Open your orders to verify payment before placing another order.');
     }
-    const adapter = createChaseAdapter(runtime());
+    const adapter = createPaymentAdapter(runtime());
     if (!adapter.getStatus().checkoutEnabled)
-        throw new Error('Chase checkout is being connected. No payment has been taken.');
+        throw new Error('Online payment is being connected. No payment has been taken.');
     const q = await deliveryQuote(lines, current);
     const receipt = await one<{
         data: string;
@@ -73,17 +73,17 @@ export async function checkout(owner: string, lines: CartLine[], body: Record<st
     const campaign = campaignId ? parse<Record<string, any>>((await one<{
         data: string;
     }>('SELECT data FROM campaigns WHERE id=?', campaignId))?.data, {}) : null;
-    const saved = { ...q, fingerprint, environment: runtime().CHASE_ENVIRONMENT, campaignId, campaignLimit: campaign?.maxPerCustomer || null, unitCount: lines.reduce((s, l) => s + l.quantity, 0) };
+    const saved = { ...q, fingerprint, environment: paymentEnvironment(runtime()), campaignId, campaignLimit: campaign?.maxPerCustomer || null, unitCount: lines.reduce((s, l) => s + l.quantity, 0) };
     const id = uid();
     const db=database();
     try { await db.batch([
-      db.prepare(inventorySql.insertOrder).bind(id,owner,body.requestKey,'creating',JSON.stringify(saved),q.total,chaseOrderReference(id),timestamp(),timestamp()),
+      db.prepare(inventorySql.insertOrder).bind(id,owner,body.requestKey,'creating',JSON.stringify(saved),q.total,adapter.reference(id),timestamp(),timestamp()),
       db.prepare(inventorySql.reserve).bind(id),
       db.prepare(inventorySql.checkReservation).bind(id,id,id),
       db.prepare(inventorySql.clearGuard).bind(id)
     ]); } catch { throw new Error('Inventory, presale limits, or an existing checkout prevented this order. Refresh your cart and check your orders.'); }
     try {
-        const result = await adapter.createCheckout({ id, totalCents: q.total, currency: 'USD' }, runtime().CHASE_RETURN_URL!);
+        const result = await adapter.createCheckout({ id, totalCents: q.total, currency: 'USD' }, paymentReturnUrl(runtime())!);
         await run('UPDATE orders SET status=?,checkout_ref=?,checkout_url=?,updated=? WHERE id=?', 'awaiting_payment', result.providerReference, result.url, timestamp(), id);
         return { id, url: result.url };
     }
@@ -92,7 +92,7 @@ export async function checkout(owner: string, lines: CartLine[], body: Record<st
         throw new Error('Checkout could not be confirmed. Please contact us with order ' + id.slice(0, 8) + '. Do not submit another payment.');
     }
 }
-export async function reconcile(owner: string, id: string) { const row = await one<{
+export async function reconcile(owner: string, id: string, hints: string[] = []) { const row = await one<{
     id: string;
     total: number;
     status: string;
@@ -101,11 +101,11 @@ export async function reconcile(owner: string, id: string) { const row = await o
     created: number;
 }>('SELECT id,total,status,checkout_ref,data,created FROM orders WHERE id=? AND owner=?', id, owner); if (!row)
     throw new Error('Order not found.'); if (['paid', 'shipped', 'delivered'].includes(row.status))
-    return { status: row.status }; const saved = parse<Record<string, any>>(row.data, {}); if (saved.environment !== runtime().CHASE_ENVIRONMENT)
+    return { status: row.status }; const saved = parse<Record<string, any>>(row.data, {}); if (saved.environment !== paymentEnvironment(runtime()))
     throw new Error('This order belongs to another payment environment and requires review.'); if (timestamp() - row.created > 29 * 86400000) {
     await run('UPDATE orders SET status=?,updated=? WHERE id=?', 'review', timestamp(), id);
     throw new Error('This payment is outside the online verification window. Contact Biomod for reconciliation.');
-} const result = await createChaseAdapter(runtime()).verifyPayment({ id, totalCents: row.total, currency: 'USD' }, row.checkout_ref); if (result.state === 'paid' && (!result.notificationId || !result.providerReference))
+} const result = await createPaymentAdapter(runtime()).verifyPayment({ id, totalCents: row.total, currency: 'USD' }, row.checkout_ref, hints, row.created); if (result.state === 'paid' && (!result.notificationId || !result.providerReference))
     throw new Error('Payment requires review.'); const state = result.state === 'failed' ? 'review' : result.state; const db=database();await db.batch([
  db.prepare(inventorySql.paymentStatus).bind(state,result.state==='paid'?result.providerReference:null,result.notificationId||null,timestamp(),id),
  db.prepare(inventorySql.settleInventory).bind(id,id,id),
