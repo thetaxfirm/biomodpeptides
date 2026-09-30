@@ -25,7 +25,7 @@ for path in ['/','/?q=test','/shop','/locations','/testing','/product/bpc-157-10
  meta=Metadata();meta.feed(body)
  assert 'noindex' in meta.meta.get('robots',''),(path,meta.meta)
  assert len(meta.canonicals)==1,(path,meta.canonicals)
- assert meta.canonicals[0].startswith('https://biomod-peptides.xovanova.chatgpt.site/'),(path,meta.canonicals)
+ assert meta.canonicals[0].startswith('https://trybiomod.com/'),(path,meta.canonicals)
  assert '?' not in meta.canonicals[0]
  if path in ['/','/shop','/locations','/testing','/product/bpc-157-10mg']:titles.append(''.join(meta.titles))
  assert not any(x in meta.meta.get('description','') for x in ['Purity:','weight loss','cognitive support','FDA approved'])

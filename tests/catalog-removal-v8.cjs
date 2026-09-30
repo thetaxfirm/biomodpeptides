@@ -34,6 +34,7 @@ Module._load=function(request,parent,isMain){
   if(request==='./commerce')return {quote:async lines=>{if(lines.some(l=>removed.includes(l.id)))throw Error('Unavailable product');return {};}};
   if(request==='./runtime')return {one:async()=>oldOrder,runtime:()=>({CHASE_ENVIRONMENT:'sandbox'}),parse:(s,d)=>s?JSON.parse(s):d};
   if(request==='./chase-payments')return {createChaseAdapter:()=>{adapterCalls++;throw Error('Payment must not be called');}};
+  if(request==='./payments')return {paymentEnvironment:()=>'sandbox',paymentReturnUrl:()=>'',createPaymentAdapter:()=>{adapterCalls++;throw Error('Payment must not be called');}};
  }
  return originalLoad.apply(this,arguments);
 };

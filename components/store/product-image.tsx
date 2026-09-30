@@ -15,7 +15,7 @@ export function ProductImage({ product, alt = product.name, width = 480, height 
   loading?: 'lazy' | 'eager';
   zoom?: boolean;
 }) {
-  const frame = product.categories.some(category => category.slug === 'research-peptides') && frames[product.image.filename];
+  const frame = product.categories.some(category => category.slug === 'research-compounds') && frames[product.image.filename];
   if (!frame) return <img src={listingImage(product)} alt={alt} width={width} height={height} loading={loading}/>;
   const [x, y, w, h] = frame.bounds;
   const scale = 760 / h;

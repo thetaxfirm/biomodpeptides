@@ -11,8 +11,7 @@ import "./storefront-v14.css";
 import "./storefront-v18.css";
 import "./storefront-v23.css";
 import "./storefront-v24.css";
-import {AgeGate} from "@/components/store/age-gate";
 import {StoreProvider} from "@/components/store/provider";
 import {Footer} from "@/components/store/content";
-export const metadata: Metadata={title:{default:"BIOMOD Peptides | Research Supplies",template:"%s | BIOMOD Peptides"},description:"Explore BIOMOD research peptides, softgels and sprays. Product specifications and lot-level research documentation.",icons:{icon:"/favicon.svg"},robots:{index:false,follow:false}};
-export default function RootLayout({children}:{children:React.ReactNode}){return <html lang="en"><body><StoreProvider><Header/>{children}<Footer/><AgeGate/></StoreProvider></body></html>}
+export const metadata: Metadata={title:{default:"BIOMOD | Research Supplies",template:"%s | BIOMOD"},description:"Explore BIOMOD research compounds, softgels and sprays. Product specifications and lot-level research documentation.",icons:{icon:"/favicon.svg"},robots:{index:false,follow:false}};
+export default function RootLayout({children}:{children:React.ReactNode}){return <html lang="en"><body><StoreProvider><Header/>{children}<Footer/></StoreProvider></body></html>}

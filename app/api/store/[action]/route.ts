@@ -200,15 +200,14 @@ export async function POST(req: NextRequest, { params }: {
             const name = str(b.name, 100);
             const email = z.string().email().parse(b.email);
             const password = z.string().min(8).max(200).parse(b.password);
-            const dob = new Date(str(b.dob, 10));
-            const latest = new Date();
-            latest.setFullYear(latest.getFullYear() - 21);
-            if (!Number.isFinite(dob.getTime()) || dob > latest || b.accepted !== true)
-                throw new Error('You must be 21 or older and agree to research-only purchasing.');
+            const phone = z.string().trim().regex(/^[0-9+().\-\s]{7,30}$/, 'Enter a valid phone number.').parse(b.phone);
+            const company = str(b.company, 150);
+            const businessType = z.enum(['university', 'researcher', 'laboratory', 'medical_professional', 'other'], { errorMap: () => ({ message: 'Choose your type of business.' }) }).parse(b.businessType);
             if (password !== b.confirmPassword)
                 throw new Error('Passwords do not match.');
-            const d = await authCall('signup?redirect_to=' + encodeURIComponent(req.nextUrl.origin + '/login'), { email, password, data: { name, company: str(b.company, 150), phone: str(b.phone, 30), research_accepted: true } });
-            return j({ message: 'Check your email to verify your account before signing in.', verificationRequired: true });
+            // Supabase sends the verification email; unverified members cannot sign in (see customer() in lib/auth.ts).
+            const d = await authCall('signup?redirect_to=' + encodeURIComponent(req.nextUrl.origin + '/login'), { email, password, data: { name, company, phone, business_type: businessType } });
+            return j({ message: 'Almost done. Check your email and click the link to verify your membership, then sign in.', verificationRequired: true });
         }
         if (action === 'auth-recover') {
             await authCall('recover?redirect_to=' + encodeURIComponent(req.nextUrl.origin + '/reset-password'), { email: z.string().email().parse(b.email) });

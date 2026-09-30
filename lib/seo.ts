@@ -19,13 +19,13 @@ export function routeMetadata(path: string, query: URLSearchParams = new URLSear
   const info = pageInfo(path);
   const index = mayIndex(path, query, config);
   const canonical = config.origin + canonicalPath(path);
-  const title = path === '/' ? info.title : info.title + ' | BIOMOD Peptides';
+  const title = path === '/' ? info.title : info.title + ' | BIOMOD';
   const p = productAt(path);
   return {
     title: { absolute: title }, description: info.description,
     alternates: { canonical },
     robots: { index, follow: index, googleBot: { index, follow: index, 'max-image-preview': index ? 'large' : 'none' } },
-    openGraph: { type: 'website', locale: 'en_US', siteName: 'BIOMOD Peptides', title, description: info.description, url: canonical,
+    openGraph: { type: 'website', locale: 'en_US', siteName: 'BIOMOD', title, description: info.description, url: canonical,
       ...(p ? { images: [{ url: config.origin + imagePath(p), alt: p.image.alt || p.name }] } : {}) },
     twitter: { card: 'summary', title, description: info.description },
   };
@@ -33,9 +33,9 @@ export function routeMetadata(path: string, query: URLSearchParams = new URLSear
 export function routeStructuredData(path: string, config: SEOConfig = currentSEO()) {
   const clean = canonicalPath(path), info = pageInfo(path), p = productAt(path);
   if (!mayIndex(path, new URLSearchParams(), config)) return null;
-  const organization = { '@type': 'Organization', '@id': config.origin + '/#organization', name: 'BIOMOD Peptides', url: config.origin, logo: config.origin + '/brand/logo-navy-tm-v4.svg', email: 'contact@biomodpeptides.com' };
+  const organization = { '@type': 'Organization', '@id': config.origin + '/#organization', name: 'BIOMOD', url: config.origin, logo: config.origin + '/brand/logo-navy-tm-v4.svg', email: 'contact@biomodpeptides.com' };
   const graph: Record<string, unknown>[] = [organization,
-    { '@type': 'WebSite', '@id': config.origin + '/#website', url: config.origin, name: 'BIOMOD Peptides', publisher: { '@id': organization['@id'] } },
+    { '@type': 'WebSite', '@id': config.origin + '/#website', url: config.origin, name: 'BIOMOD', publisher: { '@id': organization['@id'] } },
     { '@type': 'WebPage', '@id': config.origin + clean + '#page', url: config.origin + clean, name: info.title, description: info.description, isPartOf: { '@id': config.origin + '/#website' } },
   ];
   if (p) graph.push({ '@type': 'BreadcrumbList', itemListElement: [
@@ -44,4 +44,6 @@ export function routeStructuredData(path: string, config: SEOConfig = currentSEO
   ] });
   return { '@context': 'https://schema.org', '@graph': graph };
 }
-export const jsonLd = (data: unknown) => JSON.stringify(data).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+// Escape characters that could end a script tag or break inline JSON. Written without unicode escape sequences on purpose.
+const BACKSLASH = String.fromCharCode(92), LINE_SEP = String.fromCharCode(0x2028), PARA_SEP = String.fromCharCode(0x2029);
+export const jsonLd = (data: unknown) => JSON.stringify(data).replace(/</g, BACKSLASH + 'u003c').replaceAll(LINE_SEP, BACKSLASH + 'u2028').replaceAll(PARA_SEP, BACKSLASH + 'u2029');

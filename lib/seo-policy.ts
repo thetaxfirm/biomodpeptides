@@ -1,12 +1,12 @@
 import { products, compound, type Product } from './catalog';
 
-export const previewOrigin = 'https://biomod-peptides.xovanova.chatgpt.site';
+export const previewOrigin = 'https://trybiomod.com';
 export const reviewedOn = '2026-09-12';
 export const pageRecords: Record<string, { title: string; description: string; eligible: boolean }> = {
-  '/': { title: 'BIOMOD Peptides | Research-Only Vials', description: 'Explore BIOMOD lyophilized research peptide vials and batch documentation. For laboratory research only. Not for human or animal use.', eligible: true },
+  '/': { title: 'BIOMOD | Research-Only Vials', description: 'Explore BIOMOD lyophilized research compound vials and batch documentation. For laboratory research only. Not for human or animal use.', eligible: true },
   '/softgels': { title: 'The Original Peptide Softgel™ by BIOMOD', description: 'Explore BIOMOD softgel formulations, enteric design and California manufacturing. Browse full bottles in 1, 3, 5 and 10 packs.', eligible: false },
   '/shop': { title: 'Research Product Catalog', description: 'Browse BIOMOD products by compound, format and container size. Compare specifications, pack totals and available batch documentation.', eligible: true },
-  '/about': { title: 'BIOMOD | Las Vegas Roots and Our Softgel Story', description: 'A veteran-owned company with Las Vegas peptide retail roots and its own softgel formulations, manufactured in California under cGMP standards.', eligible: true },
+  '/about': { title: 'BIOMOD | Las Vegas Roots and Our Softgel Story', description: 'A veteran-owned company with Las Vegas research compound retail roots and its own softgel formulations, manufactured in California under cGMP standards.', eligible: true },
   '/locations': { title: 'BIOMOD Locations', description: 'BIOMOD location information for Las Vegas, Nevada, and the St. George area in Utah. Contact the team to confirm visiting details.', eligible: false },
   '/contact': { title: 'Contact BIOMOD', description: 'Contact BIOMOD about product documentation, location details, existing orders and general questions.', eligible: true },
   '/testing': { title: 'Batch Documents and Certificates', description: 'Search BIOMOD product lots and original certificates. Matching lots, mismatches and missing documentation are identified separately.', eligible: true },
@@ -54,7 +54,7 @@ export function pageInfo(path: string) {
   path = canonicalPath(path);
   const p = productAt(path);
   if (p) return { title: compound(p).toLowerCase() === p.name.toLowerCase() || compound(p).length > 50 ? p.name : p.name + ' · ' + compound(p), description: `${p.name}: ${p.description} Product specifications, pack sizes and available laboratory documents. Laboratory research only.`, eligible: !productReviewBlocks[p.slug] };
-  return pageRecords[path] || { title: privatePath(path) ? 'Customer Services' : 'Page Not Found', description: 'BIOMOD Peptides customer services and research products.', eligible: false };
+  return pageRecords[path] || { title: privatePath(path) ? 'Customer Services' : 'Page Not Found', description: 'BIOMOD customer services and research products.', eligible: false };
 }
 export function mayIndex(path: string, query: URLSearchParams, config: SEOConfig) {
   path = normalizedPath(path);
