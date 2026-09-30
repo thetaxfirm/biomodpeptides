@@ -10,6 +10,6 @@ export function Locations() {
       <section className="location-planned"><div className="location-heading-row"><p className="location-region">Texas</p><span className="location-status">Planned for 2026</span></div><h2>Dallas</h2><p>Coming soon.</p></section>
       <section className="location-planned"><div className="location-heading-row"><p className="location-region">California</p><span className="location-status">Planned for 2026</span></div><h2>Los Angeles</h2><p>Coming soon.</p></section>
     </div>
-    <div className="locations-contact"><p>Contact our team for visiting hours and location questions.</p><a href="mailto:contact@biomodpeptides.com">contact@biomodpeptides.com</a></div>
+    <div className="locations-contact"><p>Contact our team for visiting hours and location questions.</p><a href="mailto:contact@trybiomod.com">contact@trybiomod.com</a></div>
   </div>;
 }
