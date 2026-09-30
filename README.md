@@ -96,4 +96,4 @@ npx wrangler d1 migrations apply biomod-peptides --remote --config dist/server/w
 npx wrangler deploy --config dist/server/wrangler.json
 ```
 
-`COMMERCE_MODE=preview`: payment and customer sign-in remain unconfigured. Source control is on GitHub; automatic Cloudflare builds are not configured yet. Hosting currently remains on Cloudflare because this code uses its Workers and D1 APIs, not Vercel's Node runtime.
+Automatic deploys: Cloudflare Workers Builds deploys every push to `main`. Build command: `BIOMOD_DEPLOY=true npm run build`. Deploy command: `npx wrangler d1 migrations apply biomod-peptides --remote --config dist/server/wrangler.json && npx wrangler deploy --config dist/server/wrangler.json`. Build variable: `NODE_VERSION=22`. Preview-branch builds are off. Runtime settings live in the Worker's dashboard (Settings → Variables and secrets), and checkout stays closed until `COMMERCE_MODE` matches the payment environment. Hosting currently remains on Cloudflare because this code uses its Workers and D1 APIs, not Vercel's Node runtime.
