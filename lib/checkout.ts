@@ -5,13 +5,37 @@ import { one, run, uid, timestamp, runtime, parse, database } from './runtime';
 import { createPaymentAdapter, paymentEnvironment, paymentReturnUrl } from './payments';
 import { fixedTaxConfig, fixedTaxCents } from './tax';
 import { z } from 'zod';
+import { customer } from './auth';
+import { cheapestRate, easypostReady } from './easypost';
 export const addressSchema = z.object({ name: z.string().trim().min(2).max(100), line1: z.string().trim().min(3).max(150), line2: z.string().trim().max(150).default(''), city: z.string().trim().min(2).max(100), state: z.string().regex(/^[A-Z]{2}$/), zip: z.string().regex(/^\d{5}(-\d{4})?$/), country: z.literal('US'), phone: z.string().trim().min(7).max(30) });
-export async function deliveryQuote(lines: CartLine[], raw: unknown) {
+/** Shipping: free over the threshold, otherwise the live EasyPost rate (when connected) or the flat rate from store settings.
+ * A quoted rate is stored with the quote and reused at payment so the total cannot drift between the two steps. */
+export async function deliveryQuote(lines: CartLine[], raw: unknown, preset?: { shipping: number; shippingService: string }) {
     const address = addressSchema.parse(raw);
     const q = await quote(lines);
     if (!lines.length)
         throw new Error('Your cart is empty.');
-    const shipping = q.total >= q.config.freeShippingAt ? 0 : q.config.shippingCents;
+    let shipping: number | null = q.config.shippingCents;
+    let shippingService = 'Standard shipping';
+    if (q.total >= q.config.freeShippingAt) {
+        shipping = 0;
+        shippingService = 'Free standard shipping';
+    }
+    else if (preset && Number.isSafeInteger(preset.shipping) && preset.shipping >= 0) {
+        shipping = preset.shipping;
+        shippingService = preset.shippingService || shippingService;
+    }
+    else if (easypostReady(runtime())) {
+        try {
+            const live = await cheapestRate(runtime(), address, q.items as any);
+            shipping = live.cents;
+            shippingService = live.service;
+        }
+        catch (e) {
+            // Fall back to the flat rate so checkout keeps working if EasyPost is briefly unavailable.
+            console.error('EasyPost rate failed:', e instanceof Error ? e.message : 'unknown error');
+        }
+    }
     if (shipping === null)
         throw new Error('Delivery pricing is being finalized. Please contact us for help.');
     // TaxJar is used when connected. Otherwise the configured fixed rate applies (lib/tax.ts).
@@ -21,7 +45,7 @@ export async function deliveryQuote(lines: CartLine[], raw: unknown) {
         if (!fixed)
             throw new Error('Checkout is not accepting orders yet. Tax and delivery setup is pending.');
         const tax = fixedTaxCents(fixed, address.state, q.total);
-        return { items: q.items, subtotal: q.subtotal, discount: q.discount, shipping, tax, total: q.total + shipping + tax, address };
+        return { items: q.items, subtotal: q.subtotal, discount: q.discount, shipping, shippingService, tax, total: q.total + shipping + tax, address };
     }
     if (!runtime().STORE_ORIGIN_ZIP || !runtime().STORE_ORIGIN_STATE)
         throw new Error('Checkout is not accepting orders yet. Tax and delivery setup is pending.');
@@ -37,10 +61,10 @@ export async function deliveryQuote(lines: CartLine[], raw: unknown) {
     if (typeof t !== 'number' || !Number.isFinite(t) || t < 0)
         throw new Error('Tax could not be verified.');
     const tax = Math.round(t * 100);
-    return { items: q.items, subtotal: q.subtotal, discount: q.discount, shipping, tax, total: q.total + shipping + tax, address };
+    return { items: q.items, subtotal: q.subtotal, discount: q.discount, shipping, shippingService, tax, total: q.total + shipping + tax, address };
 }
 const quoteFingerprint = (q: Record<string, any>) => JSON.stringify({ items: q.items.map((i: any) => ({ id: i.id, quantity: i.quantity, packId: i.packId || null, packSize: i.packSize || null, packKind: i.packKind || null, lineTotal: i.lineTotal, presaleId: i.presaleId || null, price: i.product.price })), address: q.address, shipping: q.shipping, tax: q.tax, total: q.total });
-export async function issueQuote(owner: string, lines: CartLine[], address: unknown) { const q = await deliveryQuote(lines, address); const id = uid(); await run('INSERT INTO requests(id,owner,kind,data,created) VALUES(?,?,?,?,?)', id, owner, 'quote', JSON.stringify({ fingerprint: quoteFingerprint(q) }), timestamp()); return { ...q, quoteId: id }; }
+export async function issueQuote(owner: string, lines: CartLine[], address: unknown) { const q = await deliveryQuote(lines, address); const id = uid(); await run('INSERT INTO requests(id,owner,kind,data,created) VALUES(?,?,?,?,?)', id, owner, 'quote', JSON.stringify({ fingerprint: quoteFingerprint(q), shipping: q.shipping, shippingService: q.shippingService }), timestamp()); return { ...q, quoteId: id }; }
 export async function checkout(owner: string, lines: CartLine[], body: Record<string, any>) {
     if (body.accepted !== true)
         throw new Error('Confirm that you are 21 or older and purchasing for laboratory research only.');
@@ -67,12 +91,13 @@ export async function checkout(owner: string, lines: CartLine[], body: Record<st
     const adapter = createPaymentAdapter(runtime());
     if (!adapter.getStatus().checkoutEnabled)
         throw new Error('Online payment is being connected. No payment has been taken.');
-    const q = await deliveryQuote(lines, current);
     const receipt = await one<{
         data: string;
         created: number;
     }>('SELECT data,created FROM requests WHERE id=? AND owner=? AND kind=?', String(body.quoteId || ''), owner, 'quote');
-    if (!receipt || timestamp() - receipt.created > 600000 || parse<Record<string, string>>(receipt.data, {}).fingerprint !== quoteFingerprint(q))
+    const quoted = parse<Record<string, any>>(receipt?.data, {});
+    const q = await deliveryQuote(lines, current, typeof quoted.shipping === 'number' ? { shipping: quoted.shipping, shippingService: String(quoted.shippingService || '') } : undefined);
+    if (!receipt || timestamp() - receipt.created > 600000 || quoted.fingerprint !== quoteFingerprint(q))
         throw new Error('Your checkout quote changed or expired. Recalculate delivery and review the order again.');
     if (!Number.isInteger(body.expectedTotal) || body.expectedTotal !== q.total)
         throw new Error('Your total changed. Recalculate delivery and review the updated total before paying.');
@@ -82,7 +107,8 @@ export async function checkout(owner: string, lines: CartLine[], body: Record<st
     const campaign = campaignId ? parse<Record<string, any>>((await one<{
         data: string;
     }>('SELECT data FROM campaigns WHERE id=?', campaignId))?.data, {}) : null;
-    const saved = { ...q, fingerprint, environment: paymentEnvironment(runtime()), campaignId, campaignLimit: campaign?.maxPerCustomer || null, unitCount: lines.reduce((s, l) => s + l.quantity, 0) };
+    const email = (await customer())?.email || '';
+    const saved = { ...q, email, fingerprint, environment: paymentEnvironment(runtime()), campaignId, campaignLimit: campaign?.maxPerCustomer || null, unitCount: lines.reduce((s, l) => s + l.quantity, 0) };
     const id = uid();
     const db=database();
     try { await db.batch([
@@ -109,7 +135,7 @@ export async function reconcile(owner: string, id: string, hints: string[] = [])
     data: string;
     created: number;
 }>('SELECT id,total,status,checkout_ref,data,created FROM orders WHERE id=? AND owner=?', id, owner); if (!row)
-    throw new Error('Order not found.'); if (['paid', 'shipped', 'delivered'].includes(row.status))
+    throw new Error('Order not found.'); if (['paid', 'labeling', 'shipped', 'delivered'].includes(row.status))
     return { status: row.status }; const saved = parse<Record<string, any>>(row.data, {}); if (saved.environment !== paymentEnvironment(runtime()))
     throw new Error('This order belongs to another payment environment and requires review.'); if (timestamp() - row.created > 29 * 86400000) {
     await run('UPDATE orders SET status=?,updated=? WHERE id=?', 'review', timestamp(), id);
