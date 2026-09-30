@@ -271,7 +271,7 @@ export function createAnetAdapter(env: Environment = process.env, request: typeo
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body),
-                redirect: 'error',
+                redirect: 'manual', // Workers reject 'error'; a 3xx response is not ok and is rejected below.
                 cache: 'no-store',
                 signal: AbortSignal.timeout(15000),
             });
