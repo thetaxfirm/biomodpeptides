@@ -11,7 +11,7 @@ export function Experience({ path, query }: {
     path: string;
     query: Record<string, string>;
 }) { if (path === 'softgels') return <Softgels/>; if (path === 'locations') return <Locations/>; if (path === 'shop')
-    return <Shop search={query.q || ''} category={query.category === 'research-peptides' ? 'research-compounds' : (query.category || '')}/>; if (path.startsWith('product/'))
+    return <Shop search={query.q || ''} category={query.category === 'research-peptides' || (!query.category && !query.q) ? 'research-compounds' : (query.category || '')}/>; if (path.startsWith('product/'))
     return <ProductPage slug={path.slice(8)}/>; if (path === 'multi-pack')
     return <PackBuilder initialSize={Number(query.size || query.items) || 3}/>; if (path === 'presales')
     return <Presales />; if (path === 'testing' || path === 'coa' || path.startsWith('testing/'))
