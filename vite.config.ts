@@ -23,7 +23,10 @@ const localBindingConfig = {
       { pattern: "trybiomod.com", custom_domain: true },
       { pattern: "www.trybiomod.com", custom_domain: true },
     ],
-    vars: { COMMERCE_MODE: "preview" },
+    // Runtime settings (COMMERCE_MODE, AUTHORIZENET_*, TAXJAR_*, STORE_*) are managed in the
+    // Cloudflare dashboard. keep_vars stops each deploy from erasing them. Unset COMMERCE_MODE
+    // keeps checkout disabled.
+    keep_vars: true,
   } : {}),
   main: "vinext/server/fetch-handler",
   compatibility_flags: ["nodejs_compat"],
