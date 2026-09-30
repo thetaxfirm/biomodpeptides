@@ -2,7 +2,7 @@ import type { Product } from './catalog';
 
 export const packSizes = [1, 3, 5, 10] as const;
 export const packDiscounts: Record<string, number | null> = { '1': 0, '3': 10, '5': 15, '10': 20 };
-export const supportsPacks = (p: Product) => p.categories.some(c => ['research-peptides', 'softgels', 'spray-products'].includes(c.slug));
+export const supportsPacks = (p: Product) => p.categories.some(c => ['research-compounds', 'softgels', 'spray-products'].includes(c.slug));
 export const packUnit = (p: Product) => p.categories.some(c => ['softgels', 'spray-products'].includes(c.slug)) ? 'bottle' : 'vial';
 export function fixedPackPrice(p: Product, count: number) {
     if (count === 1) return p.price;

@@ -16,3 +16,4 @@
 .product-edit-dialog{max-height:90dvh;overflow-y:auto}
 .detail-pack-selector .price-tile-options{grid-template-columns:repeat(2,minmax(0,1fr))}
 .price-tile-options + .selected-pack-note{margin-top:9px;font-size:12px;color:#18324c}
+.head-actions>a.member-cta{width:auto;height:auto;min-height:38px;display:inline-flex;align-items:center;padding:8px 14px;border-radius:6px;background:#dfbb88;color:#12243a;font-size:13px;font-weight:650;white-space:nowrap}.head-actions>a.member-cta:hover{background:#ebcfa9}@media(max-width:520px){.head-actions>a.member-cta{padding:7px 10px;font-size:12px;min-height:34px}}
