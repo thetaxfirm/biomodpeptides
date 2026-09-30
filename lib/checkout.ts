@@ -3,6 +3,7 @@ import inventorySql from './inventory-statements.json';
 import { quote, CartLine } from './commerce';
 import { one, run, uid, timestamp, runtime, parse, database } from './runtime';
 import { createPaymentAdapter, paymentEnvironment, paymentReturnUrl } from './payments';
+import { fixedTaxConfig, fixedTaxCents } from './tax';
 import { z } from 'zod';
 export const addressSchema = z.object({ name: z.string().trim().min(2).max(100), line1: z.string().trim().min(3).max(150), line2: z.string().trim().max(150).default(''), city: z.string().trim().min(2).max(100), state: z.string().regex(/^[A-Z]{2}$/), zip: z.string().regex(/^\d{5}(-\d{4})?$/), country: z.literal('US'), phone: z.string().trim().min(7).max(30) });
 export async function deliveryQuote(lines: CartLine[], raw: unknown) {
@@ -13,8 +14,16 @@ export async function deliveryQuote(lines: CartLine[], raw: unknown) {
     const shipping = q.total >= q.config.freeShippingAt ? 0 : q.config.shippingCents;
     if (shipping === null)
         throw new Error('Delivery pricing is being finalized. Please contact us for help.');
-    // Tax is calculated by the connected tax service; an unavailable service never becomes zero tax.
-    if (!runtime().TAXJAR_API_TOKEN || !runtime().STORE_ORIGIN_ZIP || !runtime().STORE_ORIGIN_STATE)
+    // TaxJar is used when connected. Otherwise the configured fixed rate applies (lib/tax.ts).
+    // With neither configured, checkout stays closed: missing tax setup never becomes zero tax.
+    if (!runtime().TAXJAR_API_TOKEN) {
+        const fixed = fixedTaxConfig(runtime());
+        if (!fixed)
+            throw new Error('Checkout is not accepting orders yet. Tax and delivery setup is pending.');
+        const tax = fixedTaxCents(fixed, address.state, q.total);
+        return { items: q.items, subtotal: q.subtotal, discount: q.discount, shipping, tax, total: q.total + shipping + tax, address };
+    }
+    if (!runtime().STORE_ORIGIN_ZIP || !runtime().STORE_ORIGIN_STATE)
         throw new Error('Checkout is not accepting orders yet. Tax and delivery setup is pending.');
     const r = await fetch('https://api.taxjar.com/v2/taxes', { method: 'POST', headers: { Authorization: 'Bearer ' + runtime().TAXJAR_API_TOKEN, 'Content-Type': 'application/json' }, body: JSON.stringify({ from_country: 'US', from_zip: runtime().STORE_ORIGIN_ZIP, from_state: runtime().STORE_ORIGIN_STATE, to_country: 'US', to_zip: address.zip, to_state: address.state, to_city: address.city, to_street: address.line1, amount: q.total / 100, shipping: shipping / 100 }) });
     if (!r.ok)
