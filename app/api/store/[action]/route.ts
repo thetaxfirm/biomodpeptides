@@ -91,8 +91,11 @@ export async function GET(req: NextRequest, { params }: {
                 const form = await adapter.hostedForm(order, { email: u.email, customerId: u.id, ...saved.address });
                 return page('Secure payment', '<h1>Opening secure payment…</h1><form id="pay" method="post" action="' + esc(form.action) + '"><input type="hidden" name="token" value="' + esc(form.token) + '"><button type="submit">Continue to secure payment</button></form><script>document.getElementById("pay").submit()</script>');
             }
-            catch {
-                return fail('The payment page could not be opened. No payment has been taken. Please try again shortly.', 502);
+            catch (e) {
+                // Log and show the provider's error code (never credentials) so setup problems can be diagnosed.
+                const detail = e instanceof Error && e.name === 'AnetPaymentError' ? ' ' + e.message : '';
+                console.error('Authorize.net hosted form failed:', e instanceof Error ? e.name + ': ' + e.message : 'unknown error');
+                return fail('The payment page could not be opened. No payment has been taken.' + detail, 502);
             }
         }
         if (action === 'account') {
