@@ -11,7 +11,7 @@ def call(path,body=None,origin=base):
   try: data=json.loads(raw)
   except json.JSONDecodeError: data={'error':raw}
   return r.code,data
-status,s=call('state');assert status==200 and len(s['products'])==45
+status,s=call('state');assert status==200 and len(s['products'])==50
 assert s['config']['packDiscounts']=={'1':0,'3':10,'5':15,'10':20}
 assert not s['payment']['enabled'] and s['customer'] is None
 p=next(p for p in s['products'] if p['name']=='BPC-157')

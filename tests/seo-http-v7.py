@@ -35,7 +35,7 @@ for path in ['/missing-page-v7-check','/product/missing-product-v7-check','/test
 status,headers,body=get('/robots.txt');assert status==200 and 'Allow: /' in body and 'Disallow: /account' in body and 'Sitemap:' not in body
 status,headers,body=get('/sitemap.xml');assert status==200;assert len(ET.fromstring(body))==0
 status,headers,body=get('/api/store/state');state=json.loads(body)
-assert len(state['products'])==45
+assert len(state['products'])==50
 assert all('Purity:' not in p['description'] and 'cognitive support' not in p['description'].lower() for p in state['products'])
 for slug in ['noctis-blend-spray','zenith-semax-selank-spray']:
  assert 'pending confirmation' in next(p for p in state['products'] if p['slug']==slug)['sizes'][0]
