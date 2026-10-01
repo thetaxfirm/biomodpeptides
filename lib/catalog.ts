@@ -1,4 +1,5 @@
 import source from './catalog-facts-v2.json';
+import vialBranding from './vial-branding-v35.json';
 import competitive from './competitive-pricing-v3.json';
 export type Product = {
     id: number;
@@ -39,7 +40,7 @@ export const money = (c: number) => new Intl.NumberFormat('en-US', { style: 'cur
 export const size = (p: Product) => p.sizes[0] || '';
 export const mass = (p: Product) => { if (p.categories[0]?.slug !== 'research-compounds')
     return null; const m = size(p).match(/^(\d+(?:\.\d+)?)\s*mg\b/i); return m ? Number(m[1]) : null; };
-export const imagePath = (p: Product) => '/products/' + p.image.filename;
+export const imagePath = (p: Product) => '/products/' + ((vialBranding as Record<string,string>)[p.image.filename] || p.image.filename);
 export const cas = (p: Product) => p.casNumber || '';
 export const compound = (p: Product) => p.identity || p.name;
 export const productFormat = (p: Product) => p.categories.some(c => c.slug === 'softgels') ? 'Softgels' : p.categories.some(c => c.slug === 'spray-products') ? 'Spray' : p.categories.some(c => c.slug === 'research-compounds') ? 'Vial' : 'Research supply';
