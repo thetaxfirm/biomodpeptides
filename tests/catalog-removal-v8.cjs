@@ -1,4 +1,4 @@
-/* Verify withdrawn products cannot be published, purchased or reopened from history. */
+/* Verify HEAT restoration and rejection of unknown products without exposing withheld identities. */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const Module = require('node:module');
@@ -8,13 +8,16 @@ const { products } = require('../lib/catalog.ts');
 const { currentCart, currentSelection, unavailableOrder, orderView } = require('../lib/catalog-visibility.ts');
 const { presentationData } = require('../lib/private-presentation.ts');
 const { batchRecords, laboratoryDocuments } = require('../lib/testing.ts');
-const removed = [744,745,1389,746,747];
-const forbidden = /\bglp(?:[- ]?[123])?\b|retatrutide|tirzepatide|tirzeptatide|cagrilintide|cagrilitide|semaglutide|semiglutide|c-heat|heat-r|heat-t|2381089-83-2|2023788-19-2|1415456-99-3|910463-68-2/i;
-assert.equal(products.length,45);
-assert.equal(batchRecords.length,45);
+const restored = [744,745,1389,746,747];
+const removed = [900001,900002,900003,900004,900005];
+const forbidden = /\bglp(?:[- ]?[123])?\b|retatrutide|tirzepatide|tirzeptatide|cagrilintide|cagrilitide|semaglutide|semiglutide|2381089-83-2|2023788-19-2|1415456-99-3|910463-68-2/i;
+assert.equal(products.length,50);
+assert.equal(batchRecords.length,50);
 assert.equal(laboratoryDocuments.filter(d=>d.is_certificate).length,21);
 assert(!forbidden.test(JSON.stringify({products,batchRecords,laboratoryDocuments})));
 assert(products.some(p=>p.slug==='semax'));
+for (const id of restored) { const p=products.find(p=>p.id===id); assert(p && p.purchasable); assert(currentSelection([id])); const r=batchRecords.find(r=>r.product_id===id); assert(r && !r.document_id && !r.coa_pdf_url && !r.has_certificate_pdf); assert(p.image.filename in require('../lib/vial-branding-v37.json')); }
+assert.equal(presentationData('HEAT-R 20mg and C-HEAT-S'),'HEAT-R 20mg and C-HEAT-S');
 const allowed = products[0].id;
 for(const id of removed){
  assert(!products.some(p=>p.id===id));assert(!currentSelection([allowed,id]));
@@ -51,5 +54,5 @@ const {checkout}=require('../lib/checkout.ts');
  assert.deepEqual(await checkout('isolated-owner',lines,body),{id:'test-existing',url:oldOrder.checkout_url});
  await assert.rejects(checkout('isolated-owner',[{id:removed[1],quantity:1}],body),/Unavailable product/);
  assert.equal(adapterCalls,0);
- console.log('PASS: removed catalog and COAs, remaining Semax, stale carts and complete pack groups, historical projections without ledger edits, and checkout URL reuse guards.');
+ console.log('PASS: five HEAT products restored without certificates; withheld identities absent; unknown products and stale checkout reuse rejected.');
 })().catch(e=>{console.error(e);process.exitCode=1;});
