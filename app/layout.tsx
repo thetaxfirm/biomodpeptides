@@ -12,6 +12,7 @@ import "./storefront-v18.css";
 import "./storefront-v23.css";
 import "./storefront-v24.css";
 import "./storefront-v25.css";
+import "./storefront-v34.css";
 import {StoreProvider} from "@/components/store/provider";
 import {Footer} from "@/components/store/content";
 export const metadata: Metadata={title:{default:"BIOMOD | Research Supplies",template:"%s | BIOMOD"},description:"Explore BIOMOD research compounds, softgels and sprays. Product specifications and lot-level research documentation.",icons:{icon:"/favicon.svg"},robots:{index:false,follow:false}};
