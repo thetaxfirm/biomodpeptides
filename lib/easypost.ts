@@ -115,12 +115,17 @@ export async function sendTrackingEmail(env: Environment, to: string, orderId: s
     if (!key || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to))
         return false;
     const link = label.trackingUrl || 'https://trybiomod.com/account/orders';
-    const html = '<div style="font-family:Arial,sans-serif;color:#18324c;max-width:520px">'
-        + '<h2 style="margin:0 0 12px">Your BIOMOD order has shipped</h2>'
+    // Brand colors match the storefront: plum (#2b1030) and cream (#fbf1ea).
+    const html = '<div style="background:#fbf1ea;padding:24px 16px">'
+        + '<div style="font-family:Arial,sans-serif;color:#141414;max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e9d9ef;border-radius:8px;overflow:hidden">'
+        + '<div style="background:#2b1030;color:#fbf1ea;padding:16px 20px;font-size:20px;font-weight:bold;letter-spacing:2px">BIOMOD</div>'
+        + '<div style="padding:20px">'
+        + '<h2 style="margin:0 0 12px;color:#2b1030">Your BIOMOD order has shipped</h2>'
         + '<p>' + (name ? 'Hi ' + esc(name.split(' ')[0]) + ', y' : 'Y') + 'our order ' + esc(orderId.slice(0, 8)) + ' is on its way via ' + esc(label.service) + '.</p>'
         + '<p><strong>Tracking number:</strong> ' + esc(label.tracking) + '</p>'
-        + '<p><a href="' + esc(link) + '" style="display:inline-block;background:#dfbb88;color:#12243a;padding:10px 16px;border-radius:6px;text-decoration:none;font-weight:bold">Track your package</a></p>'
-        + '<p style="font-size:12px;color:#62574b">For laboratory research use only. Questions? Reply to contact@trybiomod.com.</p></div>';
+        + '<p><a href="' + esc(link) + '" style="display:inline-block;background:#2b1030;color:#fbf1ea;padding:10px 16px;border-radius:6px;text-decoration:none;font-weight:bold">Track your package</a></p>'
+        + '<p style="font-size:12px;color:#5c5c5c">For laboratory research use only. Questions? Reply to contact@trybiomod.com.</p>'
+        + '</div></div></div>';
     try {
         const r = await fetch('https://api.resend.com/emails', {
             method: 'POST',
