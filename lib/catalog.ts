@@ -1,6 +1,7 @@
 import source from './catalog-facts-v2.json';
 import vialBranding from './vial-branding-v37.json';
 import competitive from './competitive-pricing-v3.json';
+import retail from './retail-pricing-v1.json';
 export type Product = {
     id: number;
     name: string;
@@ -34,7 +35,7 @@ export type Product = {
     maxQuantity?: number;
     presaleId?: string | null;
 };
-export const products: Product[] = (source as Product[]).map(p => ({ ...p, categories: p.categories.map(c => c.slug === 'research-peptides' ? { slug: 'research-compounds', name: 'Research Compounds' } : c), ...(competitive as Record<string, Pick<Product, 'price' | 'packPrices'>>)[p.slug], shortDescription: p.description, description: p.description.replaceAll('—', '-') })).sort((a, b) => a.name.localeCompare(b.name));
+export const products: Product[] = (source as Product[]).map(p => ({ ...p, categories: p.categories.map(c => c.slug === 'research-peptides' ? { slug: 'research-compounds', name: 'Research Compounds' } : c), ...(competitive as Record<string, Pick<Product, 'price' | 'packPrices'>>)[p.slug], ...(retail as Record<string, Pick<Product, 'price' | 'packPrices'>>)[p.slug], shortDescription: p.description, description: p.description.replaceAll('—', '-') })).sort((a, b) => a.name.localeCompare(b.name));
 export const categories = [{ slug: 'research-compounds', name: 'Research Compounds' }, { slug: 'softgels', name: 'Softgels' }, { slug: 'spray-products', name: 'Spray Products' }, { slug: 'aminos-liquids', name: 'Aminos & Liquids' }];
 export const money = (c: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(c / 100);
 export const size = (p: Product) => p.sizes[0] || '';
