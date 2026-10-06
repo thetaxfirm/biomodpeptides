@@ -1,0 +1,66 @@
+{
+  "c-heat-s-10mg": {
+    "price": 4999,
+    "packPrices": {
+      "3": 13497,
+      "5": 21246,
+      "10": 39992
+    }
+  },
+  "5-amino-1mq-50mg": {
+    "price": 4999,
+    "packPrices": {
+      "3": 13497,
+      "5": 21246,
+      "10": 39992
+    }
+  },
+  "softgel-methylene-blue-usp": {
+    "price": 11000,
+    "packPrices": {
+      "3": 29700,
+      "5": 46750,
+      "10": 88000
+    }
+  },
+  "klow-80mg": {
+    "price": 8999,
+    "packPrices": {
+      "3": 24297,
+      "5": 38246,
+      "10": 71992
+    }
+  },
+  "run-gun-10mg": {
+    "price": 4999,
+    "packPrices": {
+      "3": 13497,
+      "5": 21246,
+      "10": 39992
+    }
+  },
+  "wolverine-10mg": {
+    "price": 4999,
+    "packPrices": {
+      "3": 13497,
+      "5": 21246,
+      "10": 39992
+    }
+  },
+  "softgel-sculptor-atx-304": {
+    "price": 19900,
+    "packPrices": {
+      "3": 53730,
+      "5": 84575,
+      "10": 159200
+    }
+  },
+  "softgel-lumen-ghk-cu-ahk-cu-astaxanthin-vitamin-e": {
+    "price": 17900,
+    "packPrices": {
+      "3": 48330,
+      "5": 76075,
+      "10": 143200
+    }
+  }
+}

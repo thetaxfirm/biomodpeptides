@@ -1,7 +1,7 @@
 import source from './catalog-facts-v2.json';
 import vialBranding from './vial-branding-v37.json';
 import competitive from './competitive-pricing-v3.json';
-import retail from './retail-pricing-v1.json';
+import retail from './retail-pricing-v4.json';
 export type Product = {
     id: number;
     name: string;
