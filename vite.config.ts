@@ -1,6 +1,7 @@
 import vinext from "vinext";
 import { defineConfig } from "vite";
 import hostingConfig from "./.openai/hosting.json";
+import searchPublication from "./lib/seo-publication-v1.json";
 import { readExecutionProfile } from "./scripts/execution-profile.mjs";
 import { sites } from "./build/sites-vite-plugin";
 
@@ -27,6 +28,7 @@ const localBindingConfig = {
     // Cloudflare dashboard. keep_vars stops each deploy from erasing them. Unset COMMERCE_MODE
     // keeps checkout disabled.
     keep_vars: true,
+    vars: { SEO_PUBLIC_ORIGIN: searchPublication.origin, SEO_PUBLIC_LAUNCH_APPROVED: "true", SEO_INDEXING_ENABLED: "true", SEO_REVIEWED_PRODUCT_SLUGS: searchPublication.productSlugs.join(",") },
   } : {}),
   main: "vinext/server/fetch-handler",
   compatibility_flags: ["nodejs_compat"],

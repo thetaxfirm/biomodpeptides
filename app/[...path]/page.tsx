@@ -1,3 +1,4 @@
+import { legacyRoutes } from '@/lib/legacy-routes';
 import { Experience } from '@/components/store/experience';
 import { notFound, permanentRedirect } from 'next/navigation';
 import { pageRecords, productAt } from '@/lib/seo-policy';
@@ -16,16 +17,18 @@ function validPath(path: string) {
 }
 export async function generateMetadata({ params, searchParams }: Props) {
   const { path } = await params;
+  if (legacyRoutes[path.join('/')]) permanentRedirect(legacyRoutes[path.join('/')]);
   if (!validPath(path.join('/'))) notFound();
   return routeMetadata('/' + path.join('/'), queryParams(await searchParams), await requestSEO());
 }
 export default async function Page({ params, searchParams }: Props) {
   const { path } = await params, route = path.join('/');
+  if (legacyRoutes[route]) permanentRedirect(legacyRoutes[route]);
   if (!validPath(route)) notFound();
   if (route === 'about-biomod') permanentRedirect('/about');
   if (route === 'coa') permanentRedirect('/testing');
   if (route === 'affiliate-program') permanentRedirect('/account/affiliate');
   const query = await searchParams;
-  const data = queryParams(query).size ? null : routeStructuredData('/' + route, await requestSEO());
+  const data = queryParams(query).size ? null : await routeStructuredData('/' + route, await requestSEO());
   return <main id="main-content" className="wrap page-content">{data && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(data) }}/>}<Experience path={route} query={Object.fromEntries(Object.entries(query).map(([key, value]) => [key, Array.isArray(value) ? value[0] || '' : value]))}/></main>;
 }

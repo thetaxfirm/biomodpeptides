@@ -1,0 +1,24 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs'); const ts = require('typescript');
+require.extensions['.ts'] = (m, f) => m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,esModuleInterop:true}}).outputText,f);
+const {products}=require('../lib/catalog.ts');
+const {productSearchScore}=require('../lib/product-search.ts');
+const {seoConfig,mayIndex,sitemapPaths,pageInfo}=require('../lib/seo-policy.ts');
+const release=require('../lib/seo-publication-v1.json');
+const find=(query)=>products.filter(p=>productSearchScore(p,query)>0).map(p=>p.slug);
+for(const q of ['bpc157','BPC 157','157 bpc 10 mg','bpc-157 vial','bpc157 10mg','137525-51-0'])assert(find(q).includes('bpc-157-10mg'),q);
+for(const q of ['tb-500','TB500 10 mg','ghk cu 50mg','NAD+ 500 mg'])assert(find(q).length,q);
+assert(!find('bpc157 20mg').includes('bpc-157-10mg'));
+assert(!find('mots c 10mg').includes('mots-c-40mg'));
+assert.equal(find('no-such-compound').length,0);
+assert.equal(find('    ').length,products.length);
+assert.equal(find('500').includes('nad-500mg'),true);
+const config=seoConfig({SEO_PUBLIC_ORIGIN:release.origin,SEO_PUBLIC_LAUNCH_APPROVED:'true',SEO_INDEXING_ENABLED:'true',SEO_REVIEWED_PRODUCT_SLUGS:release.productSlugs.join(',')});
+assert(config.enabled);assert.equal(config.origin,'https://trybiomod.com');
+for(const slug of release.productSlugs){assert(products.some(p=>p.slug===slug));assert(mayIndex('/product/'+slug,new URLSearchParams(),config));assert(pageInfo('/product/'+slug).title.includes('Research Vial'));}
+assert(mayIndex('/product/bpc-157-10mg',new URLSearchParams('utm_source=newsletter'),config));
+for(const path of ['/checkout','/admin','/account','/product/heat-r-20mg','/product/softgel-methylene-blue-usp'])assert(!mayIndex(path,new URLSearchParams(),config),path);
+assert(!mayIndex('/shop',new URLSearchParams('q=bpc157'),config));
+assert(!sitemapPaths(config).some(p=>p.includes('heat')||p.includes('checkout')));
+assert(!seoConfig({...config,SEO_PUBLIC_ORIGIN:'https://trybiomod.com.evil.example'}).enabled);
+console.log('PASS: search punctuation, reordered words, CAS, strength isolation, production indexing, attribution URLs and publication exclusions');

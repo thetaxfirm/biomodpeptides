@@ -1,11 +1,11 @@
-import { products, compound, type Product } from './catalog';
+import { products, compound, size, productFormat, type Product } from './catalog';
 
 export const previewOrigin = 'https://trybiomod.com';
-export const reviewedOn = '2026-09-12';
+export const reviewedOn = '2026-10-08';
 export const pageRecords: Record<string, { title: string; description: string; eligible: boolean }> = {
-  '/': { title: 'BIOMOD | Research-Only Vials', description: 'Explore BIOMOD lyophilized research compound vials and batch documentation. For laboratory research only. Not for human or animal use.', eligible: true },
+  '/': { title: 'Research Peptides & Lyophilized Vials | BIOMOD', description: 'Explore BIOMOD lyophilized research compound vials and batch documentation. For laboratory research only. Not for human or animal use.', eligible: true },
   '/softgels': { title: 'The Original Peptide Softgel™ by BIOMOD', description: 'Explore BIOMOD softgel formulations, enteric design and California manufacturing. Browse full bottles in 1, 3, 5 and 10 packs.', eligible: false },
-  '/shop': { title: 'Research Product Catalog', description: 'Browse BIOMOD products by compound, format and container size. Compare specifications, pack totals and available batch documentation.', eligible: true },
+  '/shop': { title: 'Research Peptides: Compounds, Vial Sizes & Batch Records', description: 'Browse BIOMOD products by compound, format and container size. Compare specifications, pack totals and available batch documentation.', eligible: true },
   '/about': { title: 'BIOMOD | Las Vegas Roots and Our Softgel Story', description: 'A veteran-owned company with Las Vegas research compound retail roots and its own softgel formulations, manufactured in California under cGMP standards.', eligible: true },
   '/locations': { title: 'BIOMOD Locations', description: 'BIOMOD location information for Las Vegas, Nevada, and the St. George area in Utah. Contact the team to confirm visiting details.', eligible: false },
   '/contact': { title: 'Contact BIOMOD', description: 'Contact BIOMOD about product documentation, location details, existing orders and general questions.', eligible: true },
@@ -22,6 +22,7 @@ export const pageRecords: Record<string, { title: string; description: string; e
   '/international-partners': { title: 'Partnership Enquiries', description: 'Contact BIOMOD about research supply requirements and partnership enquiries.', eligible: false },
 };
 export const productReviewBlocks: Record<string, string> = {
+  ...Object.fromEntries(products.filter(p => /heat/i.test(p.slug)).map(p => [p.slug, 'Public compound identity must be disclosed accurately before organic product promotion.'])),
   'softgel-methylene-blue-usp': 'Package image states dietary supplement and cognitive support; classification and marketing must be reconciled with the research-only site policy.',
   'softgel-lumen-ghk-cu-ahk-cu-astaxanthin-vitamin-e': 'Astaxanthin specification conflict requires resolution.',
   'noctis-blend-spray': '110 mg / 111 mg container specification conflict requires resolution.',
@@ -32,7 +33,7 @@ export function seoConfig(env: Env = {}) {
   let publicOrigin = '';
   try {
     const url = new URL(env.SEO_PUBLIC_ORIGIN || '');
-    if (url.protocol === 'https:' && ['biomodpeptides.com', 'www.biomodpeptides.com'].includes(url.hostname)
+    if (url.protocol === 'https:' && ['trybiomod.com', 'biomodpeptides.com', 'www.biomodpeptides.com'].includes(url.hostname)
       && !url.username && !url.password && !url.port && url.pathname === '/' && !url.search && !url.hash) publicOrigin = url.origin;
   } catch { /* An absent or invalid public origin keeps indexing disabled. */ }
   const launchApproved = env.SEO_PUBLIC_LAUNCH_APPROVED === 'true';
@@ -53,12 +54,17 @@ export function canonicalPath(path: string) {
 export function pageInfo(path: string) {
   path = canonicalPath(path);
   const p = productAt(path);
-  if (p) return { title: compound(p).toLowerCase() === p.name.toLowerCase() || compound(p).length > 50 ? p.name : p.name + ' · ' + compound(p), description: `${p.name}: ${p.description} Product specifications, pack sizes and available laboratory documents. Laboratory research only.`, eligible: !productReviewBlocks[p.slug] };
+  if (p) {
+    const contents = size(p).replace(/\s*\/\s*vial/i, '');
+    const strength = contents && !p.name.toLowerCase().includes(contents.toLowerCase()) ? ' ' + contents : '';
+    const title = `${p.name}${strength} ${productFormat(p) === 'Vial' ? 'Research Vial' : productFormat(p)}`;
+    return { title, description: `${p.name}${strength}. ${compound(p)}. Compare pack sizes, specifications and batch documentation. For laboratory research only; not for human or animal use.`, eligible: !productReviewBlocks[p.slug] };
+  }
   return pageRecords[path] || { title: privatePath(path) ? 'Customer Services' : 'Page Not Found', description: 'BIOMOD customer services and research products.', eligible: false };
 }
 export function mayIndex(path: string, query: URLSearchParams, config: SEOConfig) {
   path = normalizedPath(path);
-  if (!config.enabled || privatePath(path) || query.size > 0 || path !== canonicalPath(path)) return false;
+  if (!config.enabled || privatePath(path) || [...query.keys()].some(key => !/^(utm_[a-z_]+|gclid|fbclid|msclkid)$/.test(key)) || path !== canonicalPath(path)) return false;
   const p = productAt(path);
   if (p) return !productReviewBlocks[p.slug] && config.approvedProducts.has(p.slug);
   return Boolean(pageRecords[path]?.eligible);
@@ -75,7 +81,7 @@ export function searchReport(config: SEOConfig) {
     originConfigured: Boolean(config.publicOrigin),
     reviewedOn,
     sitemapCount: sitemapPaths(config).length,
-    productMarkup: 'No offers, ratings, medical claims or Merchant feeds are emitted.',
+    productMarkup: 'Reviewed products include factual Product data and live offers when verified. No ratings, medical claims or Merchant feeds are emitted.',
     products: products.map(p => ({ name: p.name, slug: p.slug, eligible: config.approvedProducts.has(p.slug) && !productReviewBlocks[p.slug], reason: productReviewBlocks[p.slug] || (config.approvedProducts.has(p.slug) ? 'Product review recorded; public launch controls still apply.' : 'Product classification, packaging and marketing review not recorded.') })),
   };
 }

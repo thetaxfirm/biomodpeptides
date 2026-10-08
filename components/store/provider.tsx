@@ -42,10 +42,10 @@ const Context = createContext<{
     reorder: (items: CartLine[]) => Promise<void>;
     wish: (id: number) => Promise<void>;
 } | null>(null);
-export function StoreProvider({ children }: {
-    children: ReactNode;
+export function StoreProvider({ children, initialCatalog = initialProducts }: {
+    children: ReactNode; initialCatalog?: Product[];
 }) {
-    const [store, setStore] = useState(defaults);
+    const [store, setStore] = useState({ ...defaults, products: initialCatalog });
     const [ready, setReady] = useState(false);
     const stateRef = useRef(store);
     const queue = useRef<Promise<void>>(Promise.resolve());

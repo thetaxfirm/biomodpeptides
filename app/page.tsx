@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 type Props = { searchParams: Promise<Record<string, string | string[]>> };
 const queryParams = (query: Record<string, string | string[]>) => new URLSearchParams(Object.entries(query).flatMap(([key, value]) => (Array.isArray(value) ? value : [value]).map(v => [key, v])));
 export async function generateMetadata({searchParams}: Props){return routeMetadata('/',queryParams(await searchParams),await requestSEO());}
-export default async function Home({searchParams}: Props){const data=queryParams(await searchParams).size?null:routeStructuredData('/',await requestSEO());return <main id="main-content">{data&&<script type="application/ld+json" dangerouslySetInnerHTML={{__html:jsonLd(data)}}/>}
+export default async function Home({searchParams}: Props){const data=queryParams(await searchParams).size?null:await routeStructuredData('/',await requestSEO());return <main id="main-content">{data&&<script type="application/ld+json" dangerouslySetInnerHTML={{__html:jsonLd(data)}}/>}
   <section className="research-campaign">
     <img className="campaign-image" src="/brand/biomod-bpc-157-still-life-v37.svg" alt="BIOMOD BPC-157 research vial" width={1448} height={1086} fetchPriority="high"/>
     <div className="campaign-copy"><h1>Research-only<br/>compound vials.</h1><p>Lyophilized research compounds for laboratory research.<br/>Not for human or animal use.</p><a className="button button-gold" href="/shop?category=research-compounds">Explore research vials <ArrowUpRight size={18}/></a></div>

@@ -14,6 +14,7 @@ import "./storefront-v24.css";
 import "./storefront-v25.css";
 import "./storefront-v34.css";
 import {StoreProvider} from "@/components/store/provider";
+import { publicCatalog } from '@/lib/public-catalog';
 import {Footer} from "@/components/store/content";
 export const metadata: Metadata={title:{default:"BIOMOD | Research Supplies",template:"%s | BIOMOD"},description:"Explore BIOMOD research compounds, softgels and sprays. Product specifications and lot-level research documentation.",icons:{icon:"/favicon.svg"},robots:{index:false,follow:false}};
-export default function RootLayout({children}:{children:React.ReactNode}){return <html lang="en"><body><StoreProvider><Header/>{children}<Footer/></StoreProvider></body></html>}
+export default async function RootLayout({children}:{children:React.ReactNode}){const snapshot=await publicCatalog(); return <html lang="en"><body><StoreProvider initialCatalog={snapshot.products}><Header/>{children}<Footer/></StoreProvider></body></html>}
