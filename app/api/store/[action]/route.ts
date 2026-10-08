@@ -14,6 +14,7 @@ import { getPaymentStatus, paymentEnvironment, paymentProvider } from '@/lib/pay
 import { createAnetAdapter } from '@/lib/authorizenet-payments';
 import { packSizes, supportsPacks } from '@/lib/packs';
 import { searchReport, seoConfig } from '@/lib/seo-policy';
+import { salesDiagnostics } from '@/lib/sales-diagnostics';
 export const dynamic = 'force-dynamic';
 const j = (value: unknown, status = 200) => NextResponse.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
 const cartImports = () => createCartImports({ db: database(), normalize: validateLines, validate: quote });
@@ -25,6 +26,8 @@ export async function GET(req: NextRequest, { params }: {
 }) {
     try {
         const { action } = await params;
+        if (action === 'admin-diagnostics')
+            return j(await salesDiagnostics({ requireAdmin, all }, req.nextUrl.searchParams.get('days')));
         const u = await customer();
         if (action === 'state') {
             const secure = req.nextUrl.protocol === 'https:';

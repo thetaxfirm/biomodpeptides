@@ -12,7 +12,7 @@ export const pageRecords: Record<string, { title: string; description: string; e
   '/locations': { title: 'BIOMOD Locations', description: 'BIOMOD location information for Las Vegas, Nevada, and the St. George area in Utah. Contact the team to confirm visiting details.', eligible: false },
   '/contact': { title: 'Contact BIOMOD', description: 'Contact BIOMOD about product documentation, location details, existing orders and general questions.', eligible: true },
   '/testing': { title: 'Batch Documents and Certificates', description: 'Search BIOMOD product lots and original certificates. Matching lots, mismatches and missing documentation are identified separately.', eligible: true },
-  '/quality-standard': { title: 'Reading Laboratory Reports', description: 'Review what laboratory certificates report about identity, purity and measured content, and why the lot number and test scope matter.', eligible: true },
+  '/quality-standard': { title: 'How to Read a Peptide COA: Lot, Purity and Assay', description: 'Learn how to match a peptide COA to its product lot, distinguish purity from measured content, and read the laboratory’s methods and limitations.', eligible: true },
   '/research-use-only': { title: 'Research Use Policy', description: 'BIOMOD products are supplied for laboratory research. Review purchasing restrictions and the policy on dosing and medical advice.', eligible: true },
   '/faq': { title: 'Ordering and Documentation Questions', description: 'Answers to common BIOMOD questions about product documents, research use, shipping and order support.', eligible: true },
   '/shipping-policy': { title: 'Shipping Policy', description: 'BIOMOD U.S. shipping information, processing times and delivery support.', eligible: false },
