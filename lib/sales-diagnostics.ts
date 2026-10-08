@@ -24,9 +24,12 @@ export function diagnosticWindow(value: string | null, now: number) {
   const end = Math.floor(now / dayMs) * dayMs;
   return { days, start: end - days * dayMs, end, timeZone: 'UTC' } as const;
 }
+// Match the saved paymentEnvironment contract: Chase uses bare modes; Authorize.net prefixes its provider.
 // Legacy malformed or unclassified JSON remains in the unknown bucket.
 const environment = `CASE WHEN json_valid(data) THEN CASE json_extract(data, '$.environment')
-  WHEN 'live' THEN 'live' WHEN 'sandbox' THEN 'sandbox' ELSE 'unknown' END ELSE 'unknown' END`;
+  WHEN 'live' THEN 'live' WHEN 'authorizenet:live' THEN 'live'
+  WHEN 'sandbox' THEN 'sandbox' WHEN 'authorizenet:sandbox' THEN 'sandbox'
+  ELSE 'unknown' END ELSE 'unknown' END`;
 const paidStatus = "status IN ('paid','labeling','shipped','delivered')";
 const proof = "NULLIF(TRIM(payment_ref), '') IS NOT NULL AND NULLIF(TRIM(notification_id), '') IS NOT NULL";
 export const diagnosticSql = {

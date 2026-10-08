@@ -8,6 +8,15 @@ require.extensions['.ts'] = (m, f) => m._compile(ts.transpileModule(fs.readFileS
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true },
 }).outputText, f);
 const { salesDiagnostics, diagnosticWindow } = require('../lib/sales-diagnostics.ts');
+const { paymentEnvironment } = require('../lib/payments.ts');
+// Use the real value persisted by checkout, without constructing adapters or calling providers.
+const savedEnvironments = {
+  anetLive: paymentEnvironment({PAYMENT_PROVIDER:'authorizenet',AUTHORIZENET_ENVIRONMENT:'live'}),
+  anetSandbox: paymentEnvironment({AUTHORIZENET_ENVIRONMENT:'sandbox'}),
+  chaseLive: paymentEnvironment({PAYMENT_PROVIDER:'chase',CHASE_ENVIRONMENT:'live'}),
+  chaseSandbox: paymentEnvironment({PAYMENT_PROVIDER:'chase',CHASE_ENVIRONMENT:'sandbox'}),
+};
+assert.deepEqual(savedEnvironments,{anetLive:'authorizenet:live',anetSandbox:'authorizenet:sandbox',chaseLive:'live',chaseSandbox:'sandbox'});
 const sql = new DatabaseSync(':memory:');
 sql.exec(`CREATE TABLE orders(id TEXT PRIMARY KEY,owner TEXT,status TEXT,total INTEGER,data TEXT,payment_ref TEXT,notification_id TEXT,created INTEGER,updated INTEGER);
 CREATE TABLE requests(id TEXT PRIMARY KEY,owner TEXT,kind TEXT,data TEXT,status TEXT,created INTEGER);`);
@@ -31,18 +40,18 @@ function order(status, environment, created = start, proof = true, total = 12345
 function request(kind, status = 'new', created = start) {
   sql.prepare('INSERT INTO requests VALUES(?,?,?,?,?,?)').run('fixture-request-' + (++sequence), sensitive, kind, JSON.stringify({email:sensitive,address:sensitive,sessionId:sensitive}), status, created);
 }
-order('paid','live', start); // Inclusive lower bound.
-order('shipped','live', end - 1, true, 100); // Exclusive upper bound minus one millisecond.
-order('delivered','sandbox', start, true, 999);
+order('paid',savedEnvironments.anetLive, start); // Inclusive lower bound.
+order('shipped',savedEnvironments.chaseLive, end - 1, true, 100); // Exclusive upper bound minus one millisecond.
+order('delivered',savedEnvironments.anetSandbox, start, true, 999);
 order('labeling','live', start, true, 200);
 order('paid','live', start, false, 50000);
 const whitespace = order('paid','live',start,true,88888);
 sql.prepare('UPDATE orders SET notification_id=? WHERE id=?').run('  ', whitespace);
 const half = order('paid','live',start,true,77777);
 sql.prepare('UPDATE orders SET payment_ref=NULL WHERE id=?').run(half);
-order('failed','sandbox',start,true,44444);
+order('failed',savedEnvironments.chaseSandbox,start,true,44444);
 order('cancelled','live',start,true,55555);
-order('review','live',start,true,66666); // References without a paid state do not count as recorded payment.
+order('review',savedEnvironments.anetLive,start,true,66666); // References without a paid state do not count as recorded payment.
 order('paid',undefined,start,true,101);
 order('paid','LIVE',start,true,102);
 order('paid',null,start,true,103,'not valid JSON');
@@ -51,7 +60,7 @@ order(sensitive,'live',start,true,105); // Unexpected state cannot leak arbitrar
 order('paid','live',start - 1,true,900000);
 order('paid','live',end,true,900001);
 order('paid','live',end + 1,true,900002);
-order('awaiting_payment','sandbox',start - 40 * 86400000,false);
+order('awaiting_payment',savedEnvironments.anetSandbox,start - 40 * 86400000,false);
 order('creating','unknown',end,false);
 request('quote'); request('quote'); // Repeated quotes stay events, not people.
 request('quote','new',start - 1); request('quote','new',end);
@@ -88,6 +97,8 @@ const allow = async () => {};
   assert.equal(report.requests.find(r=>r.kind==='quote').records,2);
   assert.equal(report.requests.reduce((n,r)=>n+r.records,0),5);
   assert.equal(report.unresolvedOrders.reduce((n,r)=>n+r.records,0),3);
+  assert.equal(report.unresolvedOrders.find(r=>r.status==='review').environment,'live','actual saved Authorize.net live mode maps consistently in unresolved orders');
+  assert.equal(report.unresolvedOrders.find(r=>r.status==='awaiting_payment').environment,'sandbox','actual saved Authorize.net sandbox mode maps consistently in unresolved orders');
   assert.equal(report.unresolvedOrders.find(r=>r.environment==='sandbox').oldestCreated,start-40*86400000);
   assert.deepEqual(report.cartConflicts,{records:2,oldestCreated:start-40*86400000});
   assert.equal(queries.length,4);
@@ -145,6 +156,10 @@ const allow = async () => {};
   sql.exec('DELETE FROM orders; DELETE FROM requests;');
   const empty=await salesDiagnostics({all,requireAdmin:allow},'7',now);
   assert.deepEqual(empty.orders,[]); assert.deepEqual(empty.requests,[]); assert.deepEqual(empty.unresolvedOrders,[]); assert.deepEqual(empty.cartConflicts,{records:0,oldestCreated:null});
+  for (const value of ['authorizenet:preview','anet:live','chase:live','stripe:live','live ']) order('paid',value,start,true,100);
+  const unknown=await salesDiagnostics({all,requireAdmin:allow},'7',now);
+  assert.equal(unknown.orders.reduce((n,r)=>n+r.orders,0),5);
+  assert(unknown.orders.every(r=>r.environment==='unknown'),'unsupported provider/mode spellings must not be inferred as live');
   sql.close();
-  console.log('PASS: diagnostics SQL, UTC bounds, legacy JSON, payment evidence, environment/status separation, aggregate privacy, real GET/admin authorization, no-store responses, failures and empty records');
+  console.log('PASS: diagnostics SQL, UTC bounds, legacy JSON, payment evidence, actual saved provider environments, environment/status separation, aggregate privacy, real GET/admin authorization, no-store responses, failures and empty records');
 })().catch(error=>{console.error(error);process.exitCode=1;});
