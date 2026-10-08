@@ -23,7 +23,7 @@ def blocked(action,message):
  raise AssertionError(message)
 def settle(id):
  batch([('paymentStatus',('paid','capture-'+id,'notification-'+id,2,id)),('settleInventory',(id,id,id)),('clearSettledReservation',(id,id))])
-def stock():return db.execute("SELECT json_extract(data,'$.stockQuantity') FROM product_overrides").fetchone()[0]
+def stock():return db.execute("SELECT json_extract(data,'$.stockQuantity') FROM product_overrides WHERE id=?",(p['id'],)).fetchone()[0]
 order('isolated-a','customer-a',2)
 blocked(lambda:order('isolated-b','customer-b'),'Reserved stock was oversold')
 assert db.execute("SELECT count(*) FROM orders WHERE id='isolated-b'").fetchone()[0]==0
@@ -32,7 +32,7 @@ settle('isolated-a');assert stock()==0
 settle('isolated-a');assert stock()==0
 assert db.execute('SELECT COUNT(*) FROM inventory_reservations').fetchone()[0]==0
 blocked(lambda:order('isolated-d','customer-b'),'Paid stock was sold twice')
-db.execute('UPDATE product_overrides SET data=?',(json.dumps({'stockQuantity':8}),))
+db.execute('UPDATE product_overrides SET data=? WHERE id=?',(json.dumps({'stockQuantity':8}),p['id']))
 order('isolated-e','customer-b',2,'isolated-campaign');settle('isolated-e')
 blocked(lambda:order('isolated-f','customer-b',1,'isolated-campaign'),'Cumulative presale limit exceeded')
 order('isolated-g','customer-c',2)

@@ -1,6 +1,8 @@
 import inventorySql from '@/lib/inventory-statements.json';
+import { AUTH_RETURN_COOKIE, AUTH_RETURN_MAX_AGE, safeAuthReturn, clearAuthSessionCookies, ANONYMOUS_SESSION_COOKIE, needsAnonymousSession, needsAccountSession } from '@/lib/auth-return';
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { createCartImports } from '@/lib/cart-import';
 import { z } from 'zod';
 import { session, customer, requireCustomer, requireAdmin, authReady, authCall, storeAuth, rateLimit } from '@/lib/auth';
 import { presentationData } from '@/lib/private-presentation';
@@ -14,8 +16,8 @@ import { packSizes, supportsPacks } from '@/lib/packs';
 import { searchReport, seoConfig } from '@/lib/seo-policy';
 export const dynamic = 'force-dynamic';
 const j = (value: unknown, status = 200) => NextResponse.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
+const cartImports = () => createCartImports({ db: database(), normalize: validateLines, validate: quote });
 const str = (v: unknown, max = 2000) => z.string().trim().min(1).max(max).parse(v);
-const safeReturn = (v: unknown) => typeof v === 'string' && v.startsWith('/') && !v.startsWith('//') && !v.includes('\\') ? v : '/account';
 export async function GET(req: NextRequest, { params }: {
     params: Promise<{
         action: string;
@@ -25,9 +27,28 @@ export async function GET(req: NextRequest, { params }: {
         const { action } = await params;
         const u = await customer();
         if (action === 'state') {
-            const s = await session(req.nextUrl.protocol === 'https:');
+            const secure = req.nextUrl.protocol === 'https:';
+            let s = await session(secure);
+            // An expired/revoked login must not expose a previous member's browser cart.
+            const stateCookies = await cookies();
+            const claimedOwner = await cartImports().ownerForSession(s.id);
+            if (needsAnonymousSession(Boolean(u), Boolean(stateCookies.get('bm_access') || stateCookies.get('bm_refresh')), claimedOwner, s.id, stateCookies.get(ANONYMOUS_SESSION_COOKIE)?.value) || (u && claimedOwner && claimedOwner !== u.id)) {
+                stateCookies.delete('bm_session');
+                s = await session(secure);
+                if (!u) stateCookies.set(ANONYMOUS_SESSION_COOKIE, s.id, { httpOnly: true, secure, sameSite: 'lax', path: '/', maxAge: 2592000 });
+            }
+            if (u) {
+                // If token refresh recovers after an anonymous fallback, retain items
+                // added during that fallback instead of silently loading the old cart.
+                if (stateCookies.get(ANONYMOUS_SESSION_COOKIE)?.value === s.id) {
+                    await cartImports().record(u.id, s.id);
+                    stateCookies.delete(ANONYMOUS_SESSION_COOKIE);
+                }
+                await cartImports().bindOwner(u.id, s.id);
+            }
             const ps = await catalog();
             const cfg = await config();
+            const cartConflict = u ? await cartImports().inspect(u.id, s.id) : null;
             if (u)
                 await run('INSERT OR IGNORE INTO profiles(id,name,wishlist,created) VALUES(?,?,?,?)', u.id, u.name, JSON.stringify(parse<number[]>(s.wishlist, []).filter(currentProductId)), timestamp());
             if(u)await run('INSERT OR IGNORE INTO customer_carts(id,cart,updated) VALUES(?,?,?)',u.id,JSON.stringify(currentCart(validateLines(parse(s.cart,[])))),timestamp());
@@ -57,7 +78,7 @@ export async function GET(req: NextRequest, { params }: {
             const packOwner = u ? 'customer:' + u.id : 'guest:' + s.id;
             if(u) await run('UPDATE saved_packs SET owner=? WHERE owner=?',packOwner,'guest:'+s.id);
             const savedPacks = (await all<{id:string;name:string;products:string;updated:number}>('SELECT id,name,products,updated FROM saved_packs WHERE owner=? ORDER BY updated DESC',packOwner)).map(p=>({...p,products:parse(p.products,[])})).filter(p=>currentSelection(p.products)).map(p=>presentationData(p));
-            return j({ products: ps, config: cfg, cart, wishlist, savedPacks, customer: u, authReady: authReady(), googleReady: authReady() && runtime().GOOGLE_SIGNIN_ENABLED === 'true', payment: { state: payment.state, enabled: payment.checkoutEnabled }, totals, cartError, cartNotice, campaigns: (await all<{
+            return j({ products: ps, config: cfg, cart, cartConflict, wishlist, savedPacks, customer: u, authReady: authReady(), googleReady: authReady() && runtime().GOOGLE_SIGNIN_ENABLED === 'true', payment: { state: payment.state, enabled: payment.checkoutEnabled }, totals, cartError, cartNotice, campaigns: (await all<{
                     id: string;
                     data: string;
                     active: number;
@@ -107,7 +128,7 @@ export async function GET(req: NextRequest, { params }: {
                     data: string;
                 }>('SELECT id,status,total,data,created FROM orders WHERE owner=? ORDER BY created DESC LIMIT 100', user.id)).map(o => ({ ...o, data: orderView(parse(o.data, {})) })), requests: (await all<{
                     data: string;
-                }>('SELECT id,kind,data,status,created FROM requests WHERE owner=? AND kind!=\'quote\' ORDER BY created DESC LIMIT 100', user.id)).map(r => ({ ...r, data: presentationData(parse(r.data, {})) })), rewards: presentationData(await all('SELECT points,reason,created FROM rewards WHERE owner=? ORDER BY created DESC LIMIT 100', user.id)) });
+                }>('SELECT id,kind,data,status,created FROM requests WHERE owner=? AND kind IN (\'contact\',\'stock\',\'affiliate\') ORDER BY created DESC LIMIT 100', user.id)).map(r => ({ ...r, data: presentationData(parse(r.data, {})) })), rewards: presentationData(await all('SELECT points,reason,created FROM rewards WHERE owner=? ORDER BY created DESC LIMIT 100', user.id)) });
         }
         if (action === 'admin') {
             await requireAdmin();
@@ -115,7 +136,7 @@ export async function GET(req: NextRequest, { params }: {
                     data: string;
                 }>('SELECT id,owner,status,total,data,created FROM orders ORDER BY created DESC LIMIT 200')).map(o => ({ ...o, data: orderView(parse(o.data, {})) })), requests: (await all<{
                     data: string;
-                }>('SELECT * FROM requests WHERE kind!=\'quote\' ORDER BY created DESC LIMIT 200')).map(o => ({ ...o, data: presentationData(parse(o.data, {})) })), campaigns: (await all<{
+                }>('SELECT * FROM requests WHERE kind IN (\'contact\',\'stock\',\'affiliate\') ORDER BY created DESC LIMIT 200')).map(o => ({ ...o, data: presentationData(parse(o.data, {})) })), campaigns: (await all<{
                     data: string;
                 }>('SELECT * FROM campaigns')).map<Record<string, any>>(o => { const {data, ...row}=o; return { ...row, ...parse<Record<string, any>>(data, {}) }; }).filter(c=>currentSelection(c.productIds)).map(c=>presentationData(c)) });
         }
@@ -173,13 +194,22 @@ export async function POST(req: NextRequest, { params }: {
             else {const result=await run('INSERT INTO saved_packs(id,owner,name,products,updated) SELECT ?,?,?,?,? WHERE (SELECT COUNT(*) FROM saved_packs WHERE owner=?) < 30',id,owner,name,JSON.stringify(ids),timestamp(),owner);if(!result.meta.changes) throw new Error('You can save up to 30 packs. Remove one before saving another.');}
             return j({id,message:'Pack saved.'});
         }
+        if (action === 'cart-choice') {
+            const u = await requireCustomer();
+            await cartImports().choose(u.id, s.id, z.string().uuid().parse(b.id), str(b.revision, 64), str(b.choice, 20));
+            return j({ message: 'Your selected cart is ready for review.' });
+        }
         if (action === 'cart') {
+            const u = await customer();
+            if (u) { await cartImports().bindOwner(u.id, s.id); await cartImports().assertResolved(u.id, s.id); }
             const lines = validateLines(b.cart);
             const totals = await quote(lines);
-            await run('UPDATE sessions SET cart=?,updated=? WHERE id=?', JSON.stringify(lines), timestamp(), s.id);
-            const u = await customer();
-            if (u)
-                await run('INSERT INTO customer_carts(id,cart,updated) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET cart=excluded.cart,updated=excluded.updated', u.id, JSON.stringify(lines), timestamp());
+            if (u) {
+                await database().batch([
+                    database().prepare('UPDATE sessions SET cart=?,updated=? WHERE id=?').bind(JSON.stringify(lines), timestamp(), s.id),
+                    database().prepare('INSERT INTO customer_carts(id,cart,updated) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET cart=excluded.cart,updated=excluded.updated').bind(u.id, JSON.stringify(lines), timestamp()),
+                ]);
+            } else await cartImports().saveGuest(s.id, lines);
             return j({ cart: lines, totals });
         }
         if (action === 'wishlist') {
@@ -195,9 +225,21 @@ export async function POST(req: NextRequest, { params }: {
             return j({ ok: true });
         }
         if (action === 'auth-login') {
+            const prior = await customer();
             const d = await authCall('token?grant_type=password', { email: z.string().email().parse(b.email), password: z.string().min(1).max(200).parse(b.password) });
+            const c = await cookies();
+            // A direct account switch must not carry the previous member's browser cart.
+            const claimedOwner = await cartImports().ownerForSession(s.id);
+            const switchingAccount = needsAccountSession(prior?.id, d.user?.id, claimedOwner, Boolean(c.get('bm_access') || c.get('bm_refresh')), s.id, c.get(ANONYMOUS_SESSION_COOKIE)?.value);
+            if (switchingAccount) c.delete('bm_session');
+            const loginSession = switchingAccount ? await session(secure) : s;
+            if (typeof d.user?.id !== 'string') throw new Error('Please sign in again.');
+            await cartImports().record(d.user.id, loginSession.id);
             await storeAuth(d, secure);
-            return j({ returnTo: safeReturn(b.returnTo) });
+            c.delete(ANONYMOUS_SESSION_COOKIE);
+            const returnTo = safeAuthReturn(b.returnTo ?? c.get(AUTH_RETURN_COOKIE)?.value);
+            c.delete(AUTH_RETURN_COOKIE);
+            return j({ returnTo });
         }
         if (action === 'auth-register') {
             const name = str(b.name, 100);
@@ -210,10 +252,12 @@ export async function POST(req: NextRequest, { params }: {
                 throw new Error('Passwords do not match.');
             // Supabase sends the verification email; unverified members cannot sign in (see customer() in lib/auth.ts).
             const d = await authCall('signup?redirect_to=' + encodeURIComponent(req.nextUrl.origin + '/login'), { email, password, data: { name, company, phone, business_type: businessType } });
+            (await cookies()).set(AUTH_RETURN_COOKIE, safeAuthReturn(b.returnTo), { httpOnly: true, secure, sameSite: 'lax', path: '/', maxAge: AUTH_RETURN_MAX_AGE });
             return j({ message: 'Almost done. Check your email and click the link to verify your membership, then sign in.', verificationRequired: true });
         }
         if (action === 'auth-recover') {
             await authCall('recover?redirect_to=' + encodeURIComponent(req.nextUrl.origin + '/reset-password'), { email: z.string().email().parse(b.email) });
+            (await cookies()).set(AUTH_RETURN_COOKIE, safeAuthReturn(b.returnTo), { httpOnly: true, secure, sameSite: 'lax', path: '/', maxAge: AUTH_RETURN_MAX_AGE });
             return j({ message: 'If this email has an account, a password reset link has been requested.' });
         }
         if (action === 'auth-reset') {
@@ -234,8 +278,7 @@ export async function POST(req: NextRequest, { params }: {
         }
         if (action === 'auth-logout') {
             const c = await cookies();
-            c.delete('bm_access');
-            c.delete('bm_refresh');
+            clearAuthSessionCookies(c);
             return j({ ok: true });
         }
         if (action === 'contact') {
@@ -283,6 +326,7 @@ export async function POST(req: NextRequest, { params }: {
             return j({ message: 'Your partner application has been saved.' });
         }
         if (action === 'delivery') {
+            await cartImports().assertResolved((await requireCustomer()).id, s.id);
             const u = await requireCustomer();
             return j(await issueQuote(u.id, validateLines(parse((await one<{
                 cart: string;
@@ -290,6 +334,7 @@ export async function POST(req: NextRequest, { params }: {
         }
         if (action === 'checkout') {
             const u = await requireCustomer();
+            await cartImports().assertResolved(u.id, s.id);
             return j(await checkout(u.id, validateLines(parse((await one<{
                 cart: string;
             }>('SELECT cart FROM customer_carts WHERE id=?', u.id))?.cart, [])), b));
@@ -337,7 +382,7 @@ export async function POST(req: NextRequest, { params }: {
                 return j({ message: 'Presale saved.' });
             }
             if (action === 'admin-request') {
-                await run('UPDATE requests SET status=? WHERE id=?', z.enum(['new', 'reviewed', 'resolved']).parse(b.status), str(b.id, 50));
+                await run('UPDATE requests SET status=? WHERE id=? AND kind IN (\'contact\',\'stock\',\'affiliate\')', z.enum(['new', 'reviewed', 'resolved']).parse(b.status), str(b.id, 50));
                 return j({ ok: true });
             }
             if (action === 'admin-reconcile') {

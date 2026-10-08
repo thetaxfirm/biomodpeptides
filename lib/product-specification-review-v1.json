@@ -1,0 +1,12 @@
+{
+  "slu-pp-332": "The legacy CAS identifier is invalid. Confirm the current compound specification with Biomod before ordering.",
+  "5-amino-1mq-50mg": "The legacy CAS identifier is invalid and the salt form needs confirmation. Confirm the current specification with Biomod before ordering.",
+  "lipo-c-w-b12": "The listed component identifiers and physical format need confirmation. Contact Biomod for the current 10 mL formulation specification before ordering.",
+  "ghk-cu-50mg": "The legacy CAS identifier refers to copper-free GHK, while this product is named GHK-Cu. Confirm the copper-complex specification with Biomod before ordering.",
+  "glow-70mg": "The GHK-Cu identifier and the full-length versus fragment specification for the TB-500 component need confirmation. Contact Biomod for the current blend specification before ordering.",
+  "klow-80mg": "The GHK-Cu identifier and the full-length versus fragment specification for the TB-500 component need confirmation. Contact Biomod for the current blend specification before ordering.",
+  "tb500-10mg": "The legacy identity and CAS identifier conflict on full-length versus fragment TB-500. Confirm the sequence specification with Biomod before ordering.",
+  "wolverine-10mg": "The full-length versus fragment specification for the TB-500 component needs confirmation. Contact Biomod for the current blend specification before ordering.",
+  "cjc-1295-no-dac-10mg": "The legacy CAS identifier needs reconciliation with the stated No DAC material. Confirm the current specification with Biomod before ordering.",
+  "run-gun-10mg": "The CJC component identifier needs reconciliation with the stated No DAC material. Confirm the current blend specification and matching lot documentation with Biomod before ordering."
+}

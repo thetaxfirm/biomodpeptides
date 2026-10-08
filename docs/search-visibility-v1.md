@@ -46,3 +46,8 @@ Use docs/product-search-targets-v1.csv as a page/query measurement sheet, not a 
 - https://developers.google.com/search/docs/appearance/structured-data/product-snippet
 - https://developers.google.com/search/docs/crawling-indexing/site-move-with-url-changes
 - https://developers.google.com/search/docs/essentials/spam-policies
+
+
+## Subsequent verification and correction
+
+Google's Sitemaps report subsequently returned Success and 34 discovered URLs. That resolves the initial fetch-status discrepancy; it does not establish ranking. A deeper specification review identified conflicts affecting 10 of the original 26 product pages. See search-visibility-v2.md for the current narrower publication set and the information required to restore those pages. The original 26-page technical audit above remains a record of the first deployment, not a claim that every product specification was verified.

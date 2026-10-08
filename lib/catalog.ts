@@ -1,4 +1,6 @@
 import source from './catalog-facts-v2.json';
+import specificationReviews from './product-specification-review-v1.json';
+const specificationReviewsBySlug: Record<string, string> = specificationReviews;
 import vialBranding from './vial-branding-v37.json';
 import competitive from './competitive-pricing-v3.json';
 import retail from './retail-pricing-v4.json';
@@ -35,7 +37,7 @@ export type Product = {
     maxQuantity?: number;
     presaleId?: string | null;
 };
-export const products: Product[] = (source as Product[]).map(p => ({ ...p, categories: p.categories.map(c => c.slug === 'research-peptides' ? { slug: 'research-compounds', name: 'Research Compounds' } : c), ...(competitive as Record<string, Pick<Product, 'price' | 'packPrices'>>)[p.slug], ...(retail as Record<string, Pick<Product, 'price' | 'packPrices'>>)[p.slug], shortDescription: p.description, description: p.description.replaceAll('—', '-') })).sort((a, b) => a.name.localeCompare(b.name));
+export const products: Product[] = (source as Product[]).map(p => ({ ...p, categories: p.categories.map(c => c.slug === 'research-peptides' ? { slug: 'research-compounds', name: 'Research Compounds' } : c), ...(competitive as Record<string, Pick<Product, 'price' | 'packPrices'>>)[p.slug], ...(retail as Record<string, Pick<Product, 'price' | 'packPrices'>>)[p.slug], shortDescription: p.description, description: p.description.replaceAll('—', '-') })).map(p => specificationReviewsBySlug[p.slug] ? { ...p, casNumber: '', sourceIssues: [...p.sourceIssues, specificationReviewsBySlug[p.slug]], ...(p.slug === 'tb500-10mg' ? { identity: 'TB-500 (sequence confirmation pending)', description: 'TB-500 supplied in a 10 mg vial. Full-length versus fragment specification requires confirmation.', shortDescription: 'TB-500 supplied in a 10 mg vial. Full-length versus fragment specification requires confirmation.' } : {}) } : p).sort((a, b) => a.name.localeCompare(b.name));
 export const categories = [{ slug: 'research-compounds', name: 'Research Compounds' }, { slug: 'softgels', name: 'Softgels' }, { slug: 'spray-products', name: 'Spray Products' }, { slug: 'aminos-liquids', name: 'Aminos & Liquids' }];
 export const money = (c: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(c / 100);
 export const size = (p: Product) => p.sizes[0] || '';
@@ -46,4 +48,4 @@ export const cas = (p: Product) => p.casNumber || '';
 export const compound = (p: Product) => p.identity || p.name;
 export const productFormat = (p: Product) => p.categories.some(c => c.slug === 'softgels') ? 'Softgels' : p.categories.some(c => c.slug === 'spray-products') ? 'Spray' : p.categories.some(c => c.slug === 'research-compounds') ? 'Vial' : 'Research supply';
 export const productSummary = (p: Product) => p.description;
-export const specificationNote = (p: Product) => p.slug === 'softgel-lumen-ghk-cu-ahk-cu-astaxanthin-vitamin-e' ? 'Astaxanthin quantities differ between the source specifications. Confirm the current formulation with Biomod before ordering.' : p.slug === 'noctis-blend-spray' ? 'Source documents list both 110 mg and 111 mg per bottle. Confirm the current bottle specification with Biomod.' : p.slug === 'zenith-semax-selank-spray' ? 'The full specification lists 100 mg per bottle; an older product summary lists 20 mg. Confirm the current label before ordering.' : '';
+export const specificationNote = (p: Product) => specificationReviewsBySlug[p.slug] || (p.slug === 'softgel-lumen-ghk-cu-ahk-cu-astaxanthin-vitamin-e' ? 'Astaxanthin quantities differ between the source specifications. Confirm the current formulation with Biomod before ordering.' : p.slug === 'noctis-blend-spray' ? 'Source documents list both 110 mg and 111 mg per bottle. Confirm the current bottle specification with Biomod.' : p.slug === 'zenith-semax-selank-spray' ? 'The full specification lists 100 mg per bottle; an older product summary lists 20 mg. Confirm the current label before ordering.' : '');

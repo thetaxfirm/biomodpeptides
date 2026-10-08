@@ -1,5 +1,7 @@
 import { products, compound, size, productFormat, type Product } from './catalog';
 
+import specificationReviews from './product-specification-review-v1.json';
+
 export const previewOrigin = 'https://trybiomod.com';
 export const reviewedOn = '2026-10-08';
 export const pageRecords: Record<string, { title: string; description: string; eligible: boolean }> = {
@@ -22,6 +24,7 @@ export const pageRecords: Record<string, { title: string; description: string; e
   '/international-partners': { title: 'Partnership Enquiries', description: 'Contact BIOMOD about research supply requirements and partnership enquiries.', eligible: false },
 };
 export const productReviewBlocks: Record<string, string> = {
+  ...specificationReviews,
   ...Object.fromEntries(products.filter(p => /heat/i.test(p.slug)).map(p => [p.slug, 'Public compound identity must be disclosed accurately before organic product promotion.'])),
   'softgel-methylene-blue-usp': 'Package image states dietary supplement and cognitive support; classification and marketing must be reconciled with the research-only site policy.',
   'softgel-lumen-ghk-cu-ahk-cu-astaxanthin-vitamin-e': 'Astaxanthin specification conflict requires resolution.',

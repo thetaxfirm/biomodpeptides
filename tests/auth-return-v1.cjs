@@ -1,0 +1,12 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs'); const ts = require('typescript');
+require.extensions['.ts'] = (m, f) => m._compile(ts.transpileModule(fs.readFileSync(f, 'utf8'), {compilerOptions: {target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS}}).outputText, f);
+const { safeAuthReturn, authLink, AUTH_RETURN_MAX_AGE } = require('../lib/auth-return.ts');
+for (const value of ['/checkout', '/account/orders', '/shop?q=BPC157', '/cart#summary']) assert.equal(safeAuthReturn(value), value);
+for (const value of [undefined, null, {}, '', 'checkout', 'https://evil.example', '//evil.example', '///evil.example', '/\\evil.example', '/%5cevil.example', '/%2fevil.example', '/%252fevil.example', '/%25252fevil.example', '/\n/evil.example', '/%0d%0aLocation:https://evil.example', '/%09evil.example', '/%zz', '/a/..//evil.example', '/a/%2e%2e//evil.example', '/a/../%2fevil.example', ' /checkout', '/checkout ']) assert.equal(safeAuthReturn(value), '/account', String(value));
+assert.equal(authLink('register', '/checkout'), '/register?returnTo=%2Fcheckout');
+assert.equal(authLink('login', '/checkout'), '/login?returnTo=%2Fcheckout');
+assert.equal(authLink('forgot-password', '/checkout'), '/forgot-password?returnTo=%2Fcheckout');
+assert.equal(authLink('login', '//evil.example'), '/login');
+assert.equal(AUTH_RETURN_MAX_AGE, 3600);
+console.log('PASS: checkout return routing and encoded open-redirect rejection');

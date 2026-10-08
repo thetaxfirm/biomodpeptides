@@ -4,6 +4,7 @@ import { Plus, X, Search, ChevronDown } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { compound, money } from '@/lib/catalog';
+import { productSearchScore } from '@/lib/product-search';
 import { ProductImage } from './product-image';
 import { packSizes, supportsPacks, packContents, packUnitLimit } from '@/lib/packs';
 import { useStore, report } from './provider';
@@ -29,7 +30,7 @@ export function PackBuilder({ initialSize = 3 }: { initialSize?: number }) {
   const groupId = useId();
   const eligible = store.products.filter(p => supportsPacks(p) && p.inStock && p.purchasable);
   const visible = eligible.filter(p => (format === 'all' || p.categories.some(c => c.slug === format)) &&
-    `${p.name} ${compound(p)} ${packContents(p)}`.toLowerCase().includes(q.trim().toLowerCase()))
+    productSearchScore(p, q) > 0)
     .sort((a, b) => sort === 'price-up' ? a.price - b.price : sort === 'price-down' ? b.price - a.price : a.name.localeCompare(b.name));
   const total = selected.reduce((sum, id) => sum + (store.products.find(p => p.id === id)?.price || 0), 0);
   const percent = store.config.packDiscounts[count] || 0;
@@ -74,7 +75,7 @@ export function PackBuilder({ initialSize = 3 }: { initialSize?: number }) {
         <p className="pack-shipping-note">Shipping and tax calculated at checkout.</p>
       </aside>
       <div className="pack-catalog" id="pack-products">
-        <div className="pack-catalog-tools"><div className="pack-search-field"><Search size={19}/><input aria-label="Search pack products" value={q} onChange={e => setQ(e.target.value)} placeholder="Search name or compound"/></div><Choice label="Sort pack products" value={sort} onChange={setSort} options={[["name", "Name: A–Z"], ["price-up", "Price: low to high"], ["price-down", "Price: high to low"]]}/></div>
+        <div className="pack-catalog-tools"><div className="pack-search-field"><Search size={19}/><input aria-label="Search pack products" value={q} onChange={e => setQ(e.target.value)} type="search" maxLength={200} placeholder="Name, compound, strength, CAS or SKU"/></div><Choice label="Sort pack products" value={sort} onChange={setSort} options={[["name", "Name: A–Z"], ["price-up", "Price: low to high"], ["price-down", "Price: high to low"]]}/></div>
         <div className="pack-format-tabs" aria-label="Pack product format"><button aria-pressed={format === 'all'} onClick={() => setFormat('all')}>All products <span>{eligible.length}</span></button>{formats.map(f => <button key={f.id} aria-pressed={format === f.id} onClick={() => setFormat(f.id)}>{f.name}<span>{eligible.filter(p => p.categories.some(c => c.slug === f.id)).length}</span></button>)}</div>
         <p className="pack-result-count" aria-live="polite">{visible.length} {visible.length === 1 ? 'product' : 'products'}{q.trim() ? ` matching “${q.trim()}”` : ' available'}</p>
         {formats.map(f => { const items = visible.filter(p => p.categories.some(c => c.slug === f.id)); return items.length > 0 && <section className="pack-format-group" key={f.id}><div className="pack-group-heading"><h2>{f.name}</h2><span>{items.length} products · Full {f.unit}</span></div><div className="pack-product-grid">{items.map(p => {

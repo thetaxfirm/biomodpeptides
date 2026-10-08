@@ -1,7 +1,9 @@
 import { legacyRoutes } from '@/lib/legacy-routes';
+import { cookies } from 'next/headers';
+import { AUTH_RETURN_COOKIE, authRoutes, safeAuthReturn } from '@/lib/auth-return';
 import { Experience } from '@/components/store/experience';
 import { notFound, permanentRedirect } from 'next/navigation';
-import { pageRecords, productAt } from '@/lib/seo-policy';
+import { pageRecords, productAt, mayIndex } from '@/lib/seo-policy';
 import { routeMetadata, requestSEO, routeStructuredData, jsonLd } from '@/lib/seo';
 import { batchRecords } from '@/lib/testing';
 
@@ -28,7 +30,13 @@ export default async function Page({ params, searchParams }: Props) {
   if (route === 'about-biomod') permanentRedirect('/about');
   if (route === 'coa') permanentRedirect('/testing');
   if (route === 'affiliate-program') permanentRedirect('/account/affiliate');
-  const query = await searchParams;
-  const data = queryParams(query).size ? null : await routeStructuredData('/' + route, await requestSEO());
+  const query = { ...await searchParams };
+  if (authRoutes.some(authRoute => authRoute === route)) {
+    const requested = query.returnTo ?? query.redirect;
+    const destination = Array.isArray(requested) ? requested[0] : requested;
+    query.returnTo = safeAuthReturn(destination ?? (await cookies()).get(AUTH_RETURN_COOKIE)?.value);
+  }
+  const seo = await requestSEO();
+  const data = mayIndex('/' + route, queryParams(query), seo) ? await routeStructuredData('/' + route, seo) : null;
   return <main id="main-content" className="wrap page-content">{data && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(data) }}/>}<Experience path={route} query={Object.fromEntries(Object.entries(query).map(([key, value]) => [key, Array.isArray(value) ? value[0] || '' : value]))}/></main>;
 }
