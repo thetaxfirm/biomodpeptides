@@ -4,7 +4,9 @@ export const batchRecords = source.records.filter(record => products.some(produc
 export const laboratoryDocuments = source.documents as any[];
 export const batchFor = (id:number) => batchRecords.find(r=>r.product_id===id);
 export const certificateFor = (r:any) => r && laboratoryDocuments.find(d=>d.document_id===r.document_id&&d.is_certificate);
-export const batchStatus = (r:any) => !certificateFor(r)?'pending':r.lot_match==='matches'?'matched':'mismatch';
-export const batchStatusLabel = (r:any) => batchStatus(r)==='matched'?'Matching-lot certificate':batchStatus(r)==='mismatch'?'Lot needs confirmation':'Documentation pending';
+export const coaOnRequest = (r:any) => [744, 745, 746, 747, 1389].includes(Number(r?.product_id));
+export const coaRequestNotice = 'COA available on request before purchase and supplied with your order';
+export const batchStatus = (r:any) => coaOnRequest(r)?'on-request':!certificateFor(r)?'pending':r.lot_match==='matches'?'matched':'mismatch';
+export const batchStatusLabel = (r:any) => coaOnRequest(r)?'COA available on request':batchStatus(r)==='matched'?'Matching-lot certificate':batchStatus(r)==='mismatch'?'Lot needs confirmation':'Documentation pending';
 export const reportedResult = (d:any,kind:string) => d?.results?.filter((r:any)=>r.kind===kind).map((r:any)=>r.result+(r.unit&&!r.result.includes(r.unit)?' '+r.unit:'')).join('; ') || 'Not reported';
 export const batchPath = (r:any) => '/testing/'+encodeURIComponent(r.product_lot && !/^pending|not listed$/i.test(r.product_lot)?r.product_lot:r.record_id)+'?product='+r.product_id;
