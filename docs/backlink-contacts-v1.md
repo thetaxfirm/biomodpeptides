@@ -1,0 +1,17 @@
+# Public contacts for the three existing backlink requests
+
+Verified October 8, 2026. Read-only public-page checks. No email was sent, no form was submitted, and no account was created. The existing requests in `docs/backlink-corrections-v1.md` remain unsent.
+
+| Publisher | Verified contact channel | Public evidence | Readiness |
+|---|---|---|---|
+| Las Vegas Peptide Therapy | **Usable publisher contact not found.** Its homepage links “Book Consultation” to `https://lasvegaspeptidetherapy.com/contact/`, but that destination returns **404**. No publisher email appeared on the inspected homepage or Biomod article. | [Homepage](https://lasvegaspeptidetherapy.com/) and [existing Biomod article](https://lasvegaspeptidetherapy.com/biomod-peptides-las-vegas/) returned 200; [linked contact page](https://lasvegaspeptidetherapy.com/contact/) returned 404. | Hold the unsent request until the actual publisher/editor contact is provided or verified. The article's “Contact BIOMOD” links go to Biomod itself and are **not** contacts for this publisher. |
+| AlphaGrade Peptides | **Contact form:** `https://alphagradepeptides.com/contact/`. **Public business telephone:** `(775) 505-3445`. No email address was visible in the inspected COA, Contact or About pages. | The [COA library](https://alphagradepeptides.com/research-peptide-coa-library/) links to [Contact](https://alphagradepeptides.com/contact/), which returned 200 and publishes the phone plus a Name/Email/Message form. | Use the public form only after explicit authorization to send. This is general support, not a separately identified editorial inbox. Form delivery was not tested. Do not infer an email address from the generic “Email AlphaGrade” copy. |
+| Estly Studio | **Public business email:** `andrew@estlystudio.com`. **Public business telephone:** `+1 704 290 7330`. | Both the [homepage](https://estlystudio.com/) and [About page](https://estlystudio.com/about/) returned 200 and publish the exact email as a `mailto:` link and the phone as a `tel:` link. | The existing client-credit correction can be addressed to Andrew after explicit authorization to send. Email delivery was not tested. |
+
+## Explicit public relationship signals
+
+- **Las Vegas Peptide Therapy:** The Biomod article describes itself as an independent educational/referral resource and says it claims no ownership or operating relationship with BIOMOD. It discloses possible referral/sponsored links. These are the page's statements, not independent proof of ownership. No named publisher/editor was verified.
+- **AlphaGrade:** Its COA library explicitly distinguishes BioMod reports from AlphaGrade-branded materials. This supports the relevance of a documentation-link correction, but does not establish our right to edit AlphaGrade's site or any common ownership. Its [About page](https://alphagradepeptides.com/about/) describes its Pahrump retail operation and does not identify an individual site owner in the inspected text.
+- **Estly:** Its homepage lists Biomod Peptides among companies its team has worked with. Its [About page](https://estlystudio.com/about/) publicly identifies **Andrew McLaughlin** as Estly Studio's owner. This is a published service/client-credit claim; the current scope or approval of that relationship has not been independently verified.
+
+Scope stopped at these three publishers. No new prospects, guessed addresses, private contact lookups or outreach were added. Public contact availability does not itself authorize sending.

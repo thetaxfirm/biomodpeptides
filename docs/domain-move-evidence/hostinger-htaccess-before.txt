@@ -1,0 +1,25 @@
+# BEGIN BioMod domain forwarding
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteCond %{HTTP_HOST} ^(www\.)?biomodpeptides\.com$ [NC]
+RewriteCond %{REQUEST_METHOD} ^(GET|HEAD)$
+RewriteCond %{REQUEST_URI} !^/(wp-admin|wp-content|wp-includes|wp-json|\.well-known)(/|$) [NC]
+RewriteCond %{REQUEST_URI} !^/(wp-login\.php|wp-cron\.php|xmlrpc\.php)$ [NC]
+RewriteCond %{QUERY_STRING} !(^|&)(wc-api|wc-ajax|rest_route)= [NC]
+RewriteRule ^(.*)$ https://trybiomod.com/$1 [R=301,L]
+</IfModule>
+# END BioMod domain forwarding
+# BEGIN WordPress
+# The directives (lines) between "BEGIN WordPress" and "END WordPress" are
+# dynamically generated, and should only be modified via WordPress filters.
+# Any changes to the directives between these markers will be overwritten.
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+RewriteBase /
+RewriteRule ^index\.php$ - [L]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule . /index.php [L]
+</IfModule>
+# END WordPress

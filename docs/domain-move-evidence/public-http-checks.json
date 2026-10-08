@@ -1,0 +1,44 @@
+[
+  {
+    "url": "https://biomodpeptides.com/googlecfdf6da9aff93def.html",
+    "status": 200,
+    "location": null,
+    "type": "text/html",
+    "verification": "google-site-verification: googlecfdf6da9aff93def.html"
+  },
+  {
+    "url": "https://www.biomodpeptides.com/googlecfdf6da9aff93def.html",
+    "status": 200,
+    "location": null,
+    "type": "text/html",
+    "verification": "google-site-verification: googlecfdf6da9aff93def.html"
+  },
+  {
+    "url": "https://biomodpeptides.com/",
+    "status": 301,
+    "location": "https://trybiomod.com/",
+    "type": "text/html",
+    "verification": null
+  },
+  {
+    "url": "https://www.biomodpeptides.com/",
+    "status": 301,
+    "location": "https://trybiomod.com/",
+    "type": "text/html",
+    "verification": null
+  },
+  {
+    "url": "https://biomodpeptides.com/product/bpc-157-10mg",
+    "status": 301,
+    "location": "https://trybiomod.com/product/bpc-157-10mg",
+    "type": "text/html",
+    "verification": null
+  },
+  {
+    "url": "https://biomodpeptides.com/wp-content/uploads/2026/05/BPC-157_10-mg.pdf",
+    "status": 200,
+    "location": null,
+    "type": "application/pdf",
+    "verification": null
+  }
+]

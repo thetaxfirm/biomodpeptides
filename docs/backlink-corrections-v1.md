@@ -6,13 +6,17 @@ Prepared October 8, 2026. These are unsent editorial requests. Publisher control
 
 Page: https://lasvegaspeptidetherapy.com/biomod-peptides-las-vegas/
 
+Status: **On hold: publisher contact unverified.** The linked publisher contact page returns 404. The article’s Contact BIOMOD links are not publisher contacts.
+
 Subject: Update existing Biomod website links
 
-Please update the existing Biomod links on your Biomod Peptides Las Vegas page to the current storefront. The catalog destination is https://trybiomod.com/shop and the batch-document library is https://trybiomod.com/testing. About, FAQ, quality guide and contact links can use the corresponding current TryBiomod pages. Please preserve your sponsored link labels and any relationship disclosures. The original laboratory PDFs should remain linked to their original files and lots. Thank you.
+Please update the existing Biomod links on your Biomod Peptides Las Vegas page to the current storefront. The catalog destination is https://trybiomod.com/shop and the batch-document library is https://trybiomod.com/testing. Use https://trybiomod.com/about for About, https://trybiomod.com/faq for FAQ, https://trybiomod.com/quality-standard for the quality guide, and https://trybiomod.com/contact for Contact. Please preserve your sponsored link labels and any relationship disclosures. The original laboratory PDFs should remain linked to their original files and lots. Thank you.
 
 ## AlphaGrade
 
 Page: https://alphagradepeptides.com/research-peptide-coa-library/
+
+Verified public channel: https://alphagradepeptides.com/contact/ (general contact form). No public email was verified. **Unsent; explicit authorization is required before submitting.**
 
 Subject: Current Biomod batch-library link
 
@@ -22,10 +26,12 @@ Your COA library already includes Biomod laboratory reports. Would you add one c
 
 Page: https://estlystudio.com/
 
+Verified public recipient: Andrew McLaughlin, andrew@estlystudio.com, published at https://estlystudio.com/about/. **Unsent; explicit authorization is required before sending.**
+
 Subject: Website link for your existing Biomod client credit
 
 Your homepage includes Biomod Peptides in its client credits. If that credit is current and approved, would you link the existing Biomod name or logo to https://trybiomod.com/? We are requesting a factual website link only; the client description does not need to change. Thank you.
 
 ## Verification and sending boundaries
 
-The three mentions and current link destinations were inspected on October 8, 2026. Public publisher contact channels must be verified before sending. Do not guess email addresses or disclose customer/order data. These requests are not a guarantee of placement, referral traffic or search ranking credit.
+The three mentions and current link destinations were inspected on October 8, 2026. Verified channels and remaining gaps are recorded in [Public publisher contacts](backlink-contacts-v1.md). AlphaGrade’s form and Estly’s public email were verified; Las Vegas Peptide Therapy remains on hold without a verified publisher contact. Recheck the selected channel before sending. Do not guess email addresses or disclose customer/order data. These requests are not a guarantee of placement, referral traffic or search ranking credit.
