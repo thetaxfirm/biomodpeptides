@@ -7,7 +7,7 @@ import { fixedTaxConfig, fixedTaxCents } from './tax';
 import { z } from 'zod';
 import { customer } from './auth';
 import { cheapestRate, easypostReady } from './easypost';
-export const addressSchema = z.object({ name: z.string().trim().min(2).max(100), line1: z.string().trim().min(3).max(150), line2: z.string().trim().max(150).default(''), city: z.string().trim().min(2).max(100), state: z.string().regex(/^[A-Z]{2}$/), zip: z.string().regex(/^\d{5}(-\d{4})?$/), country: z.literal('US'), phone: z.string().trim().min(7).max(30) });
+export const addressSchema = z.object({ name: z.string().trim().min(2).max(100), line1: z.string().trim().min(3).max(150), line2: z.string().trim().max(150).default(''), city: z.string().trim().min(2).max(100), state: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/, 'Enter a two-letter state abbreviation, such as NV.'), zip: z.string().regex(/^\d{5}(-\d{4})?$/), country: z.literal('US'), phone: z.string().trim().min(7).max(30) });
 /** Shipping: free over the threshold, otherwise the live EasyPost rate (when connected) or the flat rate from store settings.
  * A quoted rate is stored with the quote and reused at payment so the total cannot drift between the two steps. */
 export async function deliveryQuote(lines: CartLine[], raw: unknown, preset?: { shipping: number; shippingService: string }) {
