@@ -1,6 +1,6 @@
 // Server-owned promotions. Never accept percentages or savings from a browser.
 export const PROMO_COOKIE = 'bm_promo';
-const promotions: Readonly<Record<string, number>> = Object.freeze({ BIOMOD10: 10, BIOMOD15: 15, BIOMOD20: 20 });
+const promotions: Readonly<Record<string, number>> = Object.freeze({ BM10: 10, BIOMOD15: 15, BMOD20: 20 });
 export function promotion(value?: unknown): { code: string; percentOff: number } | null {
     if (value == null || value === '') return null;
     if (typeof value !== 'string' || value.length > 40) throw new Error('Enter a valid promo code.');

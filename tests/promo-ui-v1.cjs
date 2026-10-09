@@ -44,20 +44,20 @@ function load(file) {
 }
 const {PromoCode}=load('components/store/promo-code.tsx');const {Cart,Checkout}=load('components/store/account.tsx');
 const product={id:1,name:'Fixture',slug:'fixture',sizes:['10mg'],price:10000};
-const makeStore=()=>({totals:{subtotal:30000,packDiscount:3000,promoDiscount:2700,discount:5700,total:24300,promo:{code:'BIOMOD10',percentOff:10,savings:2700},items:[{product,quantity:3,lineTotal:27000}]},cart:[{id:1,quantity:3}],products:[product],config:{freeShippingAt:20000},payment:{enabled:true,state:'live'},customer:{name:'Fixture'},cartConflict:null,cartError:''});
+const makeStore=()=>({totals:{subtotal:30000,packDiscount:3000,promoDiscount:2700,discount:5700,total:24300,promo:{code:'BM10',percentOff:10,savings:2700},items:[{product,quantity:3,lineTotal:27000}]},cart:[{id:1,quantity:3}],products:[product],config:{freeShippingAt:20000},payment:{enabled:true,state:'live'},customer:{name:'Fixture'},cartConflict:null,cartError:''});
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 (async()=>{
  store=makeStore();let cart=harness(Cart);assert(text(cart.tree).includes('Pack savings −$30.00'));assert(text(cart.tree).includes('Promo savings −$27.00'));assert(text(cart.tree).includes('Items total $243.00'));assert(!text(cart.tree).includes('Pack savings −$57.00'));
  store={...makeStore(),totals:{...makeStore().totals,promo:null,promoDiscount:0,discount:3000,total:27000}};
  let p=harness(PromoCode,{onBusyChange:x=>busyEvents.push(x)});
  assert.equal(find(p,n=>n.type==='details').props.open,undefined);
- assert(!text(p.tree).includes('BIOMOD10'));assert(!text(p.tree).includes('BIOMOD15'));assert(!text(p.tree).includes('BIOMOD20'));
+ assert(!text(p.tree).includes('BM10'));assert(!text(p.tree).includes('BIOMOD15'));assert(!text(p.tree).includes('BMOD20'));
  let pending;apiImpl=()=>new Promise(resolve=>pending=resolve);refreshImpl=async()=>{store=makeStore();};
- find(p,n=>n.type==='input').props.onChange({target:{value:'BIOMOD10'}});p.render();find(p,n=>n.type==='form').props.onSubmit({preventDefault(){}});p.render();
+ find(p,n=>n.type==='input').props.onChange({target:{value:'BM10'}});p.render();find(p,n=>n.type==='form').props.onSubmit({preventDefault(){}});p.render();
  assert.equal(button(p,'Updating…').props.disabled,true);assert.equal(busyEvents.at(-1),true);
- pending({});await tick();p.render();assert.deepEqual(apiCalls.at(-1),{action:'promo',body:{code:'BIOMOD10'}});assert(text(p.tree).includes('BIOMOD10 applied. You save $27.00.'));assert.equal(busyEvents.at(-1),false);
+ pending({});await tick();p.render();assert.deepEqual(apiCalls.at(-1),{action:'promo',body:{code:'BM10'}});assert(text(p.tree).includes('BM10 applied. You save $27.00.'));assert.equal(busyEvents.at(-1),false);
  apiImpl=async()=>({});refreshImpl=async()=>{throw Error('network');};button(p,'Remove').props.onClick();await tick();p.render();assert.equal(apiCalls.at(-1).body.code,'');assert(text(p.tree).includes('updated totals could not load'));assert.equal(busyEvents.at(-1),true);assert.equal(button(p,'Remove').props.disabled,true);
- refreshImpl=async()=>{store={...store,totals:{...store.totals,promo:null,promoDiscount:0,total:27000}};};button(p,'Reload totals').props.onClick();await tick();p.render();assert.equal(busyEvents.at(-1),false);assert(!text(p.tree).includes('BIOMOD10 applied'));
+ refreshImpl=async()=>{store={...store,totals:{...store.totals,promo:null,promoDiscount:0,total:27000}};};button(p,'Reload totals').props.onClick();await tick();p.render();assert.equal(busyEvents.at(-1),false);assert(!text(p.tree).includes('BM10 applied'));
  apiImpl=async()=>{throw Error('Promo code not recognized.');};find(p,n=>n.type==='input').props.onChange({target:{value:'wrong'}});p.render();find(p,n=>n.type==='form').props.onSubmit({preventDefault(){}});await tick();p.render();assert.equal(find(p,n=>n.props.role==='alert').props.children,'Promo code not recognized.');assert.equal(busyEvents.at(-1),false);
  // An uncertain failed POST must retain the lock until authoritative totals return.
  refreshImpl=async()=>{throw Error('offline');};apiImpl=async()=>{throw Error('lost response');};

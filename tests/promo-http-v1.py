@@ -136,8 +136,7 @@ def run(origin):
         passed.append('fresh anonymous session and isolated cart')
 
         amounts = {}
-        for percent in (10, 15, 20):
-            code = 'BIOMOD' + str(percent)
+        for code, percent in (('BM10', 10), ('BIOMOD15', 15), ('BMOD20', 20)):
             value, headers = successful('promo', {'code': '  ' + code.lower() + '  '})
             cookie_flags(headers)
             amounts[code] = expected_promo(value['totals'], base, code, percent)
@@ -146,17 +145,17 @@ def run(origin):
             check(persisted['cart'] == single, 'applying a code does not mutate cart items')
         passed.append('10/15/20 normalization, server savings, persistence and cookie protections')
 
-        for invalid in ('NOT-A-VALID-PROMO', {'code': 'BIOMOD20', 'percentOff': 100}, ['BIOMOD10'], 'X' * 100):
+        for invalid in ('BIOMOD10', 'BIOMOD20', 'BIOM0D15', 'NOT-A-VALID-PROMO', {'code': 'BMOD20', 'percentOff': 100}, ['BM10'], 'X' * 100):
             status, _, _ = request('promo', {'code': invalid})
             check(status == 400, 'invalid promo input is rejected')
-            expected_promo(state()['totals'], base, 'BIOMOD20', 20)
+            expected_promo(state()['totals'], base, 'BMOD20', 20)
         passed.append('invalid input preserves the previously applied code')
 
         value, _ = successful('promo', {'code': 'BIOMOD15', 'percentOff': 100, 'promoDiscount': 999999999, 'total': 1})
         expected_promo(value['totals'], base, 'BIOMOD15', 15)
         passed.append('client supplied percentages and amounts cannot alter server pricing')
 
-        status, _, _ = request('promo', {'code': 'BIOMOD10'}, request_origin='https://example.invalid')
+        status, _, _ = request('promo', {'code': 'BM10'}, request_origin='https://example.invalid')
         check(status == 403, 'foreign Origin is rejected')
         expected_promo(state()['totals'], base, 'BIOMOD15', 15)
         passed.append('foreign Origin cannot mutate the applied code')
@@ -176,9 +175,9 @@ def run(origin):
             value, _ = successful('cart', {'cart': fixed})
             pack_base = value['totals']
             check_quote(pack_base)
-            value, _ = successful('promo', {'code': 'BIOMOD20'})
-            expected_promo(value['totals'], pack_base, 'BIOMOD20', 20)
-            expected_promo(state()['totals'], pack_base, 'BIOMOD20', 20)
+            value, _ = successful('promo', {'code': 'BMOD20'})
+            expected_promo(value['totals'], pack_base, 'BMOD20', 20)
+            expected_promo(state()['totals'], pack_base, 'BMOD20', 20)
             passed.append('20 percent stacks after the current 3-pack total')
         else:
             skipped.append('3-pack check unavailable: no suitable verified inventory')
