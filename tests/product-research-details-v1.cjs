@@ -93,7 +93,7 @@ assert(!softgelHTML.includes('product-questions-heading') && !softgelHTML.includ
 const softgelRelated = softgelHTML.match(/<section class="related">([\s\S]*?)<\/section>/)?.[1];
 const expectedSoftgelSlugs = products.filter(product => product.id !== softgel.id && product.categories[0]?.slug === 'softgels').slice(0, 3).map(product => product.slug);
 assert.deepEqual([...new Set([...softgelRelated.matchAll(/href="\/product\/([^"]+)"/g)].map(match => match[1]))], expectedSoftgelSlugs, 'existing nonresearch recommendation order is preserved');
-for (const [query, heading] of [[{}, 'Research peptides &amp; compounds'], [{ category: 'softgels' }, 'Softgels'], [{ category: 'spray-products' }, 'Spray Products'], [{ q: 'MOTS' }, 'The BIOMOD collection.']]) {
+for (const [query, heading] of [[{}, 'Research peptides &amp; compounds'], [{ category: 'softgels' }, 'Softgels'], [{ category: 'spray-products' }, 'Nasal &amp; spray products'], [{ q: 'MOTS' }, 'The BIOMOD collection.']]) {
   const html = renderToStaticMarkup(React.createElement(StoreProvider, { initialCatalog: products }, React.createElement(Experience, { path: 'shop', query })));
   assert(html.includes('<h1>' + heading + '</h1>'), 'full shop route heading reflects current query/category');
 }
