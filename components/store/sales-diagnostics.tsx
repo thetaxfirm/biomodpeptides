@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import type { DiagnosticEnvironment, SalesDiagnosticsReport } from '@/lib/sales-diagnostics';
+import { salesDiagnosticsExport } from '@/lib/sales-diagnostics-export';
 import { money } from '@/lib/catalog';
 import { api } from './provider';
 import styles from './sales-diagnostics.module.css';
@@ -26,6 +27,17 @@ export function SalesDiagnostics() {
     return () => { active = false; };
   }, [days, revision]);
   function refreshTotals() { setLoading(true); setError(''); setReport(null); setRevision(n => n + 1); }
+  function downloadReport() {
+    if (!report || loading) return;
+    try {
+      const file = salesDiagnosticsExport(report);
+      const url = URL.createObjectURL(new Blob([file.csv], { type: 'text/csv;charset=utf-8' }));
+      const link = document.createElement('a');
+      link.href = url; link.download = file.filename;
+      document.body.appendChild(link);
+      try { link.click(); } finally { link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
+    } catch { setError('The CSV download could not start. Please retry.'); }
+  }
   const missing = report?.orders.reduce((n, row) => n + row.missingPaymentRecords, 0) || 0;
   return <section className={styles.report} aria-labelledby="sales-diagnostics-title">
     <h2 id="sales-diagnostics-title">Sales diagnostics</h2>
@@ -35,6 +47,7 @@ export function SalesDiagnostics() {
         <option value="7">Last 7 complete days (UTC)</option><option value="30">Last 30 complete days (UTC)</option>
       </select></label>
       <button type="button" className="button button-dark" disabled={loading} onClick={refreshTotals}>{loading ? 'Loading totals…' : 'Refresh totals'}</button>
+      <button type="button" className="text-button" disabled={loading || !report} onClick={downloadReport}>Download CSV</button>
     </div>
     {error && <p role="alert">{error}</p>}
     {loading && <p role="status">Loading sales diagnostics…</p>}

@@ -2,6 +2,7 @@
 .guide p{max-width:76ch;line-height:1.75;margin:0 0 16px;color:#3c3c3c}
 .guide header p{font-size:18px;max-width:70ch;margin-bottom:24px}
 .section{margin-top:48px}
+.section p a{text-decoration:underline;text-underline-offset:3px;color:var(--foreground)}
 .section h2{font-size:27px;margin-bottom:18px;line-height:1.25}
 .example{margin:26px 0 0;padding:26px 28px;background:var(--bm-selected,#f4ecf6)}
 .example h3{font-size:19px;margin:0 0 18px}

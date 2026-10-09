@@ -53,6 +53,7 @@ export function QualityGuide() {
       <h2 id="report-limitations">Read the laboratory’s limitations</h2>
       <p>The Vanguard report linked in the example limits its results to the portion of the sample tested and states that the laboratory did not select the sample or verify that it represents the batch. A matching lot number does not remove those limitations.</p>
       <p>A COA does not establish regulatory approval, clinical effectiveness or suitability for human or animal use. Biomod research products are supplied for laboratory research only.</p>
+      <p>Use the <a href="/choosing-a-research-supplier">research supplier checklist</a> to compare identity, lot documentation, handling records and complete order costs.</p>
       <a className="editorial-link" href="/contact?subject=Product%20lot%20and%20COA%20question">Ask about a product lot or report</a>
     </section>
 
