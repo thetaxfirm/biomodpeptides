@@ -1,27 +1,27 @@
 import Link from 'next/link';
-import { type Product, money } from '@/lib/catalog';
+import { type Product } from '@/lib/catalog';
 import { eligibleDiscovery, otherVialSizes } from '@/lib/product-discovery';
 import { packContents, packSizes, packUnitLimit } from '@/lib/packs';
-import { batchFor, batchStatus, batchStatusLabel } from '@/lib/testing';
+import { batchFor, batchStatus } from '@/lib/testing';
 import styles from './product-research-details.module.css';
 
 export function VialSizeLinks({ product, products }: { product: Product; products: Product[] }) {
   const sizes = otherVialSizes(product, products);
   if (sizes.length < 2) return null;
-  return <section className={styles.sizes} aria-labelledby="other-vial-sizes-heading">
-    <h2 id="other-vial-sizes-heading">Other listed vial sizes</h2>
+  return <nav className={styles.sizes} aria-labelledby="other-vial-sizes-heading">
+    <div className={styles.sizeLabel}><h2 id="other-vial-sizes-heading">Vial size</h2><span>Contents per vial</span></div>
     <ul className={styles.sizeList}>{sizes.map(size => {
       const current = size.id === product.id;
       const availability = !size.inStock ? 'Out of stock' : !size.purchasable || packUnitLimit(size) < 1 ? 'Unavailable' : 'In stock';
+      const label = packContents(size).replace(/(\d)\s*mg\b/gi, '$1 mg');
       return <li key={size.id}>
-        <div className={styles.sizeHeading}><a href={'/product/' + size.slug} aria-current={current ? 'page' : undefined}>{packContents(size)}</a>{current && <span>Current size</span>}</div>
-        <p>{money(size.price)} / vial</p>
-        <p>{availability}</p>
-        <a className={styles.recordLink} href={'/testing?product=' + size.id}>{batchStatusLabel(batchFor(size.id))}</a>
+        <a className={styles.sizeOption} href={'/product/' + size.slug} aria-current={current ? 'page' : undefined}>
+          <span className={styles.optionHeading}><strong>{label}</strong>{current && <span aria-hidden="true">✓</span>}</span>
+          <span className={styles.availability}>{availability}</span>
+        </a>
       </li>;
     })}</ul>
-    <p className={styles.sizeNote}>Each size has its own product and batch record. Review the listed contents and documentation separately.</p>
-  </section>;
+  </nav>;
 }
 
 export function ProductResearchDetails({ product }: { product: Product }) {
