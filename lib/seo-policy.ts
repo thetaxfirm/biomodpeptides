@@ -14,7 +14,7 @@ export const pageRecords: Record<string, { title: string; description: string; e
   '/testing': { title: 'Batch Documents and Certificates', description: 'Search BIOMOD product lots and original certificates. Matching lots, mismatches and missing documentation are identified separately.', eligible: true },
   '/quality-standard': { title: 'How to Read a Peptide COA: Lot, Purity and Assay', description: 'Learn how to match a peptide COA to its product lot, distinguish purity from measured content, and read the laboratory’s methods and limitations.', eligible: true },
   '/research-use-only': { title: 'Research Use Policy', description: 'BIOMOD products are supplied for laboratory research. Review purchasing restrictions and the policy on dosing and medical advice.', eligible: true },
-  '/faq': { title: 'Ordering and Documentation Questions', description: 'Answers to common BIOMOD questions about product documents, research use, shipping and order support.', eligible: true },
+  '/faq': { title: 'Peptide COA, Pack Sizes and Ordering Questions', description: 'Find answers about peptide COAs, lot matching, purity versus measured content, vial pack sizes, U.S. shipping and research-use requirements.', eligible: true },
   '/shipping-policy': { title: 'Shipping Policy', description: 'BIOMOD U.S. shipping information, processing times and delivery support.', eligible: false },
   '/returns-refunds': { title: 'Returns and Refunds', description: 'How to contact BIOMOD about damaged, incorrect or missing items and request an order review.', eligible: false },
   '/terms-of-sale': { title: 'Terms of Sale', description: 'BIOMOD research purchasing terms, payment verification, order eligibility and policy references.', eligible: false },

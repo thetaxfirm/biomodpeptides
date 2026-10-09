@@ -1,6 +1,7 @@
 'use client';
 import { AboutBrand, TrademarkNote } from './brand-story';
 import { QualityGuide } from './quality-guide';
+import { ResearchFAQ } from './research-faq';
 import { useState, FormEvent } from 'react';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -35,5 +36,5 @@ const content: Record<string, {
 export function ContentPage({ path }: {
     path: string;
 }) { if (path === 'quality-standard') return <QualityGuide/>; if (path === 'about') return <AboutBrand/>; if (path === 'faq')
-    return <><div className="page-heading"><h1>Frequently Asked Questions</h1></div><FAQ /></>; const c = content[path] || content.about; return <div className="content-page"><h1>{c.title}</h1><div className="prose">{c.paragraphs.map(p => <p key={p}>{p}</p>)}</div>{path === 'international-partners' ? <a className="button button-dark" href="/contact">Contact Biomod</a> : null}</div>; }
+    return <ResearchFAQ/>; const c = content[path] || content.about; return <div className="content-page"><h1>{c.title}</h1><div className="prose">{c.paragraphs.map(p => <p key={p}>{p}</p>)}</div>{path === 'international-partners' ? <a className="button button-dark" href="/contact">Contact Biomod</a> : null}</div>; }
 export function Footer() { return <footer className="site-footer"><div className="wrap footer-grid"><div><a href="/"><img src="/brand/logo-white-tm-v36.svg" alt="BIOMOD" width={210}/></a><p>U.S. Marine Corps veteran owned.</p><p>For laboratory research use only.<br />Not for human or animal use. Age 21+.</p><a href="mailto:contact@trybiomod.com">contact@trybiomod.com</a></div><div><h3>Shop & Account</h3><a href="/shop">All products</a><a href="/softgels">Our softgels</a><a href="/multi-pack">Build a Pack</a><a href="/presales">Presales</a><a href="/account">My account</a><a href="/account/affiliate">Affiliate program</a></div><div><h3>Research & Support</h3><a href="/testing">Testing results</a><a href="/quality-standard">How to read a COA</a><a href="/faq">FAQs</a><a href="/about">About Biomod</a><a href="/locations">Locations</a><a href="/contact">Contact us</a></div><div><h3>Policies</h3><a href="/research-use-only">Research use only</a><a href="/shipping-policy">Shipping policy</a><a href="/returns-refunds">Returns & refunds</a><a href="/terms-of-sale">Terms of sale</a><a href="/privacy-policy">Privacy policy</a></div></div><div className="wrap footer-brand"><TrademarkNote/></div><div className="wrap footer-bottom">© {new Date().getFullYear()} BIOMOD. All rights reserved.</div></footer>; }

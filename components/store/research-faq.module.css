@@ -1,0 +1,12 @@
+.faq{max-width:960px;margin:0 auto;color:var(--foreground)}
+.faq header p{max-width:68ch}
+.group{margin-top:48px}
+.group h2{font-size:27px;line-height:1.25;margin:0 0 26px}
+.answers{display:grid;gap:32px}
+.answer{max-width:76ch;min-width:0}
+.answer h3{font-size:19px;line-height:1.4;margin:0 0 10px}
+.answer p{line-height:1.75;margin:0 0 12px;color:#3c3c3c}
+.answer a{display:inline-block;max-width:100%;font-size:15px;line-height:1.6;text-decoration:underline;text-underline-offset:3px;overflow-wrap:anywhere}
+.answer a:hover{text-decoration-thickness:2px}
+.answer a:focus-visible{outline:3px solid var(--ring);outline-offset:5px}
+@media(max-width:600px){.group{margin-top:36px}.group h2{font-size:24px;margin-bottom:22px}.answers{gap:28px}.answer h3{font-size:18px}}
