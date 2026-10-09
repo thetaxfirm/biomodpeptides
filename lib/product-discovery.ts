@@ -12,14 +12,21 @@ export function orderHomeVials(allProducts: Product[]): Product[] {
   return [...vials.filter(eligibleDiscovery), ...vials.filter(product => !eligibleDiscovery(product))];
 }
 
-// Only this documented pair represents alternate labeled vial sizes. Shared names,
+// Only these documented pairs represent alternate labeled vial sizes. Shared names,
 // ingredients, or categories do not establish equivalence between formulations.
-const vialSizeFamilies = [['mots-c-10mg', 'mots-c-40mg']] as const;
+const vialSizeFamilies = [
+  ['mots-c-10mg', 'mots-c-40mg'],
+  ['ss-31-10mg', 'ss-31-50mg'],
+  ['wolverine-10mg', 'wolverine-20mg'],
+  ['heat-r-20mg', 'heat-r-30mg'],
+] as const;
 export function otherVialSizes(product: Product, allProducts: Product[]): Product[] {
   const family = vialSizeFamilies.find(slugs => slugs.some(slug => slug === product.slug));
   if (!family) return [];
   const sizes = family.map(slug => allProducts.find(candidate => candidate.slug === slug));
-  return sizes.every((candidate): candidate is Product => candidate !== undefined && eligibleDiscovery(candidate)) ? sizes : [];
+  // Browsing an explicitly documented size pair does not approve either product
+  // for organic promotion or purchase. Those checks remain independent.
+  return sizes.every((candidate): candidate is Product => candidate !== undefined) ? sizes : [];
 }
 
 export function relatedResearchProducts(product: Product, allProducts: Product[], limit = 3): Product[] {

@@ -1,6 +1,7 @@
 import source from './coas-source-v1.json';
+import additions from './coas-additions-v1.json';
 import { products } from './catalog';
-export const batchRecords = source.records.filter(record => products.some(product => product.id === record.product_id)) as any[];
+export const batchRecords = [...source.records, ...additions].filter(record => products.some(product => product.id === record.product_id)) as any[];
 export const laboratoryDocuments = source.documents as any[];
 export const batchFor = (id:number) => batchRecords.find(r=>r.product_id===id);
 export const certificateFor = (r:any) => r && laboratoryDocuments.find(d=>d.document_id===r.document_id&&d.is_certificate);

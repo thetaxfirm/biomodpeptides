@@ -176,10 +176,10 @@
     "sizes": [
       "10mg / vial"
     ],
-    "identity": "Semax (ACTH 4\u201310 analog)",
+    "identity": "Semax (ACTH 4–10 analog)",
     "casNumber": "80714-61-0",
-    "description": "Semax (ACTH 4\u201310 analog) in a 10 mg vial.",
-    "shortDescription": "Semax (ACTH 4\u201310 analog) in a 10 mg vial.",
+    "description": "Semax (ACTH 4–10 analog) in a 10 mg vial.",
+    "shortDescription": "Semax (ACTH 4–10 analog) in a 10 mg vial.",
     "sourceIssues": []
   },
   {
@@ -1845,6 +1845,87 @@
     "casNumber": "",
     "description": "HEAT-R in a 20 mg lyophilized powder format.",
     "shortDescription": "HEAT-R in a 20 mg lyophilized powder format.",
+    "sourceIssues": []
+  },
+  {
+    "id": 5027,
+    "name": "SS-31 50mg",
+    "slug": "ss-31-50mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 11000,
+    "regularPrice": 11000,
+    "packPrices": {
+      "3": 29700,
+      "5": 46750,
+      "10": 88000
+    },
+    "currency": "USD",
+    "inStock": true,
+    "purchasable": true,
+    "stockQuantity": 100,
+    "sku": "",
+    "permalink": "https://trybiomod.com/product/ss-31-50mg",
+    "image": {
+      "filename": "ss-31-50mg-v1.webp",
+      "alt": "BIOMOD SS-31 50 mg research vial",
+      "width": 1254,
+      "height": 1254
+    },
+    "gallery": [],
+    "attributes": [],
+    "sizes": [
+      "50mg"
+    ],
+    "identity": "Elamipretide",
+    "casNumber": "736992-21-5",
+    "description": "Elamipretide in a 50 mg vial.",
+    "shortDescription": "Elamipretide in a 50 mg vial.",
+    "sourceIssues": []
+  },
+  {
+    "id": 5028,
+    "name": "Wolverine 20mg",
+    "slug": "wolverine-20mg",
+    "categories": [
+      {
+        "name": "Research Peptides",
+        "slug": "research-peptides"
+      }
+    ],
+    "price": 6999,
+    "regularPrice": 6999,
+    "packPrices": {
+      "3": 18897,
+      "5": 29746,
+      "10": 55992
+    },
+    "currency": "USD",
+    "inStock": false,
+    "purchasable": false,
+    "stockQuantity": null,
+    "availabilityLabel": "Availability pending",
+    "sku": "BM-LYO-021-20",
+    "permalink": "https://trybiomod.com/product/wolverine-20mg",
+    "image": {
+      "filename": "wolverine-20mg-v1.webp",
+      "alt": "BIOMOD Wolverine 20 mg vial illustration, BPC 10 mg and TB 10 mg",
+      "width": 1254,
+      "height": 1254
+    },
+    "gallery": [],
+    "attributes": [],
+    "sizes": [
+      "20mg"
+    ],
+    "identity": "BPC-157 + TB-500",
+    "casNumber": "",
+    "description": "Wolverine in a 20 mg lyophilized vial, listed as BPC-157 10 mg + TB-500 10 mg. Current batch documentation and availability are awaiting confirmation.",
+    "shortDescription": "Wolverine 20 mg: BPC-157 10 mg + TB-500 10 mg. Availability pending.",
     "sourceIssues": []
   }
 ]

@@ -6,7 +6,7 @@ import { orderHomeVials } from '@/lib/product-discovery';
 import { HomeVials } from '@/components/store/home-vials';
 import { routeMetadata, requestSEO, routeStructuredData, jsonLd } from '@/lib/seo';
 const homeCollections = [
-  { id: 'vials', name: 'Lyophilized vials', category: 'research-compounds', description: 'Freeze-dried compounds for laboratory research.', href: '/shop', link: 'View research vials', products: ['bpc-157-10mg', 'tb500-10mg', 'ghk-cu-50mg', 'mots-c-10mg', 'mots-c-40mg'] },
+  { id: 'vials', name: 'Lyophilized vials', category: 'research-compounds', description: 'Freeze-dried compounds for laboratory research.', href: '/shop', link: 'View research vials', products: ['bpc-157-10mg', 'tb500-10mg', 'ghk-cu-50mg', 'mots-c-10mg', 'mots-c-40mg', 'aod-9604-10mg', 'ss-31-10mg', 'ss-31-50mg'] },
 ];
 export const dynamic = 'force-dynamic';
 type Props = { searchParams: Promise<Record<string, string | string[]>> };

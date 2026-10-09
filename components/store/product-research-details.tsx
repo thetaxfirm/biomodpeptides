@@ -12,7 +12,7 @@ export function VialSizeLinks({ product, products }: { product: Product; product
     <div className={styles.sizeLabel}><h2 id="other-vial-sizes-heading">Vial size</h2><span>Contents per vial</span></div>
     <ul className={styles.sizeList}>{sizes.map(size => {
       const current = size.id === product.id;
-      const availability = !size.inStock ? 'Out of stock' : !size.purchasable || packUnitLimit(size) < 1 ? 'Unavailable' : 'In stock';
+      const availability = size.availabilityLabel || (!size.purchasable ? 'Unavailable' : !size.inStock ? 'Out of stock' : packUnitLimit(size) < 1 ? 'Unavailable' : 'In stock');
       const label = packContents(size).replace(/(\d)\s*mg\b/gi, '$1 mg');
       return <li key={size.id}>
         <a className={styles.sizeOption} href={'/product/' + size.slug} aria-current={current ? 'page' : undefined}>

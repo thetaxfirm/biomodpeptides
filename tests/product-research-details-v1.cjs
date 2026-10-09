@@ -21,7 +21,7 @@ const { packContents, packSizes } = require('../lib/packs.ts');
 const { eligibleDiscovery } = require('../lib/product-discovery.ts');
 const { batchFor, batchStatus, batchStatusLabel } = require('../lib/testing.ts');
 const { VialSizeLinks, ProductResearchDetails } = require('../components/store/product-research-details.tsx');
-const { ProductPage } = require('../components/store/catalog.tsx');
+const { ProductPage, ProductCard } = require('../components/store/catalog.tsx');
 const { Experience } = require('../components/store/experience.tsx');
 const { StoreProvider } = require('../components/store/provider.tsx');
 const render = (Component, props) => renderToStaticMarkup(React.createElement(Component, props));
@@ -70,7 +70,7 @@ for (const product of products) {
   else if (status === 'mismatch') assert(html.includes('results do not verify the listed product lot'));
   else assert(html.includes('Pending documentation is not a completed test result.') && !html.includes('lot number matching this listing'));
 }
-assert.equal(eligibleCount, 16);
+assert.equal(eligibleCount, 17);
 
 const renderPage = (slug, catalog = products) => renderToStaticMarkup(React.createElement(StoreProvider, { initialCatalog: catalog }, React.createElement(ProductPage, { slug })));
 const productHTML = renderPage(forty.slug, fixture);
@@ -81,7 +81,78 @@ const passport = productHTML.match(/<section class="batch-passport">([\s\S]*?)<\
 assert(passport?.includes('Documentation pending') && !passport.includes('Matching-lot certificate') && !passport.includes('.pdf'), '40mg retains its own documentation; never borrows the10mg COA');
 const tenPassport = renderPage(ten.slug, fixture).match(/<section class="batch-passport">([\s\S]*?)<\/section>/)?.[1];
 assert(tenPassport?.includes('Matching-lot certificate') && tenPassport.includes('MOTS-C_10-mg.pdf'), '10mg keeps its original matching report');
-for (const slug of ['ss-31-10mg', 'heat-r-20mg', 'heat-r-30mg']) assert(!renderPage(slug).includes('other-vial-sizes-heading'), 'no invented or held size-family expansion');
+const ssTen = products.find(product => product.slug === 'ss-31-10mg');
+const ssFifty = products.find(product => product.slug === 'ss-31-50mg');
+assert(ssTen && ssFifty);
+assert.equal(batchStatus(batchFor(ssTen.id)), 'matched');
+assert.equal(batchStatus(batchFor(ssFifty.id)), 'pending');
+for (const current of [ssTen, ssFifty]) {
+  const sizeNav = render(VialSizeLinks, { product: current, products });
+  assert(sizeNav.includes('href="/product/ss-31-10mg"') && sizeNav.includes('href="/product/ss-31-50mg"'));
+  assert(sizeNav.includes('href="/product/' + current.slug + '" aria-current="page"'));
+  assert(!sizeNav.includes('$') && !sizeNav.includes('.pdf'), 'SS-31 size navigation keeps selected-price and batch details separate');
+  const currentPage = renderPage(current.slug);
+  assert(currentPage.includes(sizeNav), 'Actual SS-31 product page includes both confirmed sizes');
+  assert(currentPage.indexOf('other-vial-sizes-heading') < currentPage.indexOf('class="detail-price"'));
+  assert(currentPage.includes(money(current.price)), 'SS-31 page retains its own price');
+}
+const ssTenPassport = renderPage(ssTen.slug).match(/<section class="batch-passport">([\s\S]*?)<\/section>/)?.[1];
+const ssFiftyPassport = renderPage(ssFifty.slug).match(/<section class="batch-passport">([\s\S]*?)<\/section>/)?.[1];
+assert(ssTenPassport?.includes('Matching-lot certificate') && ssTenPassport.includes('SS-31_10-mg.pdf'), 'SS-31 10 mg retains its own matching COA');
+assert(ssFiftyPassport?.includes('Documentation pending') && !ssFiftyPassport.includes('.pdf') && !ssFiftyPassport.includes('408-10-0001'), 'SS-31 50 mg cannot inherit the 10 mg certificate or lot');
+for (const slugs of [['wolverine-10mg', 'wolverine-20mg'], ['heat-r-20mg', 'heat-r-30mg']]) {
+  for (const slug of slugs) {
+    const current = products.find(product => product.slug === slug);
+    assert(current, slug + ': listing exists');
+    const currentPage = renderPage(slug);
+    const sizeNav = render(VialSizeLinks, { product: current, products });
+    assert(currentPage.includes(sizeNav) && sizeNav.includes('other-vial-sizes-heading'), slug + ': actual product page includes explicit sibling browsing');
+    for (const sibling of slugs) assert(sizeNav.includes('href="/product/' + sibling + '"'));
+    assert(sizeNav.includes('href="/product/' + slug + '" aria-current="page"'));
+    assert(!sizeNav.includes('.pdf') && !sizeNav.includes('$'), 'Size navigation does not reuse price or testing evidence');
+    assert(!currentPage.includes('product-questions-heading'), slug + ': browsing does not enable organic FAQ promotion');
+    assert(currentPage.includes(money(current.price)), slug + ': each selected listing keeps its own price');
+  }
+}
+const wolverineTwenty = products.find(product => product.slug === 'wolverine-20mg');
+assert.equal(wolverineTwenty.purchasable, false, 'Wolverine 20 mg cannot be purchased before the current batch is confirmed');
+assert.equal(wolverineTwenty.inStock, false);
+assert.equal(wolverineTwenty.stockQuantity, null, 'Unavailable listing invents no stock count');
+const wolverineHTML = renderPage(wolverineTwenty.slug);
+assert(wolverineHTML.includes('<h1>Wolverine 20 mg</h1>'));
+assert(wolverineHTML.includes(wolverineTwenty.availabilityLabel));
+const detailAddButton = wolverineHTML.match(/<button class="button button-gold"[^>]*>([\s\S]*?)<\/button>/)?.[0];
+assert(detailAddButton?.includes('disabled=""') && detailAddButton.includes(wolverineTwenty.availabilityLabel), 'The unavailable size has an honest disabled purchase CTA');
+const wolverinePassport = wolverineHTML.match(/<section class="batch-passport">([\s\S]*?)<\/section>/)?.[1];
+assert(wolverinePassport && !wolverinePassport.includes('.pdf'), 'No sibling or historical certificate is assigned to the new unavailable size');
+const shopHTML = renderToStaticMarkup(React.createElement(StoreProvider, { initialCatalog: products }, React.createElement(Experience, { path: 'shop', query: {} })));
+const shopCards = [...shopHTML.matchAll(/<article class="product-card">([\s\S]*?)<\/article>/g)].map(match => match[1]);
+for (const slugs of [['ss-31-10mg', 'ss-31-50mg'], ['wolverine-10mg', 'wolverine-20mg'], ['heat-r-20mg', 'heat-r-30mg']]) {
+  for (const slug of slugs) {
+    const product = products.find(product => product.slug === slug);
+    const sibling = slugs.find(candidate => candidate !== slug);
+    const card = shopCards.find(html => html.includes('<h3><a href="/product/' + slug + '">'));
+    assert(card, slug + ': shop shows a separate card');
+    const title = product.name.replace(/\s+\d+(?:\.\d+)?\s*mg$/i, '') + ' ' + packContents(product).replace(/(\d)\s*mg\b/gi, '$1 mg');
+    assert(card.includes('<h3><a href="/product/' + slug + '">' + escape(title) + '</a></h3>'), slug + ': card title states its actual strength');
+    assert(card.includes('class="card-other-size" href="/product/' + sibling + '"'), slug + ': shop links directly to the other strength');
+    assert(card.includes(money(product.price)), slug + ': shop preserves the independent price');
+  }
+}
+for (const [query, expected] of [
+  ['ss31', ['ss-31-10mg', 'ss-31-50mg']],
+  ['wolverine', ['wolverine-10mg', 'wolverine-20mg']],
+  ['heat-r', ['heat-r-20mg', 'heat-r-30mg']],
+  ['ss31 50mg', ['ss-31-50mg']],
+  ['wolverine 20mg', ['wolverine-20mg']],
+  ['heat-r 30mg', ['heat-r-30mg']],
+]) {
+  const results = renderToStaticMarkup(React.createElement(StoreProvider, { initialCatalog: products }, React.createElement(Experience, { path: 'shop', query: { q: query } })));
+  const listedSlugs = [...results.matchAll(/<h3><a href="\/product\/([^"]+)"/g)].map(match => match[1]);
+  assert.deepEqual(listedSlugs.sort(), expected.sort(), query + ': the actual shop search finds exact sizes without substituting a different strength');
+}
+const bundleCard = renderToStaticMarkup(React.createElement(StoreProvider, { initialCatalog: products }, React.createElement(ProductCard, { product: ssTen, onAdd: () => {} })));
+assert(!bundleCard.includes('card-other-size'), 'Bundle selection cards keep their existing interaction and do not gain size links');
 assert(productHTML.indexOf('class="product-specifications"') < productHTML.indexOf('product-questions-heading'), 'questions follow specifications');
 assert(productHTML.includes('Add to cart') && productHTML.includes('Pack size'), 'existing purchase controls remain');
 const relatedHTML = productHTML.match(/<section class="related">([\s\S]*?)<\/section>/)?.[1];
@@ -98,4 +169,4 @@ for (const [query, heading] of [[{}, 'Research peptides &amp; compounds'], [{ ca
   assert(html.includes('<h1>' + heading + '</h1>'), 'full shop route heading reflects current query/category');
 }
 assert.equal(JSON.stringify(products), before, 'rendering never mutates source product identity, price, inventory or contents');
-console.log('PASS: real ProductPage and Experience SSR preserve current purchase controls; compact size navigation, live selected price/stock and independent COA states;16 factual FAQs only; eligible research links; unchanged nonresearch links and accurate shop headings');
+console.log('PASS: real ProductPage and Experience SSR preserve current purchase controls; compact size navigation, live selected price/stock and independent COA states;17 factual FAQs only; six explicit shop variants with reciprocal size links and unavailable W20 purchase controls; eligible research links; unchanged nonresearch links and accurate shop headings');

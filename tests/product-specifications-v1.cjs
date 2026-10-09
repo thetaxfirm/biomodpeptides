@@ -6,7 +6,7 @@ const source=require('../lib/catalog-facts-v2.json'),holds=require('../lib/produ
 const cfg=seoConfig({SEO_PUBLIC_ORIGIN:'https://trybiomod.com',SEO_PUBLIC_LAUNCH_APPROVED:'true',SEO_INDEXING_ENABLED:'true',SEO_REVIEWED_PRODUCT_SLUGS:products.map(p=>p.slug).join(',')});
 for(const slug of Object.keys(holds)){
  const p=products.find(p=>p.slug===slug), original=source.find(p=>p.slug===slug);
- assert(p && original);assert(original.casNumber);assert.equal(cas(p),'');assert(specificationNote(p).includes('confirm')||specificationNote(p).includes('Confirm'));
+ assert(p && original);if(slug==='wolverine-20mg'){assert.equal(original.casNumber,'');assert.equal(p.purchasable,false);assert.equal(p.availabilityLabel,'Availability pending');}else assert(original.casNumber);assert.equal(cas(p),'');assert(specificationNote(p).includes('confirm')||specificationNote(p).includes('Confirm'));
  assert(!mayIndex('/product/'+slug,new URLSearchParams(),cfg));assert(!sitemapPaths(cfg).includes('/product/'+slug));
  assert.equal(p.id,original.id);assert.equal(p.sku,original.sku);assert.deepEqual(p.sizes,original.sizes);
 }

@@ -8,5 +8,6 @@
   "tb500-10mg": "The legacy identity and CAS identifier conflict on full-length versus fragment TB-500. Confirm the sequence specification with Biomod before ordering.",
   "wolverine-10mg": "The full-length versus fragment specification for the TB-500 component needs confirmation. Contact Biomod for the current blend specification before ordering.",
   "cjc-1295-no-dac-10mg": "The legacy CAS identifier needs reconciliation with the stated No DAC material. Confirm the current specification with Biomod before ordering.",
-  "run-gun-10mg": "The CJC component identifier needs reconciliation with the stated No DAC material. Confirm the current blend specification and matching lot documentation with Biomod before ordering."
+  "run-gun-10mg": "The CJC component identifier needs reconciliation with the stated No DAC material. Confirm the current blend specification and matching lot documentation with Biomod before ordering.",
+  "wolverine-20mg": "The current 20 mg batch, available quantity and full-length versus fragment specification of the TB component need confirmation. Contact Biomod for the current lot and its original certificate before ordering."
 }

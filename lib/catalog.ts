@@ -22,6 +22,7 @@ export type Product = {
     currency: string;
     inStock: boolean;
     purchasable: boolean;
+    availabilityLabel?: string;
     sku: string;
     description: string;
     shortDescription: string;

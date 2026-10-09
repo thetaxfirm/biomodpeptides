@@ -32,8 +32,8 @@
 
 .home-load-more{display:grid;justify-items:center;gap:12px;padding:28px 0 8px}.home-load-more p{font-size:14px;color:#5c5c5c}.secondary-collections{justify-content:center;gap:24px 48px;flex-wrap:wrap}.secondary-collections a{min-height:44px}
 
-/* Keep alternate vial sizes visible in homepage cards, with aligned pack controls. */
-.home-product-grid .product-size{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0 12px;min-height:44px}
+/* Keep alternate vial sizes clear in every catalog card, with aligned pack controls. */
+.product-grid .product-size{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0 12px;min-height:44px}
 .card-other-size{display:inline-flex;align-items:center;min-height:44px;color:var(--foreground);font-weight:600;text-decoration:underline;text-underline-offset:3px}
 .card-other-size:hover{color:var(--bm-hover)}
 .card-other-size:focus-visible{outline:3px solid var(--ring);outline-offset:3px;border-radius:2px}

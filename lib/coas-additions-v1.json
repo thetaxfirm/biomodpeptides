@@ -1,0 +1,62 @@
+[
+  {
+    "product_id": 5027,
+    "product_name": "SS-31 50mg",
+    "product_slug": "ss-31-50mg",
+    "product_url": "https://trybiomod.com/product/ss-31-50mg",
+    "public_identity": "Elamipretide",
+    "cas": "736992-21-5",
+    "coa_status": "Documentation pending",
+    "coa_pdf_url": null,
+    "product_facts": {
+      "Active Compound": "Elamipretide",
+      "Size": "50mg",
+      "Format": "Lyophilized vial"
+    },
+    "sku": null,
+    "product_lot": null,
+    "manufactured_date": null,
+    "expiration_date": null,
+    "record_id": "biomod-product-5027",
+    "source_url": "https://trybiomod.com/product/ss-31-50mg",
+    "document_id": null,
+    "has_certificate_pdf": false,
+    "certificate_lot": null,
+    "lot_match": "not_verifiable",
+    "verification_urls": [],
+    "review_issues": [
+      "A separate 50 mg lot and original certificate have not been supplied."
+    ],
+    "recorded_on": "October 8, 2026"
+  },
+  {
+    "product_id": 5028,
+    "product_name": "Wolverine 20mg",
+    "product_slug": "wolverine-20mg",
+    "product_url": "https://trybiomod.com/product/wolverine-20mg",
+    "public_identity": "BPC-157 + TB-500",
+    "cas": "",
+    "coa_status": "Documentation pending",
+    "coa_pdf_url": null,
+    "product_facts": {
+      "Active Compound": "BPC-157 + TB-500",
+      "Size": "20mg (10mg + 10mg)",
+      "Format": "Lyophilized vial"
+    },
+    "sku": "BM-LYO-021-20",
+    "product_lot": null,
+    "manufactured_date": null,
+    "expiration_date": null,
+    "record_id": "biomod-product-5028",
+    "source_url": "https://trybiomod.com/product/wolverine-20mg",
+    "document_id": null,
+    "has_certificate_pdf": false,
+    "certificate_lot": null,
+    "lot_match": "not_verifiable",
+    "verification_urls": [],
+    "review_issues": [
+      "The current 20 mg lot and its original certificate have not been confirmed."
+    ],
+    "recorded_on": "October 9, 2026"
+  }
+]
