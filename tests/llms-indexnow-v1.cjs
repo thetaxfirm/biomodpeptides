@@ -9,7 +9,7 @@ const { llmsText } = require('../lib/llms-text.ts');
 const base = { SEO_PUBLIC_ORIGIN: 'https://trybiomod.com', SEO_PUBLIC_LAUNCH_APPROVED: 'true', SEO_INDEXING_ENABLED: 'true', SEO_REVIEWED_PRODUCT_SLUGS: ['bpc-157-10mg', ...Object.keys(productReviewBlocks)].join(',') };
 const live = seoConfig(base);
 const text = llmsText(live.publicOrigin, sitemapPaths(live));
-assert(text.startsWith('# BIOMOD'));
+assert(text.startsWith('# Biomod Peptides (TryBiomod)'));
 assert.match(text, /not for human or animal use/i);
 assert(text.includes('(https://trybiomod.com/product/bpc-157-10mg)'));
 assert(text.includes('(https://trybiomod.com/quality-standard)'));

@@ -22,13 +22,13 @@ export function routeMetadata(path: string, query: URLSearchParams = new URLSear
   const index = mayIndex(path, query, config);
   const follow = config.enabled && !privatePath(path);
   const canonical = config.origin + canonicalPath(path);
-  const title = path === '/' ? info.title : info.title + ' | BIOMOD';
+  const title = path === '/' ? info.title : info.title + ' | Biomod Peptides';
   const p = productAt(path);
   return {
     title: { absolute: title }, description: info.description,
     alternates: { canonical },
     robots: { index, follow, googleBot: { index, follow, 'max-image-preview': index ? 'large' : 'none' } },
-    openGraph: { type: 'website', locale: 'en_US', siteName: 'BIOMOD', title, description: info.description, url: canonical,
+    openGraph: { type: 'website', locale: 'en_US', siteName: 'Biomod Peptides', title, description: info.description, url: canonical,
       ...(p ? { images: [{ url: config.origin + imagePath(p), alt: p.image.alt || p.name }] } : {}) },
     twitter: { card: 'summary', title, description: info.description },
   };
@@ -36,9 +36,9 @@ export function routeMetadata(path: string, query: URLSearchParams = new URLSear
 export async function routeStructuredData(path: string, config: SEOConfig = currentSEO()) {
   const clean = canonicalPath(path), info = pageInfo(path), p = productAt(path);
   if (!mayIndex(path, new URLSearchParams(), config)) return null;
-  const organization = { '@type': 'Organization', '@id': config.origin + '/#organization', name: 'BIOMOD', url: config.origin, logo: config.origin + '/brand/logo-navy-tm-v36.svg', email: 'contact@trybiomod.com' };
+  const organization = { '@type': 'Organization', '@id': config.origin + '/#organization', name: 'Biomod Peptides', alternateName: ['TryBiomod', 'BIOMOD'], description: 'Biomod Peptides supplies lyophilized compound vials for laboratory research through TryBiomod.com. Not for human or animal use.', url: config.origin, logo: config.origin + '/brand/logo-navy-tm-v36.svg', email: 'contact@trybiomod.com' };
   const graph: Record<string, unknown>[] = [organization,
-    { '@type': 'WebSite', '@id': config.origin + '/#website', url: config.origin, name: 'BIOMOD', publisher: { '@id': organization['@id'] } },
+    { '@type': 'WebSite', '@id': config.origin + '/#website', url: config.origin, name: 'Biomod Peptides', alternateName: ['TryBiomod', 'BIOMOD'], publisher: { '@id': organization['@id'] } },
     { '@type': 'WebPage', '@id': config.origin + clean + '#page', url: config.origin + clean, name: info.title, description: info.description, isPartOf: { '@id': config.origin + '/#website' } },
   ];
   if (p) graph.push({ '@type': 'BreadcrumbList', itemListElement: [

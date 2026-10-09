@@ -16,5 +16,5 @@ import "./storefront-v34.css";
 import {StoreProvider} from "@/components/store/provider";
 import { publicCatalog } from '@/lib/public-catalog';
 import {Footer} from "@/components/store/content";
-export const metadata: Metadata={title:{default:"BIOMOD | Research Supplies",template:"%s | BIOMOD"},description:"Explore BIOMOD research compounds, softgels and sprays. Product specifications and lot-level research documentation.",icons:{icon:"/favicon.svg"},robots:{index:false,follow:false}};
+export const metadata: Metadata={title:{default:"Biomod Peptides | TryBiomod",template:"%s | Biomod Peptides"},description:"Biomod Peptides at TryBiomod.com. Research compound vials, product specifications and available lot-level documentation. For laboratory research only.",icons:{icon:"/favicon.svg"},robots:{index:false,follow:false}};
 export default async function RootLayout({children}:{children:React.ReactNode}){const snapshot=await publicCatalog(); return <html lang="en"><body><StoreProvider initialCatalog={snapshot.products}><Header/>{children}<Footer/></StoreProvider></body></html>}

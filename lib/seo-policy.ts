@@ -5,10 +5,10 @@ import specificationReviews from './product-specification-review-v1.json';
 export const previewOrigin = 'https://trybiomod.com';
 export const reviewedOn = '2026-10-08';
 export const pageRecords: Record<string, { title: string; description: string; eligible: boolean }> = {
-  '/': { title: 'Research Peptides & Lyophilized Vials | BIOMOD', description: 'Explore BIOMOD lyophilized research compound vials and batch documentation. For laboratory research only. Not for human or animal use.', eligible: true },
+  '/': { title: 'Biomod Peptides | Research Vials & COAs | TryBiomod', description: 'Shop Biomod Peptides at TryBiomod.com. Lyophilized research vials, pack sizes and available batch COAs. For laboratory research only. Not for human or animal use.', eligible: true },
   '/softgels': { title: 'The Original Peptide Softgel™ by BIOMOD', description: 'Explore BIOMOD softgel formulations, enteric design and California manufacturing. Browse full bottles in 1, 3, 5 and 10 packs.', eligible: false },
   '/shop': { title: 'Research Peptides: Compounds, Vial Sizes & Batch Records', description: 'Browse BIOMOD products by compound, format and container size. Compare specifications, pack totals and available batch documentation.', eligible: true },
-  '/about': { title: 'BIOMOD | Las Vegas Roots and Our Softgel Story', description: 'A veteran-owned company with Las Vegas research compound retail roots and its own softgel formulations, manufactured in California under cGMP standards.', eligible: true },
+  '/about': { title: 'About Biomod Peptides and TryBiomod', description: 'TryBiomod.com is the online storefront for Biomod Peptides, a U.S. Marine Corps veteran-owned company with research compound retail roots in Las Vegas.', eligible: true },
   '/locations': { title: 'BIOMOD Locations', description: 'BIOMOD location information for Las Vegas, Nevada, and the St. George area in Utah. Contact the team to confirm visiting details.', eligible: false },
   '/contact': { title: 'Contact BIOMOD', description: 'Contact BIOMOD about product documentation, location details, existing orders and general questions.', eligible: true },
   '/testing': { title: 'Batch Documents and Certificates', description: 'Search BIOMOD product lots and original certificates. Matching lots, mismatches and missing documentation are identified separately.', eligible: true },
