@@ -1,0 +1,25 @@
+/* llms.txt and IndexNow tests. No network, credentials, or live configuration. */
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const ts = require('typescript');
+require.extensions['.ts'] = (module, filename) => module._compile(ts.transpileModule(fs.readFileSync(filename, 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText, filename);
+const { seoConfig, sitemapPaths, productReviewBlocks } = require('../lib/seo-policy.ts');
+const { llmsText } = require('../lib/llms-text.ts');
+const base = { SEO_PUBLIC_ORIGIN: 'https://trybiomod.com', SEO_PUBLIC_LAUNCH_APPROVED: 'true', SEO_INDEXING_ENABLED: 'true', SEO_REVIEWED_PRODUCT_SLUGS: ['bpc-157-10mg', ...Object.keys(productReviewBlocks)].join(',') };
+const live = seoConfig(base);
+const text = llmsText(live.publicOrigin, sitemapPaths(live));
+assert(text.startsWith('# BIOMOD'));
+assert.match(text, /not for human or animal use/i);
+assert(text.includes('(https://trybiomod.com/product/bpc-157-10mg)'));
+assert(text.includes('(https://trybiomod.com/quality-standard)'));
+for (const slug of Object.keys(productReviewBlocks)) assert(!text.includes('/product/' + slug + ')'), 'held product leaked: ' + slug);
+for (const p of ['/cart', '/checkout', '/account', '/admin', '/locations', '/softgels']) assert(!text.includes('trybiomod.com' + p + ')'), p);
+assert.equal(text.split('\n').filter(l => l.startsWith('- [')).length, sitemapPaths(live).length);
+assert.equal(sitemapPaths(seoConfig()).length, 0);
+const keyFiles = fs.readdirSync(path.join(__dirname, '../public')).filter(f => /^[0-9a-f]{32}\.txt$/.test(f));
+assert.equal(keyFiles.length, 1);
+const key = keyFiles[0].slice(0, -4);
+assert.equal(fs.readFileSync(path.join(__dirname, '../public', keyFiles[0]), 'utf8'), key);
+assert(fs.readFileSync(path.join(__dirname, '../scripts/indexnow-submit-v1.mjs'), 'utf8').includes(`'${key}'`));
+console.log('PASS: llms.txt lists exactly the sitemap-eligible pages, excludes held and private routes, keeps research-use language; IndexNow key file matches the submit script');
