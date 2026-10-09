@@ -190,10 +190,11 @@ async function apiCookieIntegration() {
   for (const code of [undefined, null, '', '   ']) {
     const q = await quote(one, code); reconcile(q); assert.equal(q.promo, null); assert.equal(q.total, 10000); assert.equal(q.promoDiscount, 0);
   }
-  for (const [code, percent] of [['BM10', 10], ['BIOMOD15', 15], ['BMOD20', 20]]) {
+  for (const [code, percent] of [['BM10', 10], ['BIOMOD15', 15], ['ANNA20', 20], ['BMOD20', 20]]) {
     const q = await quote(one, code); reconcile(q);
     assert.deepEqual(q.promo, { code, percentOff: percent, savings: percent * 100 });
     assert.equal(q.total, 10000 - percent * 100);
+    for (const variant of [code.toLowerCase(), code[0] + code.slice(1).toLowerCase(), '  ' + code.toLowerCase() + '  ']) assert.deepEqual(await quote(one, variant), q, 'Case and surrounding whitespace do not split code attribution');
   }
   assert.deepEqual(await quote(one, ' biomod15 '), await quote(one, 'BIOMOD15'), 'Code case/spacing normalizes');
   for (const code of ['BIOMOD10', 'BIOMOD20', 'BIOM0D15', 'BIOMOD99', 'BM10 BMOD20', 'BM10,BMOD20', 'BM10\u0000', 'X'.repeat(10000), 20, false, [], {}, { code: 'BMOD20', percentOff: 100 }]) await assert.rejects(quote(one, code));

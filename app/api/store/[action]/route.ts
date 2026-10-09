@@ -1,3 +1,4 @@
+import { promoAnalytics } from '@/lib/promo-analytics';
 import { PROMO_COOKIE, promotion } from '@/lib/promotions';
 import inventorySql from '@/lib/inventory-statements.json';
 import { AUTH_RETURN_COOKIE, AUTH_RETURN_MAX_AGE, safeAuthReturn, clearAuthSessionCookies, ANONYMOUS_SESSION_COOKIE, needsAnonymousSession, needsAccountSession } from '@/lib/auth-return';
@@ -35,6 +36,8 @@ export async function GET(req: NextRequest, { params }: {
         const { action } = await params;
         if (action === 'admin-diagnostics')
             return j(await salesDiagnostics({ requireAdmin, all }, req.nextUrl.searchParams.get('days')));
+        if (action === 'admin-promos')
+            return j(await promoAnalytics({ requireAdmin, all }, req.nextUrl.searchParams.get('days')));
         const u = await customer();
         if (action === 'state') {
             const secure = req.nextUrl.protocol === 'https:';
