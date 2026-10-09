@@ -16,7 +16,7 @@ for (const extension of ['.ts', '.tsx']) require.extensions[extension] = (module
 }).outputText, filename);
 // CSS is not evaluated by this HTML-only renderer; preserve module class names.
 require.extensions['.css'] = module => { module.exports = new Proxy({}, { get: (_, key) => key === '__esModule' ? false : String(key) }); };
-const { products } = require('../lib/catalog.ts');
+const { products, money } = require('../lib/catalog.ts');
 const { productReviewBlocks } = require('../lib/seo-policy.ts');
 const publication = require('../lib/seo-publication-v1.json');
 const { eligibleDiscovery, orderHomeVials, relatedResearchProducts, otherVialSizes } = require('../lib/product-discovery.ts');
@@ -91,6 +91,15 @@ pageModule._compile(ts.transpileModule(fs.readFileSync(pageFilename, 'utf8'), {
   const featured = [...new Set([...page.matchAll(/href="\/product\/([^"]+)"/g)].map(match => match[1]))].sort();
   assert.deepEqual(featured, reviewed, 'Actual homepage route features every reviewed vial before Load more');
   assert(page.includes('Showing 16 of 31 lyophilized peptides'));
+  const cards = [...page.matchAll(/<article class="product-card">([\s\S]*?)<\/article>/g)].map(match => match[1]);
+  const tenIndex = cards.findIndex(card => card.includes('<h3><a href="/product/mots-c-10mg">'));
+  const fortyIndex = cards.findIndex(card => card.includes('<h3><a href="/product/mots-c-40mg">'));
+  assert(tenIndex >= 0 && fortyIndex === tenIndex + 1, 'MOTS-c sizes are adjacent on the actual homepage');
+  for (const [index, current, sibling] of [[tenIndex, ten, forty], [fortyIndex, forty, ten]]) {
+    assert(cards[index].includes('class="card-other-size" href="/product/' + sibling.slug + '"'), 'Each MOTS card links directly to the other size');
+    assert(cards[index].includes('aria-label="Save ' + current.name + ' to wishlist"'), 'Wishlist retains the current card SKU');
+    assert(cards[index].includes(money(current.price)), 'The size cross-link cannot replace this card price');
+  }
   assert(!page.includes('/shop?category=research-compounds'), 'Actual home research links use the canonical catalog');
   assert.equal(JSON.stringify(products), before);
   console.log('PASS: actual homepage route renders all 16 reviewed vials; all 31 vial members and Load more retained; holds excluded from recommendations; explicit MOTS 10/40 links and live values preserved; canonical catalog navigation; no catalog mutation');
