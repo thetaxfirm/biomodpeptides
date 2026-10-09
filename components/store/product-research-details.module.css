@@ -1,0 +1,20 @@
+.sizes{margin:24px 0;min-width:0}
+.sizes h2{font-size:17px;line-height:1.4;margin:0 0 14px}
+.sizeList{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;list-style:none;margin:0;padding:0}
+.sizeList li{display:flex;flex-direction:column;gap:6px;min-width:0}
+.sizeList p{font-size:14px;line-height:1.5;margin:0}
+.sizeHeading{min-height:50px;display:flex;flex-direction:column;align-items:flex-start;gap:3px}
+.sizeHeading a{font-size:17px;font-weight:650}
+.sizeHeading span{font-size:12px;color:var(--muted-foreground)}
+.sizes a,.questions a{text-decoration:underline;text-underline-offset:3px;overflow-wrap:anywhere}
+.sizes a:hover,.questions a:hover{text-decoration-thickness:2px}
+.sizes a:focus-visible,.questions a:focus-visible{outline:3px solid var(--ring);outline-offset:4px}
+.recordLink{font-size:13px;line-height:1.5}
+.sizeNote{font-size:13px;line-height:1.6;color:var(--muted-foreground);margin:14px 0 0}
+.questions{margin:42px 0;max-width:1050px}
+.questions h2{font-size:27px;line-height:1.3;margin:0 0 24px}
+.answers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:36px}
+.answers article{min-width:0}
+.answers h3{font-size:18px;line-height:1.4;margin:0 0 12px}
+.answers p{font-size:15px;line-height:1.7;margin:0 0 12px}
+@media(max-width:700px){.questions{margin:34px 0}.questions h2{font-size:24px}.answers{grid-template-columns:1fr;gap:22px}}

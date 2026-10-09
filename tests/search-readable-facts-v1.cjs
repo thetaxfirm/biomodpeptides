@@ -16,6 +16,7 @@ for (const extension of ['.ts', '.tsx']) {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true },
   }).outputText, filename);
 }
+require.extensions['.css'] = module => { module.exports = new Proxy({ __esModule: true }, { get: (target, key) => key === '__esModule' ? true : key === 'default' ? new Proxy({}, { get: (_, name) => String(name) }) : String(key) }); };
 const { products, compound, productFormat, cas, specificationNote } = require('../lib/catalog.ts');
 const { packContents } = require('../lib/packs.ts');
 const { batchRecords, batchStatus, certificateFor, reportedResult, coaOnRequest, coaRequestNotice } = require('../lib/testing.ts');

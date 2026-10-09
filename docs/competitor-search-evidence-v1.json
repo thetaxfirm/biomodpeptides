@@ -1,0 +1,137 @@
+{
+  "note": "Observed Google organic results, not universal rankings. Public destination URLs omit tracking parameters. No traffic or conversion inference.",
+  "snapshots": [
+    {
+      "date": "2026-10-08",
+      "query": "buy research peptides",
+      "location": "Las Vegas Valley, NV 89118",
+      "personalization": "Google footer: Results are not personalized",
+      "results": [
+        {
+          "title": "Research Peptides for Sale - Phoenix Pharmaceuticals, Inc.",
+          "url": "https://phoenixpeptide.com/"
+        },
+        {
+          "title": "American Peptides \u2014 Research-Grade Peptides \u2014 Third ...",
+          "url": "https://www.americanpeptides.us/"
+        },
+        {
+          "title": "Research Peptides For Sale: Buy Kylo Peptides Online",
+          "url": "https://kylopeptides.com/"
+        },
+        {
+          "title": "10 Best Peptide Companies Compared: CoA Transparency ...",
+          "url": "https://www.reddit.com/r/ScienceBioTechnology/comments/1te6j4m/10_best_peptide_companies_compared_coa/"
+        },
+        {
+          "title": "Peptide & Amino Acid Derivatives Product Catalog | Bachem",
+          "url": "https://shop.bachem.com/"
+        },
+        {
+          "title": "Peptide Services from Biosynth",
+          "url": "https://www.biosynth.com/peptides"
+        },
+        {
+          "title": "PSPeptides: Research Peptides for Sale \u2013 US-Made, 99%+ ...",
+          "url": "https://pspeptides.com/"
+        },
+        {
+          "title": "Catalog Peptide",
+          "url": "https://www.genscript.com/peptide_products.html"
+        }
+      ],
+      "aiOverviewSupplierDomains": [
+        "americanpeptides.us",
+        "pspeptides.com"
+      ]
+    },
+    {
+      "date": "2026-10-08",
+      "query": "buy BPC-157 research peptide",
+      "location": "Las Vegas Valley, NV 89118",
+      "personalization": "Google footer: Results are not personalized",
+      "results": [
+        {
+          "title": "BPC-157 \u2013 Research Peptide",
+          "url": "https://www.americanpeptides.us/products/bpc-157"
+        },
+        {
+          "title": "BPC-157 Synthetic Hormone",
+          "url": "https://prospecbio.com/products/bpc-157"
+        },
+        {
+          "title": "Buy BPC-157 10mg & 5mg | \u226599% HPLC Purity | Kylo Peptides",
+          "url": "https://kylopeptides.com/product/bpc-157/"
+        },
+        {
+          "title": "Where to Buy BPC-157 Peptide: A Guide To Purchasing ...",
+          "url": "https://plasticsurgerykey.com/where-to-buy-bpc-157-peptide-a-guide-to-purchasing-quality-bpc-157-products/"
+        },
+        {
+          "title": "BPC-157 Peptide: Benefits, Dosage & Side Effects",
+          "url": "https://riteaid.com/peptides/bpc-157"
+        },
+        {
+          "title": "Buy BPC-157 Peptide: At-Home Therapy",
+          "url": "https://desertmobilemedical.com/product/bpc-157-peptide/"
+        },
+        {
+          "title": "Buy BPC-157 (10mg) - 99% Purity USA-Made Peptide",
+          "url": "https://biolongevitylabs.com/product/bpc157-10mg/"
+        },
+        {
+          "title": "BPC-157 Peptide: Benefits, Dosage, Side Effects & Where ...",
+          "url": "https://musculoskeletalkey.com/bpc-157-peptide-benefits-dosage-side-effects-where-to-buy-in-2026/"
+        },
+        {
+          "title": "Where to buy bpc 157 : r/ACL",
+          "url": "https://www.reddit.com/r/ACL/comments/1g1dgko/where_to_buy_bpc_157/"
+        }
+      ]
+    },
+    {
+      "date": "2026-10-08",
+      "query": "buy MOTS-c research peptide",
+      "location": "Las Vegas Valley, NV 89118",
+      "personalization": "Google footer: Results are not personalized",
+      "results": [
+        {
+          "title": "MOTS-C \u2013 Research Peptide",
+          "url": "https://www.americanpeptides.us/products/mots-c"
+        },
+        {
+          "title": "MOTS-C | Peptide Synthetic | High Purity",
+          "url": "https://prospecbio.com/products/mots-c"
+        },
+        {
+          "title": "MOTS-C | Mitochondrial-Derived Research Peptide",
+          "url": "https://trueresearchlabs.com/shop/mots-c/"
+        },
+        {
+          "title": "Buy MOTS-C 10MG",
+          "url": "https://pspeptides.com/product/buy-mots-c/"
+        },
+        {
+          "title": "Buy MOTS-c Peptide | 99.59% Purity, Ships from USA",
+          "url": "https://bluumpeptides.com/products/mots-c"
+        },
+        {
+          "title": "MOTS-c Peptide: Benefits, Dosage & Side Effects",
+          "url": "https://riteaid.com/peptides/mots-c"
+        },
+        {
+          "title": "Buy MOTS-c Peptide | USA Made, 99%+ Purity, Lab-Tested COA",
+          "url": "https://www.prismlabs.store/product/mots"
+        },
+        {
+          "title": "The Ultimate Guide to MOTS-c | Topic Request Series",
+          "url": "https://www.reddit.com/r/PeptideGuide/comments/16lcjcc/the_ultimate_guide_to_motsc_topic_request_series/"
+        },
+        {
+          "title": "MOTS-c - Kylo Peptides",
+          "url": "https://kylopeptides.com/product/mots-c/"
+        }
+      ]
+    }
+  ]
+}

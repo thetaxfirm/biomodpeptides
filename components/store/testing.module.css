@@ -1,0 +1,8 @@
+.record{border-bottom:1px solid var(--bm-line,#dedede)}
+.trigger{list-style:none;cursor:pointer;width:100%;text-align:left}
+.trigger::-webkit-details-marker{display:none}
+.trigger:focus-visible{outline:3px solid var(--ring);outline-offset:4px}
+.record[open]>.trigger>svg{transform:rotate(180deg)}
+.content{padding:10px 24px 28px;background:var(--bm-surface,#fafafa);border-radius:4px}
+.content>a{margin-top:20px;font-size:13px}
+@media(max-width:640px){.content{padding:15px 18px 22px}}

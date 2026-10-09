@@ -1,0 +1,46 @@
+{
+  "unchanged_catalog_records": 50,
+  "sitemap": {
+    "total": 25,
+    "products": 16
+  },
+  "/": {
+    "canonical": "https://trybiomod.com/",
+    "robots": "index, follow",
+    "initial_product_destinations": 16
+  },
+  "/shop": {
+    "canonical": "https://trybiomod.com/shop",
+    "robots": "index, follow"
+  },
+  "/testing": {
+    "canonical": "https://trybiomod.com/testing",
+    "robots": "index, follow",
+    "native_records": 50,
+    "original_pdf_links": 21
+  },
+  "/choosing-a-research-supplier": {
+    "canonical": "https://trybiomod.com/choosing-a-research-supplier",
+    "robots": "index, follow"
+  },
+  "/product/mots-c-10mg": {
+    "canonical": "https://trybiomod.com/product/mots-c-10mg",
+    "robots": "index, follow"
+  },
+  "/product/mots-c-40mg": {
+    "canonical": "https://trybiomod.com/product/mots-c-40mg",
+    "robots": "index, follow"
+  },
+  "/product/bpc-157-10mg": {
+    "canonical": "https://trybiomod.com/product/bpc-157-10mg",
+    "robots": "index, follow"
+  },
+  "/product/tb500-10mg": {
+    "canonical": "https://trybiomod.com/product/tb500-10mg",
+    "robots": "noindex, follow"
+  },
+  "/shop?category=research-compounds": {
+    "canonical": "https://trybiomod.com/shop",
+    "robots": "noindex, follow"
+  }
+}
