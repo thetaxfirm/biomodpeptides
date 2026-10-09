@@ -10,9 +10,9 @@ import { cheapestRate, easypostReady } from './easypost';
 export const addressSchema = z.object({ name: z.string().trim().min(2).max(100), line1: z.string().trim().min(3).max(150), line2: z.string().trim().max(150).default(''), city: z.string().trim().min(2).max(100), state: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/, 'Enter a two-letter state abbreviation, such as NV.'), zip: z.string().regex(/^\d{5}(-\d{4})?$/), country: z.literal('US'), phone: z.string().trim().min(7).max(30) });
 /** Shipping: free over the threshold, otherwise the live EasyPost rate (when connected) or the flat rate from store settings.
  * A quoted rate is stored with the quote and reused at payment so the total cannot drift between the two steps. */
-export async function deliveryQuote(lines: CartLine[], raw: unknown, preset?: { shipping: number; shippingService: string }) {
+export async function deliveryQuote(lines: CartLine[], raw: unknown, preset?: { shipping: number; shippingService: string }, promoCode?: unknown) {
     const address = addressSchema.parse(raw);
-    const q = await quote(lines);
+    const q = await quote(lines, promoCode);
     if (!lines.length)
         throw new Error('Your cart is empty.');
     let shipping: number | null = q.config.shippingCents;
@@ -45,7 +45,7 @@ export async function deliveryQuote(lines: CartLine[], raw: unknown, preset?: { 
         if (!fixed)
             throw new Error('Checkout is not accepting orders yet. Tax and delivery setup is pending.');
         const tax = fixedTaxCents(fixed, address.state, q.total);
-        return { items: q.items, subtotal: q.subtotal, discount: q.discount, shipping, shippingService, tax, total: q.total + shipping + tax, address };
+        return { items: q.items, subtotal: q.subtotal, discount: q.discount, packDiscount: q.packDiscount, promoDiscount: q.promoDiscount, promo: q.promo, shipping, shippingService, tax, total: q.total + shipping + tax, address };
     }
     if (!runtime().STORE_ORIGIN_ZIP || !runtime().STORE_ORIGIN_STATE)
         throw new Error('Checkout is not accepting orders yet. Tax and delivery setup is pending.');
@@ -61,18 +61,18 @@ export async function deliveryQuote(lines: CartLine[], raw: unknown, preset?: { 
     if (typeof t !== 'number' || !Number.isFinite(t) || t < 0)
         throw new Error('Tax could not be verified.');
     const tax = Math.round(t * 100);
-    return { items: q.items, subtotal: q.subtotal, discount: q.discount, shipping, shippingService, tax, total: q.total + shipping + tax, address };
+    return { items: q.items, subtotal: q.subtotal, discount: q.discount, packDiscount: q.packDiscount, promoDiscount: q.promoDiscount, promo: q.promo, shipping, shippingService, tax, total: q.total + shipping + tax, address };
 }
-const quoteFingerprint = (q: Record<string, any>) => JSON.stringify({ items: q.items.map((i: any) => ({ id: i.id, quantity: i.quantity, packId: i.packId || null, packSize: i.packSize || null, packKind: i.packKind || null, lineTotal: i.lineTotal, presaleId: i.presaleId || null, price: i.product.price })), address: q.address, shipping: q.shipping, tax: q.tax, total: q.total });
-export async function issueQuote(owner: string, lines: CartLine[], address: unknown) { const q = await deliveryQuote(lines, address); const id = uid(); await run('INSERT INTO requests(id,owner,kind,data,created) VALUES(?,?,?,?,?)', id, owner, 'quote', JSON.stringify({ fingerprint: quoteFingerprint(q), shipping: q.shipping, shippingService: q.shippingService }), timestamp()); return { ...q, quoteId: id }; }
-export async function checkout(owner: string, lines: CartLine[], body: Record<string, any>) {
+const quoteFingerprint = (q: Record<string, any>) => JSON.stringify({ items: q.items.map((i: any) => ({ id: i.id, quantity: i.quantity, packId: i.packId || null, packSize: i.packSize || null, packKind: i.packKind || null, lineTotal: i.lineTotal, presaleId: i.presaleId || null, price: i.product.price })), address: q.address, shipping: q.shipping, tax: q.tax, total: q.total, ...(q.promo ? { promoCode: q.promo.code } : {}) });
+export async function issueQuote(owner: string, lines: CartLine[], address: unknown, promoCode?: unknown) { const q = await deliveryQuote(lines, address, undefined, promoCode); const id = uid(); await run('INSERT INTO requests(id,owner,kind,data,created) VALUES(?,?,?,?,?)', id, owner, 'quote', JSON.stringify({ fingerprint: quoteFingerprint(q), shipping: q.shipping, shippingService: q.shippingService }), timestamp()); return { ...q, quoteId: id }; }
+export async function checkout(owner: string, lines: CartLine[], body: Record<string, any>, promoCode?: unknown) {
     if (body.accepted !== true)
         throw new Error('Confirm that you are 21 or older and purchasing for laboratory research only.');
     if (typeof body.requestKey !== 'string' || !/^[a-f0-9-]{36}$/.test(body.requestKey))
         throw new Error('Refresh checkout and try again.');
-    await quote(lines);
+    const cartQuote = await quote(lines, promoCode);
     const current = addressSchema.parse(body.address);
-    const fingerprint = JSON.stringify({ lines, address: current });
+    const fingerprint = JSON.stringify({ lines, address: current, ...(cartQuote.promo ? { promoCode: cartQuote.promo.code } : {}) });
     const old = await one<{
         id: string;
         status: string;
@@ -96,7 +96,7 @@ export async function checkout(owner: string, lines: CartLine[], body: Record<st
         created: number;
     }>('SELECT data,created FROM requests WHERE id=? AND owner=? AND kind=?', String(body.quoteId || ''), owner, 'quote');
     const quoted = parse<Record<string, any>>(receipt?.data, {});
-    const q = await deliveryQuote(lines, current, typeof quoted.shipping === 'number' ? { shipping: quoted.shipping, shippingService: String(quoted.shippingService || '') } : undefined);
+    const q = await deliveryQuote(lines, current, typeof quoted.shipping === 'number' ? { shipping: quoted.shipping, shippingService: String(quoted.shippingService || '') } : undefined, promoCode);
     if (!receipt || timestamp() - receipt.created > 600000 || quoted.fingerprint !== quoteFingerprint(q))
         throw new Error('Your checkout quote changed or expired. Recalculate delivery and review the order again.');
     if (!Number.isInteger(body.expectedTotal) || body.expectedTotal !== q.total)

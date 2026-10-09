@@ -1,7 +1,8 @@
 'use client';
 import { ProductImage } from './product-image';
 import { authLink, safeAuthReturn } from '@/lib/auth-return';
-import { useEffect, useState, FormEvent } from 'react';
+import { useEffect, useRef, useState, FormEvent } from 'react';
+import { PromoCode } from './promo-code';
 import { Eye, EyeOff, Trash2, Minus, Plus } from 'lucide-react';
 import { useStore, api, report } from './provider';
 import { money, compound } from '@/lib/catalog';
@@ -44,48 +45,153 @@ function CartChoice() {
     return <section className="content-page" aria-labelledby="cart-choice-title"><h1 id="cart-choice-title">Choose your cart</h1><p>{conflict.message}</p><p>We have kept both carts. Their contents will not be combined automatically.</p><div className="cart-choice-grid">{([['current', 'Current shopping cart', conflict.current], ['saved', 'Saved account cart', conflict.saved]] as const).map(([choice, title, lines]) => <div className="cart-choice-column" key={choice}><h2>{title}</h2>{lines.length ? <ul>{lines.map((line, i) => { const p = store.products.find(product => product.id === line.id); return <li key={i}>{p?.name || 'Unavailable product'}{p?.sizes[0] ? ' · ' + p.sizes[0] : ''} × {line.quantity}{line.packId ? ` · ${line.packSize}-pack (${line.packKind === 'fixed' ? 'same product' : 'mixed'})` : ''}</li>; })}</ul> : <p>No items.</p>}<button className="button button-dark cart-choice-action" disabled={busy} onClick={() => choose(choice)}>Use {choice === 'current' ? 'current shopping' : 'saved account'} cart</button></div>)}</div>{error && <p className="notice error" role="alert">{error}</p>}<p><button className="text-button" disabled={busy} onClick={() => choose('empty')}>Start an empty cart</button></p><a href="/shop">Continue browsing</a></section>;
 }
 
-export function Cart() { const { store, ready, saveCart } = useStore(); const [busy, setBusy] = useState(false); const q = store.totals; async function update(index: number, delta: number) { const next = store.cart.map((l, i) => i === index ? { ...l, quantity: l.quantity + delta } : l).filter(l => l.quantity > 0); setBusy(true); try {
-    await saveCart(next);
+export function Cart() {
+    const { store, ready, saveCart } = useStore();
+    const [busy, setBusy] = useState(false);
+    const [promoBusy, setPromoBusy] = useState(false);
+    const q = store.totals;
+    const packSavings = q?.packDiscount ?? q?.discount ?? 0;
+    const promoSavings = q?.promoDiscount ?? q?.promo?.savings ?? 0;
+    const locked = busy || promoBusy;
+    async function update(index: number, delta: number) {
+        if (locked) return;
+        const next = store.cart.map((l, i) => i === index ? { ...l, quantity: l.quantity + delta } : l).filter(l => l.quantity > 0);
+        setBusy(true);
+        try { await saveCart(next); } catch (e) { report(e); } finally { setBusy(false); }
+    }
+    async function remove(index: number) {
+        if (locked) return;
+        const line = store.cart[index];
+        setBusy(true);
+        try { await saveCart(store.cart.filter((l, i) => line.packId ? l.packId !== line.packId : i !== index)); }
+        catch (e) { report(e); } finally { setBusy(false); }
+    }
+    if (ready && store.cartConflict) return <CartChoice/>;
+    return <><div className="page-heading"><h1>Your Cart</h1></div>
+        {store.cartNotice && <p className="notice" role="status">{store.cartNotice}</p>}
+        {!ready ? <p>Loading your saved cart…</p> : !store.cart.length ? <Blank title="Your cart is empty."><a className="button button-dark" href="/shop">Explore products</a></Blank> : <div className="cart-layout">
+            <div>
+                {store.cartError && <div className="notice error"><p>{store.cartError}</p><button className="text-button" disabled={locked} onClick={async () => { setBusy(true); try { await saveCart([]); } catch (e) { report(e); } finally { setBusy(false); } }}>Clear cart and start again</button></div>}
+                {store.cart.map((l, i) => {
+                    const p = store.products.find(p => p.id === l.id);
+                    return p ? <article className="cart-line" key={i}>
+                        <a href={'/product/' + p.slug}><ProductImage product={p} width={98} height={98}/></a>
+                        <div><h2><a href={'/product/' + p.slug}>{p.name}</a></h2><p>{compound(p)}</p><p>{p.sizes[0]}{l.packId ? ` · ${l.packSize}-pack${l.packKind === 'fixed' ? ' · Same product' : ' · Mix & match'}` : l.presaleId ? ' · Presale' : ''}</p><strong>{money(q?.items?.[i]?.lineTotal ?? p.price * l.quantity)}</strong></div>
+                        {l.packId ? <span>Qty {l.quantity}</span> : <div className="quantity"><button disabled={locked} aria-label={'Decrease ' + p.name} onClick={() => update(i, -1)}><Minus size={14}/></button><span>{l.quantity}</span><button disabled={locked} aria-label={'Increase ' + p.name} onClick={() => update(i, 1)}><Plus size={14}/></button></div>}
+                        <button className="icon-button" disabled={locked} aria-label={l.packId ? 'Remove entire ' + l.packSize + '-pack' : 'Remove ' + p.name} onClick={() => remove(i)}><Trash2 size={19}/></button>
+                    </article> : null;
+                })}
+                <a className="text-button" href="/shop">Continue shopping</a>
+            </div>
+            <aside className="order-summary"><h2>Order Summary</h2>
+                <PromoCode disabled={busy || Boolean(store.cartError)} onBusyChange={setPromoBusy}/>
+                <div className="summary-lines">
+                    <p><span>Subtotal</span><strong>{q ? money(q.subtotal) : 'Unavailable'}</strong></p>
+                    {packSavings > 0 && <p><span>Pack savings</span><strong>−{money(packSavings)}</strong></p>}
+                    {promoSavings > 0 && <p><span>Promo savings</span><strong>−{money(promoSavings)}</strong></p>}
+                    <p><span>Shipping</span><span>{q?.total >= store.config.freeShippingAt ? 'Free' : 'At checkout'}</span></p>
+                    <p><span>Tax</span><span>At checkout</span></p>
+                    <p className="total"><span>Items total</span><strong>{q ? money(q.total) : 'Unavailable'}</strong></p>
+                </div>
+                {q?.total < store.config.freeShippingAt && <p className="muted">Add {money(store.config.freeShippingAt - q.total)} for free standard shipping.</p>}
+                <a className="button button-gold" href={store.cartError || locked ? undefined : '/checkout'} aria-disabled={Boolean(store.cartError) || locked} onClick={e => { if (store.cartError || locked) e.preventDefault(); }}>Proceed to checkout</a>
+                <p className="muted">{store.payment.enabled ? store.payment.state === 'sandbox' ? 'Test checkout only. Real payments are not accepted.' : 'Secure card payment is available at checkout.' : 'Checkout is not accepting payments yet. Your cart stays saved.'}</p>
+            </aside>
+        </div>}
+    </>;
 }
-catch (e) {
-    report(e);
-}
-finally {
-    setBusy(false);
-} } async function remove(index: number) { const line = store.cart[index]; setBusy(true); try {
-    await saveCart(store.cart.filter((l, i) => line.packId ? l.packId !== line.packId : i !== index));
-}
-catch (e) {
-    report(e);
-}
-finally {
-    setBusy(false);
-} } if (ready && store.cartConflict) return <CartChoice/>; return <><div className="page-heading"><h1>Your Cart</h1></div>{store.cartNotice&&<p className="notice" role="status">{store.cartNotice}</p>}{!ready ? <p>Loading your saved cart…</p> : !store.cart.length ? <Blank title="Your cart is empty."><a className="button button-dark" href="/shop">Explore products</a></Blank> : <div className="cart-layout"><div>{store.cartError && <div className="notice error"><p>{store.cartError}</p><button className="text-button" disabled={busy} onClick={async()=>{setBusy(true);try{await saveCart([]);}catch(e){report(e);}finally{setBusy(false);}}}>Clear cart and start again</button></div>}{store.cart.map((l, i) => { const p = store.products.find(p => p.id === l.id); return p ? <article className="cart-line" key={i}><a href={'/product/' + p.slug}><ProductImage product={p} width={98} height={98}/></a><div><h2><a href={'/product/' + p.slug}>{p.name}</a></h2><p>{compound(p)}</p><p>{p.sizes[0]}{l.packId ? ` · ${l.packSize}-pack${l.packKind === 'fixed' ? ' · Same product' : ' · Mix & match'}` : l.presaleId ? ' · Presale' : ''}</p><strong>{money(q?.items?.[i]?.lineTotal ?? p.price * l.quantity)}</strong></div>{l.packId ? <span>Qty {l.quantity}</span> : <div className="quantity"><button disabled={busy} aria-label={'Decrease ' + p.name} onClick={() => update(i, -1)}><Minus size={14}/></button><span>{l.quantity}</span><button disabled={busy} aria-label={'Increase ' + p.name} onClick={() => update(i, 1)}><Plus size={14}/></button></div>}<button className="icon-button" disabled={busy} aria-label={l.packId ? 'Remove entire ' + l.packSize + '-pack' : 'Remove ' + p.name} onClick={() => remove(i)}><Trash2 size={19}/></button></article> : null; })}<a className="text-button" href="/shop">Continue shopping</a></div><aside className="order-summary"><h2>Order Summary</h2><div className="summary-lines"><p><span>Subtotal</span><strong>{q ? money(q.subtotal) : 'Unavailable'}</strong></p>{q?.discount > 0 && <p><span>Pack savings</span><strong>−{money(q.discount)}</strong></p>}<p><span>Shipping</span><span>{q?.total >= store.config.freeShippingAt ? 'Free' : 'At checkout'}</span></p><p><span>Tax</span><span>At checkout</span></p><p className="total"><span>Items total</span><strong>{q ? money(q.total) : 'Unavailable'}</strong></p></div>{q?.total < store.config.freeShippingAt && <p className="muted">Add {money(store.config.freeShippingAt - (q?.total || 0))} for free standard shipping.</p>}<a className="button button-gold" href={store.cartError?undefined:"/checkout"} aria-disabled={Boolean(store.cartError)} onClick={e=>{if(store.cartError)e.preventDefault();}}>Proceed to checkout</a><p className="muted">{store.payment.enabled ? store.payment.state === 'sandbox' ? 'Test checkout only. Real payments are not accepted.' : 'Secure card payment is available at checkout.' : 'Checkout is not accepting payments yet. Your cart stays saved.'}</p></aside></div>}</>; }
 export function AddressFields({ initial = {} }: {
     initial?: Record<string, string>;
 }) { return <><Field label="Full name" name="name" defaultValue={initial.name}/><Field label="Street address" name="line1" defaultValue={initial.line1}/><Field label="Apartment / suite (optional)" name="line2" defaultValue={initial.line2} required={false}/><div className="form-row"><Field label="City" name="city" defaultValue={initial.city}/><Field label="State (2 letters)" name="state" defaultValue={initial.state} placeholder="CA"/><Field label="ZIP code" name="zip" defaultValue={initial.zip}/></div><Field label="Phone" name="phone" type="tel" defaultValue={initial.phone}/><input type="hidden" name="country" value="US"/><p className="muted">United States delivery only.</p></>; }
-export function Checkout() { const { store, ready } = useStore(); const [accepted, setAccepted] = useState(false); const [busy, setBusy] = useState(false); const [delivery, setDelivery] = useState<any>(null); const [address, setAddress] = useState<any>(null); const [requestKey, setRequestKey] = useState(''); useEffect(() => setRequestKey(crypto.randomUUID()), []); const cartRevision = JSON.stringify(store.cart); useEffect(() => { setDelivery(null); setAddress(null); }, [cartRevision, store.cartConflict?.id, store.totals?.total]); if (!ready)
-    return <p>Loading checkout…</p>; if (store.cartConflict) return <CartChoice/>; if (!store.payment.enabled) return <section className="checkout-unavailable"><h1>Checkout is not open yet.</h1><p>Your cart stays saved with your shopping session. We are preparing secure checkout and will accept orders once it is ready.</p><div className="checkout-unavailable-actions"><a className="button button-dark" href="/cart">Return to your cart</a><a href="/shop">Keep shopping</a><a href="/contact">Contact Biomod</a></div></section>; if (store.cartError) return <Blank title="Your cart needs a review."><p>{store.cartError}</p><a className="button button-dark" href="/cart">Review your cart</a></Blank>; if (!store.customer)
-    return <AuthPage returnTo="/checkout"/>; if (!store.cart.length)
-    return <Blank title="Your cart is empty."><a href="/shop">Shop products</a></Blank>; async function submit(e: FormEvent<HTMLFormElement>) { e.preventDefault(); setBusy(true); try {
-    const fields = formData(e.currentTarget);
-    const data = await api('delivery', { address: fields });
-    setAddress(fields);
-    setDelivery(data);
+export function Checkout() {
+    const { store, ready } = useStore();
+    const [accepted, setAccepted] = useState(false);
+    const [busy, setBusy] = useState(false);
+    const [promoBusy, setPromoBusy] = useState(false);
+    const [deliveryQuote, setDeliveryQuote] = useState<{ data: any; context: string } | null>(null);
+    const [address, setAddress] = useState<any>(null);
+    const [requestKey, setRequestKey] = useState('');
+    const operation = useRef(false);
+    const promoOperation = useRef(false);
+    const quoteRevision = useRef(0);
+    const q = store.totals;
+    const quoteContext = JSON.stringify([store.cart, store.cartConflict?.id, q?.total, q?.promo?.code || '']);
+    const currentContext = useRef(quoteContext);
+    currentContext.current = quoteContext;
+    const delivery = deliveryQuote?.context === quoteContext ? deliveryQuote.data : null;
+    const packSavings = q?.packDiscount ?? q?.discount ?? 0;
+    const promoSavings = q?.promoDiscount ?? q?.promo?.savings ?? 0;
+    useEffect(() => setRequestKey(crypto.randomUUID()), []);
+    function invalidateDelivery() {
+        quoteRevision.current += 1;
+        setDeliveryQuote(null);
+        setAddress(null);
+    }
+    useEffect(() => { invalidateDelivery(); }, [quoteContext]);
+    function changePromoBusy(next: boolean) {
+        promoOperation.current = next;
+        setPromoBusy(next);
+        if (next) invalidateDelivery();
+    }
+    if (!ready) return <p>Loading checkout…</p>;
+    if (store.cartConflict) return <CartChoice/>;
+    if (!store.payment.enabled) return <section className="checkout-unavailable"><h1>Checkout is not open yet.</h1><p>Your cart stays saved with your shopping session. We are preparing secure checkout and will accept orders once it is ready.</p><div className="checkout-unavailable-actions"><a className="button button-dark" href="/cart">Return to your cart</a><a href="/shop">Keep shopping</a><a href="/contact">Contact Biomod</a></div></section>;
+    if (store.cartError) return <Blank title="Your cart needs a review."><p>{store.cartError}</p><a className="button button-dark" href="/cart">Review your cart</a></Blank>;
+    if (!store.customer) return <AuthPage returnTo="/checkout"/>;
+    if (!store.cart.length) return <Blank title="Your cart is empty."><a href="/shop">Shop products</a></Blank>;
+    async function submit(e: FormEvent<HTMLFormElement>) {
+        e.preventDefault();
+        if (operation.current || promoOperation.current) return;
+        operation.current = true;
+        setBusy(true);
+        invalidateDelivery();
+        const revision = quoteRevision.current;
+        const context = currentContext.current;
+        try {
+            const fields = formData(e.currentTarget);
+            const data = await api('delivery', { address: fields });
+            if (revision !== quoteRevision.current || context !== currentContext.current || promoOperation.current) return;
+            setAddress(fields);
+            setDeliveryQuote({ data, context });
+        } catch (e) {
+            if (revision === quoteRevision.current) report(e);
+        } finally { operation.current = false; setBusy(false); }
+    }
+    async function checkout() {
+        if (!delivery || !accepted || !requestKey || operation.current || promoOperation.current || !store.payment.enabled) return;
+        operation.current = true;
+        setBusy(true);
+        try {
+            const d = await api('checkout', { address, accepted, requestKey, expectedTotal: delivery.total, quoteId: delivery.quoteId });
+            location.assign(d.url);
+        } catch (e) { report(e); operation.current = false; setBusy(false); }
+    }
+    return <><div className="page-heading"><h1>Checkout</h1></div>
+        {store.payment.state === 'sandbox' && <p className="notice">Test checkout only. This payment environment does not accept real payments.</p>}
+        <div className="cart-layout">
+            <form className="store-form" onSubmit={submit} onChange={invalidateDelivery}>
+                <h2>Delivery address</h2><AddressFields initial={{ name: store.customer.name }}/>
+                <button className="button button-dark" disabled={busy || promoBusy}>{busy ? 'Calculating…' : 'Calculate delivery and tax'}</button>
+            </form>
+            <aside className="order-summary"><h2>Your order</h2>
+                {q?.items.map((l: any, i: number) => <p className="summary-product" key={i}><span>{l.product.name} × {l.quantity}</span><strong>{money(l.lineTotal ?? l.product.price * l.quantity)}</strong></p>)}
+                <PromoCode disabled={busy} onBusyChange={changePromoBusy} onChange={invalidateDelivery}/>
+                <div className="summary-lines">
+                    <p><span>Subtotal</span><strong>{q ? money(q.subtotal) : 'Unavailable'}</strong></p>
+                    {packSavings > 0 && <p><span>Pack savings</span><strong>−{money(packSavings)}</strong></p>}
+                    {promoSavings > 0 && <p><span>Promo savings</span><strong>−{money(promoSavings)}</strong></p>}
+                    <p><span>Items total</span><strong>{q ? money(q.total) : 'Unavailable'}</strong></p>
+                    <p><span>Shipping</span><strong>{delivery ? money(delivery.shipping) : 'Pending address'}</strong></p>
+                    <p><span>Tax</span><strong>{delivery ? money(delivery.tax) : 'Pending address'}</strong></p>
+                    {delivery && <p className="total"><span>Total</span><strong>{money(delivery.total)}</strong></p>}
+                </div>
+                <Check checked={accepted} onChange={setAccepted}>I am 21 or older and purchasing exclusively for laboratory research. I agree to the <a href="/terms-of-sale">terms of sale</a>.</Check>
+                <button className="button button-gold" disabled={!delivery || !accepted || !requestKey || busy || promoBusy || !store.payment.enabled} onClick={() => void checkout()}>Continue to secure payment</button>
+                <p className="muted">Card information is entered on Authorize.net’s secure payment page.</p>
+            </aside>
+        </div>
+    </>;
 }
-catch (e) {
-    report(e);
-}
-finally {
-    setBusy(false);
-} } return <><div className="page-heading"><h1>Checkout</h1></div>{store.payment.state === "sandbox" && <p className="notice">Test checkout only. This payment environment does not accept real payments.</p>}{!store.payment.enabled && <p className="notice">Checkout is not accepting payments yet. Payment, delivery, and tax setup must be completed before orders can be placed.</p>}<div className="cart-layout"><form className="store-form" onSubmit={submit} onChange={() => { setDelivery(null); setAddress(null); }}><h2>Delivery address</h2><AddressFields initial={{ name: store.customer.name }}/><button className="button button-dark" disabled={busy}>{busy ? 'Calculating…' : 'Calculate delivery and tax'}</button></form><aside className="order-summary"><h2>Your order</h2>{store.totals?.items.map((l: any, i: number) => <p className="summary-product" key={i}><span>{l.product.name} × {l.quantity}</span><strong>{money(l.lineTotal ?? l.product.price * l.quantity)}</strong></p>)}<div className="summary-lines"><p><span>Items</span><strong>{money(store.totals?.total || 0)}</strong></p><p><span>Shipping</span><strong>{delivery ? money(delivery.shipping) : 'Pending address'}</strong></p><p><span>Tax</span><strong>{delivery ? money(delivery.tax) : 'Pending address'}</strong></p>{delivery && <p className="total"><span>Total</span><strong>{money(delivery.total)}</strong></p>}</div><Check checked={accepted} onChange={setAccepted}>I am 21 or older and purchasing exclusively for laboratory research. I agree to the <a href="/terms-of-sale">terms of sale</a>.</Check><button className="button button-gold" disabled={!delivery || !accepted || busy || !store.payment.enabled} onClick={async () => { setBusy(true); try {
-    const d = await api('checkout', { address, accepted, requestKey, expectedTotal: delivery.total, quoteId: delivery.quoteId });
-    location.assign(d.url);
-}
-catch (e) {
-    report(e);
-    setBusy(false);
-} }}>Continue to secure payment</button><p className="muted">Card information is entered on Authorize.net’s secure payment page.</p></aside></div></>; }
 const accountNav = [['Overview', ''], ['Orders', 'orders'], ['Addresses', 'addresses'], ['Wishlist', 'wishlist'], ['Rewards', 'rewards'], ['Affiliate', 'affiliate'], ['Notifications', 'notifications'], ['Profile', 'profile']];
 export function Account({ section = '' }: {
     section?: string;

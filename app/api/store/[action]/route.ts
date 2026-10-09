@@ -1,3 +1,4 @@
+import { PROMO_COOKIE, promotion } from '@/lib/promotions';
 import inventorySql from '@/lib/inventory-statements.json';
 import { AUTH_RETURN_COOKIE, AUTH_RETURN_MAX_AGE, safeAuthReturn, clearAuthSessionCookies, ANONYMOUS_SESSION_COOKIE, needsAnonymousSession, needsAccountSession } from '@/lib/auth-return';
 import { NextRequest, NextResponse } from 'next/server';
@@ -18,6 +19,12 @@ import { salesDiagnostics } from '@/lib/sales-diagnostics';
 export const dynamic = 'force-dynamic';
 const j = (value: unknown, status = 200) => NextResponse.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
 const cartImports = () => createCartImports({ db: database(), normalize: validateLines, validate: quote });
+async function currentPromoCode() {
+    const jar = await cookies();
+    try { return promotion(jar.get(PROMO_COOKIE)?.value)?.code || ''; }
+    catch { jar.delete(PROMO_COOKIE); return ''; }
+}
+
 const str = (v: unknown, max = 2000) => z.string().trim().min(1).max(max).parse(v);
 export async function GET(req: NextRequest, { params }: {
     params: Promise<{
@@ -72,7 +79,7 @@ export async function GET(req: NextRequest, { params }: {
             let cartError = '';
             const cartNotice = cartChanged ? 'Unavailable products or packs were removed. Review the remaining items before checkout.' : '';
             try {
-                totals = await quote(validateLines(cart));
+                totals = await quote(validateLines(cart), await currentPromoCode());
             }
             catch (e) {
                 cartError = (e as Error).message;
@@ -202,11 +209,25 @@ export async function POST(req: NextRequest, { params }: {
             await cartImports().choose(u.id, s.id, z.string().uuid().parse(b.id), str(b.revision, 64), str(b.choice, 20));
             return j({ message: 'Your selected cart is ready for review.' });
         }
+        if (action === 'promo') {
+            const u = await customer();
+            if (u) { await cartImports().bindOwner(u.id, s.id); await cartImports().assertResolved(u.id, s.id); }
+            const stored = u ? (await one<{ cart: string }>('SELECT cart FROM customer_carts WHERE id=?', u.id))?.cart : s.cart;
+            const lines = currentCart(validateLines(parse(stored, [])));
+            const selected = promotion(b.code);
+            const jar = await cookies();
+            // Removal must work even when a cart item has become unavailable.
+            if (!selected) { jar.delete(PROMO_COOKIE); return j({ ok: true, promo: null }); }
+            if (!lines.length) throw new Error('Add a product to your cart before applying a promo code.');
+            const totals = await quote(lines, selected.code);
+            jar.set(PROMO_COOKIE, selected.code, { httpOnly: true, secure, sameSite: 'lax', path: '/', maxAge: 2592000 });
+            return j({ ok: true, totals, promo: totals.promo });
+        }
         if (action === 'cart') {
             const u = await customer();
             if (u) { await cartImports().bindOwner(u.id, s.id); await cartImports().assertResolved(u.id, s.id); }
             const lines = validateLines(b.cart);
-            const totals = await quote(lines);
+            const totals = await quote(lines, await currentPromoCode());
             if (u) {
                 await database().batch([
                     database().prepare('UPDATE sessions SET cart=?,updated=? WHERE id=?').bind(JSON.stringify(lines), timestamp(), s.id),
@@ -333,14 +354,14 @@ export async function POST(req: NextRequest, { params }: {
             const u = await requireCustomer();
             return j(await issueQuote(u.id, validateLines(parse((await one<{
                 cart: string;
-            }>('SELECT cart FROM customer_carts WHERE id=?', (await requireCustomer()).id))?.cart, [])), b.address));
+            }>('SELECT cart FROM customer_carts WHERE id=?', (await requireCustomer()).id))?.cart, [])), b.address, await currentPromoCode()));
         }
         if (action === 'checkout') {
             const u = await requireCustomer();
             await cartImports().assertResolved(u.id, s.id);
             return j(await checkout(u.id, validateLines(parse((await one<{
                 cart: string;
-            }>('SELECT cart FROM customer_carts WHERE id=?', u.id))?.cart, [])), b));
+            }>('SELECT cart FROM customer_carts WHERE id=?', u.id))?.cart, [])), b, await currentPromoCode()));
         }
         if (action === 'resume') {
             const u = await requireCustomer();

@@ -1,3 +1,4 @@
+import { applyPromotion } from './promotions';
 import { applySale } from './sales';
 import { products, Product } from './catalog';
 import { all, one, setting, parse } from './runtime';
@@ -33,7 +34,7 @@ export function validateLines(value: unknown): CartLine[] {
         return { id: l.id, quantity: l.quantity, ...(l.packId ? { packId: l.packId, packSize: l.packSize, packKind: l.packKind || 'mixed' } : {}), ...(typeof l.presaleId === 'string' && /^[a-zA-Z0-9-]{1,60}$/.test(l.presaleId) ? { presaleId: l.presaleId } : {}) };
     });
 }
-export async function quote(lines: CartLine[]) {
+export async function quote(lines: CartLine[], promoCode?: unknown) {
     const [ps, cfg] = await Promise.all([catalog(), config()]);
     const byId = new Map(ps.map(p => [p.id, p]));
     const packed = new Map<string, CartLine[]>();
@@ -88,5 +89,9 @@ export async function quote(lines: CartLine[]) {
             lineDiscount.set(l, amount); allocated += amount;
         });
     }
-    return { subtotal, discount, total: subtotal - discount, currency: 'USD' as const, items: lines.map(l => ({ ...l, product: byId.get(l.id)!, lineTotal: byId.get(l.id)!.price * l.quantity - (lineDiscount.get(l) || 0) })), config: cfg };
+    const priced = lines.map(l => ({ ...l, product: byId.get(l.id)!, lineTotal: byId.get(l.id)!.price * l.quantity - (lineDiscount.get(l) || 0) }));
+    const promotion = applyPromotion(priced, promoCode);
+    const packDiscount = discount;
+    discount += promotion.promoDiscount;
+    return { subtotal, discount, packDiscount, ...promotion, total: subtotal - discount, currency: 'USD' as const, config: cfg };
 }
