@@ -3,6 +3,7 @@ import { runtime } from './runtime';
 import { canonicalPath, mayIndex, pageInfo, productAt, seoConfig, privatePath, type SEOConfig } from './seo-policy';
 import { imagePath } from './catalog';
 import { publicCatalog } from './public-catalog';
+import { certificateProperties } from './certificate-schema';
 import { headers } from 'next/headers';
 
 export const currentSEO = () => seoConfig(runtime());
@@ -53,7 +54,8 @@ export async function routeStructuredData(path: string, config: SEOConfig = curr
       brand: { '@type': 'Brand', name: 'BIOMOD' }, category: p.categories[0]?.name,
       additionalProperty: [{ '@type': 'PropertyValue', name: 'Compound', value: p.identity },
         { '@type': 'PropertyValue', name: 'Container contents', value: p.sizes[0] },
-        ...(p.casNumber ? [{ '@type': 'PropertyValue', name: 'CAS', value: p.casNumber }] : [])],
+        ...(p.casNumber ? [{ '@type': 'PropertyValue', name: 'CAS', value: p.casNumber }] : []),
+        ...certificateProperties(p.id)],
       ...(snapshot.verified && live && live.price > 0 ? { offers: { '@type': 'Offer', url: config.origin + clean,
         priceCurrency: 'USD', price: (live.price / 100).toFixed(2),
         availability: live.inStock && live.purchasable ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
