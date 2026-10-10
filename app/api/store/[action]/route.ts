@@ -8,12 +8,13 @@ import { createCartImports } from '@/lib/cart-import';
 import { z } from 'zod';
 import { session, customer, requireCustomer, requireAdmin, authReady, authCall, storeAuth, rateLimit } from '@/lib/auth';
 import { presentationData } from '@/lib/private-presentation';
-import { currentCart, currentProductId, currentSelection, orderView, unavailableOrder } from '@/lib/catalog-visibility';
+import { adminOrderView, currentCart, currentProductId, currentSelection, orderView, unavailableOrder } from '@/lib/catalog-visibility';
 import { catalog, config, quote, validateLines } from '@/lib/commerce';
 import { all, one, run, uid, timestamp, parse, runtime, database } from '@/lib/runtime';
 import { checkout, reconcile, addressSchema, issueQuote } from '@/lib/checkout';
 import { getPaymentStatus, paymentEnvironment, paymentProvider } from '@/lib/payments';
 import { createAnetAdapter } from '@/lib/authorizenet-payments';
+import { anetOrderDetails } from '@/lib/order-summary';
 import { packSizes, supportsPacks } from '@/lib/packs';
 import { searchReport, seoConfig } from '@/lib/seo-policy';
 import { salesDiagnostics } from '@/lib/sales-diagnostics';
@@ -122,7 +123,7 @@ export async function GET(req: NextRequest, { params }: {
                     return page('Payment received', '<h1>Payment received</h1><p>We already have a payment for this order.</p><p><a href="/payment/return">Check payment status</a></p>');
                 if (existing.state === 'review' || existing.underReview)
                     return fail('This payment is being reviewed. Please do not pay again. Contact us with order ' + o.id.slice(0, 8) + '.');
-                const form = await adapter.hostedForm(order, { email: u.email, customerId: u.id, ...saved.address });
+                const form = await adapter.hostedForm(order, { email: u.email, customerId: u.id, ...saved.address }, anetOrderDetails(saved));
                 return page('Secure payment', '<h1>Opening secure payment…</h1><form id="pay" method="post" action="' + esc(form.action) + '"><input type="hidden" name="token" value="' + esc(form.token) + '"><button type="submit">Continue to secure payment</button></form><script>document.getElementById("pay").submit()</script>');
             }
             catch (e) {
@@ -147,7 +148,7 @@ export async function GET(req: NextRequest, { params }: {
             await requireAdmin();
             return j({ searchPublishing: searchReport(seoConfig(runtime())), config: await config(), products: await catalog(false), orders: (await all<{
                     data: string;
-                }>('SELECT id,owner,status,total,data,created FROM orders ORDER BY created DESC LIMIT 200')).map(o => ({ ...o, data: orderView(parse(o.data, {})) })), requests: (await all<{
+                }>('SELECT id,owner,status,total,data,created FROM orders ORDER BY created DESC LIMIT 200')).map(o => ({ ...o, data: adminOrderView(parse(o.data, {})) })), requests: (await all<{
                     data: string;
                 }>('SELECT * FROM requests WHERE kind IN (\'contact\',\'stock\',\'affiliate\') ORDER BY created DESC LIMIT 200')).map(o => ({ ...o, data: presentationData(parse(o.data, {})) })), campaigns: (await all<{
                     data: string;

@@ -16,6 +16,14 @@ export type AnetCustomer = {
     state?: string;
     zip?: string;
 };
+/** What was bought, sent to Authorize.net so its merchant and customer receipts list the items, tax and shipping. */
+export type AnetOrderDetails = {
+    items?: { id: string | number; name: string; detail?: string; quantity: number; lineTotalCents: number }[];
+    taxCents?: number;
+    shippingCents?: number;
+    shippingName?: string;
+    note?: string;
+};
 export type AnetPaymentStatus = {
     provider: 'Authorize.net';
     gateway: 'Accept Hosted';
@@ -149,7 +157,24 @@ function clip(value: string | undefined, max: number): string | undefined {
     return text ? text.slice(0, max) : undefined;
 }
 // Element order matters: Authorize.net's JSON API is validated against its XML schema sequence.
-export function anetHostedPaymentPayload(auth: { name: string; transactionKey: string }, order: AnetOrder, returnUrl: string, customer: AnetCustomer = {}) {
+const cents = (v: unknown) => Number.isSafeInteger(v) && (v as number) >= 0 ? v as number : null;
+/** Authorize.net line items: at most 30, name up to 31 characters, description up to 255.
+ * When a pack discount makes the line total uneven per unit, the line is sent as quantity 1 at the line total so the receipt still adds up. */
+export function anetLineItems(details: AnetOrderDetails = {}) {
+    const lines = (details.items || []).filter(i => Number.isSafeInteger(i.quantity) && i.quantity > 0 && cents(i.lineTotalCents) !== null).slice(0, 30);
+    return lines.map((i, n) => {
+        const even = i.lineTotalCents % i.quantity === 0;
+        const name = (even ? '' : i.quantity + ' x ') + i.name;
+        return {
+            itemId: clip(String(i.id), 31) || String(n + 1),
+            name: (clip(name, 31) || 'Item').trim(),
+            description: clip([name, i.detail].filter(Boolean).join(' - '), 255),
+            quantity: String(even ? i.quantity : 1),
+            unitPrice: centsToAmount(even ? i.lineTotalCents / i.quantity : i.lineTotalCents),
+        };
+    });
+}
+export function anetHostedPaymentPayload(auth: { name: string; transactionKey: string }, order: AnetOrder, returnUrl: string, customer: AnetCustomer = {}, details: AnetOrderDetails = {}) {
     validateAnetOrder(order);
     const reference = anetOrderReference(order.id);
     const [firstName, ...rest] = (customer.name || '').trim().split(/\s+/);
@@ -165,8 +190,17 @@ export function anetHostedPaymentPayload(auth: { name: string; transactionKey: s
     const transactionRequest: Record<string, unknown> = {
         transactionType: 'authCaptureTransaction',
         amount: centsToAmount(order.totalCents),
-        order: { invoiceNumber: reference, description: 'Biomod order ' + order.id.slice(0, 8) },
+        order: { invoiceNumber: reference, description: clip('Biomod order ' + order.id.slice(0, 8) + (details.note ? ' - ' + details.note : ''), 255) },
     };
+    const lineItems = anetLineItems(details);
+    if (lineItems.length)
+        transactionRequest.lineItems = { lineItem: lineItems };
+    const tax = cents(details.taxCents);
+    if (tax !== null && tax > 0)
+        transactionRequest.tax = { amount: centsToAmount(tax), name: 'Sales tax' };
+    const shipping = cents(details.shippingCents);
+    if (shipping !== null)
+        transactionRequest.shipping = { amount: centsToAmount(shipping), name: clip(details.shippingName || 'Shipping', 31) };
     if (customer.email || customer.customerId)
         transactionRequest.customer = {
             ...(customer.customerId ? { id: clip(customer.customerId.replace(/[^A-Za-z0-9]/g, ''), 20) } : {}),
@@ -349,10 +383,10 @@ export function createAnetAdapter(env: Environment = process.env, request: typeo
             return { url: '/api/store/pay?id=' + encodeURIComponent(order.id), providerReference: anetOrderReference(order.id) };
         },
         /** Request a single-use Accept Hosted token (valid 15 minutes). */
-        async hostedForm(order: AnetOrder, customer: AnetCustomer = {}): Promise<{ action: string; token: string }> {
+        async hostedForm(order: AnetOrder, customer: AnetCustomer = {}, details: AnetOrderDetails = {}): Promise<{ action: string; token: string }> {
             validateAnetOrder(order);
             const current = active(true);
-            const response = await call(anetHostedPaymentPayload(auth(), order, current.returnUrl!.href, customer));
+            const response = await call(anetHostedPaymentPayload(auth(), order, current.returnUrl!.href, customer, details));
             if (typeof response.token !== 'string' || !response.token)
                 throw new AnetPaymentError('INVALID_TOKEN', 'Authorize.net did not return a payment form token.');
             return { action: ANET_HOSTED_FORM[current.environment], token: response.token };
