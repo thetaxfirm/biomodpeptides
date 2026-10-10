@@ -8,6 +8,15 @@ import styles from './product-research-details.module.css';
 // Literature context is deliberately limited to these reviewed molecule/size
 // pairs. It does not add specifications or test results to any product or lot.
 const studies = {
+  bpc157: {
+    heading: 'BPC-157 research context',
+    identity: 'BPC-157 is described in research literature as a 15-amino-acid peptide.',
+    models: 'Tendon fibroblasts cultured from rat Achilles tendon.',
+    focus: 'Growth-hormone-receptor expression and related cell signaling.',
+    citation: 'Chang et al. (2014), Molecules',
+    url: 'https://pubmed.ncbi.nlm.nih.gov/25415472/',
+    doi: '10.3390/molecules191119066',
+  },
   mots: {
     heading: 'MOTS-c research context',
     identity: 'MOTS-c is a 16-amino-acid, mitochondrial-derived peptide described by Lee and colleagues in 2015.',
@@ -28,6 +37,7 @@ const studies = {
   },
 };
 const researchBySlug: Partial<Record<string, typeof studies.mots>> = {
+  'bpc-157-10mg': studies.bpc157,
   'mots-c-10mg': studies.mots,
   'mots-c-40mg': studies.mots,
   'ss-31-10mg': studies.ss31,

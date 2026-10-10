@@ -76,6 +76,7 @@ for (const product of products) {
 assert.equal(eligibleCount, 17);
 
 const expectedStudies = {
+  'bpc-157-10mg': ['BPC-157 research context', 'https://pubmed.ncbi.nlm.nih.gov/25415472/', '10.3390/molecules191119066'],
   'mots-c-10mg': ['MOTS-c research context', 'https://pmc.ncbi.nlm.nih.gov/articles/PMC4350682/', '10.1016/j.cmet.2015.02.009'],
   'mots-c-40mg': ['MOTS-c research context', 'https://pmc.ncbi.nlm.nih.gov/articles/PMC4350682/', '10.1016/j.cmet.2015.02.009'],
   'ss-31-10mg': ['SS-31 research context', 'https://pmc.ncbi.nlm.nih.gov/articles/PMC3976619/', '10.1111/bph.12468'],
@@ -101,19 +102,28 @@ for (const product of products) {
   assert(!/<(?:button|details|script)\b|\bhidden=|aria-hidden=|\.pdf|FAQPage|MedicalEntity|MedicalStudy/.test(context), 'Research copy is visible without adding medical markup or a substituted document');
   assert(!/\b(?:dosage|dose|benefit|treats|cures|clinically proven|absorption|purity|acetate)\b/i.test(context), 'Research context makes no product efficacy, dosing, salt or purity claim');
   assert(html.indexOf('product-questions-heading') < html.indexOf('product-research-heading'), 'Research context follows the existing questions');
-  if (product.slug.startsWith('mots-c')) {
+  if (product.slug === 'bpc-157-10mg') {
+    assert(context.includes('BPC-157 is described in research literature as a 15-amino-acid peptide.'));
+    assert(context.includes('Tendon fibroblasts cultured from rat Achilles tendon.'));
+    assert(context.includes('Growth-hormone-receptor expression and related cell signaling.'));
+    assert(context.includes('Chang et al. (2014), Molecules'));
+    assert(!context.includes('AMPK') && !context.includes('cardiolipin') && !context.includes('PMC4350682') && !context.includes('PMC3976619'), 'BPC-157 receives only its own research source');
+  } else if (product.slug.startsWith('mots-c')) {
     assert(context.includes('16-amino-acid, mitochondrial-derived peptide') && context.includes('2015'));
     assert(context.includes('Cultured cells and mice.') && context.includes('Folate and purine metabolism') && context.includes('AMPK-related signaling'));
-    assert(!context.includes('cardiolipin') && !context.includes('PMC3976619'), 'MOTS-c receives only its own research source');
+    assert(!context.includes('cardiolipin') && !context.includes('PMC3976619') && !context.includes('25415472'), 'MOTS-c receives only its own research source');
   } else {
     assert(context.includes('four-amino-acid peptide') && context.includes('2014'));
     assert(context.includes('Artificial lipid membranes and mitochondria isolated from rat kidneys.'));
     for (const topic of ['cardiolipin', 'electron transfer', 'oxygen consumption', 'ATP synthesis']) assert(context.includes(topic));
-    assert(!context.includes('AMPK') && !context.includes('PMC4350682'), 'SS-31 receives only its own research source');
+    assert(!context.includes('AMPK') && !context.includes('PMC4350682') && !context.includes('25415472'), 'SS-31 receives only its own research source');
   }
 }
-assert.deepEqual(researchedSlugs.sort(), Object.keys(expectedStudies).sort(), 'Exactly four current eligible pages receive literature context');
+assert.deepEqual(researchedSlugs.sort(), Object.keys(expectedStudies).sort(), 'Exactly five current eligible pages receive literature context');
 assert.equal(render(ProductResearchDetails, { product: { ...ten, slug: 'mots-c-unreviewed-size' } }), '', 'Unknown sizes do not inherit a name-based research mapping');
+const bpc157 = products.find(product => product.slug === 'bpc-157-10mg');
+assert(bpc157);
+assert.equal(render(ProductResearchDetails, { product: { ...bpc157, slug: 'bpc-157-unreviewed-size' } }), '', 'The BPC-157 context cannot promote an unreviewed size');
 for (const slug of Object.keys(expectedStudies)) {
   const previous = productReviewBlocks[slug];
   try {
@@ -231,4 +241,4 @@ for (const [query, heading] of [[{}, 'Research peptides &amp; compounds'], [{ ca
 assert.equal(JSON.stringify(products), before, 'rendering never mutates source product identity, price, inventory or contents');
 assert.equal(JSON.stringify({ batchRecords, laboratoryDocuments }), documentsBefore, 'Literature context does not rewrite lot records or laboratory documents');
 assert.deepEqual(batchRecords.map(record => [record.record_id, batchStatus(record)]), statusesBefore, 'All current matched, mismatched, pending and restricted documentation states are unchanged');
-console.log('PASS: real ProductPage and Experience SSR preserve current purchase controls; compact size navigation, live selected price/stock and independent COA states;17 factual FAQs only; four exact eligible pages have visible primary research context and study limits; six explicit shop variants with reciprocal size links and unavailable W20 purchase controls; eligible research links; unchanged nonresearch links and accurate shop headings');
+console.log('PASS: real ProductPage and Experience SSR preserve current purchase controls; compact size navigation, live selected price/stock and independent COA states;17 factual FAQs only; five exact eligible pages have visible primary research context and study limits; six explicit shop variants with reciprocal size links and unavailable W20 purchase controls; eligible research links; unchanged nonresearch links and accurate shop headings');
