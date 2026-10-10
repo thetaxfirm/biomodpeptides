@@ -11,13 +11,22 @@
 .availability{font-size:12px;line-height:1.4}
 .sizeOption[aria-current=page]{background:var(--bm-action,#2b1030);border-color:var(--bm-action,#2b1030);color:#fbf1ea}
 .sizeOption:hover:not([aria-current=page]){border-color:var(--bm-action,#2b1030);background:var(--bm-selected,#f4ecf6)}
-.sizeOption:focus-visible,.questions a:focus-visible{outline:3px solid var(--ring);outline-offset:4px}
-.questions a{text-decoration:underline;text-underline-offset:3px;overflow-wrap:anywhere}
-.questions a:hover{text-decoration-thickness:2px}
+.sizeOption:focus-visible,.questions a:focus-visible,.research a:focus-visible{outline:3px solid var(--ring);outline-offset:4px}
+.questions a,.research a{text-decoration:underline;text-underline-offset:3px;overflow-wrap:anywhere}
+.questions a:hover,.research a:hover{text-decoration-thickness:2px}
 .questions{margin:42px 0;max-width:1050px}
 .questions h2{font-size:27px;line-height:1.3;margin:0 0 24px}
 .answers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:36px}
 .answers article{min-width:0}
 .answers h3{font-size:18px;line-height:1.4;margin:0 0 12px}
 .answers p{font-size:15px;line-height:1.7;margin:0 0 12px}
-@media(max-width:700px){.questions{margin:34px 0}.questions h2{font-size:24px}.answers{grid-template-columns:1fr;gap:22px}}
+.research{margin:42px 0;max-width:850px}
+.research h2{font-size:27px;line-height:1.3;margin:0 0 20px}
+.research p{font-size:15px;line-height:1.7;margin:0 0 18px}
+.studyFacts{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr);gap:28px;margin:22px 0}
+.studyFacts>div{min-width:0}
+.studyFacts dt{font-size:15px;font-weight:650;line-height:1.4;margin-bottom:8px}
+.studyFacts dd{font-size:15px;line-height:1.7;margin:0}
+.citation span{display:block;overflow-wrap:anywhere}
+.research .studyLimits{max-width:760px}
+@media(max-width:700px){.questions,.research{margin:34px 0}.questions h2,.research h2{font-size:24px}.answers,.studyFacts{grid-template-columns:1fr;gap:22px}}

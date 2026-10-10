@@ -19,7 +19,8 @@ require.extensions['.css'] = module => { module.exports = new Proxy({ __esModule
 const { products, money } = require('../lib/catalog.ts');
 const { packContents, packSizes } = require('../lib/packs.ts');
 const { eligibleDiscovery } = require('../lib/product-discovery.ts');
-const { batchFor, batchStatus, batchStatusLabel } = require('../lib/testing.ts');
+const { productReviewBlocks } = require('../lib/seo-policy.ts');
+const { batchFor, batchPath, batchRecords, batchStatus, batchStatusLabel, laboratoryDocuments } = require('../lib/testing.ts');
 const { VialSizeLinks, ProductResearchDetails } = require('../components/store/product-research-details.tsx');
 const { ProductPage, ProductCard } = require('../components/store/catalog.tsx');
 const { Experience } = require('../components/store/experience.tsx');
@@ -28,6 +29,8 @@ const render = (Component, props) => renderToStaticMarkup(React.createElement(Co
 const escape = value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#x27;');
 const asText = html => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
 const before = JSON.stringify(products);
+const documentsBefore = JSON.stringify({ batchRecords, laboratoryDocuments });
+const statusesBefore = batchRecords.map(record => [record.record_id, batchStatus(record)]);
 const ten = products.find(product => product.slug === 'mots-c-10mg');
 const forty = products.find(product => product.slug === 'mots-c-40mg');
 assert(ten && forty);
@@ -72,7 +75,64 @@ for (const product of products) {
 }
 assert.equal(eligibleCount, 17);
 
+const expectedStudies = {
+  'mots-c-10mg': ['MOTS-c research context', 'https://pmc.ncbi.nlm.nih.gov/articles/PMC4350682/', '10.1016/j.cmet.2015.02.009'],
+  'mots-c-40mg': ['MOTS-c research context', 'https://pmc.ncbi.nlm.nih.gov/articles/PMC4350682/', '10.1016/j.cmet.2015.02.009'],
+  'ss-31-10mg': ['SS-31 research context', 'https://pmc.ncbi.nlm.nih.gov/articles/PMC3976619/', '10.1111/bph.12468'],
+  'ss-31-50mg': ['SS-31 research context', 'https://pmc.ncbi.nlm.nih.gov/articles/PMC3976619/', '10.1111/bph.12468'],
+};
+const researchSection = html => html.match(/<section class="research" aria-labelledby="product-research-heading">[\s\S]*?<\/section>/)?.[0];
+const researchedSlugs = [];
+for (const product of products) {
+  const html = render(ProductResearchDetails, { product });
+  const context = researchSection(html);
+  const expected = expectedStudies[product.slug];
+  if (!expected) {
+    assert.equal(context, undefined, product.slug + ': unrelated or held products receive no molecule research section');
+    continue;
+  }
+  researchedSlugs.push(product.slug);
+  assert(eligibleDiscovery(product));
+  assert(context?.includes('<h2 id="product-research-heading">' + expected[0] + '</h2>'));
+  assert(context.includes('href="' + expected[1] + '"') && context.includes('DOI: ' + expected[2]), 'The primary citation and DOI are visible in initial HTML');
+  assert(context.includes('<dt>Models studied</dt>') && context.includes('<dt>Study focus</dt>'));
+  assert(context.includes('does not verify a BIOMOD batch or establish suitability for human use'));
+  assert(context.includes('href="' + escape(batchPath(batchFor(product.id))) + '"'), 'The context links to this product record, including a pending record, rather than a sibling COA');
+  assert(!/<(?:button|details|script)\b|\bhidden=|aria-hidden=|\.pdf|FAQPage|MedicalEntity|MedicalStudy/.test(context), 'Research copy is visible without adding medical markup or a substituted document');
+  assert(!/\b(?:dosage|dose|benefit|treats|cures|clinically proven|absorption|purity|acetate)\b/i.test(context), 'Research context makes no product efficacy, dosing, salt or purity claim');
+  assert(html.indexOf('product-questions-heading') < html.indexOf('product-research-heading'), 'Research context follows the existing questions');
+  if (product.slug.startsWith('mots-c')) {
+    assert(context.includes('16-amino-acid, mitochondrial-derived peptide') && context.includes('2015'));
+    assert(context.includes('Cultured cells and mice.') && context.includes('Folate and purine metabolism') && context.includes('AMPK-related signaling'));
+    assert(!context.includes('cardiolipin') && !context.includes('PMC3976619'), 'MOTS-c receives only its own research source');
+  } else {
+    assert(context.includes('four-amino-acid peptide') && context.includes('2014'));
+    assert(context.includes('Artificial lipid membranes and mitochondria isolated from rat kidneys.'));
+    for (const topic of ['cardiolipin', 'electron transfer', 'oxygen consumption', 'ATP synthesis']) assert(context.includes(topic));
+    assert(!context.includes('AMPK') && !context.includes('PMC4350682'), 'SS-31 receives only its own research source');
+  }
+}
+assert.deepEqual(researchedSlugs.sort(), Object.keys(expectedStudies).sort(), 'Exactly four current eligible pages receive literature context');
+assert.equal(render(ProductResearchDetails, { product: { ...ten, slug: 'mots-c-unreviewed-size' } }), '', 'Unknown sizes do not inherit a name-based research mapping');
+for (const slug of Object.keys(expectedStudies)) {
+  const previous = productReviewBlocks[slug];
+  try {
+    productReviewBlocks[slug] = 'Temporary test hold';
+    assert.equal(render(ProductResearchDetails, { product: products.find(product => product.slug === slug) }), '', 'A later publication hold excludes both questions and research context');
+  } finally {
+    if (previous === undefined) delete productReviewBlocks[slug];
+    else productReviewBlocks[slug] = previous;
+  }
+}
+
 const renderPage = (slug, catalog = products) => renderToStaticMarkup(React.createElement(StoreProvider, { initialCatalog: catalog }, React.createElement(ProductPage, { slug })));
+for (const [slug, [heading, source]] of Object.entries(expectedStudies)) {
+  const html = renderPage(slug);
+  const context = researchSection(html);
+  assert(context?.includes(heading) && context.includes('href="' + source + '"'), slug + ': actual product SSR includes the visible primary study');
+  assert(html.indexOf('product-questions-heading') < html.indexOf('product-research-heading'));
+  assert(html.indexOf('product-research-heading') < html.indexOf('product-tabs'), 'Research context follows questions without reordering purchase/specification controls');
+}
 const productHTML = renderPage(forty.slug, fixture);
 assert(productHTML.includes(sizeHTML), 'actual product route includes live size navigation');
 assert(productHTML.indexOf('other-vial-sizes-heading') < productHTML.indexOf('class="detail-price"'), 'choose the vial size before reading the selected price');
@@ -169,4 +229,6 @@ for (const [query, heading] of [[{}, 'Research peptides &amp; compounds'], [{ ca
   assert(html.includes('<h1>' + heading + '</h1>'), 'full shop route heading reflects current query/category');
 }
 assert.equal(JSON.stringify(products), before, 'rendering never mutates source product identity, price, inventory or contents');
-console.log('PASS: real ProductPage and Experience SSR preserve current purchase controls; compact size navigation, live selected price/stock and independent COA states;17 factual FAQs only; six explicit shop variants with reciprocal size links and unavailable W20 purchase controls; eligible research links; unchanged nonresearch links and accurate shop headings');
+assert.equal(JSON.stringify({ batchRecords, laboratoryDocuments }), documentsBefore, 'Literature context does not rewrite lot records or laboratory documents');
+assert.deepEqual(batchRecords.map(record => [record.record_id, batchStatus(record)]), statusesBefore, 'All current matched, mismatched, pending and restricted documentation states are unchanged');
+console.log('PASS: real ProductPage and Experience SSR preserve current purchase controls; compact size navigation, live selected price/stock and independent COA states;17 factual FAQs only; four exact eligible pages have visible primary research context and study limits; six explicit shop variants with reciprocal size links and unavailable W20 purchase controls; eligible research links; unchanged nonresearch links and accurate shop headings');
