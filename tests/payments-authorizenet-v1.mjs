@@ -40,6 +40,17 @@ try {
   assert.deepEqual(Object.keys(payload.transactionRequest), ['transactionType', 'amount', 'order', 'customer', 'shipTo', 'transactionSettings']);
   assert.equal(payload.transactionRequest.amount, '49.00');
   assert.equal(payload.transactionRequest.order.invoiceNumber, ref);
+  // Receipt detail: items, tax and shipping, still in schema order (order, lineItems, tax, shipping, customer, shipTo)
+  const detailed = a.anetHostedPaymentPayload({ name: 'x', transactionKey: 'y' }, order, env.AUTHORIZENET_RETURN_URL, { email: 'a@b.co', name: 'Ada Lovelace', line1: '1 Main', city: 'LA', state: 'CA', zip: '90001' }, { items: [{ id: 7, name: 'BPC-157 10mg Research Compound Vial', detail: '', quantity: 2, lineTotalCents: 3000 }, { id: 9, name: 'TB-500', detail: 'Mixed 3-pack', quantity: 3, lineTotalCents: 1000 }], taxCents: 335, shippingCents: 565, shippingName: 'USPS Ground Advantage', note: 'Promo BM10' }).getHostedPaymentPageRequest.transactionRequest;
+  assert.deepEqual(Object.keys(detailed), ['transactionType', 'amount', 'order', 'lineItems', 'tax', 'shipping', 'customer', 'shipTo', 'transactionSettings']);
+  assert.equal(detailed.lineItems.lineItem.length, 2);
+  assert.deepEqual(detailed.lineItems.lineItem[0], { itemId: '7', name: 'BPC-157 10mg Research Compound', description: 'BPC-157 10mg Research Compound Vial', quantity: '2', unitPrice: '15.00' });
+  assert.equal(detailed.lineItems.lineItem[1].quantity, '1', 'uneven pack line is sent at its line total');
+  assert.equal(detailed.lineItems.lineItem[1].unitPrice, '10.00');
+  assert.equal(detailed.lineItems.lineItem[1].description, '3 x TB-500 - Mixed 3-pack');
+  assert.deepEqual(detailed.tax, { amount: '3.35', name: 'Sales tax' });
+  assert.deepEqual(detailed.shipping, { amount: '5.65', name: 'USPS Ground Advantage' });
+  assert.equal(detailed.order.description, 'Biomod order 6f1d2c3b - Promo BM10');
 
   // Reconciliation
   assert.equal(a.reconcileAnetTransactions(order, [tx('1001')], ref).state, 'paid');
