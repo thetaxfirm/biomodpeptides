@@ -26,6 +26,29 @@ function quantities(words: string[]) {
   return words.flatMap((unit, index) => index > 0 && /^(mg|mcg|g|ml)$/.test(unit) && /^\d+(?:\.\d+)?$/.test(words[index - 1])
     ? [words[index - 1] + ' ' + unit] : []);
 }
+function withoutQuantities(words: string[]): string[] {
+  return words.filter((word, index) => !(
+    (/^(mg|mcg|g|ml)$/.test(word) && /^\d+(?:\.\d+)?$/.test(words[index - 1] || '')) ||
+    (/^\d+(?:\.\d+)?$/.test(word) && /^(mg|mcg|g|ml)$/.test(words[index + 1] || ''))
+  ));
+}
+function wordMatches(term: string, word: string): boolean {
+  return word === term || (/^[a-z]{3,}$/.test(term) && word.startsWith(term));
+}
+function blendQuantityMatches(product: Product, wanted: string[]): boolean {
+  // Only the catalog's spaced component separator denotes a blend. The terminal
+  // plus in NAD+ is part of its identity, not a second ingredient.
+  const components = compound(product).split(/\s+\+\s+/).map(searchWords);
+  if (components.length < 2) return true;
+  // Container amounts must not fill identity numbers such as PT-141 or TB-500.
+  const identityQuery = withoutQuantities(wanted);
+  const mentionsComponent = components.some(component => component.some(word =>
+    /^[a-z]+$/.test(word) && word !== 'blend' && identityQuery.some(term => wordMatches(term, word))));
+  if (!mentionsComponent) return true; // Preserve generic size/form and SKU lookups.
+  const includesIdentity = (identity: string[]) => identity.length > 0 &&
+    identity.every(word => identityQuery.includes(word));
+  return includesIdentity(withoutQuantities(searchWords(product.name))) || components.every(includesIdentity);
+}
 export function productSearchScore(product: Product, query: string): number {
   const wanted = searchWords(query.slice(0, 200));
   if (!wanted.length) return 1;
@@ -36,13 +59,17 @@ export function productSearchScore(product: Product, query: string): number {
   // Keep quantity and unit together and require the listed container size, not a
   // component name, CAS, SKU or the sum of unrelated blend ingredients.
   const listedQuantities = product.sizes.flatMap(value => quantities(searchWords(value)));
-  if (quantities(wanted).some(quantity => !listedQuantities.includes(quantity))) return 0;
+  const requestedQuantities = quantities(wanted);
+  if (requestedQuantities.some(quantity => !listedQuantities.includes(quantity))) return 0;
+  // A blend's listed total does not establish that amount of one component.
+  // Strength-specific component queries must also identify the blend itself.
+  if (requestedQuantities.length && !blendQuantityMatches(product, wanted)) return 0;
   const aliases = reviewedPeptide ? productAliases[product.slug] || [] : [];
   const words = searchWords([product.name, compound(product), product.sku, product.casNumber,
     ...product.sizes, format, ...product.categories.map(c => c.name), ...aliases,
     ...(reviewedPeptide ? ['peptide'] : []),
     ...(format === 'Vial' ? ['lyophilized freeze dried vial research'] : [])].join(' '));
-  const match = (term: string) => words.some(word => word === term || (/^[a-z]{3,}$/.test(term) && word.startsWith(term)));
+  const match = (term: string) => words.some(word => wordMatches(term, word));
   if (!wanted.every(match)) return 0;
   const name = searchWords(product.name).join(' '), phrase = wanted.join(' ');
   const identity = searchWords(compound(product)).join(' ');
