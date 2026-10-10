@@ -1,5 +1,6 @@
 import { unavailableOrder } from './catalog-visibility';
 import inventorySql from './inventory-statements.json';
+import { sendOrderNotification } from './order-summary';
 import { quote, CartLine } from './commerce';
 import { one, run, uid, timestamp, runtime, parse, database } from './runtime';
 import { createPaymentAdapter, paymentEnvironment, paymentReturnUrl } from './payments';
@@ -141,8 +142,11 @@ export async function reconcile(owner: string, id: string, hints: string[] = [])
     await run('UPDATE orders SET status=?,updated=? WHERE id=?', 'review', timestamp(), id);
     throw new Error('This payment is outside the online verification window. Contact Biomod for reconciliation.');
 } const result = await createPaymentAdapter(runtime()).verifyPayment({ id, totalCents: row.total, currency: 'USD' }, row.checkout_ref, hints, row.created); if (result.state === 'paid' && (!result.notificationId || !result.providerReference))
-    throw new Error('Payment requires review.'); const state = result.state === 'failed' ? 'review' : result.state; const db=database();await db.batch([
+    throw new Error('Payment requires review.'); const state = result.state === 'failed' ? 'review' : result.state; const db=database();const written=await db.batch([
  db.prepare(inventorySql.paymentStatus).bind(state,result.state==='paid'?result.providerReference:null,result.notificationId||null,timestamp(),id),
  db.prepare(inventorySql.settleInventory).bind(id,id,id),
  db.prepare(inventorySql.clearSettledReservation).bind(id,id)
-]); return { status: state, message: result.state === 'failed' ? 'The payment attempt failed. This order is held for review before inventory is released.' : result.message }; }
+]);
+// Email the store a full copy of the order the first time it is marked paid (the status update only changes a row once).
+if (state === 'paid' && written[0]?.meta?.changes) await sendOrderNotification(runtime(), id, saved);
+return { status: state, message: result.state === 'failed' ? 'The payment attempt failed. This order is held for review before inventory is released.' : result.message }; }
