@@ -1,6 +1,6 @@
 // Server-owned promotions. Never accept percentages or savings from a browser.
 export const PROMO_COOKIE = 'bm_promo';
-const promotions: Readonly<Record<string, number>> = Object.freeze({ BM10: 10, BIOMOD15: 15, BMOD20: 20, ANNA20: 20 });
+const promotions: Readonly<Record<string, number>> = Object.freeze({ BM10: 10, BIOMOD15: 15, BMOD20: 20, ANNA20: 20, KIMC15: 15 });
 export function activePromotions(): { code: string; percentOff: number }[] {
     return Object.entries(promotions).map(([code, percentOff]) => ({ code, percentOff }));
 }

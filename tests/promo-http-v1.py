@@ -136,7 +136,7 @@ def run(origin):
         passed.append('fresh anonymous session and isolated cart')
 
         amounts = {}
-        for code, percent in (('BM10', 10), ('BIOMOD15', 15), ('ANNA20', 20), ('BMOD20', 20)):
+        for code, percent in (('BM10', 10), ('BIOMOD15', 15), ('ANNA20', 20), ('KIMC15', 15), ('BMOD20', 20)):
             value, headers = successful('promo', {'code': '  ' + code.lower() + '  '})
             cookie_flags(headers)
             amounts[code] = expected_promo(value['totals'], base, code, percent)

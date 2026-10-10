@@ -190,7 +190,7 @@ async function apiCookieIntegration() {
   for (const code of [undefined, null, '', '   ']) {
     const q = await quote(one, code); reconcile(q); assert.equal(q.promo, null); assert.equal(q.total, 10000); assert.equal(q.promoDiscount, 0);
   }
-  for (const [code, percent] of [['BM10', 10], ['BIOMOD15', 15], ['ANNA20', 20], ['BMOD20', 20]]) {
+  for (const [code, percent] of [['BM10', 10], ['BIOMOD15', 15], ['ANNA20', 20], ['KIMC15', 15], ['BMOD20', 20]]) {
     const q = await quote(one, code); reconcile(q);
     assert.deepEqual(q.promo, { code, percentOff: percent, savings: percent * 100 });
     assert.equal(q.total, 10000 - percent * 100);

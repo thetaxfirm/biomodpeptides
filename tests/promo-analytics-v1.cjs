@@ -29,7 +29,7 @@ const all = async (query, ...values) => {
 };
 const getRow = (report, code, environment = 'live') => report.codes.find(p => p.code === code)?.rows.find(r => r.environment === environment);
 (async () => {
-  assert.deepEqual(activePromotions(), [{ code: 'BM10', percentOff: 10 }, { code: 'BIOMOD15', percentOff: 15 }, { code: 'BMOD20', percentOff: 20 }, { code: 'ANNA20', percentOff: 20 }]);
+  assert.deepEqual(activePromotions(), [{ code: 'BM10', percentOff: 10 }, { code: 'BIOMOD15', percentOff: 15 }, { code: 'BMOD20', percentOff: 20 }, { code: 'ANNA20', percentOff: 20 }, { code: 'KIMC15', percentOff: 15 }]);
   assert.deepEqual(promotion(' anna20 '), { code: 'ANNA20', percentOff: 20 });
   for (const code of ['BIOMOD10', 'BIOMOD20', 'BIOM0D15']) assert.throws(() => promotion(code));
   assert.deepEqual(promoWindow('7', now), { days: 7, start, end: now + 1, timeZone: 'UTC', includesPartialToday: true });
@@ -42,7 +42,7 @@ const getRow = (report, code, environment = 'live') => report.codes.find(p => p.
   for (const value of ['', '0', '07', '365', '7 OR 1=1', '30.0']) assert.throws(() => promoWindow(value, now), /Choose/);
   for (const value of [NaN, Infinity, -1, .5, Number.MAX_SAFE_INTEGER]) assert.throws(() => promoWindow('7', value), /time/);
   const empty = await promoAnalytics({ requireAdmin: allow, all }, null, now);
-  assert.equal(empty.codes.length, 4);
+  assert.equal(empty.codes.length, 5);
   for (const code of empty.codes) {
     assert.equal(code.active, true); assert.equal(code.rows.length, 3);
     assert.deepEqual(code.rows.map(r => r.environment), ['live', 'sandbox', 'unknown']);
@@ -64,6 +64,8 @@ const getRow = (report, code, environment = 'live') => report.codes.find(p => p.
   order({ environment: null, total: 222, savings: 22 });
   order({ code: 'biomod10', savings: 17, total: 170 });
   order({ code: 'BIOMOD20', savings: 19, total: 190 });
+  order({ code: ' kiMc15 ', savings: 1500, total: 8500 });
+  order({ code: 'KIMC15', savings: 3000, total: 17000, status: 'pending' });
   order({ code: 'BIOMOD15', savings: 7, total: 1000 }); // Saved savings must not be recalculated as 15%.
   order({ code: sensitive, savings: 3, total: 30 });
   order({ code: 'person@example.invalid', savings: 4, total: 40 });
@@ -82,6 +84,7 @@ const getRow = (report, code, environment = 'live') => report.codes.find(p => p.
   assert.deepEqual(getRow(report, 'ANNA20'), { environment: 'live', orders: 22, paymentRecorded: 16, grossCents: 10000, discountCents: 650, missingPaymentRecords: 2, missingDiscountRecords: 6, missingAmountRecords: 5 });
   assert.deepEqual(getRow(report, 'ANNA20', 'sandbox'), { environment: 'sandbox', orders: 2, paymentRecorded: 2, grossCents: 5000, discountCents: 1000, missingPaymentRecords: 0, missingDiscountRecords: 0, missingAmountRecords: 0 });
   assert.equal(getRow(report, 'ANNA20', 'unknown').orders, 2); assert.equal(getRow(report, 'ANNA20', 'unknown').grossCents, 333);
+  assert.deepEqual(getRow(report, 'KIMC15'), { environment: 'live', orders: 2, paymentRecorded: 1, grossCents: 8500, discountCents: 1500, missingPaymentRecords: 0, missingDiscountRecords: 0, missingAmountRecords: 0 }, 'Kim code attribution combines case variants and excludes pending amounts from paid totals');
   assert.equal(getRow(report, 'BIOMOD15').discountCents, 7, 'Report actual saved discount, never current rate × total');
   for (const code of ['BIOMOD10', 'BIOMOD20']) { const p = report.codes.find(p => p.code === code); assert.equal(p.active, false); assert.equal(p.percentOff, null); assert.equal(p.rows.length, 3); }
   assert.equal(getRow(report, 'BIOMOD10').discountCents, 17);
