@@ -1,6 +1,6 @@
 # TryBiomod batch-library search v1
 
-October 10, 2026. Author: Codex. Base: `a0d3b38ed3b1f20c48827b6bfa823e8b64f57949`; local HEAD and origin/main were checked before edits. Scope: `/testing` search only. Draft, not committed or deployed by this agent.
+October 10, 2026. Author: Codex. Base: `a0d3b38ed3b1f20c48827b6bfa823e8b64f57949`; local HEAD and origin/main were checked before edits. Scope: `/testing` search only. Implementation released through shared main in 945189f; root verification is recorded in docs/seo-work-log/2026-10-10-v7.md.
 
 ## Verified defect
 
