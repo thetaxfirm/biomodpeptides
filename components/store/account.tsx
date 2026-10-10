@@ -233,5 +233,92 @@ finally {
     return <><div className="page-heading"><h1>Your Wishlist</h1></div>{store.wishlist.length ? <div className="product-grid">{store.products.filter(p => store.wishlist.includes(p.id)).map(p => <ProductCard key={p.id} product={p}/>)}</div> : <Blank title="Your wishlist is empty.">Use the heart on a product to save it here.</Blank>}</>; if (!ready)
     return <p>Loading your account…</p>; if (!store.customer)
     return <AuthPage returnTo={'/account/' + section}/>; return <><div className="page-heading"><h1>My Account</h1></div><div className="account-layout"><aside className="account-nav"><p>{store.customer.email}</p>{accountNav.map(([name, path]) => <a className={section === path ? 'active' : ''} key={path} href={'/account/' + path}>{name}</a>)}{store.admin && <a href="/admin">Store administration</a>}<button onClick={() => api('auth-logout', {}).then(() => location.assign('/login')).catch(report)}>Sign out</button></aside><div className="account-body">{!data ? <p>Loading account details…</p> : section === 'orders' ? <><h2>Orders</h2>{!data.orders.length ? <Blank title="No orders yet."><a href="/shop">Explore the catalog</a></Blank> : data.orders.map((o: any) => <article className="account-record" key={o.id}><h3>Order {o.id.slice(0, 8)}</h3><p>{new Date(o.created).toLocaleDateString()} · {o.status.replaceAll('_', ' ')} · {money(o.total)}</p>{o.data.items?.map((i: any, n: number) => <p key={n}>{i.product.name} × {i.quantity} {!i.unavailable&&<a className="order-document-link" href={'/testing?product='+i.product.id}>Product documentation</a>}</p>)}{!o.data.catalogUnavailable&&['paid','shipped','delivered'].includes(o.status)&&<button className="button button-dark" disabled={busy} onClick={async()=>{setBusy(true);try{await reorder(o.data.items);location.assign('/cart');}catch(e){report(e);}finally{setBusy(false);}}}>{busy?'Adding…':'Reorder at current prices'}</button>}{o.data.catalogUnavailable&&<p className="notice">This order contains an archived product. Contact Biomod for order support.</p>}{o.data.tracking && <p>Tracking: {o.data.tracking}</p>}{!o.data.catalogUnavailable&&['awaiting_payment', 'pending'].includes(o.status) && <button className="button button-dark" onClick={() => api('resume', { id: o.id }).then(d => location.assign(d.url)).catch(report)}>Resume checkout</button>}{!['paid', 'shipped', 'delivered'].includes(o.status) && <button className="button button-dark" onClick={() => api('reconcile', { id: o.id }).then(d => { toast.info(d.message || d.status); load(); }).catch(report)}>Check payment status</button>}</article>)}</> : section === 'addresses' ? <><h2>Saved addresses</h2>{data.addresses.map((a: any) => <article className="account-record" key={a.id}><strong>{a.name}</strong><p>{a.line1} {a.line2}<br />{a.city}, {a.state} {a.zip}</p><button className="text-button" onClick={() => api('address', { id: a.id, remove: true }).then(load).catch(report)}>Remove</button></article>)}<form className="store-form" onSubmit={e => submit(e, 'address')}><h3>Add an address</h3><AddressFields /><button className="button button-dark" disabled={busy}>Save address</button></form></> : section === 'profile' ? <form className="store-form" onSubmit={e => submit(e, 'profile')}><h2>Profile</h2><Field label="Full name" name="name" defaultValue={data.profile?.name || store.customer.name}/><Field label="Phone" name="phone" type="tel" defaultValue={data.profile?.phone}/><Field label="Institution / company" name="company" defaultValue={data.profile?.company}/><Check checked={accepted} onChange={setAccepted}>My purchases are exclusively for laboratory research.</Check><button className="button button-dark" disabled={busy}>Save profile</button></form> : section === 'rewards' ? <><h2>Rewards</h2>{!store.config.rewardsEnabled ? <Blank title="Rewards are not active yet.">Program details will appear here when released.</Blank> : <><p className="reward-total">{data.rewards.reduce((s: number, r: any) => s + r.points, 0)} points</p>{data.rewards.length ? data.rewards.map((r: any, i: number) => <p key={i}>{r.reason}: {r.points} points · {new Date(r.created).toLocaleDateString()}</p>) : <p>No rewards have been earned yet.</p>}</>}</> : section === 'notifications' ? <><h2>Notifications</h2>{data.requests.length ? data.requests.map((r: any) => <article className="account-record" key={r.id}><strong>{r.kind === 'stock' ? 'Restock request' : r.kind === 'affiliate' ? 'Partner application' : 'Support message'}</strong><p>{r.status} · {new Date(r.created).toLocaleDateString()}</p></article>) : <Blank title="No notifications.">Your requests and updates will appear here.</Blank>}</> : section === 'affiliate' ? <><h2>Affiliate program</h2><p>Apply to partner with Biomod. Applications are reviewed before program access is granted.</p><form className="store-form" onSubmit={e => submit(e, 'affiliate')}><Field label="Website or profile URL" name="website" type="url"/><Field label="Tell us about your audience" name="message"><textarea name="message" required rows={5}/></Field><button className="button button-dark" disabled={busy}>Submit application</button></form></> : <><h2>Welcome{store.customer.name ? ', ' + store.customer.name : ''}.</h2><p>Manage your orders, addresses, saved products, and research account.</p><div className="account-overview"><a href="/account/orders"><strong>{data.orders.length}</strong>Orders</a><a href="/account/wishlist"><strong>{store.wishlist.length}</strong>Saved products</a><a href="/account/addresses"><strong>{data.addresses.length}</strong>Addresses</a></div></>}</div></div></>; }
-export function PaymentReturn() { const { store } = useStore(); const [orders, setOrders] = useState<any[]>([]); useEffect(() => { if (store.customer)
-    api('account').then(d => setOrders(d.orders)).catch(report); }, [store.customer?.id]); return <><h1>Payment status</h1><p>Returning from the payment page does not by itself confirm a payment. Open your order to verify its status.</p>{orders.filter(o => !['paid', 'shipped', 'delivered'].includes(o.status)).map(o => <article className="account-record" key={o.id}><h2>Order {o.id.slice(0, 8)}</h2><p>{money(o.total)} · {o.status}</p><button className="button button-dark" onClick={() => api('reconcile', { id: o.id }).then(d => toast.info(d.message || d.status)).catch(report)}>Verify payment</button></article>)}<a href="/account/orders">View my orders</a></>; }
+export function PaymentReturn() {
+    type ReturnOrder = { id: string; status: string; total: number };
+    type Scope = { owner: string; version: number };
+    const { store, ready, loadError, refresh } = useStore();
+    const { retrying, retryLoad } = useStoreLoadRetry(refresh);
+    const owner = ready ? store.customer?.id || null : null;
+    const latestOwner = useRef(owner);
+    latestOwner.current = owner;
+    const version = useRef(0);
+    const operation = useRef<Scope | null>(null);
+    const [view, setView] = useState<{ owner: string | null; orders: ReturnOrder[] | null; error: string; busy: string }>({ owner, orders: null, error: '', busy: '' });
+    const current = (scope: Scope) => latestOwner.current === scope.owner && version.current === scope.version;
+    const statuses: Record<string, string> = { creating: 'Checkout being prepared', awaiting_payment: 'Awaiting payment confirmation', pending: 'Payment confirmation pending', review: 'Payment requires review', paid: 'Payment confirmed', labeling: 'Preparing shipment', shipped: 'Shipped', delivered: 'Delivered', cancelled: 'Cancelled', canceled: 'Cancelled', refunded: 'Refunded', failed: 'Payment unsuccessful' };
+    const complete = ['paid', 'labeling', 'shipped', 'delivered'];
+    const verifiable = ['creating', 'awaiting_payment', 'pending', 'review'];
+
+    async function readOrders(scope: Scope) {
+        const data = await api('account');
+        if (!Array.isArray(data.orders)) throw new Error('Order list unavailable');
+        if (current(scope)) setView(previous => ({ ...previous, owner: scope.owner, orders: data.orders, error: '' }));
+    }
+    async function loadOrders(scope: Scope) {
+        if (!current(scope) || operation.current) return;
+        operation.current = scope;
+        setView(previous => ({ ...previous, busy: 'loading' }));
+        try { await readOrders(scope); }
+        catch {
+            if (current(scope)) setView(previous => ({ ...previous, error: previous.orders ? 'The order list could not refresh. Your last loaded statuses are still shown. Please retry.' : 'Your orders could not load. Please retry to check payment status.' }));
+        }
+        finally {
+            if (operation.current === scope) operation.current = null;
+            if (current(scope)) setView(previous => ({ ...previous, busy: '' }));
+        }
+    }
+    useEffect(() => {
+        const revision = ++version.current;
+        operation.current = null;
+        setView({ owner, orders: null, error: '', busy: '' });
+        if (owner) void loadOrders({ owner, version: revision });
+        return () => { version.current += 1; operation.current = null; };
+    }, [owner]);
+
+    async function verify(id: string) {
+        if (!owner || operation.current) return;
+        const scope = { owner, version: version.current };
+        if (!current(scope)) return;
+        operation.current = scope;
+        setView(previous => ({ ...previous, error: '', busy: id }));
+        try {
+            const result = await api('reconcile', { id });
+            if (!current(scope)) return;
+            if (![...complete, 'pending', 'review'].includes(result.status)) throw new Error('Payment status unavailable');
+            setView(previous => ({ ...previous, orders: previous.orders?.map(order => order.id === id ? { ...order, status: result.status } : order) || null }));
+            try { await readOrders(scope); }
+            catch {
+                if (current(scope)) setView(previous => ({ ...previous, error: 'Payment was checked, but the order list could not refresh. The last verified status is still shown. Please retry the order list.' }));
+            }
+        }
+        catch {
+            if (current(scope)) setView(previous => ({ ...previous, error: 'Payment status could not be verified. Your last loaded statuses are still shown. Check again or contact us before attempting another payment.' }));
+        }
+        finally {
+            if (operation.current === scope) operation.current = null;
+            if (current(scope)) setView(previous => ({ ...previous, busy: '' }));
+        }
+    }
+
+    if (!ready) return <><h1>Payment status</h1>{loadError ? <><p className="notice error" role="alert">{loadError}</p><button className="button button-dark" disabled={retrying} onClick={retryLoad}>{retrying ? 'Retrying…' : 'Retry account access'}</button></> : <p role="status">Loading secure account access…</p>}</>;
+    if (!owner) return <AuthPage returnTo="/payment/return"/>;
+    const shown = view.owner === owner ? view : { orders: null, error: '', busy: 'loading' };
+    return <>
+        <h1>Payment status</h1>
+        <p>Returning from the payment page does not by itself confirm payment. Check the status of your order below.</p>
+        {shown.error && <p className="notice error" role="alert">{shown.error}</p>}
+        {!shown.orders && !shown.error && <p role="status">Loading your orders…</p>}
+        {shown.error && <button className="button button-dark" disabled={Boolean(shown.busy)} onClick={() => void loadOrders({ owner, version: version.current })}>{shown.busy === 'loading' ? 'Refreshing orders…' : 'Retry order list'}</button>}
+        {shown.orders && (shown.orders.length ? <>
+            <p>Your recent orders are listed below, including earlier purchases.</p>
+            {shown.orders.map(order => <article className="account-record" key={order.id}>
+                <h2>Order {order.id.slice(0, 8)}</h2>
+                <p>{money(order.total)}</p>
+                <p role="status"><strong>{statuses[order.status] || order.status.replaceAll('_', ' ')}</strong></p>
+                {order.status === 'pending' || order.status === 'awaiting_payment' ? <p>A completed payment has not yet been confirmed. Verify the status before trying to pay again.</p> : order.status === 'review' ? <p>This order needs review. Contact us before attempting another payment.</p> : null}
+                {verifiable.includes(order.status) && <button className="button button-dark" disabled={Boolean(shown.busy)} onClick={() => verify(order.id)}>{shown.busy === order.id ? 'Verifying payment…' : 'Verify payment'}</button>}
+            </article>)}
+        </> : <p role="status">No orders were found for this signed-in account. If you used another email at checkout, sign in with that email or contact us.</p>)}
+        <p><a href="/account/orders">View my orders</a> · <a href="/contact">Contact Biomod</a></p>
+    </>;
+}

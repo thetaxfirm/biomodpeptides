@@ -130,7 +130,7 @@ export async function GET(req: NextRequest, { params }: {
                 // Log and show the provider's error code (never credentials) so setup problems can be diagnosed.
                 const detail = e instanceof Error && e.name === 'AnetPaymentError' ? ' ' + e.message : '';
                 console.error('Authorize.net hosted form failed:', e instanceof Error ? e.name + ': ' + e.message : 'unknown error');
-                return fail('The payment page could not be opened. No payment has been taken.' + detail, 502);
+                return fail('The payment page could not be opened. We could not confirm the payment status. Check your orders or contact Biomod before paying again.' + detail, 502);
             }
         }
         if (action === 'account') {
