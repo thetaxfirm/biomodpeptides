@@ -38,7 +38,15 @@ export async function session(secure: boolean) { const c = await cookies(); let 
     c.set('bm_session', id, { httpOnly: true, secure, sameSite: 'lax', path: '/', maxAge: 2592000 });
     row = { id, cart: '[]', wishlist: '[]' };
 } return row; }
-export async function requireAdmin() { const u = await requireCustomer(); if (!(runtime().STORE_ADMIN_EMAILS || '').split(',').map(s => s.trim().toLowerCase()).includes(u.email.toLowerCase()))
+export const isAdminEmail = (email: string) => (runtime().STORE_ADMIN_EMAILS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean).includes(email.trim().toLowerCase());
+// Only pre-approved administrators can create an account through recovery.
+// The provider emails a verification link; this never sets a password or grants a session.
+export async function requestPasswordRecovery(email: string, origin: string) {
+    const normalized = email.trim().toLowerCase();
+    const admin = isAdminEmail(normalized);
+    await authCall((admin ? 'otp' : 'recover') + '?redirect_to=' + encodeURIComponent(origin + '/reset-password'), { email: normalized, ...(admin ? { create_user: true } : {}) });
+}
+export async function requireAdmin() { const u = await requireCustomer(); if (!isAdminEmail(u.email))
     throw new Error('Administrator access is required.'); return u; }
 export async function rateLimit(key: string, limit = 30) { const now = timestamp(); const row = await one<{
     count: number;

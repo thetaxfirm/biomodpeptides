@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createCartImports } from '@/lib/cart-import';
 import { z } from 'zod';
-import { session, customer, requireCustomer, requireAdmin, authReady, authCall, storeAuth, rateLimit } from '@/lib/auth';
+import { session, customer, requireCustomer, requireAdmin, authReady, authCall, storeAuth, rateLimit, requestPasswordRecovery } from '@/lib/auth';
 import { presentationData } from '@/lib/private-presentation';
 import { adminOrderView, currentCart, currentProductId, currentSelection, orderView, unavailableOrder } from '@/lib/catalog-visibility';
 import { catalog, config, quote, validateLines } from '@/lib/commerce';
@@ -284,9 +284,9 @@ export async function POST(req: NextRequest, { params }: {
             return j({ message: 'Almost done. Check your email and click the link to verify your membership, then sign in.', verificationRequired: true });
         }
         if (action === 'auth-recover') {
-            await authCall('recover?redirect_to=' + encodeURIComponent(req.nextUrl.origin + '/reset-password'), { email: z.string().email().parse(b.email) });
+            await requestPasswordRecovery(z.string().trim().email().parse(b.email), req.nextUrl.origin);
             (await cookies()).set(AUTH_RETURN_COOKIE, safeAuthReturn(b.returnTo), { httpOnly: true, secure, sameSite: 'lax', path: '/', maxAge: AUTH_RETURN_MAX_AGE });
-            return j({ message: 'If this email has an account, a password reset link has been requested.' });
+            return j({ message: 'If this address is eligible, check your email for a secure password link.' });
         }
         if (action === 'auth-reset') {
             const token = str(b.token, 5000);
