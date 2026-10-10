@@ -3,6 +3,7 @@ import { runtime } from './runtime';
 import { canonicalPath, mayIndex, pageInfo, productAt, seoConfig, privatePath, type SEOConfig } from './seo-policy';
 import { imagePath } from './catalog';
 import { publicCatalog } from './public-catalog';
+import { merchantPolicies } from './merchant-policies';
 import { certificateProperties } from './certificate-schema';
 import { headers } from 'next/headers';
 
@@ -36,7 +37,13 @@ export function routeMetadata(path: string, query: URLSearchParams = new URLSear
 export async function routeStructuredData(path: string, config: SEOConfig = currentSEO()) {
   const clean = canonicalPath(path), info = pageInfo(path), p = productAt(path);
   if (!mayIndex(path, new URLSearchParams(), config)) return null;
-  const organization = { '@type': 'Organization', '@id': config.origin + '/#organization', name: 'Biomod Peptides', alternateName: ['TryBiomod', 'BIOMOD'], description: 'Biomod Peptides supplies lyophilized compound vials for laboratory research through TryBiomod.com. Not for human or animal use.', url: config.origin, logo: config.origin + '/brand/logo-navy-tm-v36.svg', email: 'contact@trybiomod.com' };
+  // Stable policies are defined on their own pages and repeated on eligible
+  // products, so every Offer reference also resolves within its document.
+  const policies = p || clean === '/shipping-policy' || clean === '/returns-refunds' ? await merchantPolicies(config.origin) : null;
+  const organization = { '@type': 'Organization', '@id': config.origin + '/#organization', name: 'Biomod Peptides', alternateName: ['TryBiomod', 'BIOMOD'], description: 'Biomod Peptides supplies lyophilized compound vials for laboratory research through TryBiomod.com. Not for human or animal use.', url: config.origin, logo: config.origin + '/brand/logo-navy-tm-v36.svg', email: 'contact@trybiomod.com',
+    ...(policies ? { hasMerchantReturnPolicy: policies.hasMerchantReturnPolicy } : {}),
+    ...(policies?.hasShippingService ? { hasShippingService: policies.hasShippingService } : {}),
+  };
   const graph: Record<string, unknown>[] = [organization,
     { '@type': 'WebSite', '@id': config.origin + '/#website', url: config.origin, name: 'Biomod Peptides', alternateName: ['TryBiomod', 'BIOMOD'], publisher: { '@id': organization['@id'] } },
     { '@type': 'WebPage', '@id': config.origin + clean + '#page', url: config.origin + clean, name: info.title, description: info.description, isPartOf: { '@id': config.origin + '/#website' } },
@@ -59,7 +66,10 @@ export async function routeStructuredData(path: string, config: SEOConfig = curr
       ...(snapshot.verified && live && live.price > 0 ? { offers: { '@type': 'Offer', url: config.origin + clean,
         priceCurrency: 'USD', price: (live.price / 100).toFixed(2),
         availability: live.inStock && live.purchasable ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
-        seller: { '@id': organization['@id'] } } } : {}) });
+        seller: { '@id': organization['@id'] },
+        ...(policies ? { hasMerchantReturnPolicy: { '@id': policies.hasMerchantReturnPolicy['@id'] } } : {}),
+        ...(policies?.hasShippingService ? { shippingDetails: { '@type': 'OfferShippingDetails', hasShippingService: { '@id': policies.hasShippingService['@id'] } } } : {}),
+      } } : {}) });
   }
   return { '@context': 'https://schema.org', '@graph': graph };
 }

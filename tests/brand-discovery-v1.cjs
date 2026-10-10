@@ -22,6 +22,7 @@ const originalLoad = Module._load;
 const originalFetch = global.fetch;
 global.fetch = async () => { throw new Error('Network is forbidden in this test'); };
 Module._load = function(request, parent, isMain) {
+  if (parent?.filename.endsWith('/lib/merchant-policies.ts') && request === './commerce') return { config: async () => ({ freeShippingAt: 20000 }) };
   if (parent?.filename.endsWith('/lib/seo.ts')) {
     if (request === './runtime') return { runtime: () => env };
     if (request === 'next/headers') return { headers: async () => new Map([['host', 'trybiomod.com']]) };
