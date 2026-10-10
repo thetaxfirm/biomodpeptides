@@ -26,3 +26,16 @@ export function orderView(data: Record<string, any>) {
   });
   return { items, subtotal: data.subtotal, discount: data.discount, shipping: data.shipping, tax: data.tax, total: data.total, address: data.address, tracking: data.tracking, catalogUnavailable: unavailableOrder(data) };
 }
+// Administrator copy: everything needed to pick, pack and ship the order, including the customer email, chosen service, promo and label.
+export function adminOrderView(data: Record<string, any>) {
+  return {
+    ...orderView(data),
+    email: data.email || '',
+    packDiscount: data.packDiscount,
+    promoDiscount: data.promoDiscount,
+    promo: data.promo ? { code: data.promo.code, savings: data.promo.savings } : null,
+    shippingService: data.shippingService,
+    shipment: data.shipment,
+    shippedAt: data.shippedAt,
+  };
+}
