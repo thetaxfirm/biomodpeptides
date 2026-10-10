@@ -45,8 +45,23 @@ function CartChoice() {
     return <section className="content-page" aria-labelledby="cart-choice-title"><h1 id="cart-choice-title">Choose your cart</h1><p>{conflict.message}</p><p>We have kept both carts. Their contents will not be combined automatically.</p><div className="cart-choice-grid">{([['current', 'Current shopping cart', conflict.current], ['saved', 'Saved account cart', conflict.saved]] as const).map(([choice, title, lines]) => <div className="cart-choice-column" key={choice}><h2>{title}</h2>{lines.length ? <ul>{lines.map((line, i) => { const p = store.products.find(product => product.id === line.id); return <li key={i}>{p?.name || 'Unavailable product'}{p?.sizes[0] ? ' · ' + p.sizes[0] : ''} × {line.quantity}{line.packId ? ` · ${line.packSize}-pack (${line.packKind === 'fixed' ? 'same product' : 'mixed'})` : ''}</li>; })}</ul> : <p>No items.</p>}<button className="button button-dark cart-choice-action" disabled={busy} onClick={() => choose(choice)}>Use {choice === 'current' ? 'current shopping' : 'saved account'} cart</button></div>)}</div>{error && <p className="notice error" role="alert">{error}</p>}<p><button className="text-button" disabled={busy} onClick={() => choose('empty')}>Start an empty cart</button></p><a href="/shop">Continue browsing</a></section>;
 }
 
+// Retry reads the existing shopping session; it must never clear or resubmit a cart.
+function useStoreLoadRetry(refresh: () => Promise<void>) {
+    const [retrying, setRetrying] = useState(false);
+    const inFlight = useRef(false);
+    async function retryLoad() {
+        if (inFlight.current) return;
+        inFlight.current = true;
+        setRetrying(true);
+        try { await refresh(); }
+        catch (e) { report(e); }
+        finally { inFlight.current = false; setRetrying(false); }
+    }
+    return { retrying, retryLoad };
+}
 export function Cart() {
-    const { store, ready, saveCart } = useStore();
+    const { store, ready, loadError, refresh, saveCart } = useStore();
+    const { retrying, retryLoad } = useStoreLoadRetry(refresh);
     const [busy, setBusy] = useState(false);
     const [promoBusy, setPromoBusy] = useState(false);
     const q = store.totals;
@@ -69,7 +84,10 @@ export function Cart() {
     if (ready && store.cartConflict) return <CartChoice/>;
     return <><div className="page-heading"><h1>Your Cart</h1></div>
         {store.cartNotice && <p className="notice" role="status">{store.cartNotice}</p>}
-        {!ready ? <p>Loading your saved cart…</p> : !store.cart.length ? <Blank title="Your cart is empty."><a className="button button-dark" href="/shop">Explore products</a></Blank> : <div className="cart-layout">
+        {!ready ? <div aria-busy={retrying}>
+            <p role={loadError ? 'alert' : 'status'}>{loadError || 'Loading your saved cart…'}</p>
+            {loadError && <button type="button" className="button button-dark" disabled={retrying} onClick={retryLoad}>{retrying ? 'Retrying…' : 'Retry cart'}</button>}
+        </div> : !store.cart.length ? <Blank title="Your cart is empty."><a className="button button-dark" href="/shop">Explore products</a></Blank> : <div className="cart-layout">
             <div>
                 {store.cartError && <div className="notice error"><p>{store.cartError}</p><button className="text-button" disabled={locked} onClick={async () => { setBusy(true); try { await saveCart([]); } catch (e) { report(e); } finally { setBusy(false); } }}>Clear cart and start again</button></div>}
                 {store.cart.map((l, i) => {
@@ -104,7 +122,8 @@ export function AddressFields({ initial = {} }: {
     initial?: Record<string, string>;
 }) { return <><Field label="Full name" name="name" defaultValue={initial.name}/><Field label="Street address" name="line1" defaultValue={initial.line1}/><Field label="Apartment / suite (optional)" name="line2" defaultValue={initial.line2} required={false}/><div className="form-row"><Field label="City" name="city" defaultValue={initial.city}/><Field label="State (2 letters)" name="state" defaultValue={initial.state} placeholder="CA"/><Field label="ZIP code" name="zip" defaultValue={initial.zip}/></div><Field label="Phone" name="phone" type="tel" defaultValue={initial.phone}/><input type="hidden" name="country" value="US"/><p className="muted">United States delivery only.</p></>; }
 export function Checkout() {
-    const { store, ready } = useStore();
+    const { store, ready, loadError, refresh } = useStore();
+    const { retrying, retryLoad } = useStoreLoadRetry(refresh);
     const [accepted, setAccepted] = useState(false);
     const [busy, setBusy] = useState(false);
     const [promoBusy, setPromoBusy] = useState(false);
@@ -133,7 +152,11 @@ export function Checkout() {
         setPromoBusy(next);
         if (next) invalidateDelivery();
     }
-    if (!ready) return <p>Loading checkout…</p>;
+    if (!ready) return <section aria-busy={retrying}>
+        <div className="page-heading"><h1>Checkout</h1></div>
+        <p role={loadError ? 'alert' : 'status'}>{loadError || 'Loading checkout…'}</p>
+        {loadError && <button type="button" className="button button-dark" disabled={retrying} onClick={retryLoad}>{retrying ? 'Retrying…' : 'Retry checkout'}</button>}
+    </section>;
     if (store.cartConflict) return <CartChoice/>;
     if (!store.payment.enabled) return <section className="checkout-unavailable"><h1>Checkout is not open yet.</h1><p>Your cart stays saved with your shopping session. We are preparing secure checkout and will accept orders once it is ready.</p><div className="checkout-unavailable-actions"><a className="button button-dark" href="/cart">Return to your cart</a><a href="/shop">Keep shopping</a><a href="/contact">Contact Biomod</a></div></section>;
     if (store.cartError) return <Blank title="Your cart needs a review."><p>{store.cartError}</p><a className="button button-dark" href="/cart">Review your cart</a></Blank>;
