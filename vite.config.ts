@@ -30,7 +30,8 @@ const localBindingConfig = {
     keep_vars: true,
     vars: { SEO_PUBLIC_ORIGIN: searchPublication.origin, SEO_PUBLIC_LAUNCH_APPROVED: "true", SEO_INDEXING_ENABLED: "true", SEO_REVIEWED_PRODUCT_SLUGS: searchPublication.productSlugs.join(",") },
   } : {}),
-  main: "vinext/server/fetch-handler",
+  main: "./worker.ts",
+  ...(production ? { triggers: { crons: ["0 9 * * *"] } } : {}),
   compatibility_flags: ["nodejs_compat"],
   d1_databases: d1
     ? [

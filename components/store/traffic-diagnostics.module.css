@@ -1,0 +1,24 @@
+.report { min-width: 0; }
+.toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 16px; margin: 20px 0; }
+.period { display: grid; gap: 8px; font-weight: 600; }
+.period select { min-height: 44px; padding: 8px 12px; background: var(--surface, white); color: inherit; border: 1px solid currentColor; border-radius: 4px; font: inherit; }
+.report section { margin-top: 28px; }
+.report h2, .report h3, .report h4 { margin-bottom: 12px; }
+.report p, .limitations { max-width: 85ch; margin: 12px 0; line-height: 1.6; }
+.report table { width: 100%; }
+.report th, .report td { white-space: normal; vertical-align: top; padding: 12px 10px; }
+.number { text-align: right; font-variant-numeric: tabular-nums; }
+.note { font-weight: 600; }
+.breakdowns { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+.breakdowns section { margin-top: 12px; }
+.limitations { padding-left: 22px; }
+.limitations li { margin: 8px 0; }
+.detail { margin-top: 20px; }
+.detail summary { cursor: pointer; padding: 12px 0; font-weight: 600; }
+.detail summary:focus-visible, .period select:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+@media (max-width: 720px) { .breakdowns { grid-template-columns: 1fr; gap: 8px; } }
+@media (max-width: 600px) {
+  .report th, .report td { padding: 10px 6px; font-size: 13px; }
+  .toolbar { align-items: stretch; }
+  .period { flex-basis: 100%; }
+}

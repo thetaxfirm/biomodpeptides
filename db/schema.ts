@@ -15,3 +15,21 @@ export const reservations = sqliteTable('inventory_reservations', { orderId: tex
 export const customerCarts=sqliteTable('customer_carts',{id:text('id').primaryKey(),cart:text('cart').notNull().default('[]'),updated:integer('updated').notNull()});
 export const savedPacks=sqliteTable('saved_packs',{id:text('id').primaryKey(),owner:text('owner').notNull(),name:text('name').notNull(),products:text('products').notNull(),updated:integer('updated').notNull()},t=>[index('saved_packs_owner_updated').on(t.owner,t.updated)]);
 export const guards=sqliteTable('transaction_guards',{id:text('id').primaryKey(),valid:integer('valid').notNull()},t=>[check('valid_transaction',sql`${t.valid}=1`)]);
+
+// Broad daily page-view aggregates, deliberately separate from shopping sessions.
+export const trafficDaily=sqliteTable('traffic_daily',{
+  day:text('day').notNull(),pageGroup:text('page_group').notNull(),sourceGroup:text('source_group').notNull(),eventCount:integer('event_count').notNull(),
+},t=>[primaryKey({columns:[t.day,t.pageGroup,t.sourceGroup]}),
+  check('traffic_valid_day',sql`${t.day} GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND strftime('%Y-%m-%d',${t.day},'+0 days') IS NOT NULL AND strftime('%Y-%m-%d',${t.day},'+0 days')=${t.day}`),
+  check('traffic_page_group',sql`${t.pageGroup} IN ('home','catalog','product','documents','guide','about','locations','contact','policy')`),
+  check('traffic_source_group',sql`${t.sourceGroup} IN ('search','ai','social','external_other','internal','direct_or_unavailable')`),
+  check('traffic_count',sql`typeof(${t.eventCount})='integer' AND ${t.eventCount} BETWEEN 1 AND 50000`),
+]);
+export const trafficMetricsHealth=sqliteTable('traffic_metrics_health',{
+  id:integer('id').primaryKey(),lastAttempt:integer('last_attempt').notNull(),lastSuccess:integer('last_success'),lastFailure:integer('last_failure'),lastStatus:text('last_status').notNull(),
+},t=>[check('traffic_health_singleton',sql`${t.id}=1`),
+  check('traffic_health_attempt',sql`typeof(${t.lastAttempt})='integer' AND ${t.lastAttempt}>=0`),
+  check('traffic_health_success',sql`${t.lastSuccess} IS NULL OR (typeof(${t.lastSuccess})='integer' AND ${t.lastSuccess}>=0)`),
+  check('traffic_health_failure',sql`${t.lastFailure} IS NULL OR (typeof(${t.lastFailure})='integer' AND ${t.lastFailure}>=0)`),
+  check('traffic_health_status',sql`${t.lastStatus} IN ('ok','failed')`),
+]);

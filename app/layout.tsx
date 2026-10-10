@@ -15,6 +15,10 @@ import "./storefront-v25.css";
 import "./storefront-v34.css";
 import {StoreProvider} from "@/components/store/provider";
 import { publicCatalog } from '@/lib/public-catalog';
+import { TrafficMeasurement } from '@/components/store/traffic-measurement';
+import { trafficConfiguration } from '@/lib/traffic-metrics';
+import { runtime } from '@/lib/runtime';
+import searchPublication from '@/lib/seo-publication-v1.json';
 import {Footer} from "@/components/store/content";
 export const metadata: Metadata={title:{default:"Biomod Peptides | TryBiomod",template:"%s | Biomod Peptides"},description:"Biomod Peptides at TryBiomod.com. Research compound vials, product specifications and available lot-level documentation. For laboratory research only.",icons:{icon:"/favicon.svg"},robots:{index:false,follow:false}};
-export default async function RootLayout({children}:{children:React.ReactNode}){const snapshot=await publicCatalog(); return <html lang="en"><body><StoreProvider initialCatalog={snapshot.products}><Header/>{children}<Footer/></StoreProvider></body></html>}
+export default async function RootLayout({children}:{children:React.ReactNode}){const snapshot=await publicCatalog(); return <html lang="en"><body><StoreProvider initialCatalog={snapshot.products}><TrafficMeasurement enabled={trafficConfiguration(runtime()).enabled} reviewedProductSlugs={searchPublication.productSlugs}/><Header/>{children}<Footer/></StoreProvider></body></html>}

@@ -38,5 +38,5 @@ export default async function Page({ params, searchParams }: Props) {
   }
   const seo = await requestSEO();
   const data = mayIndex('/' + route, queryParams(query), seo) ? await routeStructuredData('/' + route, seo) : null;
-  return <main id="main-content" className="wrap page-content">{data && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(data) }}/>}<Experience path={route} query={Object.fromEntries(Object.entries(query).map(([key, value]) => [key, Array.isArray(value) ? value[0] || '' : value]))}/></main>;
+  return <main id="main-content" data-traffic-path={'/' + route} className="wrap page-content">{data && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(data) }}/>}<Experience path={route} query={Object.fromEntries(Object.entries(query).map(([key, value]) => [key, Array.isArray(value) ? value[0] || '' : value]))}/></main>;
 }
