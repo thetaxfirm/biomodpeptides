@@ -57,7 +57,7 @@ export async function routeStructuredData(path: string, config: SEOConfig = curr
     const live = snapshot.products.find(item => item.id === p.id);
     graph.push({ '@type': 'Product', '@id': config.origin + clean + '#product',
       name: info.title, description: info.description, url: config.origin + clean,
-      image: config.origin + imagePath(p), sku: p.sku || String(p.id),
+      image: config.origin + imagePath(p), ...(p.sku?.trim() ? { sku: p.sku.trim() } : {}),
       brand: { '@type': 'Brand', name: 'BIOMOD' }, category: p.categories[0]?.name,
       additionalProperty: [{ '@type': 'PropertyValue', name: 'Compound', value: p.identity },
         { '@type': 'PropertyValue', name: 'Container contents', value: p.sizes[0] },
