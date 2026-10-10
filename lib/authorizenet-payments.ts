@@ -357,7 +357,11 @@ export function createAnetAdapter(env: Environment = process.env, request: typeo
         const batches = await call({ getSettledBatchListRequest: { merchantAuthentication: auth(), includeStatistics: false, firstSettlementDate: iso(since), lastSettlementDate: iso(new Date()) } });
         const found: Record<string, unknown>[] = [];
         const list = Array.isArray(batches.batchList) ? batches.batchList.map(object).filter(Boolean) as Record<string, unknown>[] : [];
-        for (const batch of list.slice(0, 40)) {
+        // A partial history cannot establish that an order is unpaid or has only
+        // one capture. Fail closed instead of silently dropping older batches.
+        if (list.length > 40)
+            throw new AnetPaymentError('TOO_MANY_RESULTS', 'Authorize.net results require manual reconciliation.');
+        for (const batch of list) {
             if (typeof batch.batchId !== 'string')
                 continue;
             for (let offset = 1; offset <= 5; offset++) {
@@ -366,6 +370,8 @@ export function createAnetAdapter(env: Environment = process.env, request: typeo
                 found.push(...page);
                 if (page.length < LIST_LIMIT)
                     break;
+                if (offset === 5)
+                    throw new AnetPaymentError('TOO_MANY_RESULTS', 'Authorize.net results require manual reconciliation.');
             }
         }
         return found;
