@@ -76,6 +76,8 @@ for (const product of products) {
 assert.equal(eligibleCount, 17);
 
 const expectedStudies = {
+  'glutathione-reduced-l-glutathione': ['Reduced glutathione research context', 'https://pubmed.ncbi.nlm.nih.gov/11419750/', '10.1016/s0378-4347(01)00081-0'],
+  'thymosin-alpha-1-10mg': ['Thymosin Alpha-1 research context', 'https://pubmed.ncbi.nlm.nih.gov/265536/', '10.1073/pnas.74.2.725'],
   'bpc-157-10mg': ['BPC-157 research context', 'https://pubmed.ncbi.nlm.nih.gov/25415472/', '10.3390/molecules191119066'],
   'mots-c-10mg': ['MOTS-c research context', 'https://pmc.ncbi.nlm.nih.gov/articles/PMC4350682/', '10.1016/j.cmet.2015.02.009'],
   'mots-c-40mg': ['MOTS-c research context', 'https://pmc.ncbi.nlm.nih.gov/articles/PMC4350682/', '10.1016/j.cmet.2015.02.009'],
@@ -96,13 +98,26 @@ for (const product of products) {
   assert(eligibleDiscovery(product));
   assert(context?.includes('<h2 id="product-research-heading">' + expected[0] + '</h2>'));
   assert(context.includes('href="' + expected[1] + '"') && context.includes('DOI: ' + expected[2]), 'The primary citation and DOI are visible in initial HTML');
-  assert(context.includes('<dt>Models studied</dt>') && context.includes('<dt>Study focus</dt>'));
+  const materialLabel = ['glutathione-reduced-l-glutathione', 'thymosin-alpha-1-10mg'].includes(product.slug) ? 'Study material' : 'Models studied';
+  assert(context.includes('<dt>' + materialLabel + '</dt>') && context.includes('<dt>Study focus</dt>'));
   assert(context.includes('does not verify a BIOMOD batch or establish suitability for human use'));
   assert(context.includes('href="' + escape(batchPath(batchFor(product.id))) + '"'), 'The context links to this product record, including a pending record, rather than a sibling COA');
   assert(!/<(?:button|details|script)\b|\bhidden=|aria-hidden=|\.pdf|FAQPage|MedicalEntity|MedicalStudy/.test(context), 'Research copy is visible without adding medical markup or a substituted document');
   assert(!/\b(?:dosage|dose|benefit|treats|cures|clinically proven|absorption|purity|acetate)\b/i.test(context), 'Research context makes no product efficacy, dosing, salt or purity claim');
   assert(html.indexOf('product-questions-heading') < html.indexOf('product-research-heading'), 'Research context follows the existing questions');
-  if (product.slug === 'bpc-157-10mg') {
+  if (product.slug === 'glutathione-reduced-l-glutathione') {
+    assert(context.includes('Reduced glutathione (GSH) and oxidized glutathione (GSSG) are distinct forms.'));
+    assert(context.includes('Collected human blood-cell samples: peripheral blood mononuclear cells.'));
+    assert(context.includes('Simultaneous measurement of GSH and GSSG') && context.includes('(LC-MS)'));
+    assert(context.includes('analytical method is separate from the method reported on the product certificate'));
+    assert(!context.includes('265536') && !context.includes('calf thymus'));
+  } else if (product.slug === 'thymosin-alpha-1-10mg') {
+    assert(context.includes('28-amino-acid peptide') && context.includes('1977 sequence study'));
+    assert(context.includes('Peptide material isolated from calf thymus'));
+    assert(context.includes('Isolation and amino-acid sequence analysis.'));
+    assert(context.includes('does not establish this product&#x27;s manufacturing origin'));
+    assert(!context.includes('11419750') && !context.includes('LC-MS'));
+  } else if (product.slug === 'bpc-157-10mg') {
     assert(context.includes('BPC-157 is described in research literature as a 15-amino-acid peptide.'));
     assert(context.includes('Tendon fibroblasts cultured from rat Achilles tendon.'));
     assert(context.includes('Growth-hormone-receptor expression and related cell signaling.'));
@@ -119,7 +134,7 @@ for (const product of products) {
     assert(!context.includes('AMPK') && !context.includes('PMC4350682') && !context.includes('25415472'), 'SS-31 receives only its own research source');
   }
 }
-assert.deepEqual(researchedSlugs.sort(), Object.keys(expectedStudies).sort(), 'Exactly five current eligible pages receive literature context');
+assert.deepEqual(researchedSlugs.sort(), Object.keys(expectedStudies).sort(), 'Exactly seven current eligible pages receive literature context');
 assert.equal(render(ProductResearchDetails, { product: { ...ten, slug: 'mots-c-unreviewed-size' } }), '', 'Unknown sizes do not inherit a name-based research mapping');
 const bpc157 = products.find(product => product.slug === 'bpc-157-10mg');
 assert(bpc157);
@@ -210,6 +225,8 @@ for (const slugs of [['ss-31-10mg', 'ss-31-50mg'], ['wolverine-10mg', 'wolverine
   }
 }
 for (const [query, expected] of [
+  ['GSH1500mg', ['glutathione-reduced-l-glutathione']],
+  ['GSH500mg', []], ['GSSG', []], ['oxidized glutathione', []],
   ['ss31', ['ss-31-10mg', 'ss-31-50mg']],
   ['wolverine', ['wolverine-10mg', 'wolverine-20mg']],
   ['heat-r', ['heat-r-20mg', 'heat-r-30mg']],
@@ -241,4 +258,4 @@ for (const [query, heading] of [[{}, 'Research peptides &amp; compounds'], [{ ca
 assert.equal(JSON.stringify(products), before, 'rendering never mutates source product identity, price, inventory or contents');
 assert.equal(JSON.stringify({ batchRecords, laboratoryDocuments }), documentsBefore, 'Literature context does not rewrite lot records or laboratory documents');
 assert.deepEqual(batchRecords.map(record => [record.record_id, batchStatus(record)]), statusesBefore, 'All current matched, mismatched, pending and restricted documentation states are unchanged');
-console.log('PASS: real ProductPage and Experience SSR preserve current purchase controls; compact size navigation, live selected price/stock and independent COA states;17 factual FAQs only; five exact eligible pages have visible primary research context and study limits; six explicit shop variants with reciprocal size links and unavailable W20 purchase controls; eligible research links; unchanged nonresearch links and accurate shop headings');
+console.log('PASS: real ProductPage and Experience SSR preserve current purchase controls; compact size navigation, live selected price/stock and independent COA states;17 factual FAQs only; seven exact eligible pages have visible primary research context and study limits; six explicit shop variants with reciprocal size links and unavailable W20 purchase controls; eligible research links; unchanged nonresearch links and accurate shop headings');

@@ -9,10 +9,12 @@ const peptideVialSlugs = new Set([
   'mots-c-10mg', 'mots-c-40mg', 'pt-141-10mg', 'selank', 'semax',
   'ss-31-10mg', 'ss-31-50mg', 'tesamorelin-10mg', 'thymosin-alpha-1-10mg',
 ]);
-// Original lab report V260304-6 016, lot 407-50-0001, names Epithalon 50 mg.
-// This alias belongs only to that reviewed product, not all compounds or blends.
+// Aliases belong only to the exact reviewed identity, not all compounds or blends.
 const productAliases: Readonly<Record<string, readonly string[]>> = {
+  // Original lab report V260304-6 016, lot 407-50-0001, names Epithalon 50 mg.
   'epitalon-50mg': ['epithalon'],
+  // Camera et al. (2001), PMID 11419750: reduced GSH is distinct from oxidized GSSG.
+  'glutathione-reduced-l-glutathione': ['gsh'],
 };
 
 // Normalize notation, not chemical identity. Numeric strengths are never fuzzy-matched.

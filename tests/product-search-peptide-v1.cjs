@@ -28,6 +28,7 @@ for (const [query, slug] of [
   ['SS31 50mg peptide', 'ss-31-50mg'], ['SS31 10 mg peptide', 'ss-31-10mg'],
   ['MOTS C 40mg peptide', 'mots-c-40mg'], ['MOTS-C 10mg peptide', 'mots-c-10mg'],
   ['Elamipretide 50mg peptide vial', 'ss-31-50mg'], ['Glutathione 1500mg peptide', 'glutathione-reduced-l-glutathione'],
+  ...['GSH', 'gsh', 'GSH1500mg', 'GSH 1500 mg peptide vial', 'reduced GSH', 'GSH reduced L-glutathione'].map(q => [q, 'glutathione-reduced-l-glutathione']),
   ['epithalon', 'epitalon-50mg'], ['EPITHALON 50mg peptide', 'epitalon-50mg'],
 ]) assert.deepEqual(matches(query), [slug], query);
 for (const query of [
@@ -37,6 +38,8 @@ for (const query of [
   'BPC157 10mg peptide softgel', 'BPC157 10mg peptide nasal', 'epithalon softgel',
   'NAD 500mg peptide', 'NAD peptide', 'SLU PP 332 peptide', '5 amino 1mq peptide',
   'ERASER peptide', 'Methylene Blue peptide', 'Lipo C peptide',
+  'GSSG', 'GSSG1500mg', 'oxidized glutathione', 'oxidised glutathione', 'glutathione disulfide',
+  'oxidized GSH', 'GSH GSSG', 'GSH500mg', 'GSH1500mcg', 'GSH1500ml', 'GSH spray', 'GSH softgel',
 ]) assert.deepEqual(matches(query), [], query);
 // Same-family size checks must not infer dosage from identity numbers or CAS fragments.
 for (const slug of expected) {
@@ -58,10 +61,18 @@ try {
   assert.equal(productSearchScore(epitalon, 'epithalon'), 0);
   assert(productSearchScore(epitalon, 'epitalon') > 0, 'Explicit existing identity lookup does not imply organic approval');
 } finally { delete productReviewBlocks[epitalon.slug]; }
+const glutathione = product('glutathione-reduced-l-glutathione');
+try {
+  productReviewBlocks[glutathione.slug] = 'Isolated test hold';
+  assert.equal(productSearchScore(glutathione, 'GSH'), 0, 'A later hold removes the reviewed GSH alias');
+  assert(productSearchScore(glutathione, 'glutathione') > 0, 'The recorded identity remains an exact lookup');
+} finally { delete productReviewBlocks[glutathione.slug]; }
+assert.equal(productSearchScore({ ...glutathione, slug: 'glutathione-unreviewed-size' }, 'GSH'), 0);
+for (const query of ['Reduced L-Glutathione 1500mg', '70-18-8', 'BM-EXT-004']) assert.deepEqual(matches(query), [glutathione.slug], query);
 for (const p of products.filter(p => !eligibleDiscovery(p))) {
   assert.equal(productSearchScore(p, p.name + ' peptide'), 0, 'No new contextual discovery for held/unreviewed ' + p.slug);
 }
 assert.equal(JSON.stringify(products), catalogBefore, 'Search never mutates product identity, stock, price or availability');
 const config = seoConfig({ SEO_PUBLIC_ORIGIN:publication.origin, SEO_PUBLIC_LAUNCH_APPROVED:'true', SEO_INDEXING_ENABLED:'true', SEO_REVIEWED_PRODUCT_SLUGS:publication.productSlugs.join(',') });
 assert.equal(sitemapPaths(config).filter(path => path.startsWith('/product/')).length, 17, 'No publication expansion');
-console.log('PASS: real-catalog contextual peptide search, exact Epithalon alias, original identity/SKU/CAS lookup, explicit strength and form negatives, blend distinction, non-peptide exclusion, publication holds and unchanged catalog/sitemap.');
+console.log('PASS: real-catalog contextual peptide search, exact Epithalon/GSH aliases and distinct oxidized form, original identity/SKU/CAS lookup, explicit strength and form negatives, blend distinction, non-peptide exclusion, publication holds and unchanged catalog/sitemap.');

@@ -7,7 +7,40 @@ import styles from './product-research-details.module.css';
 
 // Literature context is deliberately limited to these reviewed molecule/size
 // pairs. It does not add specifications or test results to any product or lot.
+type ResearchStudy = {
+  heading: string;
+  identity: string;
+  models: string;
+  materialLabel?: string;
+  focus: string;
+  citation: string;
+  url: string;
+  doi: string;
+  materialNote?: string;
+};
 const studies = {
+  glutathione: {
+    heading: 'Reduced glutathione research context',
+    identity: 'Reduced glutathione (GSH) and oxidized glutathione (GSSG) are distinct forms. Camera and colleagues developed an assay that distinguishes and measures both in the same analysis.',
+    materialLabel: 'Study material',
+    models: 'Collected human blood-cell samples: peripheral blood mononuclear cells.',
+    focus: 'Simultaneous measurement of GSH and GSSG by liquid chromatography coupled with mass spectrometry (LC-MS).',
+    citation: 'Camera et al. (2001), Journal of Chromatography B',
+    url: 'https://pubmed.ncbi.nlm.nih.gov/11419750/',
+    doi: '10.1016/s0378-4347(01)00081-0',
+    materialNote: "The paper's analytical method is separate from the method reported on the product certificate.",
+  },
+  thymosinAlpha1: {
+    heading: 'Thymosin Alpha-1 research context',
+    identity: 'Goldstein and colleagues described thymosin alpha-1 as a 28-amino-acid peptide in their 1977 sequence study.',
+    materialLabel: 'Study material',
+    models: 'Peptide material isolated from calf thymus for the authors’ study.',
+    focus: 'Isolation and amino-acid sequence analysis.',
+    citation: 'Goldstein et al. (1977), Proceedings of the National Academy of Sciences',
+    url: 'https://pubmed.ncbi.nlm.nih.gov/265536/',
+    doi: '10.1073/pnas.74.2.725',
+    materialNote: "The study's calf-thymus source does not establish this product's manufacturing origin.",
+  },
   bpc157: {
     heading: 'BPC-157 research context',
     identity: 'BPC-157 is described in research literature as a 15-amino-acid peptide.',
@@ -35,8 +68,10 @@ const studies = {
     url: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC3976619/',
     doi: '10.1111/bph.12468',
   },
-};
-const researchBySlug: Partial<Record<string, typeof studies.mots>> = {
+} satisfies Record<string, ResearchStudy>;
+const researchBySlug: Partial<Record<string, ResearchStudy>> = {
+  'glutathione-reduced-l-glutathione': studies.glutathione,
+  'thymosin-alpha-1-10mg': studies.thymosinAlpha1,
   'bpc-157-10mg': studies.bpc157,
   'mots-c-10mg': studies.mots,
   'mots-c-40mg': studies.mots,
@@ -93,11 +128,11 @@ export function ProductResearchDetails({ product }: { product: Product }) {
       <h2 id="product-research-heading">{study.heading}</h2>
       <p>{study.identity}</p>
       <dl className={styles.studyFacts}>
-        <div><dt>Models studied</dt><dd>{study.models}</dd></div>
+        <div><dt>{study.materialLabel || 'Models studied'}</dt><dd>{study.models}</dd></div>
         <div><dt>Study focus</dt><dd>{study.focus}</dd></div>
       </dl>
       <p className={styles.citation}>Read the original study: <a href={study.url}>{study.citation}</a>.<span>DOI: {study.doi}</span></p>
-      <p className={styles.studyLimits}>The study describes the authors&apos; materials and experimental models. It does not verify a BIOMOD batch or establish suitability for human use. <a href={record ? batchPath(record) : '/testing?product=' + product.id}>Review this product&apos;s batch record</a>.</p>
+      <p className={styles.studyLimits}>The study describes the authors&apos; materials and experimental setting. It does not verify a BIOMOD batch or establish suitability for human use. {study.materialNote && <>{study.materialNote} </>}<a href={record ? batchPath(record) : '/testing?product=' + product.id}>Review this product&apos;s batch record</a>.</p>
     </section>}
   </>;
 }
