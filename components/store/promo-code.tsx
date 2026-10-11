@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useId, useRef, useState } from 'react';
+import { FormEvent, useEffect, useId, useRef, useState } from 'react';
 import { money } from '@/lib/catalog';
 import { api, useStore } from './provider';
 import styles from './promo-code.module.css';
@@ -8,10 +8,11 @@ import styles from './promo-code.module.css';
 type Props = {
   disabled?: boolean;
   onBusyChange?: (busy: boolean) => void;
+  onUnappliedChange?: (unapplied: boolean) => void;
   onChange?: () => void;
 };
 
-export function PromoCode({ disabled = false, onBusyChange, onChange }: Props) {
+export function PromoCode({ disabled = false, onBusyChange, onUnappliedChange, onChange }: Props) {
   const { store, refresh } = useStore();
   const id = useId();
   const [code, setCode] = useState('');
@@ -21,6 +22,14 @@ export function PromoCode({ disabled = false, onBusyChange, onChange }: Props) {
   const [message, setMessage] = useState('');
   const operation = useRef(false);
   const applied = store.totals?.promo;
+  const unapplied = Boolean(code.trim()) && code.trim().toUpperCase() !== applied?.code?.trim().toUpperCase();
+  // Notify inside the input event as well as when authoritative totals change.
+  // Parent refs must guard continuation before React commits the next render.
+  function changeCode(next: string) {
+    setCode(next);
+    onUnappliedChange?.(Boolean(next.trim()) && next.trim().toUpperCase() !== applied?.code?.trim().toUpperCase());
+  }
+  useEffect(() => { onUnappliedChange?.(unapplied); }, [unapplied, onUnappliedChange]);
 
   async function update(nextCode: string) {
     if (disabled || operation.current || needsRefresh) return;
@@ -37,7 +46,7 @@ export function PromoCode({ disabled = false, onBusyChange, onChange }: Props) {
       onChange?.();
       await refresh();
       refreshed = true;
-      setCode('');
+      changeCode('');
       setMessage(nextCode ? 'Promo code applied.' : 'Promo code removed.');
     } catch (e) {
       if (changed) {
@@ -70,7 +79,7 @@ export function PromoCode({ disabled = false, onBusyChange, onChange }: Props) {
       await refresh();
       onChange?.();
       setNeedsRefresh(false);
-      setCode('');
+      // Retain the draft: a read alone does not mean this code was applied.
       setMessage('Order totals updated.');
       onBusyChange?.(false);
     } catch {
@@ -97,11 +106,13 @@ export function PromoCode({ disabled = false, onBusyChange, onChange }: Props) {
       <form onSubmit={submit} className={styles.form}>
         <label htmlFor={id}>Promo code</label>
         <div className={styles.entry}>
-          <input id={id} name="promoCode" value={code} onChange={event => { setCode(event.target.value); setError(''); setMessage(''); }} disabled={disabled || busy || needsRefresh} autoComplete="off" autoCapitalize="characters" spellCheck={false} maxLength={64} aria-invalid={Boolean(error)} aria-describedby={error ? id + '-error' : undefined}/>
+          <input id={id} name="promoCode" value={code} onChange={event => { changeCode(event.target.value); setError(''); setMessage(''); }} disabled={disabled || busy || needsRefresh} autoComplete="off" autoCapitalize="characters" spellCheck={false} maxLength={64} aria-invalid={Boolean(error)} aria-describedby={error ? id + '-error' : unapplied ? id + '-draft' : undefined}/>
           <button type="submit" className={styles.apply} disabled={disabled || busy || needsRefresh}>{busy ? 'Updating…' : 'Apply'}</button>
         </div>
       </form>
     </details>
+    {unapplied && <p id={id + '-draft'} className={styles.message} role="status">Apply your code or clear it before continuing.</p>}
+    {code && <button type="button" className={styles.remove} disabled={disabled || busy} onClick={() => { changeCode(''); if (!needsRefresh) { setError(''); setMessage(''); } }}>Clear input</button>}
     {error && <p id={id + '-error'} className={styles.error} role="alert">{error}</p>}
     {needsRefresh && <button type="button" className={styles.retry} disabled={disabled || busy} onClick={() => void reloadTotals()}>{busy ? 'Reloading…' : 'Reload totals'}</button>}
     {message && !error && <p className={styles.message} role="status">{message}</p>}

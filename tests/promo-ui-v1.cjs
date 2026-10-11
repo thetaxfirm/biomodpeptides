@@ -69,5 +69,101 @@ const tick=()=>new Promise(resolve=>setImmediate(resolve));
  find(checkout,n=>n.type===PromoStub).props.onBusyChange(false);checkout.render();apiImpl=async()=>({shipping:0,tax:0,total:24300,quoteId:'fresh'});await find(checkout,n=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{fields:{state:'CA'}}});checkout.render();assert(!text(checkout.tree).includes('Pending address'));
  store={...store,totals:{...store.totals,promo:{...store.totals.promo,code:'DIFFERENT-SAME-TOTAL'}}};checkout.render();assert(text(checkout.tree).includes('Pending address'));assert.equal(button(checkout,'Continue to secure payment').props.disabled,true);
  assert.equal(apiCalls.filter(c=>c.action==='checkout').length,0);
- console.log('PASS: collapsed non-advertising UI; stacked total rendering; apply/remove/error refresh recovery; checkout blocks promo work, discards late quotes and invalidates equal-total code changes. No network or real orders.');
+ // Real child input events must synchronously protect captured parent handlers,
+ // before either child/parent rerenders or passive effects run.
+ global.fetch=()=>{throw Error('Live network forbidden');};
+ const redirects=[];global.location={assign:url=>redirects.push(url)};
+ const noPromo=()=>({...makeStore(),customer:{id:'owner-a',name:'Fixture'},totals:{...makeStore().totals,promo:null,promoDiscount:0,discount:3000,total:27000}});
+ const child=parent=>harness(()=>PromoCode(find(parent,n=>n.type===PromoStub).props));
+ const input=host=>find(host,n=>n.type==='input');
+ const proceed=host=>find(host,n=>n.type==='a'&&text(n)==='Proceed to checkout');
+ const type=(host,value)=>input(host).props.onChange({target:{value}});
+ const address=host=>find(host,n=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{fields:{state:'CA'}}});
+ const accept=host=>find(host,n=>n.props.checked===false&&text(n).startsWith('I am 21')).props.onChange(true);
+ const settle=(parent,child)=>{child.render();parent.render();child.render();parent.render();};
+ store=noPromo();apiCalls=[];apiImpl=async()=>({});refreshImpl=async()=>{};
+ cart=harness(Cart);p=child(cart);const oldProceed=proceed(cart);let prevented=false;
+ type(p,'BIOMOD15');oldProceed.props.onClick({preventDefault(){prevented=true;}});
+ assert(prevented,'captured Cart click is guarded before a render');assert.equal(apiCalls.length,0);
+ settle(cart,p);assert.equal(proceed(cart).props.href,undefined);assert.equal(proceed(cart).props['aria-disabled'],true);
+ assert.equal(button(p,'Apply').props.disabled,false,'draft guard cannot disable its own Apply');
+ assert(text(p.tree).includes('Apply your code or clear it before continuing.'));
+ button(p,'Clear input').props.onClick();settle(cart,p);assert.equal(proceed(cart).props.href,'/checkout');assert.equal(apiCalls.length,0);
+ type(p,'   ');settle(cart,p);assert.equal(proceed(cart).props['aria-disabled'],false);
+ // Case/space-normalized existing code is not a replacement. Clearing text
+ // preserves that saved code and never requests its removal.
+ store={...makeStore(),customer:{id:'owner-a',name:'Fixture'}};cart.render();p.render();
+ type(p,' bm10 ');settle(cart,p);assert.equal(proceed(cart).props['aria-disabled'],false);
+ type(p,'BIOMOD15');settle(cart,p);assert.equal(proceed(cart).props['aria-disabled'],true);
+ button(p,'Clear input').props.onClick();settle(cart,p);assert.equal(store.totals.promo.code,'BM10');assert.equal(apiCalls.length,0);
+ // An applied-code change in authoritative totals is also observed, without
+ // falsely treating the retained draft as a saved discount.
+ type(p,'bm10');settle(cart,p);store=noPromo();cart.render();settle(cart,p);assert.equal(proceed(cart).props['aria-disabled'],true);
+ // Rejected Apply + successful read leaves an unresolved draft locked. Clear
+ // cannot bypass the separate uncertainty lock if that read subsequently fails.
+ apiImpl=async()=>{throw Error('Promo code not recognized.');};refreshImpl=async()=>{};
+ find(p,n=>n.type==='form').props.onSubmit({preventDefault(){}});await tick();settle(cart,p);
+ assert.equal(proceed(cart).props['aria-disabled'],true);assert.equal(button(p,'Apply').props.disabled,false);
+ refreshImpl=async()=>{throw Error('offline');};find(p,n=>n.type==='form').props.onSubmit({preventDefault(){}});await tick();settle(cart,p);
+ button(p,'Clear input').props.onClick();settle(cart,p);assert.equal(proceed(cart).props['aria-disabled'],true);
+ assert(text(p.tree).includes('could not be confirmed'));assert.equal(button(p,'Apply').props.disabled,true);
+ const beforeReload=apiCalls.length;refreshImpl=async()=>{};button(p,'Reload totals').props.onClick();await tick();settle(cart,p);
+ assert.equal(apiCalls.length,beforeReload,'recovery never repeats a promo POST');assert.equal(proceed(cart).props['aria-disabled'],false);
+ // A read which still does not show the attempted code must retain the text
+ // and draft guard; a lost response with that exact saved code may unlock it.
+ type(p,'BIOMOD15');settle(cart,p);refreshImpl=async()=>{throw Error('offline');};
+ find(p,n=>n.type==='form').props.onSubmit({preventDefault(){}});await tick();settle(cart,p);
+ refreshImpl=async()=>{};button(p,'Reload totals').props.onClick();await tick();settle(cart,p);
+ assert.equal(input(p).props.value,'BIOMOD15');assert.equal(proceed(cart).props['aria-disabled'],true);
+ refreshImpl=async()=>{store={...store,totals:{...store.totals,promo:{code:'BIOMOD15',percentOff:15,savings:4050},promoDiscount:4050,total:22950}};};
+ find(p,n=>n.type==='form').props.onSubmit({preventDefault(){}});await tick();settle(cart,p);
+ assert.equal(proceed(cart).props['aria-disabled'],false,'authoritative matching saved code resolves uncertainty');
+ // Normal successful Apply is one POST, clears the draft, and exposes saved
+ // savings. Existing Remove remains the explicit server mutation.
+ type(p,'BM10');settle(cart,p);apiCalls=[];apiImpl=async()=>({});refreshImpl=async()=>{store={...makeStore(),customer:{id:'owner-a',name:'Fixture'}};};
+ find(p,n=>n.type==='form').props.onSubmit({preventDefault(){}});await tick();settle(cart,p);
+ assert.deepEqual(apiCalls,[{action:'promo',body:{code:'BM10'}}]);assert.equal(input(p).props.value,'');assert.equal(proceed(cart).props['aria-disabled'],false);
+ assert(text(p.tree).includes('BM10 applied. You save $27.00.'));
+ // Cart owner tenure rejects late callbacks, including an A -> B -> A switch.
+ const oldCartPromo=find(cart,n=>n.type===PromoStub);const oldCartKey=oldCartPromo.key;
+ for(const owner of ['owner-b','owner-a']){store={...store,customer:{id:owner,name:'Fixture'}};cart.render();}
+ assert.notEqual(find(cart,n=>n.type===PromoStub).key,oldCartKey);
+ const newCartPromo=find(cart,n=>n.type===PromoStub);newCartPromo.props.onUnappliedChange(true);newCartPromo.props.onBusyChange(true);
+ oldCartPromo.props.onUnappliedChange(false);oldCartPromo.props.onBusyChange(false);cart.render();assert.equal(proceed(cart).props['aria-disabled'],true);
+ newCartPromo.props.onUnappliedChange(false);cart.render();assert.equal(proceed(cart).props['aria-disabled'],true);
+ newCartPromo.props.onBusyChange(false);cart.render();assert.equal(proceed(cart).props['aria-disabled'],false);
+ // Delivery and payment handler guards, not merely disabled button styling.
+ store=noPromo();apiCalls=[];apiImpl=async action=>action==='delivery'?{shipping:500,tax:0,total:27500,quoteId:'fresh'}:{url:'/isolated-handoff'};
+ checkout=harness(Checkout);await address(checkout);checkout.render();accept(checkout);checkout.render();p=child(checkout);
+ const oldPay=button(checkout,'Continue to secure payment');const oldAddress=find(checkout,n=>n.type==='form');const beforeDraft=apiCalls.length;
+ assert.equal(oldPay.props.disabled,false);type(p,'BIOMOD15');
+ oldPay.props.onClick();await oldAddress.props.onSubmit({preventDefault(){},currentTarget:{fields:{state:'CA'}}});await tick();
+ assert.equal(apiCalls.length,beforeDraft);assert.equal(redirects.length,0);
+ settle(checkout,p);assert.equal(button(checkout,'Calculate delivery and tax').props.disabled,true);assert.equal(button(p,'Apply').props.disabled,false);
+ button(p,'Clear input').props.onClick();oldPay.props.onClick();await tick();assert.equal(apiCalls.length,beforeDraft,'clearing cannot revive a captured old quote handler');
+ settle(checkout,p);assert.equal(button(checkout,'Calculate delivery and tax').props.disabled,false);assert.equal(button(checkout,'Continue to secure payment').props.disabled,true);
+ await address(checkout);checkout.render();assert.equal(button(checkout,'Continue to secure payment').props.disabled,false);
+ // Matching already-applied input leaves a valid quote usable; replacement
+ // requires Apply then an explicitly recalculated, discounted quote.
+ store={...store,totals:{...makeStore().totals}};checkout.render();await address(checkout);checkout.render();p.render();
+ type(p,' bm10 ');settle(checkout,p);assert.equal(button(checkout,'Continue to secure payment').props.disabled,false);
+ type(p,'BIOMOD15');settle(checkout,p);refreshImpl=async()=>{store={...store,totals:{...store.totals,promo:{code:'BIOMOD15',percentOff:15,savings:4050},promoDiscount:4050,total:22950}};};
+ find(p,n=>n.type==='form').props.onSubmit({preventDefault(){}});await tick();settle(checkout,p);
+ assert.equal(button(checkout,'Continue to secure payment').props.disabled,true);
+ apiImpl=async action=>action==='delivery'?{shipping:500,tax:0,total:23450,quoteId:'discounted'}:{url:'/isolated-handoff'};
+ await address(checkout);checkout.render();button(checkout,'Continue to secure payment').props.onClick();await tick();
+ assert.equal(apiCalls.filter(c=>c.action==='checkout').length,1);assert.equal(apiCalls.at(-1).body.expectedTotal,23450);assert.deepEqual(redirects,['/isolated-handoff']);
+ // A quote already in flight cannot reappear after a draft is entered/cleared.
+ store=noPromo();apiCalls=[];checkout=harness(Checkout);p=child(checkout);const staleInput=input(p);let lateQuote;
+ apiImpl=()=>new Promise(resolve=>lateQuote=resolve);const lateRead=address(checkout);
+ staleInput.props.onChange({target:{value:'BIOMOD15'}});p.render();button(p,'Clear input').props.onClick();settle(checkout,p);
+ lateQuote({shipping:500,tax:0,total:27500,quoteId:'late'});await lateRead;checkout.render();assert(text(checkout.tree).includes('Pending address'));
+ // Old Checkout child callbacks cannot release a later owner's draft/busy.
+ const oldCheckoutPromo=find(checkout,n=>n.type===PromoStub);
+ for(const owner of ['owner-b','owner-a']){store={...store,customer:{id:owner,name:'Fixture'}};checkout.render();}
+ const newCheckoutPromo=find(checkout,n=>n.type===PromoStub);assert.notEqual(newCheckoutPromo.key,oldCheckoutPromo.key);
+ newCheckoutPromo.props.onUnappliedChange(true);oldCheckoutPromo.props.onUnappliedChange(false);checkout.render();assert.equal(button(checkout,'Calculate delivery and tax').props.disabled,true);
+ newCheckoutPromo.props.onUnappliedChange(false);checkout.render();assert.equal(button(checkout,'Calculate delivery and tax').props.disabled,false);
+ assert.equal(apiCalls.filter(c=>c.action==='checkout').length,0);
+ console.log('PASS: unapplied draft event/handler guards, normalized saved codes, explicit Clear, recovery locks, stale quotes and owner tenure; collapsed non-advertising UI; stacked total rendering; apply/remove/error refresh recovery; checkout blocks promo work, discards late quotes and invalidates equal-total code changes. No network or real orders.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

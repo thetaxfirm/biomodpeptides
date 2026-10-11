@@ -64,7 +64,18 @@ export function Cart() {
     useEffect(() => observeShoppingView?.('cart_view'), [observeShoppingView, store, ready, loadError]);
     const { retrying, retryLoad } = useStoreLoadRetry(refresh);
     const [busy, setBusy] = useState(false);
-    const [promoBusy, setPromoBusy] = useState(false);
+    const promoOwner = ready ? store.customer?.id || null : null;
+    const promoScopeRef = useRef({ owner: promoOwner, tenure: 0, busy: false, unapplied: false });
+    if (promoScopeRef.current.owner !== promoOwner) promoScopeRef.current = { owner: promoOwner, tenure: promoScopeRef.current.tenure + 1, busy: false, unapplied: false };
+    const promoScope = promoScopeRef.current;
+    const [promoState, setPromoState] = useState({ scope: promoScope, busy: false, unapplied: false });
+    const promoBusy = promoState.scope === promoScope && promoState.busy;
+    const promoUnapplied = promoState.scope === promoScope && promoState.unapplied;
+    function changePromoState(kind: 'busy' | 'unapplied', next: boolean) {
+        if (promoScopeRef.current !== promoScope) return;
+        promoScope[kind] = next;
+        setPromoState(previous => previous.scope === promoScope && previous[kind] === next ? previous : { scope: promoScope, busy: promoScope.busy, unapplied: promoScope.unapplied });
+    }
     const q = store.totals;
     const packSavings = q?.packDiscount ?? q?.discount ?? 0;
     const promoSavings = q?.promoDiscount ?? q?.promo?.savings ?? 0;
@@ -108,7 +119,7 @@ export function Cart() {
                 <a className="text-button" href="/shop">Continue shopping</a>
             </div>
             <aside className="order-summary"><h2>Order Summary</h2>
-                <PromoCode disabled={busy || cartUpdating || cartSync === 'uncertain' || Boolean(store.cartError)} onBusyChange={setPromoBusy}/>
+                <PromoCode key={promoScope.tenure} disabled={busy || cartUpdating || cartSync === 'uncertain' || Boolean(store.cartError)} onBusyChange={next => changePromoState('busy', next)} onUnappliedChange={next => changePromoState('unapplied', next)}/>
                 <div className="summary-lines">
                     <p><span>Subtotal</span><strong>{q ? money(q.subtotal) : 'Unavailable'}</strong></p>
                     {packSavings > 0 && <p><span>Pack savings</span><strong>−{money(packSavings)}</strong></p>}
@@ -118,7 +129,7 @@ export function Cart() {
                     <p className="total"><span>Items total</span><strong>{q ? money(q.total) : 'Unavailable'}</strong></p>
                 </div>
                 {q?.total < store.config.freeShippingAt && <p className="muted">Add {money(store.config.freeShippingAt - q.total)} for free standard shipping.</p>}
-                <a className="button button-gold" href={store.cartError || locked ? undefined : '/checkout'} aria-disabled={Boolean(store.cartError) || locked} onClick={e => { if (store.cartError || locked) e.preventDefault(); }}>Proceed to checkout</a>
+                <a className="button button-gold" href={store.cartError || locked || promoUnapplied ? undefined : '/checkout'} aria-disabled={Boolean(store.cartError) || locked || promoUnapplied} onClick={e => { if (store.cartError || locked || promoScopeRef.current !== promoScope || promoScope.busy || promoScope.unapplied) e.preventDefault(); }}>Proceed to checkout</a>
                 <p className="muted">{store.payment.enabled ? store.payment.state === 'sandbox' ? 'Test checkout only. Real payments are not accepted.' : 'Secure card payment is available at checkout.' : 'Checkout is not accepting payments yet. Your cart stays saved.'}</p>
             </aside>
         </div>}
@@ -141,8 +152,10 @@ export function Checkout() {
     const [view, setView] = useState<CheckoutView>({ scope, lifetime: 0, accepted: false, deliveryQuote: null, address: null, requestKey: '' });
     const [activeRequest, setActiveRequest] = useState<Operation | null>(null);
     const [activePromo, setActivePromo] = useState<Operation | null>(null);
+    const [activePromoDraft, setActivePromoDraft] = useState<Operation | null>(null);
     const operation = useRef<Operation | null>(null);
     const promoOperation = useRef<Operation | null>(null);
+    const unappliedPromo = useRef<Operation | null>(null);
     const quoteRevision = useRef(0);
     const current = (request: Operation) => request.scope === scopeRef.current && request.scope.active && request.lifetime === request.scope.lifetime;
     const currentView = view.scope === scope && view.lifetime === scope.lifetime ? view : null;
@@ -152,6 +165,7 @@ export function Checkout() {
     const requestKey = currentView?.requestKey || '';
     const busy = Boolean(activeRequest && current(activeRequest));
     const promoBusy = Boolean(activePromo && current(activePromo));
+    const promoUnapplied = Boolean(activePromoDraft && current(activePromoDraft));
     const { retrying, retryLoad } = useStoreLoadRetry(refresh);
     useEffect(() => {
         scope.active = true;
@@ -159,13 +173,16 @@ export function Checkout() {
         quoteRevision.current += 1;
         operation.current = null;
         promoOperation.current = null;
+        unappliedPromo.current = null;
         setActiveRequest(null);
         setActivePromo(null);
+        setActivePromoDraft(null);
         setView({ scope, lifetime: scope.lifetime, accepted: false, deliveryQuote: null, address: null, requestKey: crypto.randomUUID() });
         return () => { scope.active = false; scope.lifetime += 1; };
     }, [scope]);
     const q = store.totals;
     const quoteContext = JSON.stringify([owner, scope.tenure, store.cart, store.cartConflict?.id, q?.total, q?.promo?.code || '', Boolean(cartUpdating), cartSync === 'uncertain']);
+    const renderedQuoteRevision = quoteRevision.current;
     const currentContext = useRef(quoteContext);
     currentContext.current = quoteContext;
     const delivery = deliveryQuote?.context === quoteContext ? deliveryQuote.data : null;
@@ -183,6 +200,14 @@ export function Checkout() {
         promoOperation.current = next ? request : null;
         setActivePromo(next ? request : null);
         if (next) invalidateDelivery();
+    }
+    function changeUnappliedPromo(next: boolean) {
+        const request = { scope, lifetime: renderedLifetime };
+        if (!current(request)) return;
+        const wasUnapplied = Boolean(unappliedPromo.current && current(unappliedPromo.current));
+        unappliedPromo.current = next ? request : null;
+        setActivePromoDraft(previous => next ? previous && current(previous) ? previous : request : null);
+        if (next && !wasUnapplied) invalidateDelivery();
     }
     function setAccepted(next: boolean) {
         if (!current({ scope, lifetime: renderedLifetime })) return;
@@ -207,7 +232,7 @@ export function Checkout() {
     async function submit(e: FormEvent<HTMLFormElement>) {
         e.preventDefault();
         const request = { scope, lifetime: renderedLifetime };
-        if (!current(request) || operation.current || promoOperation.current || cartUpdating) return;
+        if (!current(request) || operation.current || promoOperation.current || unappliedPromo.current || cartUpdating) return;
         operation.current = request;
         setActiveRequest(request);
         invalidateDelivery();
@@ -216,7 +241,7 @@ export function Checkout() {
         try {
             const fields = formData(e.currentTarget);
             const data = await api('delivery', { address: fields });
-            if (!current(request) || operation.current !== request || revision !== quoteRevision.current || context !== currentContext.current || promoOperation.current) return;
+            if (!current(request) || operation.current !== request || revision !== quoteRevision.current || context !== currentContext.current || promoOperation.current || unappliedPromo.current) return;
             setView(previous => previous.scope === scope && previous.lifetime === request.lifetime ? { ...previous, address: fields, deliveryQuote: { data, context } } : previous);
             if (validShoppingQuote?.(data)) measureShopping?.('delivery_quote_confirmed');
         } catch (e) {
@@ -230,7 +255,7 @@ export function Checkout() {
     }
     async function checkout() {
         const request = { scope, lifetime: renderedLifetime };
-        if (!current(request) || !delivery || !accepted || !requestKey || operation.current || promoOperation.current || !store.payment.enabled || cartUpdating) return;
+        if (!current(request) || renderedQuoteRevision !== quoteRevision.current || !delivery || !accepted || !requestKey || operation.current || promoOperation.current || unappliedPromo.current || !store.payment.enabled || cartUpdating) return;
         operation.current = request;
         setActiveRequest(request);
         const context = currentContext.current, revision = quoteRevision.current;
@@ -240,7 +265,7 @@ export function Checkout() {
             // it. Never redirect a later owner or a page which has been left.
             if (!current(request) || operation.current !== request) return;
             if (context === currentContext.current && revision === quoteRevision.current
-                && !promoOperation.current && validShoppingHandoff?.(d.url)) measureShopping?.('checkout_handoff_ready');
+                && !promoOperation.current && !unappliedPromo.current && validShoppingHandoff?.(d.url)) measureShopping?.('checkout_handoff_ready');
             location.assign(d.url);
         } catch (e) {
             if (current(request) && operation.current === request) {
@@ -255,11 +280,11 @@ export function Checkout() {
         <div className="cart-layout">
             <form key={scope.tenure} className="store-form" onSubmit={submit} onChange={invalidateDelivery}>
                 <h2>Delivery address</h2><AddressFields initial={{ name: store.customer.name }}/>
-                <button className="button button-dark" disabled={busy || promoBusy || cartUpdating}>{busy ? 'Calculating…' : 'Calculate delivery and tax'}</button>
+                <button className="button button-dark" disabled={busy || promoBusy || promoUnapplied || cartUpdating}>{busy ? 'Calculating…' : 'Calculate delivery and tax'}</button>
             </form>
             <aside className="order-summary"><h2>Your order</h2>
                 {q?.items.map((l: any, i: number) => <p className="summary-product" key={i}><span>{l.product.name} × {l.quantity}</span><strong>{money(l.lineTotal ?? l.product.price * l.quantity)}</strong></p>)}
-                <PromoCode key={scope.tenure} disabled={busy || cartUpdating} onBusyChange={changePromoBusy} onChange={invalidateDelivery}/>
+                <PromoCode key={scope.tenure} disabled={busy || cartUpdating} onBusyChange={changePromoBusy} onUnappliedChange={changeUnappliedPromo} onChange={invalidateDelivery}/>
                 <div className="summary-lines">
                     <p><span>Subtotal</span><strong>{q ? money(q.subtotal) : 'Unavailable'}</strong></p>
                     {packSavings > 0 && <p><span>Pack savings</span><strong>−{money(packSavings)}</strong></p>}
@@ -270,7 +295,7 @@ export function Checkout() {
                     {delivery && <p className="total"><span>Total</span><strong>{money(delivery.total)}</strong></p>}
                 </div>
                 <Check checked={accepted} onChange={setAccepted}>I am 21 or older and purchasing exclusively for laboratory research. I agree to the <a href="/terms-of-sale">terms of sale</a>.</Check>
-                <button className="button button-gold" disabled={!delivery || !accepted || !requestKey || busy || promoBusy || !store.payment.enabled || cartUpdating} onClick={() => void checkout()}>Continue to secure payment</button>
+                <button className="button button-gold" disabled={!delivery || !accepted || !requestKey || busy || promoBusy || promoUnapplied || !store.payment.enabled || cartUpdating} onClick={() => void checkout()}>Continue to secure payment</button>
                 <p className="muted">Card information is entered on Authorize.net’s secure payment page.</p>
             </aside>
         </div>
