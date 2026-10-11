@@ -60,7 +60,7 @@ function useStoreLoadRetry(refresh: () => Promise<void>) {
     return { retrying, retryLoad };
 }
 export function Cart() {
-    const { store, ready, loadError, refresh, saveCart, observeShoppingView } = useStore();
+    const { store, ready, loadError, cartSync = 'current', cartUpdating = false, refresh, saveCart, observeShoppingView } = useStore();
     useEffect(() => observeShoppingView?.('cart_view'), [observeShoppingView, store, ready, loadError]);
     const { retrying, retryLoad } = useStoreLoadRetry(refresh);
     const [busy, setBusy] = useState(false);
@@ -68,29 +68,34 @@ export function Cart() {
     const q = store.totals;
     const packSavings = q?.packDiscount ?? q?.discount ?? 0;
     const promoSavings = q?.promoDiscount ?? q?.promo?.savings ?? 0;
-    const locked = busy || promoBusy;
+    const locked = busy || promoBusy || cartUpdating || cartSync === 'uncertain';
     async function update(index: number, delta: number) {
         if (locked) return;
         const next = store.cart.map((l, i) => i === index ? { ...l, quantity: l.quantity + delta } : l).filter(l => l.quantity > 0);
         setBusy(true);
-        try { await saveCart(next); } catch (e) { report(e); } finally { setBusy(false); }
+        try { await saveCart(next, store.cart); } catch (e) { report(e); } finally { setBusy(false); }
     }
     async function remove(index: number) {
         if (locked) return;
         const line = store.cart[index];
         setBusy(true);
-        try { await saveCart(store.cart.filter((l, i) => line.packId ? l.packId !== line.packId : i !== index)); }
+        try { await saveCart(store.cart.filter((l, i) => line.packId ? l.packId !== line.packId : i !== index), store.cart); }
         catch (e) { report(e); } finally { setBusy(false); }
     }
     if (ready && store.cartConflict) return <CartChoice/>;
     return <><div className="page-heading"><h1>Your Cart</h1></div>
         {store.cartNotice && <p className="notice" role="status">{store.cartNotice}</p>}
+        {ready && cartSync && cartSync !== 'current' && <div className="notice" role={cartSync === 'uncertain' ? 'alert' : 'status'}>
+            <p>{cartSync === 'uncertain' ? 'The last cart change could not be confirmed. Check the saved cart before making another change or continuing to checkout.' : 'Your cart change was saved. The latest account and cart details could not refresh.'}</p>
+            <p>Retry reads your saved cart. It does not repeat the change.</p>
+            <button type="button" className="text-button" disabled={retrying || cartUpdating} onClick={retryLoad}>{retrying ? 'Retrying…' : 'Retry cart access'}</button>
+        </div>}
         {!ready ? <div aria-busy={retrying}>
             <p role={loadError ? 'alert' : 'status'}>{loadError || 'Loading your saved cart…'}</p>
             {loadError && <button type="button" className="button button-dark" disabled={retrying} onClick={retryLoad}>{retrying ? 'Retrying…' : 'Retry cart'}</button>}
-        </div> : !store.cart.length ? <Blank title="Your cart is empty."><a className="button button-dark" href="/shop">Explore products</a></Blank> : <div className="cart-layout">
+        </div> : !store.cart.length && cartSync === 'uncertain' ? <p role="status">Saved cart confirmation is needed.</p> : !store.cart.length ? <Blank title="Your cart is empty."><a className="button button-dark" href="/shop">Explore products</a></Blank> : <div className="cart-layout">
             <div>
-                {store.cartError && <div className="notice error"><p>{store.cartError}</p><button className="text-button" disabled={locked} onClick={async () => { setBusy(true); try { await saveCart([]); } catch (e) { report(e); } finally { setBusy(false); } }}>Clear cart and start again</button></div>}
+                {store.cartError && <div className="notice error"><p>{store.cartError}</p><button className="text-button" disabled={locked} onClick={async () => { setBusy(true); try { await saveCart([], store.cart); } catch (e) { report(e); } finally { setBusy(false); } }}>Clear cart and start again</button></div>}
                 {store.cart.map((l, i) => {
                     const p = store.products.find(p => p.id === l.id);
                     return p ? <article className="cart-line" key={i}>
@@ -103,7 +108,7 @@ export function Cart() {
                 <a className="text-button" href="/shop">Continue shopping</a>
             </div>
             <aside className="order-summary"><h2>Order Summary</h2>
-                <PromoCode disabled={busy || Boolean(store.cartError)} onBusyChange={setPromoBusy}/>
+                <PromoCode disabled={busy || cartUpdating || cartSync === 'uncertain' || Boolean(store.cartError)} onBusyChange={setPromoBusy}/>
                 <div className="summary-lines">
                     <p><span>Subtotal</span><strong>{q ? money(q.subtotal) : 'Unavailable'}</strong></p>
                     {packSavings > 0 && <p><span>Pack savings</span><strong>−{money(packSavings)}</strong></p>}
@@ -123,7 +128,7 @@ export function AddressFields({ initial = {} }: {
     initial?: Record<string, string>;
 }) { return <><Field label="Full name" name="name" defaultValue={initial.name}/><Field label="Street address" name="line1" defaultValue={initial.line1}/><Field label="Apartment / suite (optional)" name="line2" defaultValue={initial.line2} required={false}/><div className="form-row"><Field label="City" name="city" defaultValue={initial.city}/><Field label="State (2 letters)" name="state" defaultValue={initial.state} placeholder="CA"/><Field label="ZIP code" name="zip" defaultValue={initial.zip}/></div><Field label="Phone" name="phone" type="tel" defaultValue={initial.phone}/><input type="hidden" name="country" value="US"/><p className="muted">United States delivery only.</p></>; }
 export function Checkout() {
-    const { store, ready, loadError, refresh, measureShopping, observeShoppingView, validShoppingQuote, validShoppingHandoff } = useStore();
+    const { store, ready, loadError, cartSync = 'current', cartUpdating = false, refresh, measureShopping, observeShoppingView, validShoppingQuote, validShoppingHandoff } = useStore();
     useEffect(() => observeShoppingView?.(store.customer ? 'checkout_form_view' : 'checkout_signin_view'), [observeShoppingView, store, ready, loadError]);
     const shoppingMounted = useRef(false);
     const shoppingOwner = useRef(store.customer?.id);
@@ -140,7 +145,7 @@ export function Checkout() {
     const promoOperation = useRef(false);
     const quoteRevision = useRef(0);
     const q = store.totals;
-    const quoteContext = JSON.stringify([store.cart, store.cartConflict?.id, q?.total, q?.promo?.code || '']);
+    const quoteContext = JSON.stringify([store.cart, store.cartConflict?.id, q?.total, q?.promo?.code || '', Boolean(cartUpdating), cartSync === 'uncertain']);
     const currentContext = useRef(quoteContext);
     currentContext.current = quoteContext;
     const delivery = deliveryQuote?.context === quoteContext ? deliveryQuote.data : null;
@@ -163,6 +168,12 @@ export function Checkout() {
         <p role={loadError ? 'alert' : 'status'}>{loadError || 'Loading checkout…'}</p>
         {loadError && <button type="button" className="button button-dark" disabled={retrying} onClick={retryLoad}>{retrying ? 'Retrying…' : 'Retry checkout'}</button>}
     </section>;
+    if (cartSync === 'uncertain') return <section>
+        <div className="page-heading"><h1>Review your saved cart</h1></div>
+        <p role="alert">The last cart change could not be confirmed. Retry reads your saved cart without repeating the change.</p>
+        <button type="button" className="button button-dark" disabled={retrying || cartUpdating} onClick={retryLoad}>{retrying ? 'Retrying…' : 'Retry cart access'}</button>
+        <p><a href="/cart">Return to your cart</a></p>
+    </section>;
     if (store.cartConflict) return <CartChoice/>;
     if (!store.payment.enabled) return <section className="checkout-unavailable"><h1>Checkout is not open yet.</h1><p>Your cart stays saved with your shopping session. We are preparing secure checkout and will accept orders once it is ready.</p><div className="checkout-unavailable-actions"><a className="button button-dark" href="/cart">Return to your cart</a><a href="/shop">Keep shopping</a><a href="/contact">Contact Biomod</a></div></section>;
     if (store.cartError) return <Blank title="Your cart needs a review."><p>{store.cartError}</p><a className="button button-dark" href="/cart">Review your cart</a></Blank>;
@@ -170,7 +181,7 @@ export function Checkout() {
     if (!store.cart.length) return <Blank title="Your cart is empty."><a href="/shop">Shop products</a></Blank>;
     async function submit(e: FormEvent<HTMLFormElement>) {
         e.preventDefault();
-        if (operation.current || promoOperation.current) return;
+        if (operation.current || promoOperation.current || cartUpdating) return;
         operation.current = true;
         setBusy(true);
         invalidateDelivery();
@@ -189,7 +200,7 @@ export function Checkout() {
         } finally { operation.current = false; setBusy(false); }
     }
     async function checkout() {
-        if (!delivery || !accepted || !requestKey || operation.current || promoOperation.current || !store.payment.enabled) return;
+        if (!delivery || !accepted || !requestKey || operation.current || promoOperation.current || !store.payment.enabled || cartUpdating) return;
         operation.current = true;
         setBusy(true);
         const context = currentContext.current, revision = quoteRevision.current, owner = shoppingOwner.current;
@@ -205,11 +216,11 @@ export function Checkout() {
         <div className="cart-layout">
             <form className="store-form" onSubmit={submit} onChange={invalidateDelivery}>
                 <h2>Delivery address</h2><AddressFields initial={{ name: store.customer.name }}/>
-                <button className="button button-dark" disabled={busy || promoBusy}>{busy ? 'Calculating…' : 'Calculate delivery and tax'}</button>
+                <button className="button button-dark" disabled={busy || promoBusy || cartUpdating}>{busy ? 'Calculating…' : 'Calculate delivery and tax'}</button>
             </form>
             <aside className="order-summary"><h2>Your order</h2>
                 {q?.items.map((l: any, i: number) => <p className="summary-product" key={i}><span>{l.product.name} × {l.quantity}</span><strong>{money(l.lineTotal ?? l.product.price * l.quantity)}</strong></p>)}
-                <PromoCode disabled={busy} onBusyChange={changePromoBusy} onChange={invalidateDelivery}/>
+                <PromoCode disabled={busy || cartUpdating} onBusyChange={changePromoBusy} onChange={invalidateDelivery}/>
                 <div className="summary-lines">
                     <p><span>Subtotal</span><strong>{q ? money(q.subtotal) : 'Unavailable'}</strong></p>
                     {packSavings > 0 && <p><span>Pack savings</span><strong>−{money(packSavings)}</strong></p>}
@@ -220,7 +231,7 @@ export function Checkout() {
                     {delivery && <p className="total"><span>Total</span><strong>{money(delivery.total)}</strong></p>}
                 </div>
                 <Check checked={accepted} onChange={setAccepted}>I am 21 or older and purchasing exclusively for laboratory research. I agree to the <a href="/terms-of-sale">terms of sale</a>.</Check>
-                <button className="button button-gold" disabled={!delivery || !accepted || !requestKey || busy || promoBusy || !store.payment.enabled} onClick={() => void checkout()}>Continue to secure payment</button>
+                <button className="button button-gold" disabled={!delivery || !accepted || !requestKey || busy || promoBusy || !store.payment.enabled || cartUpdating} onClick={() => void checkout()}>Continue to secure payment</button>
                 <p className="muted">Card information is entered on Authorize.net’s secure payment page.</p>
             </aside>
         </div>

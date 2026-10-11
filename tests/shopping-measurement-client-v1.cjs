@@ -101,8 +101,8 @@ async function quoted(){await loaded({pathname:'/checkout'});const h=harness(Che
  await context().add(p);providerHost.render();assert.equal(count('cart_add_confirmed'),2,'Each deliberate accepted addition counts');
  await context().saveCart([{id:p.id,quantity:1}]);providerHost.render();assert.equal(count('cart_add_confirmed'),2,'Quantity edit/removal is not an add');
  await context().reorder([]);providerHost.render();assert.equal(count('cart_add_confirmed'),2,'Empty reorder is not an addition');
- cartError=Error('Cart rejected');await assert.rejects(context().add(p));assert.equal(count('cart_add_confirmed'),2);cartError=null;
- stateError=Error('Refresh failed after accepted write');await assert.rejects(context().add(p));assert.equal(count('cart_add_confirmed'),3,'Accepted write counts before read failure');providerHost.render();assert(context().loadError);
+ cartError=Error('Cart rejected');await assert.rejects(context().add(p));assert.equal(count('cart_add_confirmed'),2);cartError=null;await context().refresh();providerHost.render();
+ stateError=Error('Refresh failed after accepted write');await assert.doesNotReject(context().add(p));assert.equal(count('cart_add_confirmed'),3,'Accepted write counts before read failure');providerHost.render();assert(context().loadError);
  stateError=null;await context().refresh();providerHost.render();
  for(const [label,op] of [['fixed one',()=>context().addFixedPack(p,1)],['mixed one',()=>context().addMixedPack([p.id])],['fixed three',()=>context().addFixedPack(p,3)],['mixed three',()=>context().addMixedPack([p.id,p.id,p.id])],['reorder',()=>context().reorder([{id:p.id,quantity:1}])]]){const before=count('cart_add_confirmed');await op();providerHost.render();assert.equal(count('cart_add_confirmed'),before+1,label+' counts once at common operation boundary');}
  for(const failure of ['async','sync']){metricsError=failure;await assert.doesNotReject(context().add(p));providerHost.render();}await flush();

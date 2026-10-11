@@ -39,12 +39,14 @@ const Context = createContext<{
     store: Store;
     ready: boolean;
     loadError: string;
+    cartSync: 'current' | 'saved' | 'uncertain';
+    cartUpdating: boolean;
     measureShopping: MeasureShopping;
     observeShoppingView: (stage: ShoppingStage) => () => void;
     validShoppingQuote: typeof validShoppingQuote;
     validShoppingHandoff: typeof validShoppingHandoff;
     refresh: () => Promise<void>;
-    saveCart: (cart: CartLine[]) => Promise<void>;
+    saveCart: (cart: CartLine[], expectedCart?: CartLine[]) => Promise<void>;
     add: (p: Product, quantity?: number, presaleId?: string) => Promise<void>;
     addFixedPack: (p: Product, count: number, packs?: number) => Promise<void>;
     addMixedPack: (ids: number[]) => Promise<void>;
@@ -57,14 +59,52 @@ export function StoreProvider({ children, initialCatalog = initialProducts, shop
     const [store, setStore] = useState({ ...defaults, products: initialCatalog });
     const [ready, setReady] = useState(false);
     const [loadError, setLoadError] = useState('');
+    const [cartSync, setCartSync] = useState<'current' | 'saved' | 'uncertain'>('current');
+    const [cartUpdating, setCartUpdating] = useState(false);
+    const syncRef = useRef(cartSync);
+    const mounted = useRef(false);
+    const lifetime = useRef(0);
+    const ownerVersion = useRef(0);
+    const readVersion = useRef(0);
+    const acceptedReadVersion = useRef(0);
+    const writeVersion = useRef(0);
+    const queuedWrites = useRef(0);
+    function sync(next: typeof cartSync) { syncRef.current = next; setCartSync(next); }
     const stateRef = useRef(store);
     const measurementStatus = useRef({ ready, loadError });
     measurementStatus.current = { ready, loadError };
-    const measureShopping: MeasureShopping = (stage, options) => measureShoppingStage(shoppingMeasurementEnabled, { ...measurementStatus.current, store: stateRef.current }, stage, options);
+    const measureShopping: MeasureShopping = (stage, options) => {
+        if (syncRef.current === 'uncertain' || (queuedWrites.current > 0 && stage !== 'cart_add_confirmed')) return;
+        measureShoppingStage(shoppingMeasurementEnabled, { ...measurementStatus.current, store: stateRef.current }, stage, options);
+    };
     const observeShoppingView = (stage: ShoppingStage) => watchShoppingView(stage, measureShopping);
     const queue = useRef<Promise<void>>(Promise.resolve());
-    async function refresh() { try { const d = await api('state'); stateRef.current = d; measurementStatus.current = { ready: true, loadError: '' }; setStore(d); setReady(true); setLoadError(''); } catch (e) { measurementStatus.current = { ready: measurementStatus.current.ready, loadError: 'Account and cart access could not load. Please retry.' }; setLoadError('Account and cart access could not load. Please retry.'); throw e; } }
-    useEffect(() => { api('auth-refresh', {}).catch(() => null).then(refresh).catch(() => toast.error('Saved cart is temporarily unavailable. Please refresh to try again.')); }, []);
+    async function refresh() {
+        const read = ++readVersion.current, write = writeVersion.current, life = lifetime.current;
+        const current = () => mounted.current && life === lifetime.current && read === readVersion.current && write === writeVersion.current;
+        try {
+            const d: Store = await api('state');
+            if (!current()) throw new Error('A newer cart or account update has started. Retry to load the current details.');
+            acceptedReadVersion.current = read;
+            if (!measurementStatus.current.ready || d.customer?.id !== stateRef.current.customer?.id) ownerVersion.current += 1;
+            stateRef.current = d;
+            measurementStatus.current = { ready: true, loadError: '' };
+            setStore(d); setReady(true); setLoadError(''); sync('current');
+        } catch (e) {
+            if (!current()) throw new Error('A newer cart or account update has started. Retry to load the current details.');
+            measurementStatus.current = { ready: measurementStatus.current.ready, loadError: 'Account and cart access could not load. Please retry.' };
+            setLoadError(measurementStatus.current.loadError);
+            throw e;
+        }
+    }
+    useEffect(() => {
+        mounted.current = true;
+        const life = ++lifetime.current;
+        api('auth-refresh', {}).catch(() => null).then(() => {
+            if (mounted.current && life === lifetime.current) return refresh();
+        }).catch(() => { if (mounted.current && life === lifetime.current) toast.error('Saved cart is temporarily unavailable. Please refresh to try again.'); });
+        return () => { mounted.current = false; lifetime.current += 1; ownerVersion.current += 1; readVersion.current += 1; };
+    }, []);
     useEffect(() => {
         const boundaries = store.products.flatMap(p => p.sale?.enabled ? [Date.parse(p.sale.starts), Date.parse(p.sale.ends)] : []).filter(t => t > Date.now());
         if (!boundaries.length) return;
@@ -72,27 +112,69 @@ export function StoreProvider({ children, initialCatalog = initialProducts, shop
         return () => clearTimeout(timer);
     }, [store.products]);
     useEffect(() => { const update = () => { if (document.visibilityState === 'visible') refresh().catch(report); }; document.addEventListener('visibilitychange', update); return () => document.removeEventListener('visibilitychange', update); }, []);
-    async function writeCart(cart: CartLine[], addition: boolean) {
-        if (stateRef.current.cartConflict) throw new Error('Choose which cart to use in Your Cart before adding or changing items.');
-        const owner = stateRef.current.customer?.id;
-        const previousQuantity = stateRef.current.cart.reduce((sum, line) => sum + line.quantity, 0);
-        const result = await api('cart', { cart });
-        // Count one accepted addition, even if the following read fails. Quantity
-        // edits/removals and delegated single-item pack calls do not count twice.
-        if (addition && owner === stateRef.current.customer?.id && Array.isArray(result.cart)
-            && result.cart.reduce((sum: number, line: CartLine) => sum + line.quantity, 0) > previousQuantity)
-            measureShopping('cart_add_confirmed', { cart: result.cart });
-        await refresh();
+    function cartScope() { return { owner: ownerVersion.current, life: lifetime.current }; }
+    function currentCartScope(scope: ReturnType<typeof cartScope>) {
+        return mounted.current && scope.owner === ownerVersion.current && scope.life === lifetime.current;
     }
-    async function saveCart(cart: CartLine[]) { await writeCart(cart, false); }
-    async function add(p: Product, quantity = 1, presaleId?: string) { const operation = queue.current.catch(() => { }).then(async () => { const cart = [...stateRef.current.cart]; const at = cart.findIndex(l => l.id === p.id && !l.packId && l.presaleId === presaleId); if (at >= 0)
-        cart[at] = { ...cart[at], quantity: cart[at].quantity + quantity };
-    else
-        cart.push({ id: p.id, quantity, ...(presaleId ? { presaleId } : {}) }); await writeCart(cart, true); toast.success(p.name + ' added to cart', { action: { label: 'View cart', onClick: () => location.assign('/cart') } }); }); queue.current = operation; return operation; }
-    function enqueueCart(transform: (cart: CartLine[]) => CartLine[]) {
-        const operation = queue.current.catch(() => {}).then(async () => { await writeCart(transform(stateRef.current.cart), true); });
+    async function writeCart(cart: CartLine[], addition: boolean, scope: ReturnType<typeof cartScope>) {
+        if (stateRef.current.cartConflict) throw new Error('Choose which cart to use in Your Cart before adding or changing items.');
+        const previousQuantity = stateRef.current.cart.reduce((sum, line) => sum + line.quantity, 0);
+        // Invalidate reads begun before the write, and again when it settles so a
+        // read begun during the write cannot later replace the accepted result.
+        writeVersion.current += 1;
+        let result: { cart: CartLine[]; totals: Store['totals'] };
+        try {
+            result = await api('cart', { cart });
+            if (!Array.isArray(result.cart) || !result.totals) throw new Error('Cart confirmation was incomplete.');
+        } catch (e) {
+            if (currentCartScope(scope)) { writeVersion.current += 1; sync('uncertain'); }
+            throw new Error('We could not confirm this cart change. Review your saved cart before trying again. ' + (e instanceof Error ? e.message : ''));
+        }
+        if (!currentCartScope(scope)) throw new Error('Your account changed. Review your current cart before making another change.');
+        writeVersion.current += 1;
+        // The server sends these fields only after persistence. Do not discard
+        // them, replace other account fields, or replay this accepted mutation.
+        stateRef.current = { ...stateRef.current, cart: result.cart, totals: result.totals, cartError: '', cartNotice: undefined };
+        setStore(stateRef.current);
+        if (addition && result.cart.reduce((sum, line) => sum + line.quantity, 0) > previousQuantity)
+            measureShopping('cart_add_confirmed', { cart: result.cart });
+        const precedingRead = readVersion.current;
+        try { await refresh(); }
+        catch { if (currentCartScope(scope) && acceptedReadVersion.current <= precedingRead) sync('saved'); }
+        if (!currentCartScope(scope)) throw new Error('Your account changed. Review your current cart before making another change.');
+    }
+    function enqueueCart(transform: (cart: CartLine[]) => CartLine[], addition = true) {
+        const scope = cartScope();
+        if (!measurementStatus.current.ready) return Promise.reject(new Error('Wait for your saved cart to load before changing it.'));
+        queuedWrites.current += 1; setCartUpdating(true);
+        const operation = queue.current.catch(() => {}).then(async () => {
+            if (!currentCartScope(scope)) throw new Error('Your account changed. Review your current cart before making another change.');
+            if (syncRef.current === 'uncertain') throw new Error('Review your saved cart and retry cart access before making another change.');
+            await writeCart(transform(stateRef.current.cart), addition, scope);
+        }).finally(() => {
+            queuedWrites.current -= 1;
+            if (mounted.current) setCartUpdating(queuedWrites.current > 0);
+        });
         queue.current = operation;
         return operation;
+    }
+    async function saveCart(cart: CartLine[], expectedCart = stateRef.current.cart) {
+        const base = JSON.stringify(expectedCart);
+        const replacement = cart.map(line => ({ ...line }));
+        await enqueueCart(current => {
+            if (JSON.stringify(current) !== base) throw new Error('Your cart changed while this update was waiting. Review it and try your change again.');
+            return replacement;
+        }, false);
+    }
+    async function add(p: Product, quantity = 1, presaleId?: string) {
+        await enqueueCart(current => {
+            const cart = [...current];
+            const at = cart.findIndex(l => l.id === p.id && !l.packId && l.presaleId === presaleId);
+            if (at >= 0) cart[at] = { ...cart[at], quantity: cart[at].quantity + quantity };
+            else cart.push({ id: p.id, quantity, ...(presaleId ? { presaleId } : {}) });
+            return cart;
+        });
+        toast.success(p.name + ' added to cart', { action: { label: 'View cart', onClick: () => location.assign('/cart') } });
     }
     async function addFixedPack(p: Product, count: number, packs = 1) {
         if (!packSizes.includes(count as any) || !Number.isInteger(packs) || packs < 1 || count * packs > 100) throw new Error('Choose an available pack quantity.');
@@ -109,7 +191,7 @@ export function StoreProvider({ children, initialCatalog = initialProducts, shop
     }
     async function wish(id: number) { const ids = store.wishlist.includes(id) ? store.wishlist.filter(i => i !== id) : [...store.wishlist, id]; await api('wishlist', { ids }); await refresh(); toast.success(ids.includes(id) ? 'Added to your wishlist' : 'Removed from your wishlist'); }
     async function reorder(items:CartLine[]){const groups=new Map<string,string>();const lines=items.map(l=>{if(!stateRef.current.products.some(p=>p.id===l.id))throw new Error('This order contains an unavailable product.');if(l.presaleId)throw new Error('Presale orders cannot be reordered. Choose currently released products from the shop.');if(l.packId&&!groups.has(l.packId))groups.set(l.packId,crypto.randomUUID());return {id:l.id,quantity:l.quantity,...(l.packId?{packId:groups.get(l.packId),packSize:l.packSize,packKind:l.packKind||'mixed' as const}:{})};});await enqueueCart(cart=>[...cart,...lines]);toast.success('Order added at current prices. Review your cart before checkout.');}
-    return <Context.Provider value={{ store, ready, loadError, measureShopping, observeShoppingView, validShoppingQuote, validShoppingHandoff, refresh, saveCart, add, addFixedPack, addMixedPack, reorder, wish }}>{children}<Toaster position="bottom-right" richColors/></Context.Provider>;
+    return <Context.Provider value={{ store, ready, loadError, cartSync, cartUpdating, measureShopping, observeShoppingView, validShoppingQuote, validShoppingHandoff, refresh, saveCart, add, addFixedPack, addMixedPack, reorder, wish }}>{children}<Toaster position="bottom-right" richColors/></Context.Provider>;
 }
 export const useStore = () => useContext(Context)!;
 export const report = (e: unknown) => toast.error(e instanceof Error ? e.message : 'Please try again.');
