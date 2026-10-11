@@ -6,7 +6,7 @@ require.extensions['.ts'] = (m, filename) => m._compile(ts.transpileModule(fs.re
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true },
 }).outputText, filename);
 const { products, productFormat } = require('../lib/catalog.ts');
-const { productSearchScore } = require('../lib/product-search.ts');
+const { productSearchScore, searchWords } = require('../lib/product-search.ts');
 const { eligibleDiscovery } = require('../lib/product-discovery.ts');
 const { productReviewBlocks, seoConfig, sitemapPaths } = require('../lib/seo-policy.ts');
 const publication = require('../lib/seo-publication-v1.json');
@@ -47,6 +47,44 @@ for (const slug of expected) {
   assert.equal(productSearchScore(p, p.name + ' 999mg peptide'), 0, slug);
   assert(productSearchScore(p, p.name + ' ' + p.sizes[0] + ' research vial peptide') > 0, slug);
 }
+// Decimal zeros express the same listed amount, without changing units or identity.
+const approved = products.filter(eligibleDiscovery);
+assert.equal(approved.length, 17);
+for (const p of approved) {
+  const amount = p.sizes[0].match(/^(\d+)\s*mg\b/i)?.[1];
+  assert(amount, 'Current eligible product has a listed mg amount: ' + p.slug);
+  const name = p.name.replace(/\s+\d+mg$/i, '');
+  const exact = matches(name + ' ' + amount + 'mg');
+  assert(exact.includes(p.slug));
+  for (const suffix of ['.0mg', '.00 mg', '.00 milligrams']) {
+    assert.deepEqual(matches(name + ' ' + amount + suffix), exact, 'Equivalent amount: ' + p.slug + suffix);
+  }
+  for (const suffix of ['.1mg', '.000000000000000000001mg', '.0mcg', '.0g', '.0ml']) {
+    assert.equal(productSearchScore(p, name + ' ' + amount + suffix), 0, 'Distinct amount or unit: ' + p.slug + suffix);
+  }
+}
+// Both stored and queried decimal notation must work; string comparison preserves
+// precision beyond JavaScript Number and never changes the actual catalog.
+const decimalVial = { ...product('ss-31-50mg'), sizes: ['50.10000000000000000000100mg'] };
+assert(productSearchScore(decimalVial, 'SS31 50.100000000000000000001 mg') > 0);
+assert(productSearchScore(decimalVial, 'SS31 50.100000000000000000001000mg') > 0);
+for (const query of ['SS31 50.1mg', 'SS31 50.100000000000000000002mg', 'SS31 50.100000000000000000001mcg']) {
+  assert.equal(productSearchScore(decimalVial, query), 0, query);
+}
+for (const unit of ['mg', 'mcg', 'g', 'ml']) {
+  assert.deepEqual(searchWords('0.0100 ' + unit), ['0.01', unit]);
+  assert.deepEqual(searchWords('10.0 ' + unit), ['10', unit]);
+}
+assert.deepEqual(searchWords('SS-31 50.00 milligrams'), ['ss', '31', '50', 'mg'], 'Unit synonyms normalize before amounts');
+assert.deepEqual(searchWords('BPC-157 TB-500 CJC-1295 BM-LYO-017 736992-21-5'),
+  ['bpc', '157', 'tb', '500', 'cjc', '1295', 'bm', 'lyo', '017', '736992', '21', '5']);
+assert.deepEqual(searchWords('SS31.00 BM-LYO-017.00 736992-21-5.00 50.00'),
+  ['ss', '31.00', 'bm', 'lyo', '017.00', '736992', '21', '5.00', '50.00'], 'Non-quantity tokens remain unchanged');
+assert.deepEqual(matches('BPC157 10.00mg'), ['bpc-157-10mg'], 'Decimal notation cannot borrow a blend total');
+assert.deepEqual(matches('Wolverine 10.00mg'), ['wolverine-10mg'], 'Named blend total remains searchable');
+for (const query of ['SS31.00 50mg', 'BPC157 10.0mg spray', 'BPC157 10.0mg softgel', 'GSSG 1500.0mg']) {
+  assert.deepEqual(matches(query), [], query);
+}
 // Existing exact identifiers and non-peptide searches remain available on their own terms.
 for (const [query, slug] of [['NAD 500mg research vial','nad-500mg'],['53-84-9','nad-500mg'],['BM-LYO-017','ss-31-10mg'],['736992-21-5','ss-31-10mg'],['TB-500','tb500-10mg'],['ghk cu 50mg','ghk-cu-50mg'],['Wolverine 10mg','wolverine-10mg']]) {
   assert(matches(query).includes(slug), query);
@@ -59,12 +97,14 @@ try {
   productReviewBlocks[epitalon.slug] = 'Isolated test hold';
   assert.equal(productSearchScore(epitalon, 'epitalon peptide'), 0);
   assert.equal(productSearchScore(epitalon, 'epithalon'), 0);
+  assert.equal(productSearchScore(epitalon, 'epithalon 50.00mg peptide'), 0);
   assert(productSearchScore(epitalon, 'epitalon') > 0, 'Explicit existing identity lookup does not imply organic approval');
 } finally { delete productReviewBlocks[epitalon.slug]; }
 const glutathione = product('glutathione-reduced-l-glutathione');
 try {
   productReviewBlocks[glutathione.slug] = 'Isolated test hold';
   assert.equal(productSearchScore(glutathione, 'GSH'), 0, 'A later hold removes the reviewed GSH alias');
+  assert.equal(productSearchScore(glutathione, 'GSH 1500.00mg'), 0, 'Decimal notation cannot bypass a later alias hold');
   assert(productSearchScore(glutathione, 'glutathione') > 0, 'The recorded identity remains an exact lookup');
 } finally { delete productReviewBlocks[glutathione.slug]; }
 assert.equal(productSearchScore({ ...glutathione, slug: 'glutathione-unreviewed-size' }, 'GSH'), 0);
@@ -75,4 +115,4 @@ for (const p of products.filter(p => !eligibleDiscovery(p))) {
 assert.equal(JSON.stringify(products), catalogBefore, 'Search never mutates product identity, stock, price or availability');
 const config = seoConfig({ SEO_PUBLIC_ORIGIN:publication.origin, SEO_PUBLIC_LAUNCH_APPROVED:'true', SEO_INDEXING_ENABLED:'true', SEO_REVIEWED_PRODUCT_SLUGS:publication.productSlugs.join(',') });
 assert.equal(sitemapPaths(config).filter(path => path.startsWith('/product/')).length, 17, 'No publication expansion');
-console.log('PASS: real-catalog contextual peptide search, exact Epithalon/GSH aliases and distinct oxidized form, original identity/SKU/CAS lookup, explicit strength and form negatives, blend distinction, non-peptide exclusion, publication holds and unchanged catalog/sitemap.');
+console.log('PASS: real-catalog contextual peptide search, exact Epithalon/GSH aliases and distinct oxidized form, original identity/SKU/CAS lookup, equivalent decimal strengths with exact precision and units, explicit strength and form negatives, blend distinction, non-peptide exclusion, publication holds and unchanged catalog/sitemap.');

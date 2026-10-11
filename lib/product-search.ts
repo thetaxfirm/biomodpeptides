@@ -22,7 +22,11 @@ export function searchWords(value: string): string[] {
   return value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
     .replace(/([a-z])([0-9])/g, '$1 $2').replace(/([0-9])([a-z])/g, '$1 $2')
     .replace(/[^a-z0-9.]+/g, ' ').trim().split(/\s+/).filter(Boolean)
-    .map(word => ({ vials: 'vial', peptides: 'peptide', compounds: 'compound', softgels: 'softgel', sprays: 'spray', bottles: 'bottle', milligrams: 'mg' }[word] || word));
+    .map(word => ({ vials: 'vial', peptides: 'peptide', compounds: 'compound', softgels: 'softgel', sprays: 'spray', bottles: 'bottle', milligrams: 'mg' }[word] || word))
+    // Equivalent strength notation only: keep units and every nonzero digit exact.
+    // Do not round through Number or normalize molecular, CAS or SKU digits.
+    .map((word, index, words) => /^\d+\.\d+$/.test(word) && /^(mg|mcg|g|ml)$/.test(words[index + 1] || '')
+      ? word.replace(/0+$/, '').replace(/\.$/, '') : word);
 }
 function quantities(words: string[]) {
   return words.flatMap((unit, index) => index > 0 && /^(mg|mcg|g|ml)$/.test(unit) && /^\d+(?:\.\d+)?$/.test(words[index - 1])

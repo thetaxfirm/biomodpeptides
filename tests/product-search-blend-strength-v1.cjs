@@ -36,6 +36,12 @@ const matches = query => products.filter(p => productSearchScore(p, query) > 0).
 
 // A listed blend total cannot stand in for one component's requested contents.
 const corrected = [
+  ['SS31 50.00 mg', ['ss-31-50mg']],
+  ['SS31 50.1mg', []],
+  ['BPC157 10.00mg', ['bpc-157-10mg']],
+  ['BPC157 20.0mg', []],
+  ['BPC157 10.0mg spray', []],
+  ['GSH1500.0mg', ['glutathione-reduced-l-glutathione']],
   ['BPC157 10mg', ['bpc-157-10mg']],
   ['BPC157 20mg', []],
   ['TB500 10mg', ['tb500-10mg']],
