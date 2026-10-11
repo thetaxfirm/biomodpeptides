@@ -76,6 +76,8 @@ for (const product of products) {
 assert.equal(eligibleCount, 17);
 
 const expectedStudies = {
+  'epitalon-50mg': ['Epitalon research context', 'https://pubmed.ncbi.nlm.nih.gov/12937682/', '10.1023/a:1025493705728'],
+  'dsip-10mg': ['DSIP research context', 'https://pubmed.ncbi.nlm.nih.gov/265572/', '10.1073/pnas.74.3.1282'],
   'glutathione-reduced-l-glutathione': ['Reduced glutathione research context', 'https://pubmed.ncbi.nlm.nih.gov/11419750/', '10.1016/s0378-4347(01)00081-0'],
   'thymosin-alpha-1-10mg': ['Thymosin Alpha-1 research context', 'https://pubmed.ncbi.nlm.nih.gov/265536/', '10.1073/pnas.74.2.725'],
   'bpc-157-10mg': ['BPC-157 research context', 'https://pubmed.ncbi.nlm.nih.gov/25415472/', '10.3390/molecules191119066'],
@@ -105,7 +107,22 @@ for (const product of products) {
   assert(!/<(?:button|details|script)\b|\bhidden=|aria-hidden=|\.pdf|FAQPage|MedicalEntity|MedicalStudy/.test(context), 'Research copy is visible without adding medical markup or a substituted document');
   assert(!/\b(?:dosage|dose|benefit|treats|cures|clinically proven|absorption|purity|acetate)\b/i.test(context), 'Research context makes no product efficacy, dosing, salt or purity claim');
   assert(html.indexOf('product-questions-heading') < html.indexOf('product-research-heading'), 'Research context follows the existing questions');
-  if (product.slug === 'glutathione-reduced-l-glutathione') {
+  if (['epitalon-50mg', 'dsip-10mg'].includes(product.slug)) {
+    assert(!/\b(?:human treatment|human clinical trial|patients?|therapeutic|recommended|anti[- ]?aging|rejuvenation|insomnia|sleep aid|sleep quality|life extension|extends? lifespan|injectable)\b/i.test(context), 'Epitalon and DSIP literature is not presented as a human treatment or product benefit');
+    assert(!context.includes('manufactured') && !context.includes('manufacturing origin') && !context.includes('amino-acid sequence'), 'No manufacturing, sequence, or origin is inferred for either product');
+  }
+  if (product.slug === 'epitalon-50mg') {
+    assert(context.includes('Khavinson and colleagues examined the peptide Epithalon in a 2003 cell-culture study.'));
+    assert(context.includes('Cultured human fetal fibroblasts.'));
+    assert(context.includes('Telomerase activity, expression of its catalytic subunit, and telomere length.'));
+    assert(context.includes('This cell-culture study was not a clinical trial.'));
+    assert(!context.includes('265572') && !context.includes('Rabbits') && !context.includes('electroencephalogram'), 'Epitalon receives only its own cell-culture study');
+  } else if (product.slug === 'dsip-10mg') {
+    assert(context.includes('DSIP is described in research literature as a nine-amino-acid peptide.'));
+    assert(context.includes('Rabbits, with comparisons of synthetic DSIP and related peptides.'));
+    assert(context.includes('Peptide characterization and comparison of delta and spindle electroencephalogram (EEG) patterns.'));
+    assert(!context.includes('12937682') && !context.includes('Telomerase') && !context.includes('human fetal'), 'DSIP receives only its own rabbit study');
+  } else if (product.slug === 'glutathione-reduced-l-glutathione') {
     assert(context.includes('Reduced glutathione (GSH) and oxidized glutathione (GSSG) are distinct forms.'));
     assert(context.includes('Collected human blood-cell samples: peripheral blood mononuclear cells.'));
     assert(context.includes('Simultaneous measurement of GSH and GSSG') && context.includes('(LC-MS)'));
@@ -134,11 +151,16 @@ for (const product of products) {
     assert(!context.includes('AMPK') && !context.includes('PMC4350682') && !context.includes('25415472'), 'SS-31 receives only its own research source');
   }
 }
-assert.deepEqual(researchedSlugs.sort(), Object.keys(expectedStudies).sort(), 'Exactly seven current eligible pages receive literature context');
+assert.deepEqual(researchedSlugs.sort(), Object.keys(expectedStudies).sort(), 'Exactly nine current eligible pages receive literature context');
 assert.equal(render(ProductResearchDetails, { product: { ...ten, slug: 'mots-c-unreviewed-size' } }), '', 'Unknown sizes do not inherit a name-based research mapping');
 const bpc157 = products.find(product => product.slug === 'bpc-157-10mg');
 assert(bpc157);
 assert.equal(render(ProductResearchDetails, { product: { ...bpc157, slug: 'bpc-157-unreviewed-size' } }), '', 'The BPC-157 context cannot promote an unreviewed size');
+for (const slug of ['epitalon-50mg', 'dsip-10mg']) {
+  const product = products.find(product => product.slug === slug);
+  assert(product && eligibleDiscovery(product));
+  assert.equal(render(ProductResearchDetails, { product: { ...product, slug: slug + '-unreviewed-size' } }), '', slug + ': an unreviewed size cannot inherit research context');
+}
 for (const slug of Object.keys(expectedStudies)) {
   const previous = productReviewBlocks[slug];
   try {
@@ -157,6 +179,12 @@ for (const [slug, [heading, source]] of Object.entries(expectedStudies)) {
   assert(context?.includes(heading) && context.includes('href="' + source + '"'), slug + ': actual product SSR includes the visible primary study');
   assert(html.indexOf('product-questions-heading') < html.indexOf('product-research-heading'));
   assert(html.indexOf('product-research-heading') < html.indexOf('product-tabs'), 'Research context follows questions without reordering purchase/specification controls');
+  const current = products.find(product => product.slug === slug);
+  const currentRecord = batchFor(current.id);
+  assert(context.includes('href="' + escape(batchPath(currentRecord)) + '"'), slug + ': actual page links to its own current batch record');
+  assert(html.includes(escape(current.name)) && html.includes(money(current.price)) && html.includes('Pack size'), slug + ': name, current price and pack controls are preserved');
+  const currentPassport = html.match(/<section class="batch-passport">([\s\S]*?)<\/section>/)?.[1];
+  assert(currentPassport?.includes(escape(batchStatusLabel(currentRecord))), slug + ': the actual page retains its own certificate status');
 }
 const productHTML = renderPage(forty.slug, fixture);
 assert(productHTML.includes(sizeHTML), 'actual product route includes live size navigation');
@@ -258,4 +286,4 @@ for (const [query, heading] of [[{}, 'Research peptides &amp; compounds'], [{ ca
 assert.equal(JSON.stringify(products), before, 'rendering never mutates source product identity, price, inventory or contents');
 assert.equal(JSON.stringify({ batchRecords, laboratoryDocuments }), documentsBefore, 'Literature context does not rewrite lot records or laboratory documents');
 assert.deepEqual(batchRecords.map(record => [record.record_id, batchStatus(record)]), statusesBefore, 'All current matched, mismatched, pending and restricted documentation states are unchanged');
-console.log('PASS: real ProductPage and Experience SSR preserve current purchase controls; compact size navigation, live selected price/stock and independent COA states;17 factual FAQs only; seven exact eligible pages have visible primary research context and study limits; six explicit shop variants with reciprocal size links and unavailable W20 purchase controls; eligible research links; unchanged nonresearch links and accurate shop headings');
+console.log('PASS: real ProductPage and Experience SSR preserve current purchase controls; compact size navigation, live selected price/stock and independent COA states;17 factual FAQs only; nine exact eligible pages have visible primary research context and study limits; six explicit shop variants with reciprocal size links and unavailable W20 purchase controls; eligible research links; unchanged nonresearch links and accurate shop headings');

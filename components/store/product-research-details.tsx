@@ -19,6 +19,25 @@ type ResearchStudy = {
   materialNote?: string;
 };
 const studies = {
+  epitalon: {
+    heading: 'Epitalon research context',
+    identity: 'Khavinson and colleagues examined the peptide Epithalon in a 2003 cell-culture study.',
+    models: 'Cultured human fetal fibroblasts.',
+    focus: 'Telomerase activity, expression of its catalytic subunit, and telomere length.',
+    citation: 'Khavinson et al. (2003), Bulletin of Experimental Biology and Medicine',
+    url: 'https://pubmed.ncbi.nlm.nih.gov/12937682/',
+    doi: '10.1023/a:1025493705728',
+    materialNote: 'This cell-culture study was not a clinical trial.',
+  },
+  dsip: {
+    heading: 'DSIP research context',
+    identity: 'DSIP is described in research literature as a nine-amino-acid peptide.',
+    models: 'Rabbits, with comparisons of synthetic DSIP and related peptides.',
+    focus: 'Peptide characterization and comparison of delta and spindle electroencephalogram (EEG) patterns.',
+    citation: 'Schoenenberger and Monnier (1977), Proceedings of the National Academy of Sciences',
+    url: 'https://pubmed.ncbi.nlm.nih.gov/265572/',
+    doi: '10.1073/pnas.74.3.1282',
+  },
   glutathione: {
     heading: 'Reduced glutathione research context',
     identity: 'Reduced glutathione (GSH) and oxidized glutathione (GSSG) are distinct forms. Camera and colleagues developed an assay that distinguishes and measures both in the same analysis.',
@@ -70,6 +89,8 @@ const studies = {
   },
 } satisfies Record<string, ResearchStudy>;
 const researchBySlug: Partial<Record<string, ResearchStudy>> = {
+  'epitalon-50mg': studies.epitalon,
+  'dsip-10mg': studies.dsip,
   'glutathione-reduced-l-glutathione': studies.glutathione,
   'thymosin-alpha-1-10mg': studies.thymosinAlpha1,
   'bpc-157-10mg': studies.bpc157,
