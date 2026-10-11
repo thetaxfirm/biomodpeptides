@@ -85,6 +85,40 @@ assert.deepEqual(matches('Wolverine 10.00mg'), ['wolverine-10mg'], 'Named blend 
 for (const query of ['SS31.00 50mg', 'BPC157 10.0mg spray', 'BPC157 10.0mg softgel', 'GSSG 1500.0mg']) {
   assert.deepEqual(matches(query), [], query);
 }
+// Greek qualifiers are notation, never permission to discard a molecular distinction.
+const thymosin = product('thymosin-alpha-1-10mg');
+for (const [symbol, spelling] of [['α', 'alpha'], ['Α', 'alpha'], ['β', 'beta'], ['Β', 'beta']]) {
+  for (const tail of [' 10mg', '1 10mg', '-1 10.00mg peptide vial']) {
+    const symbolic = 'Thymosin ' + symbol + tail;
+    const spelled = 'Thymosin ' + spelling + tail;
+    assert.deepEqual(searchWords(symbolic), searchWords(spelled), symbolic + ': retain qualifier and subtype');
+    assert.deepEqual(matches(symbolic), matches(spelled), symbolic + ': equivalent notation, identical catalog results');
+  }
+}
+for (const query of ['Thymosin α 10mg', 'Thymosin α1 10mg', 'ThymosinΑ1 10mg', 'Thymosin α-1 10.00mg peptide vial']) {
+  assert.deepEqual(matches(query), [thymosin.slug], query);
+}
+for (const query of [
+  'Thymosin β 10mg', 'Thymosin Β1 10mg', 'Thymosin β-1 10.00mg peptide vial',
+  'Thymosin α1 20mg', 'Thymosin α1 10.1mg', 'Thymosin α1 10mcg', 'Thymosin α1 10ml',
+  'Thymosin α1 10mg spray', 'Thymosin α1 10mg softgel',
+  'Thymosin γ 10mg', 'Thymosin δ 10mg', 'Thymosin γ1 10mg', 'Thymosin Δ1 10mg',
+  'Thymosin μ 10mg', 'Thymosin µ 10mg', 'Thymosin α1 10μg', 'Thymosin α1 10µg',
+]) assert.deepEqual(matches(query), [], query + ': do not drop identity or convert units');
+assert.deepEqual(searchWords('Thymosin α1 10mg'), ['thymosin', 'alpha', '1', '10', 'mg']);
+assert.deepEqual(searchWords('Thymosin β1 10mg'), ['thymosin', 'beta', '1', '10', 'mg']);
+assert.deepEqual(searchWords('γ δ µ μ'), ['γ', 'δ', 'μ', 'μ'], 'Unmapped Unicode letters survive normalization');
+assert.deepEqual(searchWords('ÉPITHALON 50mg'), searchWords('Epithalon 50mg'), 'Existing accent normalization remains unchanged');
+const previousThymosinHold = productReviewBlocks[thymosin.slug];
+try {
+  productReviewBlocks[thymosin.slug] = 'Isolated test hold';
+  assert.equal(productSearchScore(thymosin, 'Thymosin α1 10mg peptide'), 0, 'Greek notation cannot bypass a later publication hold');
+  assert.equal(productSearchScore(thymosin, 'Thymosin β1 10mg'), 0);
+  assert.equal(productSearchScore(thymosin, 'Thymosin α1 10mg'), productSearchScore(thymosin, 'Thymosin alpha1 10mg'), 'Existing identity lookup has unchanged held-product semantics');
+} finally {
+  if (previousThymosinHold === undefined) delete productReviewBlocks[thymosin.slug];
+  else productReviewBlocks[thymosin.slug] = previousThymosinHold;
+}
 // Existing exact identifiers and non-peptide searches remain available on their own terms.
 for (const [query, slug] of [['NAD 500mg research vial','nad-500mg'],['53-84-9','nad-500mg'],['BM-LYO-017','ss-31-10mg'],['736992-21-5','ss-31-10mg'],['TB-500','tb500-10mg'],['ghk cu 50mg','ghk-cu-50mg'],['Wolverine 10mg','wolverine-10mg']]) {
   assert(matches(query).includes(slug), query);
@@ -115,4 +149,4 @@ for (const p of products.filter(p => !eligibleDiscovery(p))) {
 assert.equal(JSON.stringify(products), catalogBefore, 'Search never mutates product identity, stock, price or availability');
 const config = seoConfig({ SEO_PUBLIC_ORIGIN:publication.origin, SEO_PUBLIC_LAUNCH_APPROVED:'true', SEO_INDEXING_ENABLED:'true', SEO_REVIEWED_PRODUCT_SLUGS:publication.productSlugs.join(',') });
 assert.equal(sitemapPaths(config).filter(path => path.startsWith('/product/')).length, 17, 'No publication expansion');
-console.log('PASS: real-catalog contextual peptide search, exact Epithalon/GSH aliases and distinct oxidized form, original identity/SKU/CAS lookup, equivalent decimal strengths with exact precision and units, explicit strength and form negatives, blend distinction, non-peptide exclusion, publication holds and unchanged catalog/sitemap.');
+console.log('PASS: real-catalog contextual peptide search, exact Epithalon/GSH aliases and distinct oxidized form, original identity/SKU/CAS lookup, equivalent decimal strengths with exact precision and units, Greek qualifiers preserved, explicit strength and form negatives, blend distinction, non-peptide exclusion, publication holds and unchanged catalog/sitemap.');

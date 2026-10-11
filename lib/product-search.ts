@@ -20,8 +20,11 @@ const productAliases: Readonly<Record<string, readonly string[]>> = {
 // Normalize notation, not chemical identity. Numeric strengths are never fuzzy-matched.
 export function searchWords(value: string): string[] {
   return value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    // Greek molecular qualifiers must retain their meaning, including α1 / β1.
+    .replace(/[αβ]/g, letter => letter === 'α' ? ' alpha ' : ' beta ')
     .replace(/([a-z])([0-9])/g, '$1 $2').replace(/([0-9])([a-z])/g, '$1 $2')
-    .replace(/[^a-z0-9.]+/g, ' ').trim().split(/\s+/).filter(Boolean)
+    // Keep other letters as exact tokens; dropping an unknown qualifier broadens identity.
+    .replace(/[^\p{L}0-9.]+/gu, ' ').trim().split(/\s+/).filter(Boolean)
     .map(word => ({ vials: 'vial', peptides: 'peptide', compounds: 'compound', softgels: 'softgel', sprays: 'spray', bottles: 'bottle', milligrams: 'mg' }[word] || word))
     // Equivalent strength notation only: keep units and every nonzero digit exact.
     // Do not round through Number or normalize molecular, CAS or SKU digits.

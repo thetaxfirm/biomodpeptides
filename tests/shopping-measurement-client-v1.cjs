@@ -154,7 +154,7 @@ async function quoted(){await loaded({pathname:'/checkout'});const h=harness(Che
   if(scenario==='owner'){await update({customer:{id:'other-isolated-owner',name:'Fixture'}});h.render();}if(scenario==='address')form(h).props.onChange();if(scenario==='unmount')h.unmount();
   if(resolve){resolve({url:'/api/store/pay?id=isolated-fixture'});await flush();}
   assert.equal(count('checkout_handoff_ready'),0,scenario+' does not count a valid live handoff');
-  assert.equal(redirects.length,scenario==='reject'?0:1,'Measurement preserves existing navigation semantics');
+  assert.equal(redirects.length,['reject','owner','unmount'].includes(scenario)?0:1,'Owner changes and unmounts discard stale handoffs; same-owner navigation remains unchanged');
  }
  await loaded({pathname:'/checkout',store:{payment:{enabled:true,state:'sandbox'}}});h=harness(Checkout);paint();await submit(h);assert.equal(metrics.length,0,'Sandbox checkout form and successful delivery quote excluded');
  assert(!helpers.validShoppingHandoff('//gateway.invalid'));assert(!helpers.validShoppingHandoff('https://gateway.invalid:8443'));assert(!helpers.validShoppingHandoff(' https://gateway.invalid'));assert(!helpers.validShoppingHandoff('/account'));assert(!helpers.validShoppingHandoff('http://gateway.invalid'));assert(!helpers.validShoppingHandoff('https://user:password@gateway.invalid'));assert(helpers.validShoppingHandoff('https://gateway.invalid/hosted'));

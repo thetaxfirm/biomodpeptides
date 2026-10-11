@@ -130,38 +130,63 @@ export function AddressFields({ initial = {} }: {
 export function Checkout() {
     const { store, ready, loadError, cartSync = 'current', cartUpdating = false, refresh, measureShopping, observeShoppingView, validShoppingQuote, validShoppingHandoff } = useStore();
     useEffect(() => observeShoppingView?.(store.customer ? 'checkout_form_view' : 'checkout_signin_view'), [observeShoppingView, store, ready, loadError]);
-    const shoppingMounted = useRef(false);
-    const shoppingOwner = useRef(store.customer?.id);
-    shoppingOwner.current = store.customer?.id;
-    useEffect(() => { shoppingMounted.current = true; return () => { shoppingMounted.current = false; }; }, []);
-    const { retrying, retryLoad } = useStoreLoadRetry(refresh);
-    const [accepted, setAccepted] = useState(false);
-    const [busy, setBusy] = useState(false);
-    const [promoBusy, setPromoBusy] = useState(false);
-    const [deliveryQuote, setDeliveryQuote] = useState<{ data: any; context: string } | null>(null);
-    const [address, setAddress] = useState<any>(null);
-    const [requestKey, setRequestKey] = useState('');
-    const operation = useRef(false);
-    const promoOperation = useRef(false);
+    type Scope = { owner: string | null; tenure: number; lifetime: number; active: boolean };
+    type Operation = { scope: Scope; lifetime: number };
+    type CheckoutView = { scope: Scope; lifetime: number; accepted: boolean; deliveryQuote: { data: any; context: string } | null; address: any; requestKey: string };
+    const owner = ready ? store.customer?.id || null : null;
+    const scopeRef = useRef<Scope>({ owner, tenure: 0, lifetime: 0, active: false });
+    if (scopeRef.current.owner !== owner) scopeRef.current = { owner, tenure: scopeRef.current.tenure + 1, lifetime: 0, active: false };
+    const scope = scopeRef.current;
+    const renderedLifetime = scope.lifetime;
+    const [view, setView] = useState<CheckoutView>({ scope, lifetime: 0, accepted: false, deliveryQuote: null, address: null, requestKey: '' });
+    const [activeRequest, setActiveRequest] = useState<Operation | null>(null);
+    const [activePromo, setActivePromo] = useState<Operation | null>(null);
+    const operation = useRef<Operation | null>(null);
+    const promoOperation = useRef<Operation | null>(null);
     const quoteRevision = useRef(0);
+    const current = (request: Operation) => request.scope === scopeRef.current && request.scope.active && request.lifetime === request.scope.lifetime;
+    const currentView = view.scope === scope && view.lifetime === scope.lifetime ? view : null;
+    const accepted = currentView?.accepted || false;
+    const deliveryQuote = currentView?.deliveryQuote;
+    const address = currentView?.address;
+    const requestKey = currentView?.requestKey || '';
+    const busy = Boolean(activeRequest && current(activeRequest));
+    const promoBusy = Boolean(activePromo && current(activePromo));
+    const { retrying, retryLoad } = useStoreLoadRetry(refresh);
+    useEffect(() => {
+        scope.active = true;
+        scope.lifetime += 1;
+        quoteRevision.current += 1;
+        operation.current = null;
+        promoOperation.current = null;
+        setActiveRequest(null);
+        setActivePromo(null);
+        setView({ scope, lifetime: scope.lifetime, accepted: false, deliveryQuote: null, address: null, requestKey: crypto.randomUUID() });
+        return () => { scope.active = false; scope.lifetime += 1; };
+    }, [scope]);
     const q = store.totals;
-    const quoteContext = JSON.stringify([store.cart, store.cartConflict?.id, q?.total, q?.promo?.code || '', Boolean(cartUpdating), cartSync === 'uncertain']);
+    const quoteContext = JSON.stringify([owner, scope.tenure, store.cart, store.cartConflict?.id, q?.total, q?.promo?.code || '', Boolean(cartUpdating), cartSync === 'uncertain']);
     const currentContext = useRef(quoteContext);
     currentContext.current = quoteContext;
     const delivery = deliveryQuote?.context === quoteContext ? deliveryQuote.data : null;
     const packSavings = q?.packDiscount ?? q?.discount ?? 0;
     const promoSavings = q?.promoDiscount ?? q?.promo?.savings ?? 0;
-    useEffect(() => setRequestKey(crypto.randomUUID()), []);
     function invalidateDelivery() {
+        if (!current({ scope, lifetime: renderedLifetime })) return;
         quoteRevision.current += 1;
-        setDeliveryQuote(null);
-        setAddress(null);
+        setView(previous => previous.scope === scope && previous.lifetime === scope.lifetime ? { ...previous, deliveryQuote: null, address: null } : previous);
     }
     useEffect(() => { invalidateDelivery(); }, [quoteContext]);
     function changePromoBusy(next: boolean) {
-        promoOperation.current = next;
-        setPromoBusy(next);
+        const request = { scope, lifetime: renderedLifetime };
+        if (!current(request)) return;
+        promoOperation.current = next ? request : null;
+        setActivePromo(next ? request : null);
         if (next) invalidateDelivery();
+    }
+    function setAccepted(next: boolean) {
+        if (!current({ scope, lifetime: renderedLifetime })) return;
+        setView(previous => previous.scope === scope && previous.lifetime === scope.lifetime ? { ...previous, accepted: next } : previous);
     }
     if (!ready) return <section aria-busy={retrying}>
         <div className="page-heading"><h1>Checkout</h1></div>
@@ -181,46 +206,60 @@ export function Checkout() {
     if (!store.cart.length) return <Blank title="Your cart is empty."><a href="/shop">Shop products</a></Blank>;
     async function submit(e: FormEvent<HTMLFormElement>) {
         e.preventDefault();
-        if (operation.current || promoOperation.current || cartUpdating) return;
-        operation.current = true;
-        setBusy(true);
+        const request = { scope, lifetime: renderedLifetime };
+        if (!current(request) || operation.current || promoOperation.current || cartUpdating) return;
+        operation.current = request;
+        setActiveRequest(request);
         invalidateDelivery();
         const revision = quoteRevision.current;
         const context = currentContext.current;
-        const owner = shoppingOwner.current;
         try {
             const fields = formData(e.currentTarget);
             const data = await api('delivery', { address: fields });
-            if (revision !== quoteRevision.current || context !== currentContext.current || promoOperation.current) return;
-            setAddress(fields);
-            setDeliveryQuote({ data, context });
-            if (shoppingMounted.current && owner === shoppingOwner.current && validShoppingQuote?.(data)) measureShopping?.('delivery_quote_confirmed');
+            if (!current(request) || operation.current !== request || revision !== quoteRevision.current || context !== currentContext.current || promoOperation.current) return;
+            setView(previous => previous.scope === scope && previous.lifetime === request.lifetime ? { ...previous, address: fields, deliveryQuote: { data, context } } : previous);
+            if (validShoppingQuote?.(data)) measureShopping?.('delivery_quote_confirmed');
         } catch (e) {
-            if (revision === quoteRevision.current) report(e);
-        } finally { operation.current = false; setBusy(false); }
+            if (current(request) && revision === quoteRevision.current) report(e);
+        } finally {
+            if (operation.current === request) {
+                operation.current = null;
+                if (current(request)) setActiveRequest(null);
+            }
+        }
     }
     async function checkout() {
-        if (!delivery || !accepted || !requestKey || operation.current || promoOperation.current || !store.payment.enabled || cartUpdating) return;
-        operation.current = true;
-        setBusy(true);
-        const context = currentContext.current, revision = quoteRevision.current, owner = shoppingOwner.current;
+        const request = { scope, lifetime: renderedLifetime };
+        if (!current(request) || !delivery || !accepted || !requestKey || operation.current || promoOperation.current || !store.payment.enabled || cartUpdating) return;
+        operation.current = request;
+        setActiveRequest(request);
+        const context = currentContext.current, revision = quoteRevision.current;
         try {
             const d = await api('checkout', { address, accepted, requestKey, expectedTotal: delivery.total, quoteId: delivery.quoteId });
-            if (shoppingMounted.current && owner === shoppingOwner.current && context === currentContext.current && revision === quoteRevision.current
+            // A response belongs to the account and mounted checkout that sent
+            // it. Never redirect a later owner or a page which has been left.
+            if (!current(request) || operation.current !== request) return;
+            if (context === currentContext.current && revision === quoteRevision.current
                 && !promoOperation.current && validShoppingHandoff?.(d.url)) measureShopping?.('checkout_handoff_ready');
             location.assign(d.url);
-        } catch (e) { report(e); operation.current = false; setBusy(false); }
+        } catch (e) {
+            if (current(request) && operation.current === request) {
+                report(e);
+                operation.current = null;
+                setActiveRequest(null);
+            }
+        }
     }
     return <><div className="page-heading"><h1>Checkout</h1></div>
         {store.payment.state === 'sandbox' && <p className="notice">Test checkout only. This payment environment does not accept real payments.</p>}
         <div className="cart-layout">
-            <form className="store-form" onSubmit={submit} onChange={invalidateDelivery}>
+            <form key={scope.tenure} className="store-form" onSubmit={submit} onChange={invalidateDelivery}>
                 <h2>Delivery address</h2><AddressFields initial={{ name: store.customer.name }}/>
                 <button className="button button-dark" disabled={busy || promoBusy || cartUpdating}>{busy ? 'Calculating…' : 'Calculate delivery and tax'}</button>
             </form>
             <aside className="order-summary"><h2>Your order</h2>
                 {q?.items.map((l: any, i: number) => <p className="summary-product" key={i}><span>{l.product.name} × {l.quantity}</span><strong>{money(l.lineTotal ?? l.product.price * l.quantity)}</strong></p>)}
-                <PromoCode disabled={busy || cartUpdating} onBusyChange={changePromoBusy} onChange={invalidateDelivery}/>
+                <PromoCode key={scope.tenure} disabled={busy || cartUpdating} onBusyChange={changePromoBusy} onChange={invalidateDelivery}/>
                 <div className="summary-lines">
                     <p><span>Subtotal</span><strong>{q ? money(q.subtotal) : 'Unavailable'}</strong></p>
                     {packSavings > 0 && <p><span>Pack savings</span><strong>−{money(packSavings)}</strong></p>}
