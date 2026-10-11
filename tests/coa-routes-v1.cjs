@@ -1,0 +1,143 @@
+/* Actual API GET/POST handlers with isolated dependencies. No real database,
+ * secrets, customer records, outbound mail, order/payment/cart actions or network.
+ * Outbox SQL/concurrency/integrity are separately exercised by coa-delivery-v1. */
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const Module = require('node:module');
+const ts = require('typescript');
+const root = path.resolve(__dirname, '..');
+const filename = path.join(root, 'app/api/store/[action]/route.ts');
+const requestId = '10000000-0000-4000-8000-000000000001';
+const account = { id: 'isolated-account', email: 'account@example.invalid' };
+const contact = { name: 'Isolated request', email: 'requester@example.invalid', subject: 'COA request: HEAT-R 30mg / 102-30-0001', message: 'Isolated documentation request.' };
+const env = Object.freeze({ fixture: 'isolated' });
+const now = 2000000000000;
+let scenario, calls, saved, forbiddenCalls = 0;
+const oldFetch = global.fetch;
+global.fetch = () => { forbiddenCalls++; throw Error('External network is forbidden'); };
+const forbidden = name => () => { forbiddenCalls++; throw Error('Forbidden dependency: ' + name); };
+const note = (name, value) => { calls.push({ name, value }); };
+const called = name => calls.filter(call => call.name === name);
+const checkedAdmin = () => assert(called('admin-ok').length, 'Admin authorization must precede sensitive reads/writes');
+const status = value => ({ status: value, reason: value === 'accepted' ? 'accepted_by_email_provider' : 'fixture', acceptedAt: value === 'accepted' ? now : null, canProcess: value === 'queued' });
+const dependencies = {
+  '@/lib/auth': {
+    customer: async () => { note('customer'); return scenario.role === 'signedout' ? null : account; },
+    requireAdmin: async () => { note('requireAdmin'); if (scenario.role !== 'admin') throw Error('Administrator access required.'); note('admin-ok'); return account; },
+    requireCustomer: async () => { note('requireCustomer'); if (scenario.role === 'signedout') throw Error('Please sign in.'); return account; },
+    session: async secure => { note('session', secure); return { id: 'isolated-session' }; },
+    rateLimit: async (...args) => note('rateLimit', args),
+  },
+  '@/lib/runtime': {
+    runtime: () => env, uid: () => requestId, timestamp: () => now,
+    parse: (value, fallback) => { try { return value ? JSON.parse(value) : fallback; } catch { return fallback; } },
+    run: async (sql, ...args) => {
+      assert.equal(sql, 'INSERT INTO requests(id,owner,kind,data,created) VALUES(?,?,?,?,?)', 'Only the requested isolated inquiry insertion is permitted');
+      note('persist', args);
+      if (scenario.persistFailure) throw Error('Isolated inquiry storage unavailable.');
+      const [id, owner, kind, data, created] = args;
+      saved.set(id, { id, owner, kind, data, created });
+      return { meta: { changes: 1 } };
+    },
+    all: async sql => {
+      checkedAdmin(); note('all', sql);
+      if (sql.startsWith('SELECT * FROM requests ')) return [...saved.values()];
+      if (sql.startsWith('SELECT id,owner,status,total,data,created FROM orders ') || sql === 'SELECT * FROM campaigns') return [];
+      throw Error('Unexpected read: ' + sql);
+    },
+    one: forbidden('database one'), database: forbidden('database connection'),
+  },
+  '@/lib/commerce': { config: async () => { checkedAdmin(); note('config'); return {}; }, catalog: async visible => { checkedAdmin(); assert.equal(visible, false); note('catalog'); return []; } },
+  '@/lib/private-presentation': { presentationData: value => value },
+  '@/lib/catalog-visibility': { adminOrderView: value => value, currentSelection: () => true },
+  '@/lib/seo-policy': { seoConfig: () => ({}), searchReport: () => ({}) },
+  '@/lib/coa-outbox': {
+    coaAutomationStatus: async (receivedEnv, ids) => { checkedAdmin(); assert.equal(receivedEnv, env); assert.deepEqual(ids, [...saved.keys()]); note('coa-status', ids); return { config: { enabled: true, replyTo: 'reply@example.invalid', notifyTo: null }, mailConfigured: true, sender: 'BIOMOD <sender@example.invalid>', approvedReportCount: 3, requests: Object.fromEntries(ids.map(id => [id, { coa: status('queued'), alert: null }])) }; },
+    enqueueCoaRequest: async (receivedEnv, id) => {
+      assert.equal(receivedEnv, env); assert.equal(id, requestId); note('enqueue-coa', id);
+      if (scenario.publicRequest) assert(saved.has(id), 'The contact must be durably persisted before queueing'); else checkedAdmin();
+      if (scenario.enqueueFailure) throw Error('PRIVATE_MAIL_QUEUE_FAILURE');
+      return status('queued');
+    },
+    enqueueRequestAlert: async (receivedEnv, id) => {
+      assert.equal(receivedEnv, env); assert.equal(id, requestId); assert(saved.has(id), 'The inquiry must be durably persisted before the alert'); note('enqueue-alert', id);
+      if (scenario.alertFailure) throw Error('PRIVATE_ALERT_QUEUE_FAILURE');
+      return status('queued');
+    },
+    saveCoaConfig: async (receivedEnv, value) => { checkedAdmin(); assert.equal(receivedEnv, env); note('save-coa-config', value); return value; },
+    processCoaOutbox: async (receivedEnv, value) => {
+      checkedAdmin(); assert.equal(receivedEnv, env);
+      assert.deepEqual(value, { requestId, purpose: 'coa', limit: 1 }, 'Manual COA action must not claim a generic request-alert');
+      assert.equal(called('enqueue-coa').length, 1); note('process-coa', value); return { processed: 1, accepted: 1, review: 0 };
+    },
+    coaDeliveryStatuses: async (receivedEnv, ids) => { checkedAdmin(); assert.equal(receivedEnv, env); assert.deepEqual(ids, [requestId]); assert.equal(called('process-coa').length, 1); note('delivery-status'); return { [requestId]: { coa: scenario.deliveryStatus === null ? null : status(scenario.deliveryStatus || 'accepted'), alert: null } }; },
+  },
+};
+class FixtureResponse extends Response {
+  static json(value, options = {}) { return new FixtureResponse(JSON.stringify(value), { ...options, headers: { 'Content-Type': 'application/json', ...options.headers } }); }
+}
+const mod = new Module(filename, module);
+mod.filename = filename; mod.paths = Module._nodeModulePaths(path.dirname(filename));
+const localRequire = Module.createRequire(filename);
+mod.require = name => {
+  if (name === 'next/server') return { NextResponse: FixtureResponse };
+  if (name === 'next/headers') return { cookies: forbidden('cookies') };
+  if (Object.hasOwn(dependencies, name)) return dependencies[name];
+  if (name.startsWith('@/')) return new Proxy({}, { get: (_, key) => key === '__esModule' ? true : forbidden(name + ':' + String(key)) });
+  return localRequire(name);
+};
+mod._compile(ts.transpileModule(fs.readFileSync(filename, 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText, filename);
+const { GET, POST } = mod.exports;
+function reset(options = {}) { scenario = { role: 'admin', ...options }; calls = []; saved = new Map(); }
+async function request(action, data, headers = {}) {
+  const method = data === undefined ? 'GET' : 'POST';
+  const req = new Request('https://store.example.invalid/api/store/' + action, { method, ...(method === 'POST' ? { headers: { origin: 'https://store.example.invalid', 'content-type': 'application/json', ...headers }, body: JSON.stringify(data) } : {}) });
+  req.nextUrl = new URL(req.url);
+  const response = await (method === 'GET' ? GET : POST)(req, { params: Promise.resolve({ action }) });
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+  return { status: response.status, body: await response.json() };
+}
+(async () => {
+  // Neither unauthenticated nor ordinary signed-in visitors may read queues or act.
+  for (const role of ['signedout', 'customer']) {
+    reset({ role }); let result = await request('admin'); assert.equal(result.status, 400); assert.deepEqual(calls.map(c => c.name), ['customer', 'requireAdmin']);
+    for (const [action, body] of [['admin-coa-config', { enabled: true, replyTo: 'reply@example.invalid' }], ['admin-coa-process', { id: requestId }]]) {
+      reset({ role }); result = await request(action, body); assert.equal(result.status, 400); assert.deepEqual(calls.map(c => c.name), ['session', 'rateLimit', 'requireAdmin']);
+    }
+  }
+  reset(); let result = await request('admin-coa-process', { id: requestId }, { origin: 'https://other.example.invalid' }); assert.equal(result.status, 403); assert.equal(calls.length, 0);
+  reset(); result = await request('admin-coa-config', { enabled: true, replyTo: 'reply@example.invalid' }, { 'content-length': '30001' }); assert.equal(result.status, 413); assert.equal(calls.length, 0);
+  reset(); result = await request('admin-coa-config', { enabled: 'true', replyTo: 'invalid' }); assert.equal(result.status, 400); assert.equal(called('save-coa-config').length, 0);
+  reset(); result = await request('admin-coa-process', { id: 'not-an-existing-request-id' }); assert.equal(result.status, 400); assert.equal(called('enqueue-coa').length, 0); assert.equal(called('process-coa').length, 0);
+
+  reset(); saved.set(requestId, { id: requestId, kind: 'contact', created: now, data: JSON.stringify(contact) });
+  result = await request('admin'); assert.equal(result.status, 200); assert.equal(result.body.coaAutomation.approvedReportCount, 3); assert.equal(result.body.requests[0].data.email, contact.email); assert.equal(called('coa-status').length, 1); assert(!calls.some(c => /enqueue|process|save/.test(c.name)), 'Admin refresh must not queue or send');
+  reset({ role: 'signedout' }); result = await request('coa-originals'); assert.equal(result.status, 404); assert.equal(called('coa-status').length, 0);
+  reset(); result = await request('admin-coa-config', { enabled: true, replyTo: 'reply@example.invalid', notifyTo: null, recipient: 'intruder@example.invalid', base64: 'NOT_AN_ATTACHMENT', sender: 'unexpected@example.invalid' }); assert.equal(result.status, 200); assert.deepEqual(called('save-coa-config')[0].value, { enabled: true, replyTo: 'reply@example.invalid', notifyTo: null });
+
+  // A public contact is saved once; unavailable email handling cannot turn it into failure.
+  for (const failures of [{}, { enqueueFailure: true }, { alertFailure: true }, { enqueueFailure: true, alertFailure: true }]) {
+    reset({ role: 'signedout', publicRequest: true, ...failures });
+    result = await request('contact', { ...contact, recipient: 'intruder@example.invalid', filename: 'forged.pdf' });
+    assert.equal(result.status, 200); assert.equal(result.body.id, requestId); assert.match(result.body.message, /saved/); assert.equal(called('persist').length, 1); assert.equal(called('enqueue-coa').length, 1); assert.equal(called('enqueue-alert').length, 1); assert.equal(called('process-coa').length, 0, 'Public contact queues only, never initiates synchronous mail');
+    assert.deepEqual(JSON.parse(saved.get(requestId).data), contact); assert.equal(saved.get(requestId).owner, null); assert.equal(saved.get(requestId).kind, 'contact'); assert(!JSON.stringify(result.body).includes('PRIVATE_')); assert(!Object.hasOwn(result.body, 'status'));
+  }
+  reset({ publicRequest: true, persistFailure: true }); result = await request('contact', contact); assert.equal(result.status, 400); assert.equal(saved.size, 0); assert.equal(called('enqueue-coa').length, 0); assert.equal(called('enqueue-alert').length, 0);
+  reset({ publicRequest: true }); result = await request('contact', { ...contact, website: 'honeypot' }); assert.equal(result.status, 200); assert.equal(called('persist').length, 0); assert.equal(called('enqueue-coa').length, 0); assert.equal(called('enqueue-alert').length, 0);
+  reset({ publicRequest: true }); result = await request('contact', { ...contact, email: 'invalid' }); assert.equal(result.status, 400); assert.equal(called('persist').length, 0); assert.equal(called('enqueue-coa').length, 0);
+  reset({ role: 'customer', publicRequest: true, alertFailure: true }); result = await request('affiliate', { website: 'https://partner.example.invalid', message: 'Isolated partner request', email: 'intruder@example.invalid' }); assert.equal(result.status, 200); assert.equal(saved.get(requestId).owner, account.id); assert.equal(JSON.parse(saved.get(requestId).data).email, account.email); assert.equal(called('enqueue-coa').length, 0); assert.equal(called('enqueue-alert').length, 1); assert.equal(called('process-coa').length, 0);
+  reset({ role: 'signedout', publicRequest: true }); result = await request('affiliate', { website: 'https://partner.example.invalid', message: 'Isolated partner request' }); assert.equal(result.status, 400); assert.equal(called('persist').length, 0); assert.equal(called('enqueue-alert').length, 0);
+
+  // Admin selects an existing request ID only. Body-supplied recipients/documents are ignored.
+  for (const deliveryStatus of ['accepted', 'duplicate', 'queued', 'sending', 'manual_review', null]) {
+    reset({ deliveryStatus }); result = await request('admin-coa-process', { id: requestId, recipient: 'intruder@example.invalid', subject: 'Replacement subject', filename: 'replacement.pdf', base64: 'FORGED_BYTES' });
+    assert.equal(result.status, 200); assert.deepEqual(calls.map(c => c.name), ['session', 'rateLimit', 'requireAdmin', 'admin-ok', 'enqueue-coa', 'process-coa', 'delivery-status']); assert.equal(called('enqueue-alert').length, 0);
+    assert(!JSON.stringify(result.body).includes('intruder') && !JSON.stringify(result.body).includes('FORGED_BYTES'));
+    if (deliveryStatus === 'accepted') { assert.match(result.body.message, /provider accepted/); assert.match(result.body.message, /Inbox delivery is not yet confirmed/); }
+    else assert(!result.body.message.includes('provider accepted'), 'Unconfirmed results must not claim mail acceptance');
+  }
+  reset({ enqueueFailure: true }); result = await request('admin-coa-process', { id: requestId }); assert.equal(result.status, 400); assert.equal(called('process-coa').length, 0); assert.equal(called('delivery-status').length, 0);
+  assert.equal(forbiddenCalls, 0);
+  console.log('PASS: actual COA API routes authorize before sensitive reads/writes; same-origin/body gates; validated settings and request ID only; inquiry persistence survives enqueue failures; manual report-only processing; honest mail status; no network, real records or commerce mutations.');
+})().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => { global.fetch = oldFetch; });

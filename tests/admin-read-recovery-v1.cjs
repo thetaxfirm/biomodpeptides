@@ -29,7 +29,7 @@ const alerts=h=>nodes(h.tree).filter(n=>n.props.role==='alert').map(text).join('
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return{promise,resolve,reject};};
 const flush=async h=>{for(let i=0;i<16;i++)await Promise.resolve();h?.render();};
 const noop=()=>null;
-function Field(){}function Check(){}function Choice(){}function Blank(){}function AuthPage(){}function ShippingLabel(){}function Dialog(){}function Tabs(){}function TabsTrigger(){}
+function Field(){}function Check(){}function Choice(){}function Blank(){}function AuthPage(){}function ShippingLabel(){}function Dialog(){}function Tabs(){}function TabsTrigger(){}function CoaAutomation(){}
 const ownerA={id:'fixture-admin-a',name:'Fixture A',email:'a@example.invalid'};
 const ownerB={id:'fixture-admin-b',name:'Fixture B',email:'b@example.invalid'};
 const fixture=(label='Snapshot A')=>({config:{presalesEnabled:false,rewardsEnabled:false,affiliateEnabled:false,packDiscounts:{},shippingCents:null,freeShippingAt:20000},products:[{id:900001,name:label,price:10000,stockQuantity:1,inStock:true,purchasable:true}],campaigns:[{id:'fixture-campaign',title:'Simulated campaign',active:false,starts:'2099-01-01',ends:'2099-02-01'}],orders:[{id:'fixture-order',status:'pending',total:10000,created:0,data:{items:[]}}],requests:[{id:'fixture-request',kind:'fixture',status:'new',created:0,data:{}}],searchPublishing:{}});
@@ -42,6 +42,7 @@ mod.require=id=>{
  if(id==='sonner')return{toast:{success:v=>successes.push(v),info:v=>infos.push(v)}};
  if(id==='@/lib/catalog')return{money:c=>'$'+(c/100).toFixed(2)};if(id==='@/lib/packs')return{supportsPacks:()=>false};
  if(id==='./account')return{AuthPage};if(id==='./shipping-admin')return{ShippingLabel};
+ if(id==='./coa-automation')return{CoaAutomation};
  if(id==='./primitives')return{Field,Check,Choice,Blank,formData:form=>form.fields};
  if(id==='@/components/ui/tabs')return{Tabs,TabsTrigger,TabsList:noop,TabsContent:noop};
  if(id==='@/components/ui/dialog')return{Dialog,DialogContent:noop,DialogTitle:noop,DialogDescription:noop};
@@ -146,6 +147,22 @@ const productNames=h=>nodes(h.tree).filter(n=>n.type===Dialog).map(n=>n.props.op
  find(h,n=>n.type===Dialog).props.onOpenChange(false);h.render();button(h,'Edit').props.onClick();h.render();
  productSave.resolve({message:'Earlier product saved'});await oldProductSave;h.render();
  assert.equal(productNames(h),'true');assert(button(h,'Refresh administration').props.disabled);assert.equal(mutations(),1);assert.equal(reads(),1);assert.match(alerts(h),/protect unsaved edits/);
+
+ // COA config/send delegates stay under parent draft, single-flight and owner guards.
+ reset();h=mount({initialTab:'requests'});await flush(h);
+ let coa=find(h,n=>n.type===CoaAutomation);assert.equal(coa.props.busy,false);assert.equal(coa.props.dirty,false);assert.deepEqual(coa.props.requests,fixture().requests,'Outbox uses already-loaded request identities');
+ coa.props.onDraft();h.render();assert.equal(find(h,n=>n.type===CoaAutomation).props.dirty,true);
+ const beforeCoaReads=reads();await coa.props.onProcess('fixture-request');assert.equal(reads(),beforeCoaReads);assert.equal(mutations(),0);
+ allowedMutation='admin-coa-config';apiImpl=async action=>action==='admin-coa-config'?{message:'Fixture config saved'}:fixture();
+ await find(h,n=>n.type===CoaAutomation).props.onSave({preventDefault(){},currentTarget:{fields:{enabled:'on',replyTo:'reply@example.invalid',notifyTo:''}}});h.render();
+ assert.deepEqual(calls.find(c=>c.action==='admin-coa-config').body,{enabled:true,replyTo:'reply@example.invalid',notifyTo:null});assert.equal(find(h,n=>n.type===CoaAutomation).props.dirty,false);
+ allowedMutation='admin-coa-process';const coaProcess=deferred();apiImpl=action=>action==='admin-coa-process'?coaProcess.promise:Promise.resolve(fixture());
+ coa=find(h,n=>n.type===CoaAutomation);const sending=coa.props.onProcess('fixture-request');coa.props.onProcess('fixture-request');h.render();
+ assert.equal(calls.filter(c=>c.action==='admin-coa-process').length,1);assert.equal(find(h,n=>n.type===CoaAutomation).props.busy,true);
+ coaProcess.resolve({message:'Fixture accepted, not delivered'});await sending;h.render();assert.equal(find(h,n=>n.type===CoaAutomation).props.busy,false);
+ const staleCoa=find(h,n=>n.type===CoaAutomation).props;state.store.customer=ownerB;apiImpl=async()=>fixture('Owner B');h.render();await flush(h);const callCount=calls.length;
+ staleCoa.onDraft();await staleCoa.onProcess('fixture-request');await staleCoa.onSave(event());assert.equal(calls.length,callCount);
+ assert.equal(find(h,n=>n.type===CoaAutomation).props.dirty,false);
 
  // Failed reads persist and retry remains a single-flight GET, never a mutation.
  reset();apiImpl=async()=>{throw Error('Simulated admin read outage');};h=mount();await flush(h);

@@ -1,0 +1,23 @@
+.section { min-width: 0; margin-bottom: 40px; }
+.section h2, .section h3 { margin-bottom: 12px; }
+.section p { max-width: 90ch; margin: 10px 0; line-height: 1.6; }
+.note { font-size: 14px; color: var(--bm-secondary, #5c5c5c); }
+.configuration, .reportDetails { display: flex; flex-wrap: wrap; gap: 16px 36px; margin: 20px 0; }
+.configuration > div, .reportDetails > div { min-width: 0; max-width: 100%; }
+.configuration dt, .reportDetails dt { font-size: 14px; color: var(--bm-secondary, #5c5c5c); }
+.configuration dd, .reportDetails dd { margin: 4px 0 0; overflow-wrap: anywhere; }
+.form { margin: 24px 0 32px; max-width: 850px; }
+.fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.fields small { font-size: 13px; font-weight: 400; line-height: 1.5; }
+.checkbox { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; }
+.checkbox input { width: 18px; height: 18px; margin: 0; accent-color: var(--bm-ink, #2d1235); }
+.checkbox input:focus-visible { outline: 2px solid var(--ring, #4a2a55); outline-offset: 3px; }
+.outbox { display: grid; gap: 28px; }
+.request { min-width: 0; padding: 20px 0; border-top: 1px solid var(--bm-line, #dedede); }
+.request > h4 { margin: 0 0 12px; overflow-wrap: anywhere; }
+.request > p { overflow-wrap: anywhere; }
+.requestId { overflow-wrap: anywhere; font-weight: 400; }
+.states { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 32px; margin: 16px 0; }
+.delivery { min-width: 0; overflow-wrap: anywhere; }
+.delivery h4 { margin: 0 0 8px; font-size: 14px; font-weight: 500; }
+@media (max-width: 600px) { .fields, .states { grid-template-columns: minmax(0, 1fr); } .configuration { display: grid; gap: 16px; } }

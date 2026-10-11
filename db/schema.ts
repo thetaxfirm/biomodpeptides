@@ -42,3 +42,13 @@ export const shoppingDaily=sqliteTable('shopping_daily',{
   check('shopping_stage',sql`${t.stage} IN ('cart_add_confirmed','cart_view','checkout_signin_view','checkout_form_view','delivery_quote_confirmed','checkout_handoff_ready')`),
   check('shopping_count',sql`typeof(${t.eventCount})='integer' AND ${t.eventCount} BETWEEN 1 AND 50000`),
 ]);
+
+// Operational COA replies and request alerts; no credentials or original PDF bytes.
+export const coaDeliveryOutbox=sqliteTable('coa_delivery_outbox',{
+ id:text('id').primaryKey(),requestId:text('request_id').notNull(),purpose:text('purpose').notNull(),status:text('status').notNull(),reason:text('reason').notNull(),recipient:text('recipient'),recipientHash:text('recipient_hash'),dedupeKey:text('dedupe_key'),duplicateOf:text('duplicate_of'),documentHash:text('document_hash'),attachmentName:text('attachment_name'),productName:text('product_name'),strength:text('strength'),lot:text('lot'),reportId:text('report_id'),templateVersion:text('template_version').notNull(),sender:text('sender'),replyTo:text('reply_to'),subject:text('subject'),body:text('body'),payloadHash:text('payload_hash'),idempotencyKey:text('idempotency_key').notNull(),attempts:integer('attempts').notNull().default(0),firstAttemptAt:integer('first_attempt_at'),nextAttemptAt:integer('next_attempt_at').notNull(),leaseToken:text('lease_token'),leaseUntil:integer('lease_until'),providerId:text('provider_id'),acceptedAt:integer('accepted_at'),created:integer('created').notNull(),updated:integer('updated').notNull(),
+},t=>[uniqueIndex('coa_delivery_request_purpose').on(t.requestId,t.purpose),uniqueIndex('coa_delivery_recipient_report').on(t.dedupeKey).where(sql`${t.purpose}='coa' AND ${t.dedupeKey} IS NOT NULL`),index('coa_delivery_ready').on(t.status,t.nextAttemptAt),index('coa_delivery_quota').on(t.purpose,t.firstAttemptAt,t.recipientHash),check('coa_delivery_purpose',sql`${t.purpose} IN ('coa','request-alert')`),check('coa_delivery_status',sql`${t.status} IN ('queued','sending','accepted','manual_review','duplicate')`),check('coa_delivery_attempts',sql`${t.attempts} BETWEEN 0 AND 5`)]);
+
+// Private original laboratory PDFs, provisioned separately from this public repository.
+export const coaOriginalReports=sqliteTable('coa_original_reports',{
+ sha256:text('sha256').primaryKey(),data:text('data').notNull(),enabled:integer('enabled').notNull().default(0),
+},t=>[check('coa_original_hash',sql`length(${t.sha256})=64 AND ${t.sha256} NOT GLOB '*[^a-f0-9]*'`),check('coa_original_enabled',sql`${t.enabled} IN (0,1)`)]);

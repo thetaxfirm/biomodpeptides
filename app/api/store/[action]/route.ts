@@ -1,3 +1,4 @@
+import { coaAutomationStatus, coaDeliveryStatuses, enqueueCoaRequest, enqueueRequestAlert, processCoaOutbox, saveCoaConfig } from '@/lib/coa-outbox';
 import { promoAnalytics } from '@/lib/promo-analytics';
 import { PROMO_COOKIE, promotion } from '@/lib/promotions';
 import inventorySql from '@/lib/inventory-statements.json';
@@ -146,11 +147,10 @@ export async function GET(req: NextRequest, { params }: {
         }
         if (action === 'admin') {
             await requireAdmin();
+            const requests = await all<{ id: string; data: string }>("SELECT * FROM requests WHERE kind IN ('contact','stock','affiliate') ORDER BY created DESC LIMIT 200");
             return j({ searchPublishing: searchReport(seoConfig(runtime())), config: await config(), products: await catalog(false), orders: (await all<{
                     data: string;
-                }>('SELECT id,owner,status,total,data,created FROM orders ORDER BY created DESC LIMIT 200')).map(o => ({ ...o, data: adminOrderView(parse(o.data, {})) })), requests: (await all<{
-                    data: string;
-                }>('SELECT * FROM requests WHERE kind IN (\'contact\',\'stock\',\'affiliate\') ORDER BY created DESC LIMIT 200')).map(o => ({ ...o, data: presentationData(parse(o.data, {})) })), campaigns: (await all<{
+                }>('SELECT id,owner,status,total,data,created FROM orders ORDER BY created DESC LIMIT 200')).map(o => ({ ...o, data: adminOrderView(parse(o.data, {})) })), requests: requests.map(o => ({ ...o, data: presentationData(parse(o.data, {})) })), coaAutomation: await coaAutomationStatus(runtime(), requests.map(r => r.id)), campaigns: (await all<{
                     data: string;
                 }>('SELECT * FROM campaigns')).map<Record<string, any>>(o => { const {data, ...row}=o; return { ...row, ...parse<Record<string, any>>(data, {}) }; }).filter(c=>currentSelection(c.productIds)).map(c=>presentationData(c)) });
         }
@@ -316,6 +316,8 @@ export async function POST(req: NextRequest, { params }: {
             const u = await customer();
             const id = uid();
             await run('INSERT INTO requests(id,owner,kind,data,created) VALUES(?,?,?,?,?)', id, u?.id || null, 'contact', JSON.stringify(data), timestamp());
+            // The saved inquiry remains successful if mail setup or enqueueing is unavailable.
+            await Promise.allSettled([enqueueCoaRequest(runtime(), id), enqueueRequestAlert(runtime(), id)]);
             return j({ message: 'Your message has been saved for the Biomod team.', id });
         }
         if (action === 'notify') {
@@ -350,7 +352,9 @@ export async function POST(req: NextRequest, { params }: {
         }
         if (action === 'affiliate') {
             const u = await requireCustomer();
-            await run('INSERT INTO requests(id,owner,kind,data,created) VALUES(?,?,?,?,?)', uid(), u.id, 'affiliate', JSON.stringify({ email: u.email, website: str(b.website, 500), message: str(b.message, 3000) }), timestamp());
+            const id = uid();
+            await run('INSERT INTO requests(id,owner,kind,data,created) VALUES(?,?,?,?,?)', id, u.id, 'affiliate', JSON.stringify({ email: u.email, website: str(b.website, 500), message: str(b.message, 3000) }), timestamp());
+            await Promise.allSettled([enqueueRequestAlert(runtime(), id)]);
             return j({ message: 'Your partner application has been saved.' });
         }
         if (action === 'delivery') {
@@ -384,6 +388,18 @@ export async function POST(req: NextRequest, { params }: {
         }
         if (action.startsWith('admin-')) {
             await requireAdmin();
+            if (action === 'admin-coa-config') {
+                const settings = z.object({ enabled: z.boolean(), replyTo: z.string().email(), notifyTo: z.string().email().nullable().optional() }).parse(b);
+                await saveCoaConfig(runtime(), settings);
+                return j({ message: 'COA email settings saved.' });
+            }
+            if (action === 'admin-coa-process') {
+                const id = z.string().uuid().parse(b.id);
+                await enqueueCoaRequest(runtime(), id);
+                await processCoaOutbox(runtime(), { requestId: id, purpose: 'coa', limit: 1 });
+                const status = (await coaDeliveryStatuses(runtime(), [id]))[id]?.coa;
+                return j({ message: status?.status === 'accepted' ? 'The email provider accepted this COA email. Inbox delivery is not yet confirmed.' : status?.status === 'duplicate' ? 'This original report already has an email record. Check its existing status.' : status?.status === 'queued' || status?.status === 'sending' ? 'This COA is queued for email processing.' : 'This request requires review or COA automation is disabled.', status });
+            }
             if (action === 'admin-config') {
                 const cfg = z.object({ packDiscounts: z.record(z.number().min(0).max(100).nullable()), shippingCents: z.number().int().min(0).max(100000).nullable(), freeShippingAt: z.number().int().min(0).max(1000000), presalesEnabled: z.boolean(), rewardsEnabled: z.boolean(), affiliateEnabled: z.boolean() }).parse(b);
                 if (Object.keys(cfg.packDiscounts).some(k => !['1', '3', '5', '10'].includes(k)))
