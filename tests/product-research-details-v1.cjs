@@ -214,12 +214,12 @@ for (const slug of Object.keys(expectedStudies)) {
 }
 
 const renderPage = (slug, catalog = products) => renderToStaticMarkup(React.createElement(StoreProvider, { initialCatalog: catalog }, React.createElement(ProductPage, { slug })));
-// Literature does not reconcile a different certificate lot or fill missing records.
+// Literature does not reconcile lots. Tesamorelin separately has a reviewed original matching-lot report; other gaps remain unchanged.
 const remainingBatchEvidence = {
   'semax': [788, 'mismatch', 'LYO-029-2608-01', '001-R'],
   'selank': [785, 'mismatch', 'LYO-028-2608-02', '001-b'],
   'aod-9604-10mg': [758, 'matched', '406-10-0001', '406-10-0001'],
-  'tesamorelin-10mg': [755, 'mismatch', '301-10-0001', '001-B'],
+  'tesamorelin-10mg': [755, 'matched', '301-10-0001', '301-10-0001'],
   'nad-500mg': [752, 'mismatch', '405-500-0001', '001-B'],
   'kisspeptin-10mg': [751, 'matched', '404-10-0001', '404-10-0001'],
   'pt-141-10mg': [750, 'matched', '403-10-0001', '403-10-0001'],

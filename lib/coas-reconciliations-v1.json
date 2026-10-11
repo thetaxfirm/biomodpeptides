@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "reconciliations": [
+    {
+      "product_id": 755,
+      "product_slug": "tesamorelin-10mg",
+      "product_lot": "301-10-0001",
+      "expected_identity": "Tesamorelin",
+      "expected_size": "10mg",
+      "previous_document_id": "coa-d3dcb0813151",
+      "document_id": "coa-74b222968092",
+      "recorded_on": "October 10, 2026 (Pacific)",
+      "source_url": "https://alphagradepeptides.com/research-peptide-coa-library/",
+      "source_note": "Supplier-hosted report matching the listed lot. Results apply to the submitted sample. Confirm the lot supplied with your order."
+    }
+  ],
+  "documents": [
+    {
+      "document_id": "coa-74b222968092",
+      "url": "https://alphagradepeptides.com/wp-content/uploads/2026/09/biomod-tesamorelin-10mg-coa.pdf",
+      "filename": "biomod-tesamorelin-10mg-coa.pdf",
+      "sha256": "74b2229680929a30771287e4ae1caa838e6749e550a184d55fc68e97628d92fb",
+      "pages": 2,
+      "content_type": "application/pdf",
+      "kind": "certificate_of_analysis",
+      "is_certificate": true,
+      "laboratory_name": "Vanguard Laboratory",
+      "report_to": "BIOMOD PEPTIDES",
+      "sample_name": "Tesamorelin 10 mg",
+      "compound": "Tesamorelin",
+      "nominal_amount": "10 mg",
+      "batch_number": "301-10-0001",
+      "report_id": "V260304-6 012",
+      "report_date": "4/2/2026",
+      "test_date": null,
+      "issue_date": null,
+      "release_date": null,
+      "sample_received_date": null,
+      "verification_urls": [],
+      "verification_checked": false,
+      "source_hosting": "supplier",
+      "source_library_url": "https://alphagradepeptides.com/research-peptide-coa-library/",
+      "extraction_method": "Original PDF text layer and both rendered pages reviewed October 11, 2026 UTC; unchanged source bytes retained.",
+      "visual_check_pages": [
+        1,
+        2
+      ],
+      "results": [
+        {
+          "kind": "purity",
+          "analyte": "Chromatographic Purity",
+          "result": "96.28% + 0.18%",
+          "method": "HPLC-UV/VIS",
+          "unit": "%",
+          "page": 1,
+          "source_url": "https://alphagradepeptides.com/wp-content/uploads/2026/09/biomod-tesamorelin-10mg-coa.pdf"
+        },
+        {
+          "kind": "assay",
+          "analyte": "Assay",
+          "result": "9.92",
+          "method": "HPLC-UV/VIS",
+          "unit": "mg",
+          "page": 1,
+          "source_url": "https://alphagradepeptides.com/wp-content/uploads/2026/09/biomod-tesamorelin-10mg-coa.pdf"
+        },
+        {
+          "kind": "heavy_metals",
+          "analyte": "Arsenic (As)",
+          "result": "0.02",
+          "method": "ICP-MS",
+          "unit": "ppm",
+          "page": 2,
+          "source_url": "https://alphagradepeptides.com/wp-content/uploads/2026/09/biomod-tesamorelin-10mg-coa.pdf",
+          "loq": "0.01"
+        },
+        {
+          "kind": "heavy_metals",
+          "analyte": "Cadmium (Cd)",
+          "result": "ND",
+          "method": "ICP-MS",
+          "unit": "ppm",
+          "page": 2,
+          "source_url": "https://alphagradepeptides.com/wp-content/uploads/2026/09/biomod-tesamorelin-10mg-coa.pdf",
+          "loq": "0.01"
+        },
+        {
+          "kind": "heavy_metals",
+          "analyte": "Lead (Pb)",
+          "result": "0.03",
+          "method": "ICP-MS",
+          "unit": "ppm",
+          "page": 2,
+          "source_url": "https://alphagradepeptides.com/wp-content/uploads/2026/09/biomod-tesamorelin-10mg-coa.pdf",
+          "loq": "0.02"
+        },
+        {
+          "kind": "heavy_metals",
+          "analyte": "Mercury (Hg)",
+          "result": "ND",
+          "method": "ICP-MS",
+          "unit": "ppm",
+          "page": 2,
+          "source_url": "https://alphagradepeptides.com/wp-content/uploads/2026/09/biomod-tesamorelin-10mg-coa.pdf",
+          "loq": "0.005"
+        },
+        {
+          "kind": "endotoxins",
+          "analyte": "Endotoxins",
+          "result": "Pass - <5.00 EU/mg*",
+          "method": "LAL",
+          "unit": "EU/mg",
+          "page": 2,
+          "source_url": "https://alphagradepeptides.com/wp-content/uploads/2026/09/biomod-tesamorelin-10mg-coa.pdf"
+        },
+        {
+          "kind": "sterility",
+          "analyte": "Sterility",
+          "result": "Pass - No Growth Detected",
+          "method": "USP <71>",
+          "unit": null,
+          "page": 2,
+          "source_url": "https://alphagradepeptides.com/wp-content/uploads/2026/09/biomod-tesamorelin-10mg-coa.pdf"
+        }
+      ],
+      "report_scope_notes": [
+        "These results apply to the tested portion of the submitted sample. The laboratory did not select the sample and does not establish its authenticity or representativeness of the associated lot/batch.",
+        "The report records samples received in acceptable condition and analyses performed under the Vanguard Laboratory Quality Management System. It directs readers to A2LA certificate #6377.01.01 for the scope of accredited tests; no independent accreditation or report-authenticity verification is asserted here.",
+        "The chromatographic-purity result is printed as 96.28% + 0.18%. The plus sign is retained as printed; it has not been interpreted as a plus/minus uncertainty.",
+        "Page 2 identifies run 260402. ND means Non-Detect. The table headings use LOQ (ppm); the report separately defines LOD as Limit of Quantification. Original notation is retained.",
+        "The endotoxin asterisk refers to the report's stated pass/fail basis: 5 EU/kg, described there as a USP/FDA threshold, with 350 EU total for a 70 kg adult. This is the laboratory's report-specific footnote, not a recommended human-use limit or a suitability determination.",
+        "The report's Pass labels apply only to its listed sample tests. They do not establish product approval, clinical safety or suitability for human or animal use."
+      ]
+    }
+  ]
+}

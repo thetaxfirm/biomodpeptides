@@ -46,6 +46,7 @@ const mappings = {
   '/es': '/',
   '/es/product/mots-c-10mg': '/product/mots-c-10mg',
   '/es/product/mots-c-40mg': '/product/mots-c-40mg',
+  '/es/product/ss-31-10mg': '/product/ss-31-10mg',
   '/es/coa': '/testing',
 };
 
@@ -66,8 +67,8 @@ const mappings = {
       assert(await Page(props(destination)), 'the real route must accept the destination');
     } else assert(pageRecords['/'], 'the homepage destination must already exist');
   }
-  assert.deepEqual(Object.keys(legacyRoutes).filter(key => key === 'es' || key.startsWith('es/')).sort(), Object.keys(mappings).map(key => key.slice(1)).sort(), 'only the four evidenced Spanish aliases may be added');
-  for (const unknown of ['/es/not-a-real-page', '/es/product/not-a-real-product', '/es/product/bpc-157-10mg', '/es/product/heat-r-20mg', '/es/coa/extra']) {
+  assert.deepEqual(Object.keys(legacyRoutes).filter(key => key === 'es' || key.startsWith('es/')).sort(), Object.keys(mappings).map(key => key.slice(1)).sort(), 'only the explicitly evidenced Spanish aliases may be added');
+  for (const unknown of ['/es/not-a-real-page', '/es/product/not-a-real-product', '/es/product/bpc-157-10mg', '/es/product/ss-31-50mg', '/es/product/ss-31-10mg/extra', '/es/product/heat-r-20mg', '/es/coa/extra']) {
     for (const form of [unknown, unknown + '/']) {
       for (const handler of [generateMetadata, Page]) {
         await assert.rejects(handler(props(form)), error => error.digest === 'NEXT_HTTP_ERROR_FALLBACK;404', form + ' must remain a genuine 404, not a blanket Spanish redirect');
