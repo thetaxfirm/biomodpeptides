@@ -18,6 +18,8 @@ Mail uses the existing Resend secret binding without exposing its value. The fal
 
 The five-minute Worker cron processes at most five due emails per invocation. Atomic claims, an immutable payload and idempotency key, recipient/report deduplication, up to five bounded retries, and a 23-hour safe retry cutoff protect against duplicate or ambiguous sends. Unknown outcomes remain for review. New COAs are capped at 100/day and three per recipient/day; generic alerts at 50/day. Operational correspondence is not visitor analytics. The existing daily traffic-retention cron is preserved.
 
+A private `coa_scheduler_health_v1` settings record records scheduled start/completion times, readiness booleans and aggregate processing counts. It contains no recipient, request text, report contents, provider reference or credentials. Failed processing records a generic phase/status and fails the platform event; overlapping older runs cannot overwrite newer health. This operational record distinguishes a missing invocation from a disabled or unconfigured sender.
+
 ## Validation
 
 - Actual API-handler authorization, same-origin checks, contact persistence despite queue errors, honeypot handling, validated configuration and manual COA-only scope.
