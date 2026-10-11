@@ -20,7 +20,7 @@ const { products, money } = require('../lib/catalog.ts');
 const { packContents, packSizes } = require('../lib/packs.ts');
 const { eligibleDiscovery } = require('../lib/product-discovery.ts');
 const { productReviewBlocks } = require('../lib/seo-policy.ts');
-const { batchFor, batchPath, batchRecords, batchStatus, batchStatusLabel, laboratoryDocuments } = require('../lib/testing.ts');
+const { batchFor, batchPath, batchRecords, batchStatus, batchStatusLabel, certificateFor, laboratoryDocuments } = require('../lib/testing.ts');
 const { VialSizeLinks, ProductResearchDetails } = require('../components/store/product-research-details.tsx');
 const { ProductPage, ProductCard } = require('../components/store/catalog.tsx');
 const { Experience } = require('../components/store/experience.tsx');
@@ -76,6 +76,14 @@ for (const product of products) {
 assert.equal(eligibleCount, 17);
 
 const expectedStudies = {
+  'semax': ['Semax research context', 'https://link.springer.com/article/10.1186/1471-2164-15-228', '10.1186/1471-2164-15-228'],
+  'selank': ['Selank research context', 'https://www.frontiersin.org/journals/pharmacology/articles/10.3389/fphar.2016.00031/full', '10.3389/fphar.2016.00031'],
+  'aod-9604-10mg': ['AOD-9604 research context', 'https://pubmed.ncbi.nlm.nih.gov/25208511/', '10.1002/dta.1715'],
+  'tesamorelin-10mg': ['Tesamorelin research context', 'https://pubmed.ncbi.nlm.nih.gov/17214611/', '10.1111/j.1742-7843.2007.00008.x'],
+  'nad-500mg': ['NAD+ research context', 'https://pubmed.ncbi.nlm.nih.gov/28497978/', '10.1089/ars.2017.7014'],
+  'kisspeptin-10mg': ['Kisspeptin-10 research context', 'https://pmc.ncbi.nlm.nih.gov/articles/PMC5419131/', '10.1210/me.2009-0013'],
+  'pt-141-10mg': ['PT-141 research context', 'https://pubmed.ncbi.nlm.nih.gov/15226502/', '10.1073/pnas.0400491101'],
+  'kpv-10mg': ['KPV research context', 'https://pmc.ncbi.nlm.nih.gov/articles/PMC2431115/', '10.1053/j.gastro.2007.10.026'],
   'epitalon-50mg': ['Epitalon research context', 'https://pubmed.ncbi.nlm.nih.gov/12937682/', '10.1023/a:1025493705728'],
   'dsip-10mg': ['DSIP research context', 'https://pubmed.ncbi.nlm.nih.gov/265572/', '10.1073/pnas.74.3.1282'],
   'glutathione-reduced-l-glutathione': ['Reduced glutathione research context', 'https://pubmed.ncbi.nlm.nih.gov/11419750/', '10.1016/s0378-4347(01)00081-0'],
@@ -100,7 +108,8 @@ for (const product of products) {
   assert(eligibleDiscovery(product));
   assert(context?.includes('<h2 id="product-research-heading">' + expected[0] + '</h2>'));
   assert(context.includes('href="' + expected[1] + '"') && context.includes('DOI: ' + expected[2]), 'The primary citation and DOI are visible in initial HTML');
-  const materialLabel = ['glutathione-reduced-l-glutathione', 'thymosin-alpha-1-10mg'].includes(product.slug) ? 'Study material' : 'Models studied';
+  assert.deepEqual([...context.matchAll(/<a href="(https:\/\/[^"]+)"/g)].map(match => match[1]), [expected[1]], product.slug + ': the research section cites only its own reviewed primary source');
+  const materialLabel = ['glutathione-reduced-l-glutathione', 'thymosin-alpha-1-10mg', 'aod-9604-10mg', 'nad-500mg'].includes(product.slug) ? 'Study material' : 'Models studied';
   assert(context.includes('<dt>' + materialLabel + '</dt>') && context.includes('<dt>Study focus</dt>'));
   assert(context.includes('does not verify a BIOMOD batch or establish suitability for human use'));
   assert(context.includes('href="' + escape(batchPath(batchFor(product.id))) + '"'), 'The context links to this product record, including a pending record, rather than a sibling COA');
@@ -111,7 +120,39 @@ for (const product of products) {
     assert(!/\b(?:human treatment|human clinical trial|patients?|therapeutic|recommended|anti[- ]?aging|rejuvenation|insomnia|sleep aid|sleep quality|life extension|extends? lifespan|injectable)\b/i.test(context), 'Epitalon and DSIP literature is not presented as a human treatment or product benefit');
     assert(!context.includes('manufactured') && !context.includes('manufacturing origin') && !context.includes('amino-acid sequence'), 'No manufacturing, sequence, or origin is inferred for either product');
   }
-  if (product.slug === 'epitalon-50mg') {
+  if (product.slug === 'semax') {
+    assert(context.includes('synthetic seven-amino-acid peptide') && context.includes('Medvedeva'));
+    assert(context.includes('Rats following experimental focal ischemia') && context.includes('frontoparietal cortex'));
+    assert(context.includes('Transcript levels') && context.includes('immune and vascular processes'));
+  } else if (product.slug === 'selank') {
+    assert(context.includes('seven-amino-acid peptide related to tuftsin') && context.includes('Selank or GABA'));
+    assert(context.includes('Rat frontal cortex') && context.includes('samples pooled by experimental group and time point'));
+    assert(context.includes('targeted real-time PCR panel') && context.includes('do not establish direct receptor binding'));
+  } else if (product.slug === 'aod-9604-10mg') {
+    assert(context.includes('AOD9604 as a modified C-terminal fragment') && context.includes('residues 177–191 with an added N-terminal tyrosine'));
+    assert(context.includes('Urine for analytical detection') && context.includes('serum and urine used for in-vitro metabolism experiments'));
+    assert(context.includes('identification of metabolites') && context.includes('not the method used for the BIOMOD certificate'));
+  } else if (product.slug === 'tesamorelin-10mg') {
+    assert(context.includes('tesamorelin as TH9507') && context.includes('modified 44-residue growth hormone-releasing factor analogue'));
+    assert(context.includes('Rat, dog and human plasma') && context.includes('animal experiments in pigs, rats and dogs'));
+    assert(context.includes('plasma stability, GH and IGF-1 biomarkers') && context.includes('adverse findings in dogs under its experimental conditions'));
+  } else if (product.slug === 'nad-500mg') {
+    assert(context.includes('NAD+ and NADH are the oxidized and reduced forms') && !/\bpeptide\b/i.test(context), 'NAD+ is a redox cofactor, not a peptide or an interchangeable NADH product');
+    assert(context.includes('Cultured mammalian cells and mouse tissues.') && context.includes('LC-MS measurement'));
+    assert(context.includes('changes between oxidized and reduced forms during extraction') && context.includes('does not establish the test method used for a BIOMOD lot'));
+  } else if (product.slug === 'kisspeptin-10mg') {
+    assert(context.includes('Kisspeptin-10 is the peptide name in this catalog; 10 mg is the listed vial content.'), 'Peptide identity and vial mass remain separate');
+    assert(context.includes('HEK 293 and genetically modified MDA-MB-231 cell cultures.'));
+    assert(context.includes('Receptor internalization and desensitization') && context.includes('GRK2, beta-arrestin and ERK1/2'));
+  } else if (product.slug === 'pt-141-10mg') {
+    assert(context.includes('PT-141, a synthetic alpha-MSH analogue'));
+    assert(context.includes('Female rats under defined estrogen and progesterone conditions.'));
+    assert(context.includes('solicitation, lordosis and pacing') && context.includes('locomotor activity and conditioned place preference'));
+  } else if (product.slug === 'kpv-10mg') {
+    assert(context.includes('KPV is the tripeptide Lys-Pro-Val.'));
+    assert(context.includes('Intestinal epithelial cell cultures, Jurkat T cells and mouse models of intestinal inflammation.'));
+    assert(context.includes('PepT1-mediated uptake, NF-κB and MAPK signaling'));
+  } else if (product.slug === 'epitalon-50mg') {
     assert(context.includes('Khavinson and colleagues examined the peptide Epithalon in a 2003 cell-culture study.'));
     assert(context.includes('Cultured human fetal fibroblasts.'));
     assert(context.includes('Telomerase activity, expression of its catalytic subunit, and telomere length.'));
@@ -144,19 +185,19 @@ for (const product of products) {
     assert(context.includes('16-amino-acid, mitochondrial-derived peptide') && context.includes('2015'));
     assert(context.includes('Cultured cells and mice.') && context.includes('Folate and purine metabolism') && context.includes('AMPK-related signaling'));
     assert(!context.includes('cardiolipin') && !context.includes('PMC3976619') && !context.includes('25415472'), 'MOTS-c receives only its own research source');
-  } else {
+  } else if (['ss-31-10mg', 'ss-31-50mg'].includes(product.slug)) {
     assert(context.includes('four-amino-acid peptide') && context.includes('2014'));
     assert(context.includes('Artificial lipid membranes and mitochondria isolated from rat kidneys.'));
     for (const topic of ['cardiolipin', 'electron transfer', 'oxygen consumption', 'ATP synthesis']) assert(context.includes(topic));
     assert(!context.includes('AMPK') && !context.includes('PMC4350682') && !context.includes('25415472'), 'SS-31 receives only its own research source');
   }
 }
-assert.deepEqual(researchedSlugs.sort(), Object.keys(expectedStudies).sort(), 'Exactly nine current eligible pages receive literature context');
+assert.deepEqual(researchedSlugs.sort(), Object.keys(expectedStudies).sort(), 'Exactly 17 current eligible pages receive literature context');
 assert.equal(render(ProductResearchDetails, { product: { ...ten, slug: 'mots-c-unreviewed-size' } }), '', 'Unknown sizes do not inherit a name-based research mapping');
 const bpc157 = products.find(product => product.slug === 'bpc-157-10mg');
 assert(bpc157);
 assert.equal(render(ProductResearchDetails, { product: { ...bpc157, slug: 'bpc-157-unreviewed-size' } }), '', 'The BPC-157 context cannot promote an unreviewed size');
-for (const slug of ['epitalon-50mg', 'dsip-10mg']) {
+for (const slug of Object.keys(expectedStudies)) {
   const product = products.find(product => product.slug === slug);
   assert(product && eligibleDiscovery(product));
   assert.equal(render(ProductResearchDetails, { product: { ...product, slug: slug + '-unreviewed-size' } }), '', slug + ': an unreviewed size cannot inherit research context');
@@ -173,6 +214,17 @@ for (const slug of Object.keys(expectedStudies)) {
 }
 
 const renderPage = (slug, catalog = products) => renderToStaticMarkup(React.createElement(StoreProvider, { initialCatalog: catalog }, React.createElement(ProductPage, { slug })));
+// Literature does not reconcile a different certificate lot or fill missing records.
+const remainingBatchEvidence = {
+  'semax': [788, 'mismatch', 'LYO-029-2608-01', '001-R'],
+  'selank': [785, 'mismatch', 'LYO-028-2608-02', '001-b'],
+  'aod-9604-10mg': [758, 'matched', '406-10-0001', '406-10-0001'],
+  'tesamorelin-10mg': [755, 'mismatch', '301-10-0001', '001-B'],
+  'nad-500mg': [752, 'mismatch', '405-500-0001', '001-B'],
+  'kisspeptin-10mg': [751, 'matched', '404-10-0001', '404-10-0001'],
+  'pt-141-10mg': [750, 'matched', '403-10-0001', '403-10-0001'],
+  'kpv-10mg': [749, 'pending', '402-10-0001', null],
+};
 for (const [slug, [heading, source]] of Object.entries(expectedStudies)) {
   const html = renderPage(slug);
   const context = researchSection(html);
@@ -185,6 +237,18 @@ for (const [slug, [heading, source]] of Object.entries(expectedStudies)) {
   assert(html.includes(escape(current.name)) && html.includes(money(current.price)) && html.includes('Pack size'), slug + ': name, current price and pack controls are preserved');
   const currentPassport = html.match(/<section class="batch-passport">([\s\S]*?)<\/section>/)?.[1];
   assert(currentPassport?.includes(escape(batchStatusLabel(currentRecord))), slug + ': the actual page retains its own certificate status');
+  const evidence = remainingBatchEvidence[slug];
+  if (evidence) {
+    assert.deepEqual([current.id, batchStatus(currentRecord), currentRecord.product_lot, currentRecord.certificate_lot], evidence, slug + ': existing lot evidence is unchanged');
+    assert(currentPassport.includes('<dt>Listed product lot</dt><dd>' + escape(evidence[2]) + '</dd>'));
+    assert(currentPassport.includes('<dt>Certificate lot</dt><dd>' + escape(evidence[3] || 'Not listed') + '</dd>'));
+    const certificate = certificateFor(currentRecord);
+    if (certificate) assert(currentPassport.includes('href="' + escape(certificate.url) + '"'), slug + ': original PDF remains attached only to its own record');
+    else assert(!currentPassport.includes('.pdf'), slug + ': pending evidence never borrows a certificate');
+    if (evidence[1] !== 'matched') {
+      assert(currentPassport.includes('Not verified for this lot') && !currentPassport.includes('Matching-lot certificate'), slug + ': literature does not validate the listed lot');
+    }
+  }
 }
 const productHTML = renderPage(forty.slug, fixture);
 assert(productHTML.includes(sizeHTML), 'actual product route includes live size navigation');
@@ -286,4 +350,4 @@ for (const [query, heading] of [[{}, 'Research peptides &amp; compounds'], [{ ca
 assert.equal(JSON.stringify(products), before, 'rendering never mutates source product identity, price, inventory or contents');
 assert.equal(JSON.stringify({ batchRecords, laboratoryDocuments }), documentsBefore, 'Literature context does not rewrite lot records or laboratory documents');
 assert.deepEqual(batchRecords.map(record => [record.record_id, batchStatus(record)]), statusesBefore, 'All current matched, mismatched, pending and restricted documentation states are unchanged');
-console.log('PASS: real ProductPage and Experience SSR preserve current purchase controls; compact size navigation, live selected price/stock and independent COA states;17 factual FAQs only; nine exact eligible pages have visible primary research context and study limits; six explicit shop variants with reciprocal size links and unavailable W20 purchase controls; eligible research links; unchanged nonresearch links and accurate shop headings');
+console.log('PASS: real ProductPage and Experience SSR preserve current purchase controls; compact size navigation, live selected price/stock and independent COA states;17 factual FAQs only; all 17 exact eligible pages have visible primary research context and study limits; six explicit shop variants with reciprocal size links and unavailable W20 purchase controls; eligible research links; unchanged nonresearch links and accurate shop headings');
