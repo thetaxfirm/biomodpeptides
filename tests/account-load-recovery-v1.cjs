@@ -53,6 +53,10 @@ const provider={
   },
   report:error=>reports.push(error),
 };
+const authReturnFilename=path.join(root,'lib/auth-return.ts');
+const authReturnModule=new Module(authReturnFilename,module);
+authReturnModule._compile(ts.transpileModule(fs.readFileSync(authReturnFilename,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,authReturnFilename);
+const {authLink}=authReturnModule.exports;
 const filename=path.join(root,'components/store/account.tsx');
 const mod=new Module(filename,module);mod.filename=filename;mod.paths=Module._nodeModulePaths(root);
 mod.require=id=>{
@@ -60,7 +64,7 @@ mod.require=id=>{
   if(id==='./provider')return provider;
   if(id==='@/lib/catalog')return {money:c=>'$'+(c/100).toFixed(2),compound:p=>p.name};
   if(id==='./promo-code')return {PromoCode:noop};if(id==='./product-image')return {ProductImage:noop};
-  if(id==='@/lib/auth-return')return {authLink:()=>'',safeAuthReturn:value=>value};
+  if(id==='@/lib/auth-return')return authReturnModule.exports;
   if(id==='lucide-react')return new Proxy({}, {get:()=>noop});
   if(id==='sonner')return {toast:{success:noop,info:noop}};
   if(id==='./catalog')return {ProductCard:noop};
@@ -166,6 +170,43 @@ const submitProfile=host=>find(host,n=>n.type==='form').props.onSubmit({preventD
     const accountCount=apiCalls.filter(c=>c.action==='account').length;action.resolve({message:'Fixture action finished'});await pending;await flush();
     assert.equal(apiCalls.filter(c=>c.action==='account').length,accountCount,transition+' rejects old captured reload');if(transition!=='unmount')host.unmount();
   }
+  // Management navigation appears only for a signed-in administrator. Account data remains their own.
+  for(const section of ['', 'orders', 'affiliate']) {
+    reset();state.store.admin=true;apiImpl=async()=>makeAccount();host=mount(section);
+    const notice=find(host,n=>n.type==='section'&&n.props['aria-labelledby']==='account-store-management');
+    assert.match(text(notice),/account below shows your own purchases/);
+    const flat=nodes(host.tree);assert(flat.indexOf(notice)<flat.indexOf(find(host,n=>n.props.className==='account-body')),'Management destinations are visible before ordinary account details, including while loading');
+    for(const [href,label] of [['/admin?tab=orders','Store orders'],['/admin?tab=promos','Affiliate & promo codes']]) {
+      assert(nodes(notice).some(n=>n.type==='a'&&n.props.href===href&&text(n)===label));
+      const nav=find(host,n=>n.type==='aside');assert(nodes(nav).some(n=>n.type==='a'&&n.props.href===href&&text(n)===label));
+    }
+    await flush(host);
+    assert.equal(text(find(host,n=>n.type==='aside')).includes('My purchases'),true);
+    if(section==='orders') {assert.equal(text(find(host,n=>n.type==='h2'&&text(n)==='My purchases')),'My purchases');assert.equal(records(host).length,1);assert(text(host.tree).includes('aaaaaaaa'));}
+    if(section==='')assert.equal(text(find(host,n=>n.type==='a'&&n.props.href==='/account/orders'&&nodes(n).some(child=>child.type==='strong'))),'1 My purchases');
+    if(section==='affiliate')assert(text(host.tree).includes('Applications are reviewed before program access is granted.'),'Personal affiliate application behavior is retained');
+    assert(apiCalls.every(c=>c.action==='account'&&c.body===undefined),'Management links never fetch store-wide data');
+    state.store.admin=false;host.render();assert(!nodes(host.tree).some(n=>n.type==='a'&&n.props.href?.startsWith('/admin')),'Removing admin status removes every management link immediately');
+    assert(!text(host.tree).includes('Store management'));assert(!text(host.tree).includes('My purchases'));
+    assert(nodes(host.tree).some(n=>n.type==='a'&&n.props.href==='/account/orders'&&text(n)==='Orders'),'Ordinary customer Orders navigation is unchanged');
+    if(section==='orders')assert(nodes(host.tree).some(n=>n.type==='h2'&&text(n)==='Orders'));
+    if(section==='')assert(text(host.tree).includes('Manage your orders, addresses, saved products, and research account.'));
+    host.unmount();
+  }
+  reset();state.store.customer=null;state.store.admin=true;host=mount();assert.equal(host.tree.type,AuthPage);assert(!nodes(host.tree).some(n=>n.props.href?.startsWith('/admin')));host.unmount();
+
+  // Actual AuthPage recognizes safe admin deep links without weakening return-destination validation.
+  for(const destination of ['/admin','/admin?tab=orders','/admin?tab=promos','#invalid','/administrator','https://evil.example/admin?tab=promos','//evil.example/admin']) {
+    reset();const isAdmin=destination.startsWith('/admin')&&destination!=='/administrator';
+    host=harness(()=>AuthPage({returnTo:destination}));
+    assert(nodes(host.tree).some(n=>n.type==='a'&&n.props.href===authLink('forgot-password',destination)&&text(n)===(isAdmin?'Set or reset your admin password':'Forgot password?')));
+    assert(nodes(host.tree).some(n=>n.type==='a'&&n.props.href===authLink('register',destination)));
+    host.unmount();host=harness(()=>AuthPage({mode:'forgot-password',returnTo:destination}));
+    assert.equal(text(find(host,n=>n.type==='h1')),isAdmin?'Set your admin password':'Reset your password');
+    assert.equal(text(host.tree).includes('Access is limited to approved administrator addresses.'),isAdmin);
+    assert(nodes(host.tree).some(n=>n.type==='a'&&n.props.href===authLink('login',destination)&&text(n)==='Back to sign in'));
+    assert.equal(apiCalls.length,0,'Rendering destinations never submits auth or account actions');host.unmount();
+  }
   assert(everyCall.every(c=>c.action==='account'||c.action==='profile'),'No cart, payment, email or order mutation calls');
-  console.log('PASS: actual Account initial store failure/recovery; durable account-read errors and single-flight GET retries; malformed data; owner changes, sign-out, stale reads and unmount; known-data refresh failure; preserved action reloads with latest-read wins; stale action reload exclusion. Isolated account/profile fixtures only, no live network or commerce calls.');
+  console.log('PASS: actual Account initial store failure/recovery; durable account-read errors and single-flight GET retries; malformed data; owner changes, sign-out, stale reads and unmount; known-data refresh failure; preserved action reloads with latest-read wins; stale action reload exclusion; admin-only management navigation and safe auth deep-link wording. Isolated account/profile fixtures only, no live network or commerce calls.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

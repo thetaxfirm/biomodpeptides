@@ -52,8 +52,8 @@ export function PromoAnalytics() {
   const missingDiscounts = visible?.codes.reduce((sum, code) => sum + (code.rows.find(row => row.environment === environment)?.missingDiscountRecords ?? 0), 0) ?? 0;
 
   return <section className={styles.report} aria-labelledby="promo-analytics-title">
-    <h2 id="promo-analytics-title">Promo code performance</h2>
-    <p>Orders with a saved promo code, separated by payment environment.</p>
+    <h2 id="promo-analytics-title">Affiliate &amp; promo codes</h2>
+    <p>All active codes appear here, including codes with no orders yet. Use the totals below to track orders attributed to each code.</p>
     <div className={styles.toolbar}>
       <label className={styles.control}>Reporting period<select value={days} onChange={event => { clearReport(); setDays(event.target.value); }}>
         <option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="all">All available history</option>
