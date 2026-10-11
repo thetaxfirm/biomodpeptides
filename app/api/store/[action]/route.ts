@@ -3,7 +3,7 @@ import { promoAnalytics } from '@/lib/promo-analytics';
 import { PROMO_COOKIE, promotion } from '@/lib/promotions';
 import inventorySql from '@/lib/inventory-statements.json';
 import { AUTH_RETURN_COOKIE, AUTH_RETURN_MAX_AGE, safeAuthReturn, clearAuthSessionCookies, ANONYMOUS_SESSION_COOKIE, needsAnonymousSession, needsAccountSession } from '@/lib/auth-return';
-import { NextRequest, NextResponse } from 'next/server';
+import { after, NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createCartImports } from '@/lib/cart-import';
 import { z } from 'zod';
@@ -22,6 +22,21 @@ import { salesDiagnostics } from '@/lib/sales-diagnostics';
 export const dynamic = 'force-dynamic';
 const j = (value: unknown, status = 200) => NextResponse.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
 const cartImports = () => createCartImports({ db: database(), normalize: validateLines, validate: quote });
+// Start only this newly saved inquiry after the response. Durable jobs remain the
+// source of recipients/documents; the outbox keeps its leases, caps and retry policy.
+function scheduleInquiryDelivery(env: ReturnType<typeof runtime>, requestId: string, kind: 'contact' | 'affiliate') {
+    try {
+        after(async () => {
+            await Promise.allSettled([
+                ...(kind === 'contact' ? [processCoaOutbox(env, { requestId, purpose: 'coa', limit: 1 })] : []),
+                processCoaOutbox(env, { requestId, purpose: 'request-alert', limit: 1 }),
+            ]);
+        });
+    } catch {
+        // A missing response lifecycle cannot undo a saved inquiry. The durable
+        // queue is still available to the scheduled retry or authorized admin.
+    }
+}
 async function currentPromoCode() {
     const jar = await cookies();
     try { return promotion(jar.get(PROMO_COOKIE)?.value)?.code || ''; }
@@ -318,6 +333,7 @@ export async function POST(req: NextRequest, { params }: {
             await run('INSERT INTO requests(id,owner,kind,data,created) VALUES(?,?,?,?,?)', id, u?.id || null, 'contact', JSON.stringify(data), timestamp());
             // The saved inquiry remains successful if mail setup or enqueueing is unavailable.
             await Promise.allSettled([enqueueCoaRequest(runtime(), id), enqueueRequestAlert(runtime(), id)]);
+            scheduleInquiryDelivery(runtime(), id, 'contact');
             return j({ message: 'Your message has been saved for the Biomod team.', id });
         }
         if (action === 'notify') {
@@ -355,6 +371,7 @@ export async function POST(req: NextRequest, { params }: {
             const id = uid();
             await run('INSERT INTO requests(id,owner,kind,data,created) VALUES(?,?,?,?,?)', id, u.id, 'affiliate', JSON.stringify({ email: u.email, website: str(b.website, 500), message: str(b.message, 3000) }), timestamp());
             await Promise.allSettled([enqueueRequestAlert(runtime(), id)]);
+            scheduleInquiryDelivery(runtime(), id, 'affiliate');
             return j({ message: 'Your partner application has been saved.' });
         }
         if (action === 'delivery') {
