@@ -92,7 +92,7 @@ const flush=async()=>{for(let i=0;i<8;i++)await Promise.resolve();};
 
   // Actual protected dashboard: fetch failures and missing history remain unavailable, never fabricated zero counts.
   const table=Object.fromEntries(['Table','TableHeader','TableBody','TableRow','TableHead','TableCell'].map(name=>[name,name]));
-  const {TrafficDiagnostics}=load('components/store/traffic-diagnostics.tsx',{'@/components/ui/table':table,'./traffic-diagnostics.module.css':{}});
+  const {TrafficDiagnostics}=load('components/store/traffic-diagnostics.tsx',{'@/components/ui/table':table,'./traffic-diagnostics.module.css':{},'./shopping-diagnostics':{ShoppingDiagnostics:()=>null}});
   const day={date:'2026-10-09',events:5,capReached:false,byPageGroup:[{pageGroup:'home',events:5}],bySourceGroup:[{sourceGroup:'search',events:5}]};
   const report={asOf:'2026-10-10T12:00:00Z',status:'available',configuration:{enabled:true,reason:'enabled',startedAt:'2026-10-08T12:00:00Z'},window:{requestedDays:7,timeZone:'UTC',start:'2026-10-08',endExclusive:'2026-10-10',retainedFrom:'2026-07-13'},completedDays:[day],activationDayPartial:{...day,date:'2026-10-08',events:3},partialToday:{...day,date:'2026-10-10',events:2},totals:{events:5,byPageGroup:day.byPageGroup,bySourceGroup:day.bySourceGroup},cap:{dailyLimit:50000,daysReached:[]},cleanup:{lastAttemptAt:'2026-10-10T12:00:00Z',lastSuccessAt:'2026-10-10T12:00:00Z',lastFailureAt:null,status:'ok',retentionDays:90},limitations:['Opted-out and blocked-script visits are excluded.']};
   let response=report;requests=[];global.fetch=(url,options)=>{requests.push({url,options});return Promise.resolve({ok:true,json:async()=>response});};

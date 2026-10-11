@@ -33,3 +33,12 @@ export const trafficMetricsHealth=sqliteTable('traffic_metrics_health',{
   check('traffic_health_failure',sql`${t.lastFailure} IS NULL OR (typeof(${t.lastFailure})='integer' AND ${t.lastFailure}>=0)`),
   check('traffic_health_status',sql`${t.lastStatus} IN ('ok','failed')`),
 ]);
+
+// Shopping stages are unlinked daily counts, not visitor journeys or payments.
+export const shoppingDaily=sqliteTable('shopping_daily',{
+  day:text('day').notNull(),stage:text('stage').notNull(),eventCount:integer('event_count').notNull(),
+},t=>[primaryKey({columns:[t.day,t.stage]}),
+  check('shopping_valid_day',sql`${t.day} GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND strftime('%Y-%m-%d',${t.day},'+0 days') IS NOT NULL AND strftime('%Y-%m-%d',${t.day},'+0 days')=${t.day}`),
+  check('shopping_stage',sql`${t.stage} IN ('cart_add_confirmed','cart_view','checkout_signin_view','checkout_form_view','delivery_quote_confirmed','checkout_handoff_ready')`),
+  check('shopping_count',sql`typeof(${t.eventCount})='integer' AND ${t.eventCount} BETWEEN 1 AND 50000`),
+]);

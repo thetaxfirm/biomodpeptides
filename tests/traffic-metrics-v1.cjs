@@ -11,7 +11,7 @@ require.extensions['.ts'] = (m, f) => m._compile(ts.transpileModule(fs.readFileS
 }).outputText, f);
 const shared = require('../lib/traffic-metrics.ts');
 const server = require('../lib/traffic-metrics-server.ts');
-const migration = fs.readFileSync(path.join(__dirname, '../drizzle/0014_aggregate_traffic.sql'), 'utf8');
+const migration = ['0014_aggregate_traffic.sql', '0015_aggregate_shopping.sql'].map(name => fs.readFileSync(path.join(__dirname, '../drizzle', name), 'utf8')).join('\n');
 const { TRAFFIC_DAY_MS: DAY, TRAFFIC_DAILY_CAP: CAP, TRAFFIC_ORIGIN: ORIGIN } = shared;
 const now = Date.parse('2026-10-10T12:30:00.000Z');
 const started = '2026-10-06T13:20:00.000Z';

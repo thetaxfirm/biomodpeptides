@@ -37,8 +37,9 @@ export type TrafficNavigation = {
   initialNavigation: boolean;
   attempted: boolean;
   optedOut: boolean;
+  shoppingAttempted: Set<string>;
 };
-export const newTrafficNavigation = (): TrafficNavigation => ({ pathname: null, initialNavigation: true, attempted: false, optedOut: false });
+export const newTrafficNavigation = (): TrafficNavigation => ({ pathname: null, initialNavigation: true, attempted: false, optedOut: false, shoppingAttempted: new Set() });
 // Only this in-memory object keeps a path. It is never transmitted or persisted.
 export function observeTrafficNavigation(state: TrafficNavigation, pathname: string, search: string) {
   if (new URLSearchParams(search).getAll('measurement').includes('off')) state.optedOut = true;
@@ -46,6 +47,7 @@ export function observeTrafficNavigation(state: TrafficNavigation, pathname: str
     state.initialNavigation = state.pathname === null;
     state.pathname = pathname;
     state.attempted = false;
+    state.shoppingAttempted.clear();
   }
 }
 export function consumeTrafficNavigation(state: TrafficNavigation, pageGroup: TrafficPageGroup, referrer: string, origin: string): TrafficEvent | null {
@@ -55,4 +57,14 @@ export function consumeTrafficNavigation(state: TrafficNavigation, pageGroup: Tr
 }
 export function trafficPrivacyExcluded(navigator: { globalPrivacyControl?: boolean; doNotTrack?: string | null; webdriver?: boolean }, windowDoNotTrack?: string | null) {
   return navigator.globalPrivacyControl === true || navigator.doNotTrack === '1' || windowDoNotTrack === '1' || navigator.webdriver === true;
+}
+
+// Both collectors share one in-memory document state. An opt-out survives route
+// changes and component remounts; nothing is written to browser storage.
+const documents = new WeakMap<Document, TrafficNavigation>();
+export function documentTrafficNavigation(document: Document, pathname: string, search: string): TrafficNavigation {
+  let state = documents.get(document);
+  if (!state) { state = newTrafficNavigation(); documents.set(document, state); }
+  observeTrafficNavigation(state, pathname, search);
+  return state;
 }

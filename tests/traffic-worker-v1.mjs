@@ -33,7 +33,7 @@ const mf = new Miniflare({
   modulesRoot: built,
   compatibilityDate: config.compatibility_date,
   compatibilityFlags: config.compatibility_flags,
-  bindings: { TRAFFIC_MEASUREMENT_ENABLED: 'true', TRAFFIC_MEASUREMENT_STARTED_AT: new Date(now - dayMs).toISOString() },
+  bindings: { TRAFFIC_MEASUREMENT_ENABLED: 'true', TRAFFIC_MEASUREMENT_STARTED_AT: new Date(now - dayMs).toISOString(), SHOPPING_MEASUREMENT_ENABLED: 'true', SHOPPING_MEASUREMENT_STARTED_AT: new Date(now - dayMs).toISOString() },
   d1Databases: { DB: 'isolated-traffic-database' },
   d1Persist: path.join(temporary, 'd1'),
   outboundService: () => { outboundAttempts++; throw new Error('External services are disabled in this isolated test.'); },
@@ -42,18 +42,22 @@ const mf = new Miniflare({
 try {
   await mf.ready;
   const db = await mf.getD1Database('DB');
-  const migration = await fs.readFile(path.join(root, 'drizzle/0014_aggregate_traffic.sql'), 'utf8');
+  const migration = (await Promise.all(['0014_aggregate_traffic.sql', '0015_aggregate_shopping.sql'].map(name => fs.readFile(path.join(root, 'drizzle', name), 'utf8')))).join('\n');
   // D1 exec parses each statement; strip comment-only lines without altering SQL.
   const statements = migration.replace(/^--.*$/gm, '').split(';').map(value => value.trim()).filter(Boolean);
   await db.batch(statements.map(sql => db.prepare(sql)));
   await db.batch([
     db.prepare('INSERT INTO traffic_daily VALUES(?,?,?,?)').bind(expired, 'home', 'internal', 2),
     db.prepare('INSERT INTO traffic_daily VALUES(?,?,?,?)').bind(cutoff, 'home', 'internal', 3),
+    db.prepare('INSERT INTO shopping_daily VALUES(?,?,?)').bind(expired, 'cart_view', 4),
+    db.prepare('INSERT INTO shopping_daily VALUES(?,?,?)').bind(cutoff, 'cart_view', 5),
   ]);
   const scheduled = await mf.dispatchFetch('http://localhost/cdn-cgi/handler/scheduled?cron=0%209%20*%20*%20*');
   assert.equal(scheduled.status, 200, 'Built scheduled handler must complete: ' + (await scheduled.text()).slice(0, 500));
   assert.equal(await db.prepare('SELECT day FROM traffic_daily WHERE day=?').bind(expired).first(), null);
   assert.equal((await db.prepare('SELECT event_count n FROM traffic_daily WHERE day=?').bind(cutoff).first()).n, 3, 'Exact retention boundary survives');
+  assert.equal(await db.prepare('SELECT day FROM shopping_daily WHERE day=?').bind(expired).first(), null);
+  assert.equal((await db.prepare('SELECT event_count n FROM shopping_daily WHERE day=?').bind(cutoff).first()).n, 5, 'Shopping retention boundary survives the same scheduled transaction');
   const health = await db.prepare('SELECT last_attempt,last_success,last_failure,last_status FROM traffic_metrics_health WHERE id=1').first();
   assert.equal(health.last_status, 'ok'); assert(health.last_success >= now); assert.equal(health.last_failure, null);
   const total = async () => (await db.prepare('SELECT COALESCE(SUM(event_count),0) n FROM traffic_daily').first()).n;
@@ -67,6 +71,19 @@ try {
     const ignored = await mf.dispatchFetch(origin + '/api/metrics', { method: 'POST', headers: { ...headers, ...optOut }, body: payload });
     assert.equal(ignored.status, 204); assert.equal(ignored.headers.get('set-cookie'), null); assert.equal(await total(), 4);
   }
+  const shoppingTotal = async () => (await db.prepare('SELECT COALESCE(SUM(event_count),0) n FROM shopping_daily').first()).n;
+  const shoppingPayload = JSON.stringify({ event: 'checkout_handoff_ready' });
+  const shoppingAccepted = await mf.dispatchFetch(origin + '/api/metrics', { method: 'POST', headers, body: shoppingPayload });
+  assert.equal(shoppingAccepted.status, 204); assert.equal(shoppingAccepted.headers.get('set-cookie'), null);
+  assert.equal(await shoppingTotal(), 6); assert.equal(await total(), 4, 'Shopping stage does not increment public page views');
+  for (const optOut of [{ 'sec-gpc': '1' }, { dnt: '1' }]) {
+    const ignored = await mf.dispatchFetch(origin + '/api/metrics', { method: 'POST', headers: { ...headers, ...optOut }, body: shoppingPayload });
+    assert.equal(ignored.status, 204); assert.equal(await shoppingTotal(), 6);
+  }
+  const badShopping = await mf.dispatchFetch(origin + '/api/metrics', { method: 'POST', headers, body: JSON.stringify({ event: 'cart_view', productId: 'forbidden-fixture' }) });
+  assert.equal(badShopping.status, 400); assert.equal(await shoppingTotal(), 6);
+  const shoppingReport = await mf.dispatchFetch(origin + '/api/metrics/shopping-report?days=invalid');
+  assert.equal(shoppingReport.status, 403); assert.equal(shoppingReport.headers.get('set-cookie'), null); assert.equal(await shoppingTotal(), 6);
   const rejected = await mf.dispatchFetch(origin + '/api/metrics', { method: 'POST', headers: { ...headers, origin: 'https://unrelated.invalid' }, body: payload });
   assert.equal(rejected.status, 403); assert.equal(await total(), 4);
   const report = await mf.dispatchFetch(origin + '/api/metrics/report?days=invalid');
@@ -74,7 +91,7 @@ try {
   assert.equal(report.headers.get('set-cookie'), null); assert.equal(await total(), 4);
   assert.equal((await db.prepare("SELECT COUNT(*) n FROM sqlite_master WHERE name IN ('sessions','rate_limits','orders')").first()).n, 0, 'Metrics work without commerce tables or sessions');
   assert.equal(outboundAttempts, 0, 'No external services were contacted');
-  console.log('PASS: actual built Worker scheduled cleanup, local D1 transaction/retention boundary and health, one isolated ingestion, GPC/DNT no-write, foreign-origin rejection, no cookies, and report authorization before validation. Production untouched.');
+  console.log('PASS: actual built Worker scheduled cleanup, local D1 transaction/retention boundary and health, separate isolated page/stage ingestion, GPC/DNT no-write, foreign-origin rejection, no cookies, and report authorization before validation. Production untouched.');
 } finally {
   await mf.dispose();
   await fs.rm(temporary, { recursive: true, force: true });

@@ -3,21 +3,18 @@
 import { useEffect } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { TRAFFIC_ORIGIN } from '@/lib/traffic-metrics';
-import { consumeTrafficNavigation, newTrafficNavigation, observeTrafficNavigation, trafficPageGroup, trafficPrivacyExcluded, type TrafficNavigation } from '@/lib/traffic-navigation';
+import { consumeTrafficNavigation, documentTrafficNavigation, observeTrafficNavigation, trafficPageGroup, trafficPrivacyExcluded } from '@/lib/traffic-navigation';
 import { useStore } from './provider';
 
 // One document, not one component instance: remounts and StrictMode do not create events.
 // No cookies, storage, identifiers, per-person history or network retry queue.
-const documents = new WeakMap<Document, TrafficNavigation>();
 export function TrafficMeasurement({ enabled, reviewedProductSlugs }: { enabled: boolean; reviewedProductSlugs: string[] }) {
   const pathname = usePathname();
   const search = useSearchParams().toString();
   const { store, ready, loadError } = useStore();
   useEffect(() => {
     if (!pathname) return;
-    let state = documents.get(document);
-    if (!state) { state = newTrafficNavigation(); documents.set(document, state); }
-    observeTrafficNavigation(state, pathname, search);
+    const state = documentTrafficNavigation(document, pathname, search);
     if (!enabled || window.location.origin !== TRAFFIC_ORIGIN || !ready || loadError || store.admin || state.optedOut
       || trafficPrivacyExcluded(navigator as Navigator & { globalPrivacyControl?: boolean }, (window as Window & { doNotTrack?: string }).doNotTrack)) return;
     const pageGroup = trafficPageGroup(pathname, reviewedProductSlugs);

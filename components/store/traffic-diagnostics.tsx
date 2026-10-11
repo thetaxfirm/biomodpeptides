@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { ShoppingDiagnostics } from './shopping-diagnostics';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import type { TrafficReport, TrafficPageGroup, TrafficSourceGroup } from '@/lib/traffic-metrics';
 import styles from './traffic-diagnostics.module.css';
@@ -37,7 +38,7 @@ export function TrafficDiagnostics() {
   const visible = !loading && !error && report && String(report.window.requestedDays) === days ? report : null;
   const available = visible?.status === 'available' ? visible : null;
   const hasCompleted = Boolean(available && available.completedDays.length && available.totals.events !== null);
-  return <section className={styles.report} aria-labelledby="traffic-diagnostics-title">
+  return <><section className={styles.report} aria-labelledby="traffic-diagnostics-title">
     <h2 id="traffic-diagnostics-title">Traffic diagnostics</h2>
     <p>Accepted public page-view events. These are not unique visitors, verified people, conversions or attributable sales.</p>
     <div className={styles.toolbar}>
@@ -89,5 +90,5 @@ export function TrafficDiagnostics() {
         <ul className={styles.limitations}>{visible.limitations.map(item => <li key={item}>{item}</li>)}</ul>
       </section>
     </>}
-  </section>;
+  </section><ShoppingDiagnostics/></>;
 }

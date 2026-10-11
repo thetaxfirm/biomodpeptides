@@ -60,7 +60,8 @@ function useStoreLoadRetry(refresh: () => Promise<void>) {
     return { retrying, retryLoad };
 }
 export function Cart() {
-    const { store, ready, loadError, refresh, saveCart } = useStore();
+    const { store, ready, loadError, refresh, saveCart, observeShoppingView } = useStore();
+    useEffect(() => observeShoppingView?.('cart_view'), [observeShoppingView, store, ready, loadError]);
     const { retrying, retryLoad } = useStoreLoadRetry(refresh);
     const [busy, setBusy] = useState(false);
     const [promoBusy, setPromoBusy] = useState(false);
@@ -122,7 +123,12 @@ export function AddressFields({ initial = {} }: {
     initial?: Record<string, string>;
 }) { return <><Field label="Full name" name="name" defaultValue={initial.name}/><Field label="Street address" name="line1" defaultValue={initial.line1}/><Field label="Apartment / suite (optional)" name="line2" defaultValue={initial.line2} required={false}/><div className="form-row"><Field label="City" name="city" defaultValue={initial.city}/><Field label="State (2 letters)" name="state" defaultValue={initial.state} placeholder="CA"/><Field label="ZIP code" name="zip" defaultValue={initial.zip}/></div><Field label="Phone" name="phone" type="tel" defaultValue={initial.phone}/><input type="hidden" name="country" value="US"/><p className="muted">United States delivery only.</p></>; }
 export function Checkout() {
-    const { store, ready, loadError, refresh } = useStore();
+    const { store, ready, loadError, refresh, measureShopping, observeShoppingView, validShoppingQuote, validShoppingHandoff } = useStore();
+    useEffect(() => observeShoppingView?.(store.customer ? 'checkout_form_view' : 'checkout_signin_view'), [observeShoppingView, store, ready, loadError]);
+    const shoppingMounted = useRef(false);
+    const shoppingOwner = useRef(store.customer?.id);
+    shoppingOwner.current = store.customer?.id;
+    useEffect(() => { shoppingMounted.current = true; return () => { shoppingMounted.current = false; }; }, []);
     const { retrying, retryLoad } = useStoreLoadRetry(refresh);
     const [accepted, setAccepted] = useState(false);
     const [busy, setBusy] = useState(false);
@@ -170,12 +176,14 @@ export function Checkout() {
         invalidateDelivery();
         const revision = quoteRevision.current;
         const context = currentContext.current;
+        const owner = shoppingOwner.current;
         try {
             const fields = formData(e.currentTarget);
             const data = await api('delivery', { address: fields });
             if (revision !== quoteRevision.current || context !== currentContext.current || promoOperation.current) return;
             setAddress(fields);
             setDeliveryQuote({ data, context });
+            if (shoppingMounted.current && owner === shoppingOwner.current && validShoppingQuote?.(data)) measureShopping?.('delivery_quote_confirmed');
         } catch (e) {
             if (revision === quoteRevision.current) report(e);
         } finally { operation.current = false; setBusy(false); }
@@ -184,8 +192,11 @@ export function Checkout() {
         if (!delivery || !accepted || !requestKey || operation.current || promoOperation.current || !store.payment.enabled) return;
         operation.current = true;
         setBusy(true);
+        const context = currentContext.current, revision = quoteRevision.current, owner = shoppingOwner.current;
         try {
             const d = await api('checkout', { address, accepted, requestKey, expectedTotal: delivery.total, quoteId: delivery.quoteId });
+            if (shoppingMounted.current && owner === shoppingOwner.current && context === currentContext.current && revision === quoteRevision.current
+                && !promoOperation.current && validShoppingHandoff?.(d.url)) measureShopping?.('checkout_handoff_ready');
             location.assign(d.url);
         } catch (e) { report(e); operation.current = false; setBusy(false); }
     }
