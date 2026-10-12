@@ -121,7 +121,7 @@ function route(relative, dependencies) {
 
     // Authorization is first in the actual route, including malformed queries.
     let touched=false;
-    const actualReport=route('app/api/metrics/shopping-report/route.ts',{'@/lib/auth':{requireAdmin:async()=>{throw Error(privateValue);}},'@/lib/runtime':{runtime:()=>{touched=true;return env;},database:()=>{touched=true;return db;}},'@/lib/traffic-metrics-server':server});
+    const actualReport=route('app/api/metrics/shopping-report/route.ts',{'@/lib/auth':{requireAdmin:async()=>{throw Error(privateValue);},requireStaff:async()=>{throw Error(privateValue);}},'@/lib/runtime':{runtime:()=>{touched=true;return env;},database:()=>{touched=true;return db;}},'@/lib/traffic-metrics-server':server});
     let result=await actualReport.GET(reportRequest('?days=invalid'));assert.equal(result.status,403);assert(!touched);responseSafe(result);assert(!(await result.text()).includes(privateValue));
     for (const query of ['?days=1','?days=07','?days=7&days=30','?days=30&customer=private']) {before=dbCalls;assert.equal((await server.shoppingReport(reportRequest(query),reportDeps)).status,400);assert.equal(dbCalls,before);}
     assert.equal((await server.shoppingReport(new Request(ORIGIN+'/api/metrics/shopping-report',{method:'POST'}),reportDeps)).status,400);

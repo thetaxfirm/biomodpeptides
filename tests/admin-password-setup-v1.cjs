@@ -12,6 +12,15 @@ const env = {
   SUPABASE_ANON_KEY: 'isolated-public-key',
   STORE_ADMIN_EMAILS: 'chris@biomodcompounds.com, ash@biomodcompounds.com',
 };
+// Synthetic staff rows (lib/staff-store writes these from the owner-only Team tab).
+const staffRows = new Map([
+  ['packer@biomodcompounds.com', { role: 'fulfillment', active: 1 }],
+  ['helpdesk@biomodcompounds.com', { role: 'support', active: 1 }],
+  ['manager@biomodcompounds.com', { role: 'manager', active: 1 }],
+  ['former@biomodcompounds.com', { role: 'manager', active: 0 }],
+]);
+const staffLookups = [];
+let staffOutage = false;
 const cookies = new Map();
 const cookieWrites = [];
 const cookieJar = {
@@ -21,7 +30,14 @@ const cookieJar = {
 };
 const runtime = {
   runtime: () => env,
-  one: async () => { throw new Error('Database access is forbidden in this auth-only test'); },
+  // Only the staff-role lookup may read the database; owners never reach it.
+  one: async (sql, ...values) => {
+    assert.equal(sql, 'SELECT role FROM staff WHERE email=? AND active=1', 'Only the staff role lookup may read');
+    staffLookups.push(values[0]);
+    if (staffOutage) throw new Error('Isolated staff table unavailable');
+    const row = staffRows.get(values[0]);
+    return row && row.active ? { role: row.role } : null;
+  },
   run: async () => { throw new Error('Database writes are forbidden in this auth-only test'); },
   uid: () => { throw new Error('Session creation is forbidden in this auth-only test'); },
   timestamp: () => 0,
@@ -40,6 +56,7 @@ subject.paths = module.paths;
 subject.require = request => {
   if (request === 'next/headers') return { cookies: async () => cookieJar };
   if (request === './runtime') return runtime;
+  if (request === './staff') return require('./staff-module-fixture.cjs').loadStaffModule();
   throw new Error('Unexpected dependency: ' + request);
 };
 subject._compile(ts.transpileModule(fs.readFileSync(sourcePath, 'utf8'), {
@@ -92,6 +109,21 @@ async function recovery(email, endpoint, normalized = email.trim().toLowerCase()
     for (const email of ['ash+other@biomodcompounds.com', 'xash@biomodcompounds.com', 'ash@biomodcompounds.com.evil.invalid'])
       await recovery(email, 'recover');
 
+    // Owners come from the runtime setting alone; they never trigger a staff lookup.
+    staffLookups.length = 0;
+    await recovery('ash@biomodcompounds.com', 'otp');
+    assert.deepEqual(staffLookups, [], 'Owners are resolved without reading the database');
+    // Active staff added by an owner can set a password; removed staff and unknown addresses cannot.
+    await recovery(' Packer@BioModCompounds.com ', 'otp', 'packer@biomodcompounds.com');
+    await recovery('helpdesk@biomodcompounds.com', 'otp');
+    await recovery('former@biomodcompounds.com', 'recover');
+    assert.deepEqual(staffLookups, ['packer@biomodcompounds.com', 'helpdesk@biomodcompounds.com', 'former@biomodcompounds.com'], 'Staff lookups use the normalized address');
+    staffOutage = true;
+    await recovery('packer@biomodcompounds.com', 'recover');
+    assert.equal(await auth.staffRole('packer@biomodcompounds.com'), null, 'A staff lookup failure denies access');
+    assert.equal(await auth.staffRole('ash@biomodcompounds.com'), 'owner', 'Owners keep access during a database outage');
+    staffOutage = false;
+
     // Even an unexpected provider payload must remain inside the server boundary.
     response = { status: 200, body: { access_token: 'isolated-access-sentinel', refresh_token: 'isolated-refresh-sentinel', password: 'isolated-password-sentinel' } };
     await recovery('ash@biomodcompounds.com', 'otp');
@@ -120,7 +152,7 @@ async function recovery(email, endpoint, normalized = email.trim().toLowerCase()
     for (const email of ['chris@biomodcompounds.com', 'ash@biomodcompounds.com', 'ASH@BIOMODCOMPOUNDS.COM']) {
       response = { status: 200, body: { id: 'isolated-admin', email, email_confirmed_at: '2026-10-10T00:00:00Z', user_metadata: { name: 'Isolated admin' }, access_token: 'isolated-access-sentinel' } };
       const user = await auth.requireAdmin();
-      assert.deepEqual(user, { id: 'isolated-admin', email, name: 'Isolated admin' });
+      assert.deepEqual(user, { id: 'isolated-admin', email, name: 'Isolated admin', role: 'owner' });
       assert.equal(calls.at(-1).method, 'GET');
       assert.equal(new URL(calls.at(-1).url).pathname, '/auth/v1/user');
       assert.equal(calls.at(-1).headers.Authorization, 'Bearer isolated-session-token');
@@ -133,6 +165,28 @@ async function recovery(email, endpoint, normalized = email.trim().toLowerCase()
       response = { status: 200, body: { id: 'isolated-customer', email, email_confirmed_at: '2026-10-10T00:00:00Z' } };
       await assert.rejects(auth.requireAdmin(), /Administrator access is required/);
     }
+    // Each role reaches only its own permissions; the server re-checks on every request.
+    const signedIn = email => { response = { status: 200, body: { id: 'isolated-staff', email, email_confirmed_at: '2026-10-10T00:00:00Z', user_metadata: {} } }; };
+    const allowed = [
+      ['packer@biomodcompounds.com', 'fulfillment', ['orders:read', 'orders:fulfill', 'orders:reconcile'], ['requests:write', 'store:write', 'reports:read', 'team:manage']],
+      ['helpdesk@biomodcompounds.com', 'support', ['orders:read', 'orders:reconcile', 'requests:write'], ['orders:fulfill', 'store:write', 'reports:read', 'team:manage']],
+      ['manager@biomodcompounds.com', 'manager', ['orders:read', 'orders:fulfill', 'orders:reconcile', 'requests:write', 'store:write', 'reports:read'], ['team:manage']],
+      ['ash@biomodcompounds.com', 'owner', ['orders:read', 'orders:fulfill', 'orders:reconcile', 'requests:write', 'store:write', 'reports:read', 'team:manage'], []],
+    ];
+    for (const [email, role, yes, no] of allowed) {
+      for (const permission of yes) { signedIn(email); assert.equal((await auth.requireStaff(permission)).role, role, email + ' holds ' + permission); }
+      for (const permission of no) { signedIn(email); await assert.rejects(auth.requireStaff(permission), /role does not include this/, email + ' lacks ' + permission); }
+    }
+    signedIn('manager@biomodcompounds.com');
+    assert.equal((await auth.requireAdmin()).role, 'manager', 'Full store administration includes managers');
+    for (const email of ['packer@biomodcompounds.com', 'helpdesk@biomodcompounds.com']) {
+      signedIn(email);
+      await assert.rejects(auth.requireAdmin(), /role does not include this/, 'Store settings exclude fulfillment and support');
+    }
+    for (const email of ['former@biomodcompounds.com', 'buyer@example.invalid']) {
+      signedIn(email);
+      await assert.rejects(auth.requireStaff('orders:read'), /Administrator access is required/, 'Removed staff and customers have no role');
+    }
     response = { status: 401, body: { message: 'Expired fixture token' } };
     await assert.rejects(auth.requireAdmin(), /Please sign in to continue/);
     cookies.clear();
@@ -140,7 +194,7 @@ async function recovery(email, endpoint, normalized = email.trim().toLowerCase()
     await assert.rejects(auth.requireAdmin(), /Please sign in to continue/);
     assert.equal(calls.length, beforeAnonymous, 'Anonymous admin access does not call the provider');
     assert.equal(cookieWrites.length, 0);
-    console.log('PASS: separate admin password setup by verified email link, preserved Chris access, exact allowlist, ordinary recovery, generic failures and no password/session exposure');
+    console.log('PASS: separate admin password setup by verified email link, preserved Chris access, exact allowlist, staff roles with fail-closed lookup, ordinary recovery, generic failures and no password/session exposure');
   } finally {
     global.fetch = originalFetch;
   }

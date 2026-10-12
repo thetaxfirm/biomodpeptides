@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers';
 import { runtime, one, run, uid, timestamp } from './runtime';
+import { can, isAssignableRole, normalizeStaffEmail, type StaffPermission, type StaffRole } from './staff';
 export type Customer = {
     id: string;
     email: string;
@@ -38,16 +39,33 @@ export async function session(secure: boolean) { const c = await cookies(); let 
     c.set('bm_session', id, { httpOnly: true, secure, sameSite: 'lax', path: '/', maxAge: 2592000 });
     row = { id, cart: '[]', wishlist: '[]' };
 } return row; }
+// Owners: the STORE_ADMIN_EMAILS runtime setting.
 export const isAdminEmail = (email: string) => (runtime().STORE_ADMIN_EMAILS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean).includes(email.trim().toLowerCase());
-// Only pre-approved administrators can create an account through recovery.
+// Owner from the runtime setting, otherwise an active staff row. Any lookup failure
+// (including the staff table not existing yet) denies access rather than granting it.
+export async function staffRole(email: string): Promise<StaffRole | null> {
+    const normalized = normalizeStaffEmail(email || '');
+    if (!normalized) return null;
+    if (isAdminEmail(normalized)) return 'owner';
+    try {
+        const row = await one<{ role: string }>('SELECT role FROM staff WHERE email=? AND active=1', normalized);
+        return row && isAssignableRole(row.role) ? row.role : null;
+    }
+    catch { return null; }
+}
+// Only owners and active staff can create an account through recovery.
 // The provider emails a verification link; this never sets a password or grants a session.
 export async function requestPasswordRecovery(email: string, origin: string) {
     const normalized = email.trim().toLowerCase();
-    const admin = isAdminEmail(normalized);
+    const admin = Boolean(await staffRole(normalized));
     await authCall((admin ? 'otp' : 'recover') + '?redirect_to=' + encodeURIComponent(origin + '/reset-password'), { email: normalized, ...(admin ? { create_user: true } : {}) });
 }
-export async function requireAdmin() { const u = await requireCustomer(); if (!isAdminEmail(u.email))
-    throw new Error('Administrator access is required.'); return u; }
+export async function requireStaff(permission: StaffPermission) { const u = await requireCustomer(); const role = await staffRole(u.email);
+    if (!role) throw new Error('Administrator access is required.');
+    if (!can(role, permission)) throw new Error('Your administrator role does not include this.');
+    return { ...u, role }; }
+// Full store administration (owners and managers).
+export const requireAdmin = () => requireStaff('store:write');
 export async function rateLimit(key: string, limit = 30) { const now = timestamp(); const row = await one<{
     count: number;
 }>('INSERT INTO rate_limits(key,count,expires) VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET count=CASE WHEN expires<? THEN 1 ELSE count+1 END,expires=CASE WHEN expires<? THEN excluded.expires ELSE expires END RETURNING count', key, now + 600000, now, now); if ((row?.count || 0) > limit)

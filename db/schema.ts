@@ -52,3 +52,11 @@ export const coaDeliveryOutbox=sqliteTable('coa_delivery_outbox',{
 export const coaOriginalReports=sqliteTable('coa_original_reports',{
  sha256:text('sha256').primaryKey(),data:text('data').notNull(),enabled:integer('enabled').notNull().default(0),
 },t=>[check('coa_original_hash',sql`length(${t.sha256})=64 AND ${t.sha256} NOT GLOB '*[^a-f0-9]*'`),check('coa_original_enabled',sql`${t.enabled} IN (0,1)`)]);
+// Staff below the owner level (owners are STORE_ADMIN_EMAILS). See lib/staff.ts.
+export const staff=sqliteTable('staff',{
+ email:text('email').primaryKey(),name:text('name').notNull().default(''),role:text('role').notNull(),active:integer('active').notNull().default(1),
+ created:integer('created').notNull(),updated:integer('updated').notNull(),updatedBy:text('updated_by').notNull(),
+},t=>[check('staff_email',sql`${t.email}=lower(trim(${t.email})) AND length(${t.email}) BETWEEN 3 AND 254`),check('staff_role',sql`${t.role} IN ('manager','fulfillment','support')`),check('staff_active',sql`${t.active} IN (0,1)`)]);
+export const staffAudit=sqliteTable('staff_audit',{
+ id:text('id').primaryKey(),actor:text('actor').notNull(),email:text('email').notNull(),role:text('role').notNull(),active:integer('active').notNull(),created:integer('created').notNull(),
+},t=>[index('staff_audit_created').on(t.created),check('staff_audit_active',sql`${t.active} IN (0,1)`)]);
