@@ -28,3 +28,7 @@ Affected: lib/staff.ts, lib/staff-store.ts, lib/auth.ts, app/api/store/[action]/
 ## Validation
 
 TypeScript, all 37 isolated release suites (new `staff-access-v1.cjs`; extended `admin-password-setup-v1.cjs` and `admin-landing-v1.cjs` with per-role allow/deny, fail-closed lookup and staff landing) and the gated production build passed. No new lint findings in changed files. Existing route tests now stub `requireStaff` as an owner. No live sign-in, password email or staff row was created. Authenticated verification of the Team tab and a limited role needs the owner's signed-in browser.
+
+## Live deployment
+
+Commit 5f6cb71 deployed by Workers Builds (build caf7855d, Worker version a31795e6, 100% at 2026-10-12T20:06Z); GitHub release-check passed. Read-only checks: production D1 has `staff`, `staff_audit` and `staff_audit_created`, with zero staff rows. /, /shop and /admin/login return 200. Signed-out calls to the admin payload, the shipping API and the new `admin-staff` action are refused, and no row was written. Not yet verified: the Team tab and a limited role while signed in, which need the owner's own browser session.
