@@ -1,3 +1,9 @@
+## Current change and release rule
+
+Every contributor must follow [AGENTS.md](AGENTS.md) and [the website consistency rule](docs/website-change-rule-v1.md). Run `npm run check:release`; the normal `BIOMOD_DEPLOY=true npm run build` production path enforces the same checks before compiling. GitHub runs the check on pushes and pull requests. Completion additionally requires deployment and live verification of all affected surfaces.
+
+The sections below include historical release notes. Confirm current behavior against source, runtime and dated release evidence rather than treating older configuration statements as current. This GitHub repository is public; never commit customer data, original private reports or secrets.
+
 # Biomod Peptides custom storefront
 
 A custom React storefront with an original Biomod campaign, using 45 real Biomod products, approved brand graphics, source-grounded product descriptions, and published laboratory documents. There is no WooCommerce or WordPress runtime integration. Source URLs are retained only as provenance and original public certificate links.
