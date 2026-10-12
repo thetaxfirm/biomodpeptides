@@ -56,6 +56,21 @@ try {
   globalThis.fetch = async () => { throw new TypeError('network'); };
   await assert.rejects(e.cheapestRate(env, to, [vial]), /could not be reached/);
   await assert.rejects(e.cheapestRate({}, to, [vial]), /not connected/);
+  // Credentials, authenticated API access and webhook registration are separate states.
+  let healthCalls = 0;
+  globalThis.fetch = async (url, init) => { healthCalls++; assert.equal(init.method, 'GET');
+    if (url.endsWith('/carrier_accounts')) return Response.json({ carrier_accounts: [] });
+    if (url.endsWith('/webhooks')) return new Response('{}', { status: 503 });
+    throw Error('Unexpected diagnostic call');
+  };
+  const missing = await e.shippingConnection({});
+  assert.equal(missing.configured, false); assert.equal(missing.connected, false); assert.equal(healthCalls, 0);
+  const partial = await e.shippingConnection(env);
+  assert.equal(partial.configured, true); assert.equal(partial.connected, true); assert.equal(partial.webhookRegistered, null);
+  assert(Number.isFinite(Date.parse(partial.checkedAt)));
+  globalThis.fetch = async () => new Response('{}', { status: 401 });
+  const refused = await e.shippingConnection(env);
+  assert.equal(refused.configured, true); assert.equal(refused.connected, false); assert.equal(refused.webhookRegistered, null);
   // Webhook signatures.
   const body = JSON.stringify({ description: 'tracker.updated', result: { object: 'Tracker', tracking_code: '9400TEST', status: 'delivered' } });
   const sig = 'hmac-sha256-hex=' + createHmac('sha256', 'whsec-12345').update(body).digest('hex');

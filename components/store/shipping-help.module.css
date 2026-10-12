@@ -1,0 +1,17 @@
+.panel { margin: 24px 0; padding: 24px; background: #fff; border: 1px solid #d9cbdc; border-radius: 8px; color: #2b1030; }
+.panel h3 { margin: 0 0 12px; font-size: 1.4rem; }
+.panel h4 { margin: 0 0 8px; font-size: 1.05rem; }
+.panel p { line-height: 1.6; margin: 8px 0; }
+.connection { display: flex; align-items: flex-start; gap: 24px; padding: 20px 0; margin: 16px 0; border-block: 1px solid #e9d9ef; }
+.connection > div { flex: 1; min-width: 0; }
+.connection button { flex-shrink: 0; }
+.note { font-size: .9rem; color: #635969; }
+.workflow { margin: 12px 0 20px; padding-left: 24px; }
+.workflow li { padding: 0 0 12px 6px; line-height: 1.65; }
+.help { padding: 12px 0; }
+.help summary { font-weight: 600; cursor: pointer; line-height: 1.5; }
+.help dt { font-weight: 600; margin-top: 12px; }
+.help dd { margin: 4px 0 12px; line-height: 1.6; }
+.label { margin: 16px 0; padding: 16px; background: #fff; border: 1px solid #d9cbdc; }
+.label img { display: block; width: auto; max-width: 100%; max-height: 680px; object-fit: contain; }
+@media (max-width: 640px) { .panel { padding: 16px; } .connection { flex-direction: column; gap: 12px; } .connection button { width: 100%; white-space: normal; } }

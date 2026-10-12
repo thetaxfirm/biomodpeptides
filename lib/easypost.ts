@@ -145,13 +145,19 @@ export async function sendTrackingEmail(env: Environment, to: string, orderId: s
 
 /** Read-only carrier diagnostics. Never exposes account IDs, addresses or credentials. */
 export async function shippingConnection(env: Environment) {
-    if (!easypostReady(env)) return { connected: false, message: 'Carrier connection is not configured.', webhookConfigured: false, webhookRegistered: false };
+    const checkedAt = new Date().toISOString();
+    const configured = easypostReady(env);
+    const webhookConfigured = Boolean(env.EASYPOST_WEBHOOK_SECRET?.trim());
+    if (!configured) return { configured, connected: false, checkedAt, message: 'Carrier connection is not configured.', webhookConfigured, webhookRegistered: null };
+    try { await call(env, '/carrier_accounts'); }
+    catch { return { configured, connected: false, checkedAt, message: 'Carrier connection could not be verified. Check the EasyPost account.', webhookConfigured, webhookRegistered: null }; }
+    // Webhook availability is independent of whether the API authenticated.
+    let webhookRegistered: boolean | null = null;
     try {
-        await call(env, '/carrier_accounts');
         const hooks = await call(env, '/webhooks');
-        const registered = Array.isArray(hooks.webhooks) && hooks.webhooks.some((h: any) => h.url === 'https://trybiomod.com/api/shipping/easypost' && !h.disabled_at);
-        return { connected: true, message: 'EasyPost accepted the connection check.', webhookConfigured: Boolean(env.EASYPOST_WEBHOOK_SECRET), webhookRegistered: registered };
-    } catch { return { connected: false, message: 'Carrier connection could not be verified. Check the EasyPost account.', webhookConfigured: Boolean(env.EASYPOST_WEBHOOK_SECRET), webhookRegistered: false }; }
+        if (Array.isArray(hooks.webhooks)) webhookRegistered = hooks.webhooks.some((h: any) => h.url === 'https://trybiomod.com/api/shipping/easypost' && !h.disabled_at);
+    } catch { /* API access worked; webhook state is unavailable, not disconnected. */ }
+    return { configured, connected: true, checkedAt, message: 'EasyPost accepted the connection check.', webhookConfigured, webhookRegistered };
 }
 export async function readShipmentTracking(env: Environment, shipmentId: string, tracking: string) {
     if (!/^shp_[a-zA-Z0-9]+$/.test(shipmentId)) throw new ShippingError('This order has no valid carrier shipment reference.');
