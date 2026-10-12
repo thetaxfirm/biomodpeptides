@@ -2,6 +2,8 @@
 import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
 import { products as initialProducts, Product } from '@/lib/catalog';
 import { packDiscounts, packSizes } from '@/lib/packs';
+import { applySale } from '@/lib/sales';
+import { nextSaleBoundary } from '@/lib/sale-display';
 import type { CartLine, StoreConfig } from '@/lib/commerce';
 import type { CartConflict } from '@/lib/cart-import';
 import { toast, Toaster } from 'sonner';
@@ -30,11 +32,12 @@ type Store = {
         state: string;
     };
     totals: any;
+    pricingStale?: boolean;
     cartError: string;
     cartNotice?: string;
     campaigns: any[];
 };
-const defaults: Store = { products: initialProducts, config: initialConfig, cart: [], cartConflict: null, wishlist: [], savedPacks: [], customer: null, authReady: false, googleReady: false, admin: false, payment: { enabled: false, state: 'not_configured' }, totals: null, cartError: '', campaigns: [] };
+const defaults: Store = { products: initialProducts, config: initialConfig, cart: [], cartConflict: null, wishlist: [], savedPacks: [], customer: null, authReady: false, googleReady: false, admin: false, payment: { enabled: false, state: 'not_configured' }, totals: null, pricingStale: false, cartError: '', campaigns: [] };
 const Context = createContext<{
     store: Store;
     ready: boolean;
@@ -79,11 +82,23 @@ export function StoreProvider({ children, initialCatalog = initialProducts, shop
     };
     const observeShoppingView = (stage: ShoppingStage) => watchShoppingView(stage, measureShopping);
     const queue = useRef<Promise<void>>(Promise.resolve());
+    function repriceLocalProducts() {
+        if (!mounted.current) return;
+        const current = stateRef.current;
+        const products = current.products.map(p => applySale(p));
+        const cartIds = new Set(current.cart.map(line => line.id));
+        const offer = (p: Product) => JSON.stringify([p.price, p.packPrices ?? null, p.activeSale ?? null, p.activePreorder ?? null]);
+        const changed = products.some((p, index) => cartIds.has(p.id) && offer(p) !== offer(current.products[index]));
+        // A locally changed offer is not an authoritative cart quote. Retain
+        // the saved cart, but do not display its previous financial totals.
+        stateRef.current = { ...current, products, pricingStale: Boolean(current.pricingStale || changed), totals: changed ? null : current.totals };
+        setStore(stateRef.current);
+    }
     async function refresh() {
         const read = ++readVersion.current, write = writeVersion.current, life = lifetime.current;
         const current = () => mounted.current && life === lifetime.current && read === readVersion.current && write === writeVersion.current;
         try {
-            const d: Store = await api('state');
+            const d: Store = { ...await api('state'), pricingStale: false };
             if (!current()) throw new Error('A newer cart or account update has started. Retry to load the current details.');
             acceptedReadVersion.current = read;
             if (!measurementStatus.current.ready || d.customer?.id !== stateRef.current.customer?.id) ownerVersion.current += 1;
@@ -100,18 +115,25 @@ export function StoreProvider({ children, initialCatalog = initialProducts, shop
     useEffect(() => {
         mounted.current = true;
         const life = ++lifetime.current;
+        repriceLocalProducts();
         api('auth-refresh', {}).catch(() => null).then(() => {
             if (mounted.current && life === lifetime.current) return refresh();
         }).catch(() => { if (mounted.current && life === lifetime.current) toast.error('Saved cart is temporarily unavailable. Please refresh to try again.'); });
         return () => { mounted.current = false; lifetime.current += 1; ownerVersion.current += 1; readVersion.current += 1; };
     }, []);
     useEffect(() => {
-        const boundaries = store.products.flatMap(p => p.sale?.enabled ? [Date.parse(p.sale.starts), Date.parse(p.sale.ends)] : []).filter(t => t > Date.now());
-        if (!boundaries.length) return;
-        const timer = setTimeout(() => { refresh().catch(report); }, Math.min(2147483647, Math.max(100, Math.min(...boundaries) - Date.now() + 100)));
+        const boundary = nextSaleBoundary(store.products, Date.now());
+        if (boundary === null) return;
+        const timer = setTimeout(() => {
+            if (!mounted.current) return;
+            // End or start the displayed offer immediately, even if a network read fails.
+            // Checkout still obtains a fresh authoritative quote before payment.
+            repriceLocalProducts();
+            refresh().catch(report);
+        }, Math.min(2147483647, Math.max(100, boundary - Date.now() + 100)));
         return () => clearTimeout(timer);
     }, [store.products]);
-    useEffect(() => { const update = () => { if (document.visibilityState === 'visible') refresh().catch(report); }; document.addEventListener('visibilitychange', update); return () => document.removeEventListener('visibilitychange', update); }, []);
+    useEffect(() => { const update = () => { if (document.visibilityState === 'visible') { repriceLocalProducts(); refresh().catch(report); } }; document.addEventListener('visibilitychange', update); return () => document.removeEventListener('visibilitychange', update); }, []);
     function cartScope() { return { owner: ownerVersion.current, life: lifetime.current }; }
     function currentCartScope(scope: ReturnType<typeof cartScope>) {
         return mounted.current && scope.owner === ownerVersion.current && scope.life === lifetime.current;
@@ -134,7 +156,7 @@ export function StoreProvider({ children, initialCatalog = initialProducts, shop
         writeVersion.current += 1;
         // The server sends these fields only after persistence. Do not discard
         // them, replace other account fields, or replay this accepted mutation.
-        stateRef.current = { ...stateRef.current, cart: result.cart, totals: result.totals, cartError: '', cartNotice: undefined };
+        stateRef.current = { ...stateRef.current, cart: result.cart, totals: result.totals, pricingStale: false, cartError: '', cartNotice: undefined };
         setStore(stateRef.current);
         if (addition && result.cart.reduce((sum, line) => sum + line.quantity, 0) > previousQuantity)
             measureShopping('cart_add_confirmed', { cart: result.cart });

@@ -42,4 +42,13 @@ blocked(lambda:batch([('checkInventoryEdit',('stale-edit',10,p['id'],8,p['id']))
 assert stock()==6
 assert db.execute('SELECT SUM(quantity) FROM inventory_reservations').fetchone()[0]==2
 assert db.execute('SELECT COUNT(*) FROM transaction_guards').fetchone()[0]==0
+# A status change between quote and commit cannot create a new checkout reservation.
+for field,value in [('availability','coming_soon'),('availability','sold_out'),('availability','unavailable'),('inStock',False),('purchasable',False)]:
+ db.execute('UPDATE product_overrides SET data=? WHERE id=?',(json.dumps({'stockQuantity':6,field:value}),p['id']))
+ attempt='isolated-status-'+field+'-'+str(value)
+ blocked(lambda:order(attempt,'new-fixture-customer'),'A closed product was reserved after its quote')
+ assert db.execute('SELECT count(*) FROM orders WHERE id=?',(attempt,)).fetchone()[0]==0
+ assert db.execute('SELECT count(*) FROM inventory_reservations WHERE order_id=?',(attempt,)).fetchone()[0]==0
+assert db.execute('SELECT SUM(quantity) FROM inventory_reservations').fetchone()[0]==2,'Existing reserved orders remain untouched'
+assert db.execute('SELECT COUNT(*) FROM transaction_guards').fetchone()[0]==0
 print('PASS: atomic rollback, oversell prevention, active-attempt uniqueness, idempotent settlement, cumulative presale limits, uncertain-attempt retention, protected inventory edits')

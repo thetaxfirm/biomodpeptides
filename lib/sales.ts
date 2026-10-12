@@ -1,10 +1,13 @@
 import type { Product } from './catalog';
+import { productAvailability } from './availability';
 // A scheduled percentage applies to current single and fixed-pack prices.
 // Legacy regularPrice is not a sale claim or a discount base.
 export function applySale(product: Product, now = Date.now()): Product {
     const { activeSale, activePreorder, ...rest } = product;
     const previous = activePreorder || activeSale;
     const p: Product = previous ? { ...rest, price: previous.basePrice, packPrices: previous.basePackPrices } : rest;
+    // Closed products retain the configured offer, but do not advertise a live deal.
+    if (productAvailability(p) !== 'available') return p;
     const preorder = p.preorder;
     // The preorder offer replaces a scheduled sale, so the same 15% cannot compound.
     // Existing pack and promo savings still apply downstream.

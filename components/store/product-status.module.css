@@ -1,0 +1,4 @@
+.status { width: fit-content; max-width: 100%; margin: 10px 0; padding: 6px 10px; border-radius: 4px; background: #edf5fa; color: #23516c; font-size: .85rem; font-weight: 650; line-height: 1.45; }
+.status[data-status="sold_out"] { background: #fceff0; color: #942b35; }
+.status[data-status="coming_soon"] { background: #fff4e6; color: #83521b; }
+.status[data-status="unavailable"] { background: #eeeceb; color: #514944; }

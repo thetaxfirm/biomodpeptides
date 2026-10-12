@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { runtime } from './runtime';
 import { canonicalPath, mayIndex, pageInfo, productAt, seoConfig, privatePath, type SEOConfig } from './seo-policy';
 import { imagePath } from './catalog';
+import { schemaAvailability } from './availability';
 import { publicCatalog } from './public-catalog';
 import { merchantPolicies } from './merchant-policies';
 import { certificateProperties } from './certificate-schema';
@@ -65,7 +66,8 @@ export async function routeStructuredData(path: string, config: SEOConfig = curr
         ...certificateProperties(p.id)],
       ...(snapshot.verified && live && live.price > 0 ? { offers: { '@type': 'Offer', url: config.origin + clean,
         priceCurrency: 'USD', price: (live.price / 100).toFixed(2),
-        availability: live.inStock && live.purchasable ? live.activePreorder ? 'https://schema.org/PreOrder' : 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+        ...(live.activeSale && !live.activePreorder && Number.isFinite(Date.parse(live.activeSale.ends)) ? { priceValidUntil: new Date(live.activeSale.ends).toISOString().slice(0, 10) } : {}),
+        availability: schemaAvailability(live),
         seller: { '@id': organization['@id'] },
         ...(policies ? { hasMerchantReturnPolicy: { '@id': policies.hasMerchantReturnPolicy['@id'] } } : {}),
         ...(policies?.hasShippingService ? { shippingDetails: { '@type': 'OfferShippingDetails', hasShippingService: { '@id': policies.hasShippingService['@id'] } } } : {}),

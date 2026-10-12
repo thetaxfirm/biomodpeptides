@@ -22,14 +22,14 @@ function mount(props={}){const h={props,slots:[],effectFns:[],cleanups:[],cursor
  replay(){this.cleanups.forEach(fn=>fn?.());this.effectFns.forEach((fn,i)=>{if(fn)this.cleanups[i]=fn();});this.render();},
  unmount(){this.cleanups.forEach(fn=>fn?.());this.cleanups=[];},};h.render();hosts.push(h);return h;}
 function nodes(t,out=[]){if(Array.isArray(t))t.forEach(x=>nodes(x,out));else if(t&&typeof t==='object'&&t.props){out.push(t);nodes(t.props.children,out);}return out;}
-function text(t){if(t==null||typeof t==='boolean')return'';if(Array.isArray(t))return t.map(text).join(' ').replace(/\s+/g,' ').trim();if(typeof t!=='object')return String(t);return text(t.props?.children);}
+function text(t){if(t==null||typeof t==='boolean')return'';if(Array.isArray(t))return t.map(text).join(' ').replace(/\s+/g,' ').trim();if(typeof t!=='object')return String(t);if(t.type===AdminProducts)return (t.props.edited?[t.props.edited]:t.props.products).map(p=>p.name).join(' ');return text(t.props?.children);}
 const find=(h,p)=>{const n=nodes(h.tree).find(p);assert(n,'Expected rendered control');return n;};
 const button=(h,label)=>find(h,n=>n.type==='button'&&text(n)===label);
 const alerts=h=>nodes(h.tree).filter(n=>n.props.role==='alert').map(text).join(' ');
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return{promise,resolve,reject};};
 const flush=async h=>{for(let i=0;i<16;i++)await Promise.resolve();h?.render();};
 const noop=()=>null;
-function Field(){}function Check(){}function Choice(){}function Blank(){}function AuthPage(){}function ShippingLabel(){}function Dialog(){}function Tabs(){}function TabsTrigger(){}function CoaAutomation(){}function RequestInbox(){}function ChangeHistory(){}
+function Field(){}function Check(){}function Choice(){}function Blank(){}function AuthPage(){}function ShippingLabel(){}function Dialog(){}function Tabs(){}function TabsTrigger(){}function CoaAutomation(){}function RequestInbox(){}function ChangeHistory(){}function AdminProducts(){}
 const ownerA={id:'fixture-admin-a',name:'Fixture A',email:'a@example.invalid'};
 const ownerB={id:'fixture-admin-b',name:'Fixture B',email:'b@example.invalid'};
 const fixture=(label='Snapshot A')=>({config:{presalesEnabled:false,rewardsEnabled:false,affiliateEnabled:false,packDiscounts:{},shippingCents:null,freeShippingAt:20000},products:[{id:900001,name:label,price:10000,stockQuantity:1,inStock:true,purchasable:true}],campaigns:[{id:'fixture-campaign',title:'Simulated campaign',active:false,starts:'2099-01-01',ends:'2099-02-01'}],orders:[{id:'fixture-order',status:'pending',total:10000,created:0,data:{items:[]}}],requests:[{id:'fixture-request',kind:'fixture',status:'new',created:0,data:{}}],searchPublishing:{}});
@@ -42,10 +42,11 @@ mod.require=id=>{
  if(id==='./fulfillment-admin')return {FulfillmentQueue:()=>null,CarrierConnection:()=>null};
  if(id==='react')return hooks;if(id==='react/jsx-runtime')return projectRequire('react/jsx-runtime');if(id==='./provider')return provider;
  if(id==='sonner')return{toast:{success:v=>successes.push(v),info:v=>infos.push(v)}};
- if(id==='@/lib/catalog')return{money:c=>'$'+(c/100).toFixed(2)};if(id==='@/lib/packs')return{supportsPacks:()=>false};
+ if(id==='@/lib/catalog')return{money:c=>'$'+(c/100).toFixed(2)};if(id==='@/lib/packs')return{supportsPacks:p=>Boolean(p.categories?.some(c=>['research-compounds','spray-products','softgels'].includes(c.slug)))};
  if(id==='./account')return{AuthPage};if(id==='./shipping-admin')return{ShippingLabel};
  if(id==='./coa-automation')return{CoaAutomation};
  if(id==='./change-history')return{ChangeHistory};
+ if(id==='./admin-products')return{AdminProducts};
  if(id==='./team-admin')return{TeamAdmin:noop};if(id==='@/lib/staff')return require('./staff-module-fixture.cjs').loadStaffModule();
  if(id==='./request-inbox')return{RequestInbox};
  if(id==='./primitives')return{Field,Check,Choice,Blank,formData:form=>form.fields};
@@ -63,7 +64,9 @@ const mutations=()=>calls.filter(c=>c.action!=='admin').length;
 const settingsForm=h=>nodes(h.tree).find(n=>n.type==='form');
 const event=()=>({preventDefault(){},currentTarget:{fields:{pack3:'',pack5:'',pack10:'',shipping:'',threshold:'200'}}});
 const shippingDone=h=>find(h,n=>n.type===ShippingLabel).props.onDone;
-const productNames=h=>nodes(h.tree).filter(n=>n.type===Dialog).map(n=>n.props.open).join(',');
+const productPanel=h=>find(h,n=>n.type===AdminProducts);
+const editFirst=h=>{const panel=productPanel(h);panel.props.onEdit(panel.props.products[0]);};
+const productNames=h=>String(Boolean(productPanel(h).props.edited));
 (async()=>{
  // Default and deep-linked sections use the actual Admin and Experience components.
  reset();let h=mount();await flush(h);
@@ -88,6 +91,7 @@ const productNames=h=>nodes(h.tree).filter(n=>n.type===Dialog).map(n=>n.props.op
   assert.equal(find(h,n=>n.type===Tabs).props.value,mayRead?'changes':'orders');
   assert.equal(nodes(h.tree).some(n=>n.type===TabsTrigger&&n.props.value==='changes'),mayRead);
   assert.equal(nodes(h.tree).some(n=>n.type===ChangeHistory),mayRead,'History is never mounted without reports permission');
+  assert.equal(nodes(h.tree).some(n=>n.type===AdminProducts),mayRead,'Products editor is never mounted without store write permission');
  }
  reset();h=mount({initialTab:'changes'});await flush(h);const priorHistoryKey=find(h,n=>n.type===ChangeHistory).key;
  button(h,'Refresh administration').props.onClick();await flush(h);assert.notEqual(find(h,n=>n.type===ChangeHistory).key,priorHistoryKey,'Global admin refresh remounts the history reader');
@@ -101,14 +105,14 @@ const productNames=h=>nodes(h.tree).filter(n=>n.type===Dialog).map(n=>n.props.op
  assert(nodes(h.tree).some(n=>n.type===Blank&&n.props.title==='No orders received.'));
  const initialKey=settingsForm(h).key;
  find(h,n=>n.type===Tabs).props.onValueChange('promos');
- find(h,n=>n.type==='input'&&n.props['aria-label']==='Find a product to edit').props.onChange({target:{value:'Snapshot'}});h.render();
+ productPanel(h).props.onQuery('Snapshot');h.render();
  const updated={...fixture(),orders:['order001-new','order002-new'].map((id,i)=>({id,status:i?'shipped':'paid',total:10000,created:0,data:{items:[]}}))};
  const newRead=deferred();apiImpl=()=>newRead.promise;h.render();assert.equal(reads(),1,'Same-owner rerender alone must not poll');
  const manualRefresh=button(h,'Refresh administration').props.onClick;manualRefresh();manualRefresh();h.render();
  assert.equal(reads(),2);assert(button(h,'Refreshing administration…').props.disabled);assert.equal(settingsForm(h).key,initialKey);
  newRead.resolve(updated);await flush(h);
  assert(text(h.tree).includes('order001'));assert(text(h.tree).includes('order002'));assert(!nodes(h.tree).some(n=>n.type===Blank&&n.props.title==='No orders received.'));
- assert.equal(find(h,n=>n.type===Tabs).props.value,'promos');assert.equal(find(h,n=>n.type==='input'&&n.props['aria-label']==='Find a product to edit').props.value,'Snapshot');
+ assert.equal(find(h,n=>n.type===Tabs).props.value,'promos');assert.equal(productPanel(h).props.query,'Snapshot');
  assert.notEqual(settingsForm(h).key,initialKey);assert(find(h,n=>n.type==='time').props.dateTime);assert.equal(mutations(),0);assert.equal(refreshCalls,0);
  const acceptedKey=settingsForm(h).key,acceptedTime=find(h,n=>n.type==='time').props.dateTime;
  apiImpl=async()=>{throw Error('Simulated manual read outage');};button(h,'Refresh administration').props.onClick();await flush(h);
@@ -127,9 +131,9 @@ const productNames=h=>nodes(h.tree).filter(n=>n.type===Dialog).map(n=>n.props.op
  }
  find(h,n=>n.type===Check).props.onChange(true);h.render();assert.equal(find(h,n=>n.type===Check).props.checked,true);assert(button(h,'Refresh administration').props.disabled);
  button(h,'Discard unsaved edits').props.onClick();h.render();assert.equal(find(h,n=>n.type===Check).props.checked,false);
- button(h,'Edit').props.onClick();h.render();assert.equal(productNames(h),'true');assert(button(h,'Refresh administration').props.disabled);
- const productForm=nodes(h.tree).find(n=>n.type==='form'&&nodes(n).some(f=>f.type===Field&&f.props.name==='price'));assert(productForm);productForm.props.onChangeCapture();h.render();
- find(h,n=>n.type===Dialog).props.onOpenChange(false);h.render();assert.equal(productNames(h),'false');assert.equal(button(h,'Refresh administration').props.disabled,false);assert.equal(mutations(),0);
+ editFirst(h);h.render();assert.equal(productNames(h),'true');assert(button(h,'Refresh administration').props.disabled);
+ const productForm=productPanel(h);productForm.props.onDraft();h.render();
+ productPanel(h).props.onCancel();h.render();assert.equal(productNames(h),'false');assert.equal(button(h,'Refresh administration').props.disabled,false);assert.equal(mutations(),0);
 
  // Starting clean is insufficient: edits during a pending read preserve both
  // uncontrolled field instances and controlled flags, and do not accept that response.
@@ -160,13 +164,27 @@ const productNames=h=>nodes(h.tree).filter(n=>n.type===Dialog).map(n=>n.props.op
 
  // Closing and reopening an editor during an earlier save creates a different
  // draft even for the same product. Its version must never reuse the old value.
- reset();h=mount();await flush(h);allowedMutation='admin-product';button(h,'Edit').props.onClick();h.render();
- const editor=nodes(h.tree).find(n=>n.type==='form'&&nodes(n).some(f=>f.type===Field&&f.props.name==='price'));
+ reset();h=mount();await flush(h);allowedMutation='admin-product';editFirst(h);h.render();
+ const editor=productPanel(h);
  const productSave=deferred();apiImpl=()=>productSave.promise;
- const oldProductSave=editor.props.onSubmit({preventDefault(){},currentTarget:{fields:{price:'100',stockQuantity:'1',maxQuantity:'100',salePercent:''}}});h.render();
- find(h,n=>n.type===Dialog).props.onOpenChange(false);h.render();button(h,'Edit').props.onClick();h.render();
+ const oldProductSave=editor.props.onSave({preventDefault(){},currentTarget:{fields:{price:'100',stockQuantity:'1',maxQuantity:'100',salePercent:''}}});h.render();
+ productPanel(h).props.onCancel();h.render();editFirst(h);h.render();
+ assert.equal(calls.find(c=>c.action==='admin-product').body.expectedStock,1,'Product save uses the loaded stock snapshot');
+ assert.equal(calls.find(c=>c.action==='admin-product').body.stockQuantity,1);
  productSave.resolve({message:'Earlier product saved'});await oldProductSave;h.render();
  assert.equal(productNames(h),'true');assert(button(h,'Refresh administration').props.disabled);assert.equal(mutations(),1);assert.equal(reads(),1);assert.match(alerts(h),/protect unsaved edits/);
+
+ // Extracted Products editor retains the original stock snapshot, configured offers
+ // and cents/pack transforms. A failed inventory save leaves the draft intact.
+ reset();const configured={...fixture().products[0],categories:[{slug:'softgels'}],stockQuantity:37,preorder:{enabled:false,percentOff:15,ships:'early November 2026'},packPrices:{3:25000,5:null,10:80000}};
+ apiImpl=async()=>({...fixture(),products:[configured]});h=mount({initialTab:'products'});await flush(h);editFirst(h);h.render();
+ productPanel(h).props.onEdit({...productPanel(h).props.edited,availability:'sold_out',inStock:false,purchasable:false,sale:{enabled:true,percentOff:20,starts:'2099-01-01T00:00:00Z',ends:'2099-01-04T00:00:00Z'}});h.render();
+ allowedMutation='admin-product';apiImpl=async action=>{if(action==='admin-product')throw Error('Synthetic inventory conflict');return fixture();};
+ await productPanel(h).props.onSave({preventDefault(){},currentTarget:{fields:{price:'125.50',fixed3:'',fixed5:'500.75',fixed10:'800',stockQuantity:'35',maxQuantity:'12',preorderPercent:'15',preorderShips:'early November 2026',salePercent:'20',saleStarts:'2099-01-01T00:00:00Z',saleEnds:'2099-01-04T00:00:00Z'}}});h.render();
+ const productWrite=calls.find(c=>c.action==='admin-product').body;
+ assert.equal(productWrite.expectedStock,37);assert.equal(productWrite.stockQuantity,35);assert.equal(productWrite.availability,'sold_out');assert.equal(productWrite.inStock,false);assert.equal(productWrite.purchasable,false);assert.equal(productWrite.price,12550);assert.equal(productWrite.maxQuantity,12);
+ assert.deepEqual(productWrite.packPrices,{3:null,5:50075,10:80000});assert.deepEqual(productWrite.preorder,configured.preorder);assert.deepEqual(productWrite.sale,{enabled:true,percentOff:20,starts:'2099-01-01T00:00:00.000Z',ends:'2099-01-04T00:00:00.000Z'});
+ assert.equal(productNames(h),'true');assert(button(h,'Refresh administration').props.disabled);assert.equal(productPanel(h).props.busy,false);assert.equal(reports.length,1);assert.equal(reads(),1,'Failed inventory write does not accept a replacement snapshot');
 
  // COA config/send delegates stay under parent draft, single-flight and owner guards.
  reset();h=mount({initialTab:'requests'});await flush(h);
@@ -249,12 +267,12 @@ const productNames=h=>nodes(h.tree).filter(n=>n.type===Dialog).map(n=>n.props.op
 
  // Mask old data synchronously, clear editing/search/settings and block old actions, including manual refresh.
 
- reset();h=mount();await flush(h);button(h,'Edit').props.onClick();find(h,n=>n.type==='input'&&n.props['aria-label']==='Find a product to edit').props.onChange({target:{value:'Snapshot'}});h.render();assert.equal(productNames(h),'true');
+ reset();h=mount();await flush(h);editFirst(h);productPanel(h).props.onQuery('Snapshot');h.render();assert.equal(productNames(h),'true');
  const staleRefresh=button(h,'Refresh administration').props.onClick;
  const staleForm=settingsForm(h).props.onSubmit,staleCampaign=button(h,'Enable').props.onClick,staleRequest=find(h,n=>n.type===RequestInbox).props.onStatus,staleShipping=shippingDone(h);
  const oldOwnerRead=deferred();apiImpl=()=>oldOwnerRead.promise;staleShipping();const newerOwnerRead=deferred();apiImpl=()=>newerOwnerRead.promise;state.store.customer=ownerB;h.render();assert(!text(h.beforeEffects).includes('Snapshot A'));assert(!text(h.tree).includes('Snapshot A'));const count=calls.length;
  staleRefresh();await staleForm(event());await staleCampaign();await staleRequest(fixture().requests[0],'resolved');await staleShipping();assert.equal(calls.length,count);
- oldOwnerRead.resolve(fixture('Old owner leaked'));await flush(h);assert(!text(h.tree).includes('Old owner leaked'));newerOwnerRead.resolve(fixture('Snapshot B'));await flush(h);assert(text(h.tree).includes('Snapshot B'));assert.equal(productNames(h),'false');assert.equal(find(h,n=>n.type==='input'&&n.props['aria-label']==='Find a product to edit').props.value,'');
+ oldOwnerRead.resolve(fixture('Old owner leaked'));await flush(h);assert(!text(h.tree).includes('Old owner leaked'));newerOwnerRead.resolve(fixture('Snapshot B'));await flush(h);assert(text(h.tree).includes('Snapshot B'));assert.equal(productNames(h),'false');assert.equal(productPanel(h).props.query,'');
 
  // A -> B -> A does not revive an older tenure or let its failure overwrite A.
  reset();const a1=deferred(),b=deferred(),a2=deferred();apiImpl=()=>a1.promise;h=mount();apiImpl=()=>b.promise;state.store.customer=ownerB;h.render();apiImpl=()=>a2.promise;state.store.customer=ownerA;h.render();a1.resolve(fixture('Old A'));await flush(h);assert(!text(h.tree).includes('Old A'));a2.resolve(fixture('Current A'));await flush(h);b.reject(Error('Stale B'));await flush(h);assert(text(h.tree).includes('Current A'));assert.equal(alerts(h),'');

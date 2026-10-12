@@ -82,7 +82,7 @@ export function Cart() {
     const q = store.totals;
     const packSavings = q?.packDiscount ?? q?.discount ?? 0;
     const promoSavings = q?.promoDiscount ?? q?.promo?.savings ?? 0;
-    const locked = busy || promoBusy || cartUpdating || cartSync === 'uncertain';
+    const locked = busy || promoBusy || cartUpdating || cartSync === 'uncertain' || Boolean(store.pricingStale);
     async function update(index: number, delta: number) {
         if (locked) return;
         const next = store.cart.map((l, i) => i === index ? { ...l, quantity: l.quantity + delta } : l).filter(l => l.quantity > 0);
@@ -99,6 +99,7 @@ export function Cart() {
     if (ready && store.cartConflict) return <CartChoice/>;
     return <><div className="page-heading"><h1>Your Cart</h1></div>
         {store.cartNotice && <p className="notice" role="status">{store.cartNotice}</p>}
+        {store.pricingStale && <div className="notice" role="alert"><p>A scheduled offer changed. Refresh your cart to confirm current prices before checkout. Your items are still saved.</p><button type="button" className="text-button" disabled={retrying || cartUpdating} onClick={retryLoad}>{retrying ? 'Refreshing prices…' : 'Refresh current prices'}</button></div>}
         {ready && cartSync && cartSync !== 'current' && <div className="notice" role={cartSync === 'uncertain' ? 'alert' : 'status'}>
             <p>{cartSync === 'uncertain' ? 'The last cart change could not be confirmed. Check the saved cart before making another change or continuing to checkout.' : 'Your cart change was saved. The latest account and cart details could not refresh.'}</p>
             <p>Retry reads your saved cart. It does not repeat the change.</p>
@@ -122,7 +123,7 @@ export function Cart() {
                 <a className="text-button" href="/shop">Continue shopping</a>
             </div>
             <aside className="order-summary"><h2>Order Summary</h2>{hasPreorder(q?.items) && <p className="preorder-checkout-notice">{preorderOrderNotice}</p>}
-                <PromoCode key={promoScope.tenure} disabled={busy || cartUpdating || cartSync === 'uncertain' || Boolean(store.cartError)} onBusyChange={next => changePromoState('busy', next)} onUnappliedChange={next => changePromoState('unapplied', next)}/>
+                <PromoCode key={promoScope.tenure} disabled={busy || cartUpdating || cartSync === 'uncertain' || Boolean(store.cartError) || Boolean(store.pricingStale)} onBusyChange={next => changePromoState('busy', next)} onUnappliedChange={next => changePromoState('unapplied', next)}/>
                 <div className="summary-lines">
                     <p><span>Subtotal</span><strong>{q ? money(q.subtotal) : 'Unavailable'}</strong></p>
                     {packSavings > 0 && <p><span>Pack savings</span><strong>−{money(packSavings)}</strong></p>}
@@ -184,7 +185,7 @@ export function Checkout() {
         return () => { scope.active = false; scope.lifetime += 1; };
     }, [scope]);
     const q = store.totals;
-    const quoteContext = JSON.stringify([owner, scope.tenure, store.cart, store.cartConflict?.id, q?.total, q?.promo?.code || '', Boolean(cartUpdating), cartSync === 'uncertain']);
+    const quoteContext = JSON.stringify([owner, scope.tenure, store.cart, store.cartConflict?.id, q?.total, q?.promo?.code || '', Boolean(cartUpdating), cartSync === 'uncertain', Boolean(store.pricingStale)]);
     const renderedQuoteRevision = quoteRevision.current;
     const currentContext = useRef(quoteContext);
     currentContext.current = quoteContext;
@@ -227,6 +228,7 @@ export function Checkout() {
         <button type="button" className="button button-dark" disabled={retrying || cartUpdating} onClick={retryLoad}>{retrying ? 'Retrying…' : 'Retry cart access'}</button>
         <p><a href="/cart">Return to your cart</a></p>
     </section>;
+    if (store.pricingStale) return <section><div className="page-heading"><h1>Confirm current prices</h1></div><p role="alert">A scheduled offer changed. Refresh prices before continuing. Your cart is saved.</p><button type="button" className="button button-dark" disabled={retrying || cartUpdating} onClick={retryLoad}>{retrying ? 'Refreshing prices…' : 'Refresh current prices'}</button></section>;
     if (store.cartConflict) return <CartChoice/>;
     if (!store.payment.enabled) return <section className="checkout-unavailable"><h1>Checkout is not open yet.</h1><p>Your cart stays saved with your shopping session. We are preparing secure checkout and will accept orders once it is ready.</p><div className="checkout-unavailable-actions"><a className="button button-dark" href="/cart">Return to your cart</a><a href="/shop">Keep shopping</a><a href="/contact">Contact Biomod</a></div></section>;
     if (store.cartError) return <Blank title="Your cart needs a review."><p>{store.cartError}</p><a className="button button-dark" href="/cart">Review your cart</a></Blank>;

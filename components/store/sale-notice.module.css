@@ -1,0 +1,12 @@
+.offer { margin: 14px 0; padding: 14px 16px; color: #532813; background: #fcf0e8; border-radius: 6px; }
+.heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; }
+.heading strong { font-size: 1rem; }
+.heading > span { font-size: .77rem; }
+.clock { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; margin-top: 10px; }
+.caption { font-size: .78rem; }
+.digits { font-variant-numeric: tabular-nums; white-space: nowrap; font-size: .9rem; }
+.digits b { font-size: 1.12rem; font-weight: 650; }
+.offer[data-compact] { padding: 10px 12px; }
+.offer[data-compact] .heading { gap: 4px; }
+.offer[data-compact] .heading > span { flex-basis: 100%; }
+@media (max-width: 480px) { .offer { padding: 12px; } .clock { gap: 5px 10px; } }

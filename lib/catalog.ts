@@ -25,6 +25,7 @@ export type Product = {
     currency: string;
     inStock: boolean;
     purchasable: boolean;
+    availability?: 'available' | 'coming_soon' | 'sold_out' | 'unavailable';
     availabilityLabel?: string;
     sku: string;
     description: string;

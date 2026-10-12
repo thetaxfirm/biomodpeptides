@@ -9,6 +9,7 @@ if (major < 22 || (major === 22 && minor < 13)) {
   process.exit(1);
 }
 const tests = [
+  "product-availability-v1.cjs", "admin-products-ui-v1.cjs", "sale-display-v1.cjs",
   "change-history-v1.cjs", "change-history-system-v1.cjs", "change-history-route-v1.cjs", "change-history-ui-v1.cjs", "change-history-shipping-v1.cjs", "change-history-import-v1.mjs",
   "checkout-recovery-v1.cjs", "preorder-pricing-v1.cjs", "preorder-order-v1.cjs",
   "fulfillment-v1.cjs", "easypost-v1.mjs", "easypost-admin-ui-v1.cjs", "sales-v24.cjs", "address-normalization-v1.cjs",
