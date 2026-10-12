@@ -1,8 +1,9 @@
 import { legacyRoutes } from '@/lib/legacy-routes';
 import { cookies } from 'next/headers';
+import { customer, isAdminEmail } from '@/lib/auth';
 import { AUTH_RETURN_COOKIE, authRoutes, safeAuthReturn } from '@/lib/auth-return';
 import { Experience } from '@/components/store/experience';
-import { notFound, permanentRedirect } from 'next/navigation';
+import { notFound, permanentRedirect, redirect } from 'next/navigation';
 import { pageRecords, productAt, mayIndex } from '@/lib/seo-policy';
 import { routeMetadata, requestSEO, routeStructuredData, jsonLd } from '@/lib/seo';
 import { batchRecords } from '@/lib/testing';
@@ -27,6 +28,12 @@ export default async function Page({ params, searchParams }: Props) {
   const { path } = await params, route = path.join('/');
   if (legacyRoutes[route]) permanentRedirect(legacyRoutes[route]);
   if (!validPath(route)) notFound();
+  // The generic account landing is the store backend for approved administrators.
+  // Explicit customer subpages remain separate and retain owner-scoped records.
+  if (route === 'account') {
+    const user = await customer();
+    if (user && isAdminEmail(user.email)) redirect('/admin');
+  }
   if (route === 'about-biomod') permanentRedirect('/about');
   if (route === 'coa') permanentRedirect('/testing');
   if (route === 'affiliate-program') permanentRedirect('/account/affiliate');

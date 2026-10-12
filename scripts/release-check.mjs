@@ -13,7 +13,7 @@ const tests = [
   "promo-checkout-v1.cjs", "promo-ui-v1.cjs",
   "cart-save-recovery-v1.cjs", "checkout-owner-recovery-v1.cjs",
   "store-load-recovery-v1.cjs", "account-load-recovery-v1.cjs",
-  "admin-read-recovery-v1.cjs", "admin-password-setup-v1.cjs",
+  "admin-read-recovery-v1.cjs", "admin-password-setup-v1.cjs", "admin-landing-v1.cjs",
   "admin-request-status-v1.cjs", "request-inbox-v1.cjs",
   "auth-return-v1.cjs", "payment-return-v1.cjs",
   "payments-authorizenet-v1.mjs", "payment-lookup-completeness-v1.cjs",
