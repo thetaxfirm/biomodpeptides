@@ -102,7 +102,7 @@ export function CoaAutomation({ report, requests = [], busy, dirty, refreshing, 
           {coa.lot && <div><dt>Lot</dt><dd>{coa.lot}</dd></div>}
           {coa.reportId && <div><dt>Report</dt><dd>{coa.reportId}</dd></div>}
         </dl>}
-        <div className={styles.states}><DeliveryState delivery={coa} label="Original COA" relatedName={coa?.duplicateOfRequestId ? displayText(requestById.get(coa.duplicateOfRequestId)?.data?.name) || displayText(requestById.get(coa.duplicateOfRequestId)?.data?.email) : undefined}/>{delivery.alert && <DeliveryState delivery={delivery.alert} label="Request notification"/>}</div>
+        <div className={styles.states}>{coa && <DeliveryState delivery={coa} label="Original COA" relatedName={coa?.duplicateOfRequestId ? displayText(requestById.get(coa.duplicateOfRequestId)?.data?.name) || displayText(requestById.get(coa.duplicateOfRequestId)?.data?.email) : undefined}/>} {delivery.alert && <DeliveryState delivery={delivery.alert} label="Request notification"/>}</div>
         {eligible && <button type="button" className="button button-dark" disabled={processDisabled} aria-label={'Send original COA for request ' + id} onClick={() => { if (!processDisabled && eligible) void onProcess(id); }}>Send original COA</button>}
       </article>;
     })}</div>}

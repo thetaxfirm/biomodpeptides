@@ -443,8 +443,22 @@ export async function POST(req: NextRequest, { params }: {
                 return j({ message: 'Presale saved.' });
             }
             if (action === 'admin-request') {
-                await run('UPDATE requests SET status=? WHERE id=? AND kind IN (\'contact\',\'stock\',\'affiliate\')', z.enum(['new', 'reviewed', 'resolved']).parse(b.status), str(b.id, 50));
-                return j({ ok: true });
+                const id = z.string().uuid().parse(b.id);
+                const status = z.enum(['new', 'in_progress', 'resolved', 'spam', 'reviewed']).parse(b.status);
+                if (b.expectedStatus === undefined)
+                    return j({ error: 'Refresh the request list before changing its status.', code: 'request_refresh_required' }, 400);
+                // Compare the saved value exactly, including legacy statuses. This
+                // only records an inbox workflow decision; it never approves an
+                // affiliate, changes request content or processes an email.
+                const expectedStatus = z.string().min(1).max(50).parse(b.expectedStatus);
+                const result = await run('UPDATE requests SET status=? WHERE id=? AND status=? AND kind IN (\'contact\',\'stock\',\'affiliate\')', status, id, expectedStatus);
+                if (!result.meta.changes) {
+                    const existing = await one('SELECT id FROM requests WHERE id=? AND kind IN (\'contact\',\'stock\',\'affiliate\')', id);
+                    return existing
+                        ? j({ error: 'This request changed since you loaded it. Refresh the request list and try again.', code: 'request_status_conflict' }, 409)
+                        : j({ error: 'Request not found.' }, 404);
+                }
+                return j({ ok: true, id, status, message: 'Request status updated.' });
             }
             if (action === 'admin-reconcile') {
                 const o = await one<{
