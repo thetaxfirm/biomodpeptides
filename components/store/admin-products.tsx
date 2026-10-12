@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from 'react';
 import { money, type Product } from '@/lib/catalog';
-import { supportsPacks } from '@/lib/packs';
+import { standardPackPrices, supportsPacks } from '@/lib/packs';
 import { hasPublicationHold, blockedReleaseLot, productAvailability, productAvailabilityLabel, type ProductAvailability } from '@/lib/availability';
 import { applySale } from '@/lib/sales';
 import styles from './admin-products.module.css';
@@ -109,6 +109,7 @@ function ProductEditor({ product: p, busy, onEdit, onCancel, onDraft, onSave, ba
         salePercent: p.sale?.percentOff?.toString() || '', saleStarts: localDate(p.sale?.starts), saleEnds: localDate(p.sale?.ends),
         stockQuantity: p.stockQuantity?.toString() ?? '', maxQuantity: String(p.maxQuantity ?? 100),
     }));
+    const [packPricingMode, setPackPricingMode] = useState<'automatic' | 'custom'>('custom');
     const [error, setError] = useState('');
     const batchProduct = { ...p, batch: { lot: batchDraft.lot.trim() || null, reportRef: batchDraft.reportRef || null, coaAvailable: batchDraft.coaAvailable } };
     const group = groupFor(p), held = hasPublicationHold(batchProduct), selected = p.availability || productAvailability(p);
@@ -120,7 +121,20 @@ function ProductEditor({ product: p, busy, onEdit, onCancel, onDraft, onSave, ba
     const duration = (Date.parse(draft.saleEnds) - Date.parse(draft.saleStarts)) / 3600000;
     const durationDays = Number((duration / 24).toFixed(2)), durationHours = Number(duration.toFixed(2));
     const zone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'device time zone';
-    function field(name: keyof typeof draft, value: string) { if (busy) return; setDraft(previous => ({ ...previous, [name]: value })); setError(''); onDraft(); }
+    function field(name: keyof typeof draft, value: string) {
+        if (busy) return;
+        if (name === 'price') {
+            const amount = Number(value), cents = Math.round(amount * 100);
+            const completePrice = /^(?:\d+(?:\.\d{1,2})?|\.\d{1,2})$/.test(value) && amount > 0 && amount <= 99999.99;
+            const packs = completePrice ? standardPackPrices(cents) : null;
+            setDraft(previous => ({ ...previous, price: value, fixed3: packs ? (packs[3] / 100).toFixed(2) : '', fixed5: packs ? (packs[5] / 100).toFixed(2) : '', fixed10: packs ? (packs[10] / 100).toFixed(2) : '' }));
+            setPackPricingMode('automatic');
+        } else {
+            setDraft(previous => ({ ...previous, [name]: value }));
+            if (name === 'fixed3' || name === 'fixed5' || name === 'fixed10') setPackPricingMode('custom');
+        }
+        setError(''); onDraft();
+    }
     function status(value: ProductAvailability) {
         if (busy) return;
         onEdit({ ...p, availability: value, inStock: value === 'available', purchasable: value === 'available' });
@@ -150,13 +164,14 @@ function ProductEditor({ product: p, busy, onEdit, onCancel, onDraft, onSave, ba
     return <section className={`${styles.products} ${styles.editor} ${styles[group.color]}`} aria-labelledby="product-editor-title">
         <header className={styles.editorHeading}><div><p className={styles.formatLabel}>{group.label}</p><h2 id="product-editor-title">{p.name}</h2><p>{p.sizes.join(' · ')}{p.sku ? ` · SKU ${p.sku}` : ''}</p></div><a href={`/product/${p.slug}?measurement=off`} target="_blank" rel="noopener noreferrer">View product page</a></header>
         <form onSubmit={submit} className={styles.editorForm}>
+            <input name="packPricingMode" type="hidden" value={packPricingMode}/>
             <input name="batchChanged" type="hidden" value={batchChanged ? 'true' : 'false'}/>
             <fieldset disabled={busy} className={styles.formContents}>
                 <div className={styles.editorGrid}>
                     <div className={styles.mainColumn}>
                         <section className={styles.panel} aria-labelledby="product-price-title"><h3 id="product-price-title">Price & packs</h3><p>Set the base price before offers. Fixed-pack amounts are totals for the whole pack.</p>
                             <label className={styles.field}><span>Single product price ($)</span><input name="price" type="number" min="0.01" max="99999.99" step="0.01" required value={draft.price} onChange={e => field('price', e.target.value)}/></label>
-                            {supportsPacks(p) && <><div className={styles.threeColumns}>{([3, 5, 10] as const).map(n => <label className={styles.field} key={n}><span>{n}-pack total ($)</span><input name={`fixed${n}`} type="number" min="0.01" max="999999.99" step="0.01" value={draft[`fixed${n}`]} onChange={e => field(`fixed${n}`, e.target.value)} placeholder="Standard discount"/></label>)}</div><p className={styles.help}>Leave a pack total blank to use the standard bulk discount.</p></>}
+                            {supportsPacks(p) && <><div className={styles.threeColumns}>{([3, 5, 10] as const).map(n => <label className={styles.field} key={n}><span>{n}-pack total ($)</span><input name={`fixed${n}`} type="number" min="0.01" max="999999.99" step="0.01" value={draft[`fixed${n}`]} onChange={e => field(`fixed${n}`, e.target.value)} placeholder="Standard discount"/></label>)}</div><p className={styles.help}>Changing the single price recalculates 3-, 5- and 10-pack totals at 10%, 15% and 20% off. You can edit these totals afterward for custom pricing, or leave one blank to use its standard discount. Mixed-pack settings stay unchanged.</p></>}
                         </section>
                         <section className={`${styles.panel} ${styles.salePanel}`} aria-labelledby="product-sale-title"><div className={styles.sectionHeading}><h3 id="product-sale-title">Sale</h3><label className={styles.toggle}><input type="checkbox" checked={saleEnabled} onChange={e => { if (!busy) onEdit({ ...p, sale: { enabled: e.target.checked, percentOff: p.sale?.percentOff || 0, starts: p.sale?.starts || '', ends: p.sale?.ends || '' } }); }}/><span>Enable scheduled sale</span></label></div>
                             <p>Choose the percentage, start and end. The website shows the sale timer while this offer is active.</p>

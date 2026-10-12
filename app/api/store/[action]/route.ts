@@ -21,7 +21,7 @@ import { checkout, reconcile, addressSchema, issueQuote } from '@/lib/checkout';
 import { getPaymentStatus, paymentEnvironment, paymentProvider } from '@/lib/payments';
 import { createAnetAdapter } from '@/lib/authorizenet-payments';
 import { anetOrderDetails } from '@/lib/order-summary';
-import { packSizes, supportsPacks } from '@/lib/packs';
+import { packSizes, supportsPacks, standardPackPrices } from '@/lib/packs';
 import { searchReport, seoConfig } from '@/lib/seo-policy';
 import { salesDiagnostics } from '@/lib/sales-diagnostics';
 import { can, permissionsFor, type StaffPermission } from '@/lib/staff';
@@ -481,6 +481,7 @@ export async function POST(req: NextRequest, { params }: {
                 return j({ message: 'Store settings saved.' });
             }
             if (action === 'admin-product') {
+                const packPricingMode = z.enum(['automatic', 'custom']).optional().parse(b.packPricingMode);
                 const data = z.object({ batch: z.object({ lot: z.string().trim().max(100).regex(/^[A-Za-z0-9][A-Za-z0-9._\/-]*$/).nullable(), reportRef: z.string().max(200).regex(/^(?:public:[A-Za-z0-9._-]+|private:[a-f0-9]{64})$/).nullable(), coaAvailable: z.boolean() }).optional(), publicationRelease: z.object({lot:z.string(),reason:z.string().optional()}).nullable().optional(), availability: z.enum(availabilityOptions).optional(), preorder: z.object({ enabled: z.boolean(), percentOff: z.number().min(0.01).max(99), ships: z.string().trim().min(1).max(120) }).nullable().optional(), sale: z.object({ enabled: z.boolean(), percentOff: z.number().min(0.01).max(99), starts: z.string().datetime(), ends: z.string().datetime() }).nullable().optional(), price: z.number().int().min(1).max(9999999), packPrices: z.record(z.number().int().min(1).max(99999999).nullable()).optional(), inStock: z.boolean(), purchasable: z.boolean(), stockQuantity: z.number().int().min(0).max(100000).nullable(), maxQuantity: z.number().int().min(1).max(100000) }).parse(b);
                 if (data.sale && Date.parse(data.sale.ends) <= Date.parse(data.sale.starts)) throw new Error('Sale end must follow its start.');
                 if (Object.keys(data.packPrices || {}).some(n => !['3','5','10'].includes(n))) throw new Error('Unknown pack size.');
@@ -515,7 +516,14 @@ export async function POST(req: NextRequest, { params }: {
                 if (hasPublicationHold(nextProduct)) { data.inStock = false; data.purchasable = false; }
                 // Optional fields omitted by an older editor retain their current source.
                 if (!Object.hasOwn(b, 'sale') && currentProduct.sale !== undefined) data.sale = currentProduct.sale;
-                if (!Object.hasOwn(b, 'packPrices') && currentProduct.packPrices !== undefined) data.packPrices = currentProduct.packPrices;
+                // Reprice on the server as well: an older editor must not save old pack totals with a new base price.
+                const basePriceChanged = data.price !== currentProduct.price;
+                if (supportsPacks(currentProduct) && (packPricingMode === 'automatic' || (basePriceChanged && packPricingMode !== 'custom'))) {
+                    data.packPrices = standardPackPrices(data.price);
+                } else {
+                    if (supportsPacks(currentProduct) && basePriceChanged && packPricingMode === 'custom' && !Object.hasOwn(b, 'packPrices')) throw new Error('Enter the custom pack totals or use automatic pack pricing.');
+                    if (!Object.hasOwn(b, 'packPrices') && currentProduct.packPrices !== undefined) data.packPrices = currentProduct.packPrices;
+                }
                 if (currentProduct.preorder !== undefined && !Object.hasOwn(b, 'preorder')) throw new Error('Preorder settings require the current product editor. Refresh administration before editing this product.');
                 const db = withAuditDb(database(), { ...auditActor, summary: `${currentProduct.name} product settings updated` });
                 const guard = uid(), versionGuard = uid(), batchGuard = uid();

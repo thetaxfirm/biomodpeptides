@@ -104,6 +104,7 @@ try {
  assert(text(h.tree).includes('Synthetic softgel')); assert(!text(h.tree).includes('Synthetic spray'));
  h.props.onQuery(''); h.render(); edit(h, 'Synthetic spray');
  assert(!nodes(h.tree).some(n => n.props.role === 'dialog'), 'Editing is an inline workspace, not a modal');
+ assert.equal(input(h, 'packPricingMode').props.value, 'custom', 'Loaded manual totals stay custom until the base price changes');
  assert.equal(input(h, 'fixed3').props.value, '240'); assert.equal(input(h, 'fixed5').props.value, ''); assert.equal(input(h, 'fixed10').props.value, '700');
  assert(text(h.tree).includes('Preorder pricing takes priority')); assert.equal(input(h, 'stockQuantity').props.value, '50');
  status(h, 'coming_soon'); assert.equal(h.props.edited.availability, 'coming_soon'); assert.equal(h.props.edited.inStock, false); assert.equal(h.props.edited.purchasable, false); assert.equal(h.props.edited.stockQuantity, 50); assert.deepEqual(h.props.edited.preorder, fixtures[1].preorder);
@@ -129,6 +130,49 @@ try {
  h.props.busy = false; h.render(); click(h, 'Discard product draft'); assert(!h.props.edited); edit(h, 'Synthetic spray'); assert.equal(input(h, 'price').props.value, '99.99', 'Discard and reopen restores loaded values');
  assert.equal(input(h, 'stockQuantity').props.value, '50'); assert.equal(checkbox(h, 'Offer as preorder').props.checked, true);
  click(h, 'Discard product draft'); edit(h, 'Synthetic supply'); assert(!nodes(h.tree).some(n => n.type === 'input' && n.props.name === 'fixed3')); assert.equal(input(h, 'stockQuantity').props.value, '0', 'Zero stock never displays as missing');
+ // Changing the single price recalculates fixed packs immediately; manual edits remain deliberate.
+ const customPackProduct = product(910006, 'Custom pack fixture', 'research-compounds', {
+  price: 6999, packPrices: { 3: 17000, 5: 28000, 10: 51000 }, preorder: { enabled: true, percentOff: 15, ships: 'early November 2026' },
+ });
+ h = mount([customPackProduct]); edit(h, customPackProduct.name);
+ const packValues = () => [3, 5, 10].map(n => input(h, `fixed${n}`).props.value);
+ assert.equal(input(h, 'packPricingMode').props.value, 'custom');
+ assert.deepEqual(packValues(), ['170', '280', '510'], 'Existing manual totals are unchanged on opening the editor');
+ assert(text(h.tree).includes('10%, 15% and 20% off')); assert(text(h.tree).includes('Mixed-pack settings stay unchanged'));
+ type(h, 'stockQuantity', '42'); type(h, 'price', '80');
+ assert.deepEqual(packValues(), ['216.00', '340.00', '640.00']);
+ assert.equal(input(h, 'packPricingMode').props.value, 'automatic');
+ assert.equal(input(h, 'stockQuantity').props.value, '42');
+ assert.equal(input(h, 'preorderPercent').props.value, '15');
+ assert.equal(input(h, 'preorderShips').props.value, 'early November 2026');
+ assert.equal(h.props.edited.stockQuantity, 50, 'Recalculation preserves the inventory conflict snapshot');
+ status(h, 'coming_soon'); status(h, 'available');
+ checkbox(h, 'Offer as preorder').props.onChange({ target: { checked: false } }); h.render();
+ assert.deepEqual(packValues(), ['216.00', '340.00', '640.00']);
+ assert.equal(input(h, 'packPricingMode').props.value, 'automatic', 'Availability and offer toggles preserve the pricing mode');
+ for (const incomplete of ['', '.', '1e', '80.', '0', '-1', 'Infinity', '100000', '80.001']) {
+  type(h, 'price', incomplete);
+  assert.deepEqual(packValues(), ['', '', ''], `Invalid or incomplete ${JSON.stringify(incomplete)} clears derived totals`);
+  assert.equal(input(h, 'packPricingMode').props.value, 'automatic');
+  assert.equal(input(h, 'stockQuantity').props.value, '42');
+ }
+ type(h, 'price', '69.99');
+ assert.deepEqual(packValues(), ['188.97', '297.46', '559.92'], 'Pack totals use the shared cents rounding');
+ type(h, 'price', '80'); type(h, 'fixed3', '210.50');
+ assert.deepEqual(packValues(), ['210.50', '340.00', '640.00']);
+ assert.equal(input(h, 'packPricingMode').props.value, 'custom', 'A direct pack edit requests custom pricing');
+ type(h, 'fixed5', ''); assert.equal(input(h, 'packPricingMode').props.value, 'custom', 'Blank pack override retains the standard fallback');
+ type(h, 'price', '80');
+ assert.deepEqual(packValues(), ['216.00', '340.00', '640.00'], 'The next base edit replaces all custom totals with fresh standard packs');
+ assert.equal(input(h, 'packPricingMode').props.value, 'automatic');
+ h.props.busy = true; h.render(); const pricingDraftCount = h.drafts;
+ type(h, 'price', '90'); type(h, 'fixed3', '200');
+ assert.deepEqual(packValues(), ['216.00', '340.00', '640.00']); assert.equal(input(h, 'price').props.value, '80');
+ assert.equal(input(h, 'packPricingMode').props.value, 'automatic'); assert.equal(h.drafts, pricingDraftCount);
+ h.props.busy = false; h.render(); submit(h); assert.equal(h.saves.length, 1);
+ click(h, 'Discard product draft'); edit(h, customPackProduct.name);
+ assert.equal(input(h, 'price').props.value, '69.99'); assert.deepEqual(packValues(), ['170', '280', '510']);
+ assert.equal(input(h, 'packPricingMode').props.value, 'custom', 'Discard restores the saved custom pack mode');
  h = mount([product(910005, 'Closed offer fixture', 'softgels', { availability: 'coming_soon', inStock: false, purchasable: false, preorder: { enabled: true, percentOff: 15, ships: 'early November 2026' } })]);
  assert(text(h.tree).includes('Preorder configured')); assert(text(h.tree).includes('Ordering closed')); assert(!text(h.tree).includes('with offer'));
  const heldSource = sourceProducts.find(hasPublicationHold); assert(heldSource, 'Source has publication-hold fixture');
@@ -165,5 +209,5 @@ try {
  assert.equal(input(h,'maxQuantity').props.max,'100000');type(h,'maxQuantity','100000');assert.equal(input(h,'maxQuantity').props.value,'100000');
  h.props.busy=true;h.render();type(h,'batchLot','MUST-NOT-CHANGE');reportSelect().props.onChange({target:{value:'public:one'}});input(h,'batchCoaAvailable').props.onChange({target:{checked:false}});h.render();assert.equal(input(h,'batchLot').props.value,'SYNTHETIC-B');assert.equal(reportSelect().props.value,'private:two');assert.equal(input(h,'batchCoaAvailable').props.checked,true);
  h.props.busy=false;h.render();click(h,'Discard product draft');edit(h,'Synthetic vial');assert.equal(input(h,'batchLot').props.value,'SYNTHETIC-A');assert.equal(reportSelect().props.value,'public:one');
- console.log('PASS: grouped product formats, search/SKU filters, status controls, publication holds, base/fixed-pack fields, draft-preserving availability, preorder separation, real price previews, schedule validation/durations, exact lot/COA choices, owner release review, held-lot guard, 100000 maximum, removal, busy guards and discard. Actual component/helpers, isolated fixtures, no network.');
+ console.log('PASS: grouped product formats, search/SKU filters, status controls, publication holds, automatic fixed-pack recalculation and custom overrides, draft-preserving availability, preorder separation, real price previews, schedule validation/durations, exact lot/COA choices, owner release review, held-lot guard, 100000 maximum, removal, busy guards and discard. Actual component/helpers, isolated fixtures, no network.');
 } finally { Date.now = originalNow; }

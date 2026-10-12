@@ -22,7 +22,7 @@ const saved=product=>JSON.parse(sql.prepare('SELECT data FROM product_overrides 
 const events=product=>sql.prepare("SELECT * FROM change_events WHERE entity_type='product' AND entity_id=? ORDER BY rowid").all(String(product.id)).map(e=>({...e,changes:JSON.parse(e.changes)}));
 let staffRole='owner',authorized=false;
 class FixtureResponse extends Response{static json(value,options={}){return new FixtureResponse(JSON.stringify(value),{...options,headers:{'Content-Type':'application/json',...options.headers}});}}
-const deps={
+const deps={'@/lib/packs':require('../lib/packs.ts'),
  'next/server':{NextResponse:FixtureResponse},
  '@/lib/availability':availability,
  '@/lib/product-batch':require('../lib/product-batch.ts'),
