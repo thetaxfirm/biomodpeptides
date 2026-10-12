@@ -1,3 +1,4 @@
+import { savedBatch } from './batch-snapshot';
 import { withAuditDb, auditRun, type AuditActor } from './change-history';
 import { unavailableOrder } from './catalog-visibility';
 import inventorySql from './inventory-statements.json';
@@ -57,7 +58,7 @@ export async function deliveryQuote(lines: CartLine[], raw: unknown, preset?: Sh
     const tax = await checkoutTax(runtime(), address, q.total, shipping);
     return { items: q.items, subtotal: q.subtotal, discount: q.discount, packDiscount: q.packDiscount, promoDiscount: q.promoDiscount, promo: q.promo, shipping, shippingService, shippingOption, shippingOptionId: shippingOption?.id, shippingOptions, tax, total: q.total + shipping + tax, address };
 }
-const fingerprintItems = (q: Record<string, any>) => q.items.map((i: any) => ({ id: i.id, quantity: i.quantity, packId: i.packId || null, packSize: i.packSize || null, packKind: i.packKind || null, lineTotal: i.lineTotal, presaleId: i.presaleId || null, price: i.product.price, preorder: savedPreorder(i.product.activePreorder) }));
+const fingerprintItems = (q: Record<string, any>) => q.items.map((i: any) => ({ id: i.id, quantity: i.quantity, packId: i.packId || null, packSize: i.packSize || null, packKind: i.packKind || null, lineTotal: i.lineTotal, presaleId: i.presaleId || null, price: i.product.price, preorder: savedPreorder(i.product.activePreorder), batch: savedBatch(i.product.soldBatch) }));
 export const quoteFingerprint = (q: Record<string, any>) => JSON.stringify({ items: fingerprintItems(q), address: q.address, shipping: q.shipping, shippingService: q.shippingService || '', shippingOption: savedShippingOption(q.shippingOption), tax: q.tax, total: q.total, ...(q.promo ? { promoCode: q.promo.code } : {}) });
 const inputFingerprint = (q: Record<string, any>) => JSON.stringify({ items: fingerprintItems(q), address: q.address, subtotal: q.subtotal, discount: q.discount, ...(q.promo ? { promoCode: q.promo.code } : {}) });
 export async function issueQuote(owner: string, lines: CartLine[], address: unknown, promoCode?: unknown, selection?: { quoteId: string; shippingOptionId: string }) {
@@ -88,6 +89,10 @@ export async function checkout(owner: string, lines: CartLine[], body: Record<st
         throw new Error('Confirm that you are 21 or older and purchasing for laboratory research only.');
     if (typeof body.requestKey !== 'string' || !/^[a-f0-9-]{36}$/.test(body.requestKey))
         throw new Error('Refresh checkout and try again.');
+    // Private snapshot stays only in this request. Any product/lot/COA write
+    // during quote validation must abort the reservation before payment starts.
+    const productRows = (await database().prepare('SELECT id,data FROM product_overrides').all<{ id: number; data: string }>()).results;
+    const productVersions = [...new Set(lines.map(line => line.id))].map(productId => ({ id: productId, data: productRows.find(row => row.id === productId)?.data ?? null, guard: uid() }));
     const cartQuote = await quote(lines, promoCode);
     const current = addressSchema.parse(body.address);
     const fingerprint = JSON.stringify({ lines, address: current, ...(cartQuote.promo ? { promoCode: cartQuote.promo.code } : {}), ...(typeof body.shippingOptionId === 'string' ? { shippingOptionId: body.shippingOptionId } : {}) });
@@ -136,10 +141,12 @@ export async function checkout(owner: string, lines: CartLine[], body: Record<st
     const id = uid();
     const db=withAuditDb(database(), auditActor);
     try { await db.batch([
+      ...productVersions.map(version => db.prepare(inventorySql.checkProductVersion).bind(version.guard, version.data, version.id)),
       db.prepare(inventorySql.insertOrder).bind(id,owner,body.requestKey,'creating',JSON.stringify(saved),q.total,adapter.reference(id),timestamp(),timestamp()),
       db.prepare(inventorySql.reserve).bind(id),
       db.prepare(inventorySql.checkReservation).bind(id,id,id),
-      db.prepare(inventorySql.clearGuard).bind(id)
+      db.prepare(inventorySql.clearGuard).bind(id),
+      ...productVersions.map(version => db.prepare(inventorySql.clearGuard).bind(version.guard))
     ]); } catch { throw new Error('Inventory, presale limits, or an existing checkout prevented this order. Refresh your cart and check your orders.'); }
     try {
         const result = await adapter.createCheckout({ id, totalCents: q.total, currency: 'USD' }, paymentReturnUrl(runtime())!);

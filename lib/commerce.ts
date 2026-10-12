@@ -1,8 +1,11 @@
+import { batchSnapshot } from './batch-snapshot';
 import { applyPromotion } from './promotions';
 import { applySale } from './sales';
 import { applyAvailability } from './availability';
 import { products, Product } from './catalog';
-import { all, one, setting, parse, runtime } from './runtime';
+import { all, one, setting, parse, runtime, database } from './runtime';
+import { resolveProductBatches } from './product-batch';
+import { coaHash } from './coa-delivery';
 import { normalizeShippingOptions, defaultShippingOptions, type ShippingOptionsConfig } from './shipping-options';
 import { packDiscounts, packSizes, fixedPackPrice, supportsPacks } from './packs';
 export type CartLine = {
@@ -24,14 +27,22 @@ export type StoreConfig = {
 };
 export const defaultConfig: StoreConfig = { packDiscounts: { ...packDiscounts }, shippingCents: null, freeShippingAt: 20000, shippingOptions: defaultShippingOptions, presalesEnabled: false, rewardsEnabled: false, affiliateEnabled: false };
 export async function config(): Promise<StoreConfig> { const stored = await setting<Partial<StoreConfig>>('store', {}); return { ...defaultConfig, ...stored, shippingOptions: normalizeShippingOptions(stored.shippingOptions, runtime()), packDiscounts: { ...defaultConfig.packDiscounts, ...stored.packDiscounts, '1': 0 } }; }
-export async function catalog(withSales = true): Promise<Product[]> { const rows = await all<{
-    id: number;
-    data: string;
-}>('SELECT id,data FROM product_overrides'); const map = new Map(rows.map(r => [r.id, parse<Partial<Product>>(r.data, {})])); return products.map(p => { const override = map.get(p.id) || {}; const editable = ['price', 'packPrices', 'sale', 'preorder', 'availability', 'inStock', 'purchasable', 'stockQuantity', 'maxQuantity'] as const; const product = { ...p, ...Object.fromEntries(editable.filter(key => override[key] !== undefined).map(key => [key, override[key]])) };  const available = applyAvailability(product); return withSales ? applySale(available) : available; }); }
+export async function catalog(withSales = true, includeAdmin = false): Promise<Product[]> {
+    const rows = await all<{ id: number; data: string }>('SELECT id,data FROM product_overrides');
+    const map = new Map(rows.map(r => [r.id, parse<Partial<Product>>(r.data, {})]));
+    const editable = ['price', 'packPrices', 'sale', 'preorder', 'availability', 'inStock', 'purchasable', 'stockQuantity', 'maxQuantity', 'batch', 'publicationRelease'] as const;
+    const merged = products.map(p => { const override = map.get(p.id) || {}; return { ...p, ...Object.fromEntries(editable.filter(key => override[key] !== undefined).map(key => [key, override[key]])) }; });
+    const resolved = await resolveProductBatches(database(), merged);
+    return Promise.all(resolved.map(async (p, index) => {
+        const product = includeAdmin ? { ...p, ...(merged[index].batch ? { batch: merged[index].batch } : {}), publicationRelease: merged[index].publicationRelease, editVersion: await coaHash(rows.find(r => r.id === p.id)?.data || '') } : { ...p, ...(p.publicationRelease ? { publicationRelease: { lot: p.publicationRelease.lot } } : {}) };
+        const available = applyAvailability(product);
+        return withSales ? applySale(available) : available;
+    }));
+}
 export function validateLines(value: unknown): CartLine[] {
     if (!Array.isArray(value) || value.length > 100) throw new Error('Your cart contains too many items.');
     return value.map(l => {
-        if (!l || typeof l !== 'object' || !Number.isInteger(l.id) || !Number.isInteger(l.quantity) || l.quantity < 1 || l.quantity > 100) throw new Error('Choose a quantity from 1 to 100.');
+        if (!l || typeof l !== 'object' || !Number.isInteger(l.id) || !Number.isInteger(l.quantity) || l.quantity < 1 || l.quantity > 100000) throw new Error('Choose a quantity within the product’s order limit.');
         if (l.packId !== undefined && (typeof l.packId !== 'string' || !/^[a-zA-Z0-9-]{1,60}$/.test(l.packId) || !packSizes.includes(l.packSize))) throw new Error('Choose a valid pack.');
         if (l.packKind !== undefined && (!l.packId || !['fixed','mixed'].includes(l.packKind))) throw new Error('Choose a valid pack type.');
         return { id: l.id, quantity: l.quantity, ...(l.packId ? { packId: l.packId, packSize: l.packSize, packKind: l.packKind || 'mixed' } : {}), ...(typeof l.presaleId === 'string' && /^[a-zA-Z0-9-]{1,60}$/.test(l.presaleId) ? { presaleId: l.presaleId } : {}) };
@@ -92,7 +103,7 @@ export async function quote(lines: CartLine[], promoCode?: unknown) {
             lineDiscount.set(l, amount); allocated += amount;
         });
     }
-    const priced = lines.map(l => ({ ...l, product: byId.get(l.id)!, lineTotal: byId.get(l.id)!.price * l.quantity - (lineDiscount.get(l) || 0) }));
+    const priced = lines.map(l => ({ ...l, product: { ...byId.get(l.id)!, soldBatch: batchSnapshot(byId.get(l.id)!) }, lineTotal: byId.get(l.id)!.price * l.quantity - (lineDiscount.get(l) || 0) }));
     const promotion = applyPromotion(priced, promoCode);
     const packDiscount = discount;
     discount += promotion.promoDiscount;

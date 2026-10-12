@@ -6,7 +6,10 @@ const labels: Record<ProductAvailability, string> = { available: 'In stock', com
 // Source publication holds require their own documented release. Admin inventory
 // or status edits cannot silently publish a held product.
 const heldProducts = new Map(products.filter(p => !p.purchasable && p.availabilityLabel).map(p => [p.id, p.availabilityLabel!]));
-export const hasPublicationHold = (p: Pick<Product, 'id'>) => heldProducts.has(p.id);
+export const sourcePublicationHold = (p: Pick<Product, 'id'>) => heldProducts.has(p.id);
+export const currentLot = (p: Product) => p.batch !== undefined ? p.batch.lot : p.resolvedBatch?.product_lot || null;
+export const blockedReleaseLot = (p: Pick<Product, 'id'>, lot: string | null) => p.id === 5028 && lot?.toUpperCase() === '702-20-0001';
+export const hasPublicationHold = (p: Product) => sourcePublicationHold(p) && !(p.publicationRelease?.lot && p.publicationRelease.lot === currentLot(p) && !blockedReleaseLot(p, currentLot(p)));
 export function productAvailability(p: Product): ProductAvailability {
     if (hasPublicationHold(p)) return 'unavailable';
     if (p.availability && p.availability !== 'available' && availabilityOptions.includes(p.availability)) return p.availability;
@@ -15,7 +18,7 @@ export function productAvailability(p: Product): ProductAvailability {
     return 'available';
 }
 export function productAvailabilityLabel(p: Product): string {
-    return heldProducts.get(p.id) || labels[productAvailability(p)];
+    return (hasPublicationHold(p) ? heldProducts.get(p.id) : undefined) || labels[productAvailability(p)];
 }
 export function applyAvailability(p: Product): Product {
     const state = productAvailability(p);

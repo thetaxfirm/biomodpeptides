@@ -1,3 +1,5 @@
+import { adminBatchRecords, validateBatchEdit } from '@/lib/product-batch';
+import { coaHash, loadCoaReports, readCoaOriginal, verifiedCoaAttachment } from '@/lib/coa-delivery';
 import { changeHistory, auditRun, withAuditDb, recordChange, type AuditActor } from '@/lib/change-history';
 import { recoveryAdminStatus } from '@/lib/checkout-recovery';
 import { coaAutomationStatus, coaDeliveryStatuses, enqueueCoaRequest, enqueueRequestAlert, processCoaOutbox, saveCoaConfig } from '@/lib/coa-outbox';
@@ -13,7 +15,7 @@ import { session, customer, requireCustomer, requireStaff, staffRole, authReady,
 import { presentationData } from '@/lib/private-presentation';
 import { adminOrderView, currentCart, currentProductId, currentSelection, orderView, unavailableOrder } from '@/lib/catalog-visibility';
 import { catalog, config, quote, validateLines } from '@/lib/commerce';
-import { availabilityOptions, hasPublicationHold } from '@/lib/availability';
+import { availabilityOptions, hasPublicationHold, sourcePublicationHold, blockedReleaseLot } from '@/lib/availability';
 import { all, one, run, uid, timestamp, parse, runtime, database } from '@/lib/runtime';
 import { checkout, reconcile, addressSchema, issueQuote } from '@/lib/checkout';
 import { getPaymentStatus, paymentEnvironment, paymentProvider } from '@/lib/payments';
@@ -64,6 +66,16 @@ export async function GET(req: NextRequest, { params }: {
 }) {
     try {
         const { action } = await params;
+        if (action === 'admin-coa-original') {
+            try { await requireStaff('store:write'); } catch { return j({ error: 'Administrator product access required.' }, 403); }
+            const ref = req.nextUrl.searchParams.get('ref') || '';
+            if (!/^private:[a-f0-9]{64}$/.test(ref)) return j({ error: 'Original report not found.' }, 404);
+            const report = (await loadCoaReports(database())).find(r => 'private:' + r.sha256 === ref);
+            const original = report ? await readCoaOriginal(database(), report) : null;
+            if (!original) return j({ error: 'Original report unavailable.' }, 404);
+            const attachment = await verifiedCoaAttachment(original);
+            return new NextResponse(Uint8Array.from(atob(attachment.content), c => c.charCodeAt(0)), { headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': "inline; filename*=UTF-8''" + encodeURIComponent(attachment.filename), 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', 'X-Robots-Tag': 'noindex, nofollow', 'Content-Security-Policy': "frame-ancestors 'self'" } });
+        }
         if (action === 'admin-changes') {
             try { await requireStaff('reports:read'); } catch { return j({ error: 'Administrator reporting access required.' }, 403); }
             return j(await changeHistory(database(), req.nextUrl.searchParams));
@@ -186,7 +198,8 @@ export async function GET(req: NextRequest, { params }: {
             const { role } = await requireStaff('orders:read');
             const allowed = (permission: StaffPermission) => can(role, permission);
             const requests = allowed('requests:write') ? await all<{ id: string; data: string }>("SELECT * FROM requests WHERE kind IN ('contact','stock','affiliate') ORDER BY created DESC LIMIT 200") : [];
-            return j({ role, permissions: permissionsFor(role), checkoutRecovery: await recoveryAdminStatus(runtime()), searchPublishing: allowed('reports:read') ? searchReport(seoConfig(runtime())) : null, config: await config(), products: await catalog(false), orders: (await all<{
+            const adminProducts = await catalog(false, allowed('store:write'));
+            return j({ role, permissions: permissionsFor(role), batchRecords: allowed('store:write') ? await adminBatchRecords(database(), adminProducts) : [], checkoutRecovery: await recoveryAdminStatus(runtime()), searchPublishing: allowed('reports:read') ? searchReport(seoConfig(runtime())) : null, config: await config(), products: adminProducts, orders: (await all<{
                     data: string;
                 }>('SELECT id,owner,status,total,data,created FROM orders ORDER BY created DESC LIMIT 200')).map(o => ({ ...o, data: adminOrderView(parse(o.data, {})) })), requests: requests.map(o => ({ ...o, data: presentationData(parse(o.data, {})) })), coaAutomation: allowed('requests:write') ? await coaAutomationStatus(runtime(), requests.map(r => r.id)) : null, campaigns: allowed('store:write') ? (await all<{
                     data: string;
@@ -468,23 +481,51 @@ export async function POST(req: NextRequest, { params }: {
                 return j({ message: 'Store settings saved.' });
             }
             if (action === 'admin-product') {
-                const data = z.object({ availability: z.enum(availabilityOptions).optional(), preorder: z.object({ enabled: z.boolean(), percentOff: z.number().min(0.01).max(99), ships: z.string().trim().min(1).max(120) }).nullable().optional(), sale: z.object({ enabled: z.boolean(), percentOff: z.number().min(0.01).max(99), starts: z.string().datetime(), ends: z.string().datetime() }).nullable().optional(), price: z.number().int().min(1).max(9999999), packPrices: z.record(z.number().int().min(1).max(99999999).nullable()).optional(), inStock: z.boolean(), purchasable: z.boolean(), stockQuantity: z.number().int().min(0).max(100000).nullable(), maxQuantity: z.number().int().min(1).max(100) }).parse(b);
+                const data = z.object({ batch: z.object({ lot: z.string().trim().max(100).regex(/^[A-Za-z0-9][A-Za-z0-9._\/-]*$/).nullable(), reportRef: z.string().max(200).regex(/^(?:public:[A-Za-z0-9._-]+|private:[a-f0-9]{64})$/).nullable(), coaAvailable: z.boolean() }).optional(), publicationRelease: z.object({lot:z.string(),reason:z.string().optional()}).nullable().optional(), availability: z.enum(availabilityOptions).optional(), preorder: z.object({ enabled: z.boolean(), percentOff: z.number().min(0.01).max(99), ships: z.string().trim().min(1).max(120) }).nullable().optional(), sale: z.object({ enabled: z.boolean(), percentOff: z.number().min(0.01).max(99), starts: z.string().datetime(), ends: z.string().datetime() }).nullable().optional(), price: z.number().int().min(1).max(9999999), packPrices: z.record(z.number().int().min(1).max(99999999).nullable()).optional(), inStock: z.boolean(), purchasable: z.boolean(), stockQuantity: z.number().int().min(0).max(100000).nullable(), maxQuantity: z.number().int().min(1).max(100000) }).parse(b);
                 if (data.sale && Date.parse(data.sale.ends) <= Date.parse(data.sale.starts)) throw new Error('Sale end must follow its start.');
                 if (Object.keys(data.packPrices || {}).some(n => !['3','5','10'].includes(n))) throw new Error('Unknown pack size.');
-                const currentProduct = (await catalog(false)).find(p => p.id === b.id);
+                const currentProduct = (await catalog(false, true)).find(p => p.id === b.id);
                 if (!currentProduct) throw new Error('Product not found.');
-                // A chosen status is deliberate; older editors must not erase it.
+                const savedRow = await one<{data:string}>('SELECT data FROM product_overrides WHERE id=?', b.id);
+                if (typeof b.expectedVersion !== 'string' || b.expectedVersion !== currentProduct.editVersion || b.expectedVersion !== await coaHash(savedRow?.data || '')) throw new Error('This product changed or the editor is outdated. Refresh administration and review the latest values before saving.');
+                const previousBatch = (await adminBatchRecords(database(), [currentProduct]))[0];
+                if (data.batch) {
+                    if (!b.expectedBatch || b.expectedBatch.lot !== previousBatch?.lot || b.expectedBatch.reportRef !== previousBatch?.reportRef || b.expectedBatch.coaAvailable !== previousBatch?.coaAvailable) throw new Error('The current lot or original report changed. Refresh administration before saving.');
+                    const unchanged = previousBatch && data.batch.lot === previousBatch.lot && data.batch.reportRef === previousBatch.reportRef && data.batch.coaAvailable === previousBatch.coaAvailable;
+                    if (!unchanged) data.batch = await validateBatchEdit(database(), currentProduct, data.batch);
+                    // A price-only save must not convert a legacy mismatched report into a new association.
+                    if (unchanged && currentProduct.batch === undefined) delete data.batch;
+                } else if (currentProduct.batch !== undefined) data.batch = currentProduct.batch;
+                const lotChanged = data.batch !== undefined && data.batch.lot !== (previousBatch?.lot || null);
+                // Release attestations are accepted only through this owner-only path, never from a raw client object.
+                data.publicationRelease = lotChanged ? null : currentProduct.publicationRelease;
+                if (b.releaseReviewed === true) {
+                    if (actor.role !== 'owner') throw new Error('Only an owner can release a product review hold.');
+                    const lot = data.batch?.lot || previousBatch?.lot || null;
+                    if (!sourcePublicationHold(currentProduct) || !lot || blockedReleaseLot(currentProduct, lot)) throw new Error('Identify the verified current selling lot. The older flagged Wolverine lot cannot be released here.');
+                    if (!data.stockQuantity || data.stockQuantity <= 0) throw new Error('Enter the verified stock quantity before releasing this lot.');
+                    data.publicationRelease = { lot, reason: z.string().trim().min(10).max(500).parse(b.releaseReason) };
+                }
+                const nextProduct = { ...currentProduct, ...data };
                 if (data.availability !== undefined) {
-                    if (data.availability === 'available' && hasPublicationHold(currentProduct)) throw new Error('This product has a publication hold. Confirm its release before making it available.');
+                    if (data.availability === 'available' && hasPublicationHold(nextProduct)) throw new Error('Review the current lot and complete the owner release confirmation before making this product available.');
                     data.inStock = data.availability === 'available';
                     data.purchasable = data.availability === 'available';
                 } else if (currentProduct.availability !== undefined) data.availability = currentProduct.availability;
-                if (hasPublicationHold(currentProduct)) { data.inStock = false; data.purchasable = false; }
+                if (hasPublicationHold(nextProduct)) { data.inStock = false; data.purchasable = false; }
                 // Optional fields omitted by an older editor retain their current source.
                 if (!Object.hasOwn(b, 'sale') && currentProduct.sale !== undefined) data.sale = currentProduct.sale;
                 if (!Object.hasOwn(b, 'packPrices') && currentProduct.packPrices !== undefined) data.packPrices = currentProduct.packPrices;
                 if (currentProduct.preorder !== undefined && !Object.hasOwn(b, 'preorder')) throw new Error('Preorder settings require the current product editor. Refresh administration before editing this product.');
-                const db=withAuditDb(database(), {...auditActor, summary: `${currentProduct.name} pricing or availability updated`});const guard=uid();try{await db.batch([db.prepare(inventorySql.checkInventoryEdit).bind(guard,data.stockQuantity,b.id,b.expectedStock??null,b.id),db.prepare(inventorySql.updateProduct).bind(b.id,JSON.stringify(data)),db.prepare(inventorySql.clearGuard).bind(guard)]);}catch{throw new Error('Inventory cannot be reduced below stock reserved by existing orders.');}
+                const db = withAuditDb(database(), { ...auditActor, summary: `${currentProduct.name} product settings updated` });
+                const guard = uid(), versionGuard = uid(), batchGuard = uid();
+                try { await db.batch([
+                    db.prepare(inventorySql.checkProductVersion).bind(versionGuard, savedRow?.data ?? null, b.id),
+                    ...(lotChanged ? [db.prepare(inventorySql.checkBatchEdit).bind(batchGuard, b.id, b.id)] : []),
+                    db.prepare(inventorySql.checkInventoryEdit).bind(guard, data.stockQuantity, b.id, b.expectedStock ?? null, b.id),
+                    db.prepare(inventorySql.updateProduct).bind(b.id, JSON.stringify(data)),
+                    ...[guard,versionGuard,...(lotChanged?[batchGuard]:[])].map(id=>db.prepare(inventorySql.clearGuard).bind(id)),
+                ]); } catch { throw new Error(lotChanged ? 'The lot cannot change while stock is reserved or paid orders await fulfillment. Complete those orders first, then refresh. No changes were saved.' : 'The product or reserved stock changed. Refresh administration and review the latest values. No changes were saved.'); }
                 return j({ message: 'Product updated.' });
             }
             if (action === 'admin-campaign') {

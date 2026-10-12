@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { type Product } from '@/lib/catalog';
 import { eligibleDiscovery, otherVialSizes } from '@/lib/product-discovery';
 import { packContents, packSizes, packUnitLimit } from '@/lib/packs';
-import { batchFor, batchPath, batchStatus } from '@/lib/testing';
+import { batchFor, batchPath, batchStatus, coaRequestNoticeFor } from '@/lib/testing';
 import styles from './product-research-details.module.css';
 
 // Literature context is deliberately limited to these reviewed molecule/size
@@ -209,11 +209,11 @@ export function VialSizeLinks({ product, products }: { product: Product; product
 
 export function ProductResearchDetails({ product }: { product: Product }) {
   if (!eligibleDiscovery(product)) return null;
-  const record = batchFor(product.id);
+  const record = batchFor(product.id,product);
   const status = batchStatus(record);
   const study = researchBySlug[product.slug];
   const packOptions = packSizes.slice(0, -1).join(', ') + ' or ' + packSizes.at(-1);
-  const documentation = status === 'matched'
+  const documentation = status === 'on-request' ? coaRequestNoticeFor(record) : status === 'matched'
     ? 'A certificate is published with a lot number matching this listing. Confirm the lot supplied with your order and read the original report for its methods and results.'
     : status === 'mismatch'
       ? 'The available certificate identifies a different lot. Its results do not verify the listed product lot. Ask Biomod for the matching document.'

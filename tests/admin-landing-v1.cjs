@@ -14,7 +14,8 @@ const dependencies={
  '@/components/store/experience':{Experience:()=>null},
  '@/lib/seo-policy':{pageRecords:{},productAt:()=>null,mayIndex:()=>false},
  '@/lib/seo':{requestSEO:async()=>({}),routeMetadata:()=>({})},
- '@/lib/testing':{batchRecords:[]},
+ '@/lib/testing':{batchRecords:[],batchRecordsFor:()=>[]},
+ '@/lib/public-catalog':{publicCatalog:async()=>({products:[],verified:true})},
 };
 function load(file,overrides={}){const f=path.join(root,file),m=new Module(f,module);m.filename=f;m.paths=module.paths;m.require=id=>{if(id in overrides)return overrides[id];if(id in dependencies)return dependencies[id];if(id==='@/lib/shipping-terms')return load('lib/shipping-terms.ts');if(id==='./shipping-options')return load('lib/shipping-options.ts');if(id==='@/lib/preorders')return load('lib/preorders.ts');if(id==='react/jsx-runtime')return require(id);throw Error('Unexpected dependency '+id)};m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{module:1,target:9,jsx:4,esModuleInterop:true}}).outputText,f);return m.exports;}
 function nodes(t,out=[]){if(Array.isArray(t))t.forEach(x=>nodes(x,out));else if(t?.props){out.push(t);nodes(t.props.children,out)}return out}

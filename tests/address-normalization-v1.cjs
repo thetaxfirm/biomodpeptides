@@ -27,8 +27,8 @@ const runtime = {
     else assert(query.startsWith('UPDATE orders SET status='), 'Only expected order status updates');
   },
   database: () => ({
-    prepare: query => ({ bind: (...values) => ({ query, values }) }),
-    batch: async statements => { savedOrder = JSON.parse(statements[0].values[4]); },
+    prepare: query => ({ bind: (...values) => ({ query, values }), all: async()=>{assert.equal(query,'SELECT id,data FROM product_overrides');return {results:[{id:product.id,data:JSON.stringify(product)}]};} }),
+    batch: async statements => { const insert=statements.find(s=>s.query.startsWith('INSERT INTO orders('));assert(insert,'The expected order insertion is present after version guards');savedOrder = JSON.parse(insert.values[4]); },
   }),
 };
 const originalLoad = Module._load;
@@ -66,7 +66,7 @@ const { addressSchema, deliveryQuote, issueQuote, checkout } = require('../lib/c
   assert.equal(lower.state, ' nv ', 'Caller input is not mutated');
   const issued = await issueQuote('isolated-owner', lines, lower);
   const body = { accepted: true, requestKey: '00000000-0000-4000-8000-000000000000', address, expectedTotal: issued.total, quoteId: issued.quoteId, shippingOptionId: issued.shippingOptionId };
-  assert.deepEqual(await checkout('isolated-owner', lines, body), { id: 'isolated-2', url: '/isolated-payment' });
+  assert.deepEqual(await checkout('isolated-owner', lines, body), { id: 'isolated-3', url: '/isolated-payment' });
   assert.equal(adapterCalls, 1, 'Equivalent uppercase input reuses the normalized delivery quote');
   assert.deepEqual(savedOrder.address, address);
   assert.equal(savedOrder.fingerprint, JSON.stringify({ lines, address, shippingOptionId: issued.shippingOptionId }));

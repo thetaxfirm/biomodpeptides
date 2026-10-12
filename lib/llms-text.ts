@@ -1,9 +1,10 @@
+import type { Product } from './catalog';
 import { pageInfo, productAt } from './seo-policy';
 import { certificateProperties } from './certificate-schema';
 // Plain-text index for AI assistants (llmstxt.org). Built only from sitemap-eligible pages and their reviewed metadata.
-export function llmsText(origin: string, paths: string[]) {
+export function llmsText(origin: string, paths: string[], currentProducts?: Product[]) {
   const coa = (path: string) => {
-    const p = productAt(path), props = p ? certificateProperties(p.id) : [], get = (name: string) => props.find(x => x.name === name)?.value;
+    const source = productAt(path), p = currentProducts === undefined ? source : currentProducts.find(product => product.id === source?.id), props = p ? certificateProperties(p.id, p) : [], get = (name: string) => props.find(x => x.name === name)?.value;
     return props.length ? ` Matching-lot COA: lot ${get('Certificate lot')}, reported purity ${get('Purity (reported)')}, measured content ${get('Measured content (reported)')}.` : '';
   };
   const line = (path: string) => { const info = pageInfo(path); return `- [${info.title}](${origin}${path}): ${info.description}${coa(path)}`; };

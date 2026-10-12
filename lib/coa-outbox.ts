@@ -1,5 +1,6 @@
 // Backend only: immutable original reports are read from private D1 at the send boundary.
-import { exactCoaReport, approvedCoaReportCount, coaReportByHash, loadCoaReports, readCoaOriginal, type OriginalCoaMetadata, coaEmail, coaSender, isCoaRequest, coaHash, verifiedCoaAttachment, coaMessage, COA_TEMPLATE_VERSION } from './coa-delivery';
+import { exactCoaReport, approvedCoaReportCount, coaReportByHash, readCoaOriginal, type OriginalCoaMetadata, type CoaBatchAssociation, coaEmail, coaSender, isCoaRequest, coaHash, verifiedCoaAttachment, coaMessage, COA_TEMPLATE_VERSION } from './coa-delivery';
+import { loadCoaBatchContext } from './product-batch';
 export type CoaEnvironment = Record<string, string | undefined> & { DB: D1Database };
 export type CoaConfig = { enabled: boolean; replyTo: string; notifyTo: string | null };
 type Purpose = 'coa' | 'request-alert';
@@ -33,9 +34,9 @@ async function requestById(env: CoaEnvironment,id:string):Promise<StoredRequest|
  if (!validId(id)) throw new Error('Choose an existing request.');
  return env.DB.prepare("SELECT id,kind,data,created FROM requests WHERE id=? AND kind IN ('contact','affiliate')").bind(id).first<StoredRequest>();
 }
-async function makePlan(env:CoaEnvironment,request:StoredRequest,config:CoaConfig,purpose:Purpose,now:number,originals:readonly OriginalCoaMetadata[]):Promise<Row|null> {
+async function makePlan(env:CoaEnvironment,request:StoredRequest,config:CoaConfig,purpose:Purpose,now:number,originals:readonly OriginalCoaMetadata[],associations:readonly CoaBatchAssociation[]):Promise<Row|null> {
  const data=parse(request.data); if(!data||typeof data!=='object')return null;
- const report=purpose==='coa'&&request.kind==='contact'?exactCoaReport(data.subject,originals):null;
+ const report=purpose==='coa'&&request.kind==='contact'?exactCoaReport(data.subject,originals,associations):null;
  if(purpose==='coa'&&(request.kind!=='contact'||!isCoaRequest(data.subject)))return null;
  if(purpose==='request-alert'&&(!config.notifyTo||request.created<now-300000||request.created>now))return null;
  const recipient=purpose==='coa'?coaEmail(data.email):config.notifyTo;
@@ -53,7 +54,7 @@ async function enqueue(env:CoaEnvironment,id:string,purpose:Purpose,deps:Depende
  const config=await readCoaConfig(env); if(!config.enabled)return null;
  const old=await existing(env,id,purpose);if(old)return statusOf(old,mailReady(env));
  const request=await requestById(env,id);if(!request)return null;
- const now=(deps.now||Date.now)(),plan=await makePlan(env,request,config,purpose,now,purpose==='coa'?await loadCoaReports(env.DB):[]);if(!plan)return null;
+ const now=(deps.now||Date.now)(),context=purpose==='coa'?await loadCoaBatchContext(env.DB):{originals:[],associations:[]},plan=await makePlan(env,request,config,purpose,now,context.originals,context.associations);if(!plan)return null;
  plan.payload_hash=await coaHash(payloadFingerprint(plan));
  const values=columns.map(key=>plan[key]);
  // Insertion and active recipient/report uniqueness are enforced inside SQLite.
@@ -72,7 +73,7 @@ export const enqueueCoaRequest=(env:CoaEnvironment,id:string,deps:Dependencies={
 export const enqueueRequestAlert=(env:CoaEnvironment,id:string,deps:Dependencies={})=>enqueue(env,id,'request-alert',deps);
 export async function coaAutomationStatus(env:CoaEnvironment,ids:string[],deps:Dependencies={}):Promise<CoaAutomationStatus>{
  const config=await readCoaConfig(env),ready=config.enabled&&mailReady(env),requests:CoaAutomationStatus['requests']={};
- const originals=await loadCoaReports(env.DB);
+ const {originals,associations}=await loadCoaBatchContext(env.DB);
  const selected=[...new Set(ids)].filter(validId).slice(0,200), rows:Row[]=[], source:StoredRequest[]=[];
  // Keep the admin's 200-request view below D1's statement parameter and subrequest limits.
  for(let offset=0;offset<selected.length;offset+=80){
@@ -89,14 +90,14 @@ export async function coaAutomationStatus(env:CoaEnvironment,ids:string[],deps:D
   requests[id]={coa:coa?statusOf(coa,ready):null,alert:alert?statusOf(alert,ready):null};
   const related=coa?.duplicate_of&&relations.find(row=>row.request_id===coa.duplicate_of);
   if(related&&requests[id].coa)requests[id].coa={...requests[id].coa!,relatedStatus:related.status,acceptedAt:related.status==='accepted'?related.accepted_at:null};
-  if(!coa){const request=source.find(row=>row.id===id),plan=request&&await makePlan(env,request,config,'coa',(deps.now||Date.now)(),originals);if(plan)plans.set(id,plan);}
+  if(!coa){const request=source.find(row=>row.id===id),plan=request&&await makePlan(env,request,config,'coa',(deps.now||Date.now)(),originals,associations);if(plan)plans.set(id,plan);}
  }
  const keys=[...new Set([...plans.values()].map(plan=>plan.dedupe_key).filter((key):key is string=>Boolean(key)))],duplicates:Row[]=[];
  for(let offset=0;offset<keys.length;offset+=80){const chunk=keys.slice(offset,offset+80);duplicates.push(...(await env.DB.prepare(`SELECT * FROM coa_delivery_outbox WHERE purpose='coa' AND dedupe_key IN (${chunk.map(()=>'?').join(',')})`).bind(...chunk).all<Row>()).results);}
  for(const [id,plan] of plans){const other=duplicates.find(row=>row.dedupe_key===plan.dedupe_key);
   requests[id].coa=other?{...statusOf(other,false),status:'duplicate',reason:'same_original_already_queued_accepted_or_under_review',duplicateOfRequestId:other.request_id,relatedStatus:other.status,acceptedAt:other.status==='accepted'?other.accepted_at:null,canProcess:false}:{...statusOf(plan,ready),status:plan.status==='queued'?'ready':plan.status};
  }
- return {config,mailConfigured:mailReady(env),sender:senderFor(env)||'',approvedReportCount:approvedCoaReportCount(originals),requests};
+ return {config,mailConfigured:mailReady(env),sender:senderFor(env)||'',approvedReportCount:approvedCoaReportCount(originals,associations),requests};
 }
 export async function coaDeliveryStatuses(env:CoaEnvironment,ids:string[],deps:Dependencies={}){return (await coaAutomationStatus(env,ids,deps)).requests;}
 async function mark(env:CoaEnvironment,row:Row,status:Row['status'],reason:string,now:number,acceptedId?:string){
@@ -113,7 +114,6 @@ export async function processCoaOutbox(env:CoaEnvironment,options:{requestId?:st
  await env.DB.prepare("UPDATE coa_delivery_outbox SET status='manual_review',reason='retry_limit_or_unknown_outcome',lease_token=NULL,lease_until=NULL,updated=? WHERE status='sending' AND attempts>=5 AND lease_until<=?"+scopeWhere).bind(now,now,...scopeValues).run();
  await env.DB.prepare("UPDATE coa_delivery_outbox SET status='manual_review',reason='retry_window_expired',lease_token=NULL,lease_until=NULL,updated=? WHERE status IN ('queued','sending') AND first_attempt_at IS NOT NULL AND first_attempt_at<=? AND (lease_until IS NULL OR lease_until<=?)"+scopeWhere).bind(now,now-SAFE_RETRY,now,...scopeValues).run();
  const rows=(await env.DB.prepare("SELECT * FROM coa_delivery_outbox WHERE (status='queued' OR (status='sending' AND lease_until<=?)) AND next_attempt_at<=?"+scopeWhere+" ORDER BY created,id LIMIT ?").bind(now,now,...scopeValues,limit).all<Row>()).results;
- const originals=rows.some(row=>row.purpose==='coa')?await loadCoaReports(env.DB):[];
  let processed=0,accepted=0,review=0;
  for(const candidate of rows){
   if(!(await readCoaConfig(env)).enabled)break;
@@ -124,11 +124,16 @@ export async function processCoaOutbox(env:CoaEnvironment,options:{requestId?:st
    if(!coaEmail(row.recipient)||!coaSender(row.sender)||!coaEmail(row.reply_to)||!row.subject||!row.body||await coaHash(payloadFingerprint(row))!==row.payload_hash)throw new Error('snapshot_integrity_failed');
    const payload:{from:string;to:string[];reply_to:string;subject:string;text:string;attachments?:{filename:string;content:string}[]}={from:row.sender!,to:[row.recipient!],reply_to:row.reply_to!,subject:row.subject,text:row.body};
    if(row.purpose==='coa'){
-    const report=coaReportByHash(row.document_hash||'',originals);
+    const {originals,associations}=await loadCoaBatchContext(env.DB);
+    const report=coaReportByHash(row.document_hash||'',originals,associations);
     if(!report||report.productName!==row.product_name||report.strength!==row.strength||report.lot!==row.lot||report.reportId!==row.report_id||row.template_version!==COA_TEMPLATE_VERSION)throw new Error('original_unavailable');
     if(report.filename!==row.attachment_name)throw new Error('original_unavailable');
     const original=await readCoaOriginal(env.DB,report);if(!original)throw new Error('original_unavailable');
     payload.attachments=[await verifiedCoaAttachment(original)];
+    // Recheck after the original read/hash work, immediately before the provider call.
+    // Never substitute a newly selected report into an already queued message.
+    const current=await loadCoaBatchContext(env.DB);
+    if(!coaReportByHash(report.sha256,current.originals,current.associations))throw new Error('original_unavailable');
    }else if(row.template_version!=='request-alert-v1')throw new Error('snapshot_integrity_failed');
    const response=await (deps.fetch||fetch)('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+env.RESEND_API_KEY!.trim(),'Content-Type':'application/json','Idempotency-Key':row.idempotency_key},body:JSON.stringify(payload),redirect:'manual',signal:AbortSignal.timeout(10000)});
    if(response.ok){const data=await response.json() as {id?:unknown};if(typeof data.id!=='string'||!/^[a-f0-9-]{36}$/.test(data.id))throw new Error('provider_outcome_unknown');if(await mark(env,row,'accepted','accepted_by_email_provider',(deps.now||Date.now)(),data.id))accepted++;}

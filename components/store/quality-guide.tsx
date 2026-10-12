@@ -1,3 +1,5 @@
+'use client';
+import { useStore } from './provider';
 import { batchFor, batchPath, certificateFor } from '@/lib/testing';
 import styles from './quality-guide.module.css';
 
@@ -9,7 +11,10 @@ const checks = [
 ];
 
 export function QualityGuide() {
-  const example = batchFor(753);
+  const { store, ready, loadError } = useStore();
+  const candidate = store.products.find(p => p.id === 753);
+  const product = !loadError && (ready || candidate?.resolvedBatch) ? candidate : undefined;
+  const example = product ? batchFor(product.id, product) : undefined;
   const certificate = certificateFor(example);
   return <article className={styles.guide}>
     <header className="page-heading">
@@ -51,7 +56,7 @@ export function QualityGuide() {
 
     <section aria-labelledby="report-limitations" className={styles.section}>
       <h2 id="report-limitations">Read the laboratory’s limitations</h2>
-      <p>The Vanguard report linked in the example limits its results to the portion of the sample tested and states that the laboratory did not select the sample or verify that it represents the batch. A matching lot number does not remove those limitations.</p>
+      <p>Check whether the report limits its results to the portion of the sample tested, and whether the laboratory selected the sample or verified that it represents the batch. A matching lot number does not remove the laboratory’s stated limitations.</p>
       <p>A COA does not establish regulatory approval, clinical effectiveness or suitability for human or animal use. Biomod research products are supplied for laboratory research only.</p>
       <p>Use the <a href="/choosing-a-research-supplier">research supplier checklist</a> to compare identity, lot documentation, handling records and complete order costs.</p>
       <a className="editorial-link" href="/contact?subject=Product%20lot%20and%20COA%20question">Ask about a product lot or report</a>

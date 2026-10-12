@@ -73,6 +73,7 @@ const dependencies = {
     },
     one: forbidden('database one'), database: () => { checkedAdmin(); return env.DB; },
   },
+  '@/lib/product-batch': {adminBatchRecords:async(db,products)=>{checkedAdmin();assert.equal(db,env.DB);assert.deepEqual(products,[]);return [];}},
   '@/lib/commerce': { config: async () => { checkedAdmin(); note('config'); return {}; }, catalog: async visible => { checkedAdmin(); assert.equal(visible, false); note('catalog'); return []; } },
   '@/lib/private-presentation': { presentationData: value => value },
   '@/lib/catalog-visibility': { adminOrderView: value => value, currentSelection: () => true },

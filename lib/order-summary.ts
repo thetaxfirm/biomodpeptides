@@ -1,3 +1,4 @@
+import { savedBatch } from './batch-snapshot';
 import { presentationText } from './private-presentation';
 import { savedPreorder, orderPreorderNotice } from './fulfillment';
 import type { AnetOrderDetails } from './authorizenet-payments';
@@ -14,6 +15,9 @@ export function itemDetail(item: Record<string, any>): string {
         parts.push('Presale');
     const preorder = savedPreorder(item.product?.activePreorder);
     if (preorder) parts.push('Preorder: ' + preorder.percentOff + '% off; estimated dispatch ' + preorder.ships);
+    const batch = savedBatch(item.product?.soldBatch);
+    if (batch?.lot) parts.push('Lot ' + batch.lot);
+    if (batch?.coaAvailable && batch.reportId) parts.push('COA ' + batch.reportId);
     return parts.join(', ');
 }
 export function summaryItems(data: Record<string, any>): SummaryItem[] {

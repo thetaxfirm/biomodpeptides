@@ -9,6 +9,7 @@ export type OriginalCoa = {
 export const COA_TEMPLATE_VERSION = 'original-coa-v1';
 export const COA_MAX_BYTES = 8 * 1024 * 1024;
 export type OriginalCoaMetadata = Omit<OriginalCoa,'base64'|'sourceBasename'>;
+export type CoaBatchAssociation = {productId:number;lot:string|null;reportRef:string|null;coaAvailable:boolean};
 const canonical = (value: string) => value.trim().toLowerCase();
 export const coaEmail = (value: unknown): string | null => typeof value === 'string' && value.length <= 254 && !/[\x00-\x1f\x7f]/.test(value) && /^[^\s<>@,;]+@[^\s<>@,;]+\.[^\s<>@,;]+$/.test(value.trim()) ? value.trim().toLowerCase() : null;
 export function coaSender(value: unknown): string | null {
@@ -17,21 +18,25 @@ export function coaSender(value: unknown): string | null {
   return match && coaEmail(match[1] || match[2]) ? cleaned : null;
 }
 export const isCoaRequest = (subject: unknown) => typeof subject === 'string' && /\bCOA\b|certificate of analysis/i.test(subject);
-export function exactCoaReport(subject: unknown, originals: readonly OriginalCoaMetadata[]): OriginalCoaMetadata | null {
+export function exactCoaReport(subject: unknown, originals: readonly OriginalCoaMetadata[], associations?:readonly CoaBatchAssociation[]): OriginalCoaMetadata | null {
   if (typeof subject !== 'string') return null;
-  const matches = originals.filter(report => canonical(subject) === canonical(`COA request: ${report.productName} / ${report.lot}`));
+  const matches = originals.filter(report => canonical(subject) === canonical(`COA request: ${report.productName} / ${report.lot}`) && (!associations || associations.some(item => item.productId === report.productId && item.coaAvailable && item.lot === report.lot && item.reportRef === 'private:' + report.sha256)));
   if (matches.length !== 1) return null;
   const report = matches[0], product = products.find(item => item.id === report.productId), batch = batchFor(report.productId);
+  const association = associations?.find(item => item.productId === report.productId);
+  const matchesCurrentLot = associations ? Boolean(association?.coaAvailable && association.lot === report.lot && association.reportRef === 'private:' + report.sha256) : batch?.product_lot === report.lot && batch?.product_name === report.productName;
   // A future catalog/lot change never silently inherits this report association.
   if (!product || !batch || productFormat(product) !== 'Vial' || product.categories.some(category => category.slug !== 'research-compounds') || product.name !== report.productName || product.sizes.length !== 1 || product.sizes[0] !== report.strength ||
-      batch.product_lot !== report.lot || batch.product_name !== report.productName || report.form !== 'lyophilized powder' ||
+      !matchesCurrentLot || report.form !== 'lyophilized powder' ||
       !report.reportId || !report.chemicalIdentity || !/^[a-f0-9]{64}$/.test(report.sha256)) return null;
   return report;
 }
-export const approvedCoaReportCount = (originals: readonly OriginalCoaMetadata[]) => originals.filter(report => exactCoaReport(`COA request: ${report.productName} / ${report.lot}`, originals) === report).length;
-export function coaReportByHash(hash: string, originals: readonly OriginalCoaMetadata[]): OriginalCoaMetadata | null {
+export const approvedCoaReportCount = (originals: readonly OriginalCoaMetadata[], associations?:readonly CoaBatchAssociation[]) => originals.filter(report => exactCoaReport(`COA request: ${report.productName} / ${report.lot}`, originals, associations) === report).length;
+export function coaReportByHash(hash: string, originals: readonly OriginalCoaMetadata[], associations?:readonly CoaBatchAssociation[]): OriginalCoaMetadata | null {
   const matches = originals.filter(item => item.sha256 === hash);
-  return matches.length === 1 ? exactCoaReport(`COA request: ${matches[0].productName} / ${matches[0].lot}`, originals) : null;
+  if (matches.length !== 1) return null;
+  const selected = exactCoaReport(`COA request: ${matches[0].productName} / ${matches[0].lot}`, originals, associations);
+  return selected?.sha256 === hash ? selected : null;
 }
 const metadataKeys = ['productId','productName','strength','form','lot','reportId','filename','sha256','chemicalIdentity'] as const;
 function validatedMetadata(value:unknown, hash:unknown):OriginalCoaMetadata|null {

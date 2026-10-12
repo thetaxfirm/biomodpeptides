@@ -41,6 +41,6 @@ export async function shippingWorkerFixture({preview=false,port=3067}={}) {
   await db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').bind('store',JSON.stringify(store)).run();
   const address={name:'Synthetic shipping preview',line1:'1 Example Road',line2:'',city:'Las Vegas',state:'NV',zip:'89101',country:'US',phone:'7025550100'};
   await db.prepare('INSERT INTO addresses(id,owner,data,created) VALUES(?,?,?,?)').bind('fixture-address',owner,JSON.stringify(address),Date.now()).run();
-  return {mf,db,calls,owner,email,sessionId,store,product,cart,address,close:async()=>{await mf.dispose();await fs.rm(temporary,{recursive:true,force:true});}};
+  return {mf,db,calls,owner,email,authUser:user,sessionId,store,product,cart,address,close:async()=>{await mf.dispose();await fs.rm(temporary,{recursive:true,force:true});}};
  } catch(error) {await mf.dispose();await fs.rm(temporary,{recursive:true,force:true});throw error;}
 }

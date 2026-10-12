@@ -25,6 +25,8 @@ class FixtureResponse extends Response{static json(value,options={}){return new 
 const deps={
  'next/server':{NextResponse:FixtureResponse},
  '@/lib/availability':availability,
+ '@/lib/product-batch':require('../lib/product-batch.ts'),
+ '@/lib/coa-delivery':require('../lib/coa-delivery.ts'),
  '@/lib/commerce':{catalog,quote},
  '@/lib/runtime':runtime,
  '@/lib/change-history':history,
@@ -35,6 +37,7 @@ const filename=path.join(root,'app/api/store/[action]/route.ts'),mod=new Module(
 mod.require=name=>Object.hasOwn(deps,name)?deps[name]:name.startsWith('@/')||name==='next/headers'?new Proxy({},{get:(_,key)=>key==='__esModule'?true:()=>{throw Error('Unexpected dependency '+name+':'+String(key));}}):localRequire(name);
 mod._compile(ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,esModuleInterop:true}}).outputText,filename);
 async function post(payload,origin='https://store.example.invalid'){
+ payload={expectedVersion:await require('../lib/coa-delivery.ts').coaHash(sql.prepare('SELECT data FROM product_overrides WHERE id=?').get(payload.id)?.data||''),...payload};
  authorized=false;const req=new Request('https://store.example.invalid/api/store/admin-product',{method:'POST',headers:{origin,'content-type':'application/json'},body:JSON.stringify(payload)});req.nextUrl=new URL(req.url);const response=await mod.exports.POST(req,{params:Promise.resolve({action:'admin-product'})});assert.equal(response.headers.get('cache-control'),'no-store');return {status:response.status,...await response.json()};
 }
 const payload=(product=p,extra={})=>({id:product.id,...base,expectedStock:8,...extra});
@@ -66,7 +69,7 @@ const payload=(product=p,extra={})=>({id:product.id,...base,expectedStock:8,...e
  result=await post(payload(p,{availability:'available',stockQuantity:0}));assert.equal(result.status,200);assert.equal(saved(p).stockQuantity,0);assert.equal(productAvailability((await catalog()).find(x=>x.id===p.id)),'sold_out','Available selection never creates inventory');
  store(p,base);
  for(const extra of [{availability:'PRIVATE_STATUS'},{availability:null},{sale:{...scheduled,percentOff:100}},{sale:{...scheduled,starts:scheduled.ends}},{sale:{...scheduled,ends:'not-a-date'}}]){const before=JSON.stringify(saved(p));result=await post(payload(p,extra));assert.equal(result.status,400);assert.equal(JSON.stringify(saved(p)),before);}
- result=await post(payload(held,{availability:'available'}));assert.equal(result.status,400);assert.match(result.error,/publication hold/);
+ result=await post(payload(held,{availability:'available'}));assert.equal(result.status,400);assert.match(result.error,/owner release confirmation/);
  store(held,{...base,inStock:false,purchasable:false});result=await post(payload(held));assert.equal(result.status,200);assert.equal(saved(held).purchasable,false,'Legacy checkboxes cannot bypass a source hold');
  store(preorder,{...base,preorder:{enabled:true,percentOff:15,ships:'early November 2026'}});result=await post(payload(preorder,{availability:'coming_soon'}));assert.equal(result.status,400);assert.match(result.error,/current product editor/);assert(saved(preorder).preorder.enabled);
  result=await post(payload(preorder,{availability:'coming_soon',preorder:saved(preorder).preorder}));assert.equal(result.status,200);assert(saved(preorder).preorder.enabled,'Availability edit retains separate initial preorder offer');

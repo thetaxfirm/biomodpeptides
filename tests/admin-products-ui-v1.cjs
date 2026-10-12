@@ -52,7 +52,7 @@ const fixtures = [
 ];
 function mount(products = fixtures) {
  const instances = new Map();
- const host = { props: { products, edited: null, query: '', busy: false, formKey: 0 }, instances, tree: null, drafts: 0, saves: [],
+ const host = { props: { products, edited: null, query: '', busy: false, formKey: 0, batchRecords: [], canRelease: false }, instances, tree: null, drafts: 0, saves: [],
   render() {
    const seen = new Set();
    const expand = (node, at = 'root') => {
@@ -133,7 +133,37 @@ try {
  assert(text(h.tree).includes('Preorder configured')); assert(text(h.tree).includes('Ordering closed')); assert(!text(h.tree).includes('with offer'));
  const heldSource = sourceProducts.find(hasPublicationHold); assert(heldSource, 'Source has publication-hold fixture');
  h = mount([heldSource]); edit(h, heldSource.name);
- const availableRadio = find(h, n => n.type === 'input' && n.props.type === 'radio' && n.props.value === 'available'); assert.equal(availableRadio.props.disabled, true); availableRadio.props.onChange(); h.render();
- assert(text(h.tree).includes('Publication hold')); assert(!h.props.edited.purchasable, 'UI cannot republish a source-held product');
- console.log('PASS: grouped product formats, search/SKU filters, status controls, publication holds, base/fixed-pack fields, draft-preserving availability, preorder separation, real price previews, schedule validation/durations, removal, busy guards and discard. Actual component/helpers, isolated fixtures, no network.');
+ const availableRadio = find(h, n => n.type === 'input' && n.props.type === 'radio' && n.props.value === 'available'); assert.equal(availableRadio.props.disabled, false); availableRadio.props.onChange(); h.render();
+ assert(text(h.tree).includes('Publication hold')); assert(text(h.tree).includes('Only an owner can release')); submit(h); assert.equal(h.saves.length,0,'A nonowner cannot save a held Available product');
+ h.props.canRelease=true;h.render();assert(input(h,'releaseReviewed').props.required);assert(input(h,'batchLot').props.required);
+ submit(h);assert(text(h.tree).includes('Enter the current product lot'));
+ type(h,'batchLot','702-20-0001');submit(h);assert(text(h.tree).includes('cannot be released'));assert.equal(h.saves.length,0);
+ type(h,'batchLot','SYNTHETIC-REPLACEMENT-LOT');submit(h);assert(text(h.tree).includes('Confirm the owner review'));
+ input(h,'releaseReviewed').props.onChange({target:{checked:true}});h.render();
+ const reason=find(h,n=>n.type==='textarea'&&n.props.name==='releaseReason');reason.props.onChange({target:{value:'Synthetic fixture review, not a real release.'}});h.render();submit(h);assert.equal(h.saves.length,1);
+ type(h,'batchLot','ANOTHER-SYNTHETIC-LOT');assert.equal(input(h,'releaseReviewed').props.checked,false,'Changing reviewed lot resets owner confirmation');submit(h);assert.equal(h.saves.length,1);
+ status(h,'unavailable');submit(h);assert.equal(h.saves.length,2,'Owner review is not required to keep ordering closed');
+ // A prior owner release belongs to one lot, not every replacement lot.
+ const released={...heldSource,availability:'available',inStock:true,purchasable:true,batch:{lot:'APPROVED-SYNTHETIC',reportRef:null,coaAvailable:false},publicationRelease:{lot:'APPROVED-SYNTHETIC',reason:'Synthetic prior review'}};
+ h=mount([released]);h.props.canRelease=true;h.props.batchRecords=[{productId:released.id,lot:'APPROVED-SYNTHETIC',reportRef:null,coaAvailable:false,attached:null,choices:[]}];h.render();edit(h,released.name);assert(!nodes(h.tree).some(n=>n.props.name==='releaseReviewed'));
+ type(h,'batchLot','UNREVIEWED-REPLACEMENT');assert(input(h,'releaseReviewed').props.required);submit(h);assert.equal(h.saves.length,0,'A changed lot requires a new owner review');assert.equal(find(h,n=>n.props.name==='releaseReason').props.maxLength,500);
+ // Registered original association controls: current lot, strength and eligibility.
+ h=mount([fixtures[0]]);h.props.batchRecords=[{productId:fixtures[0].id,lot:'SYNTHETIC-A',reportRef:'public:one',coaAvailable:true,attached:null,choices:[
+ {ref:'public:one',lot:'SYNTHETIC-A',reportId:'ORIGINAL-A',filename:'original-a.pdf',url:'/coas/original-a.pdf',strength:'10mg',productName:'Synthetic vial',eligible:true},
+ {ref:'private:two',lot:'SYNTHETIC-B',reportId:'ORIGINAL-B',filename:'original-b.pdf',strength:'10mg',productName:'Synthetic vial',eligible:false,identityEligible:true},
+ {ref:'public:wrong',lot:'SYNTHETIC-B',reportId:'WRONG-STRENGTH',filename:'wrong.pdf',strength:'50mg',productName:'Synthetic vial',eligible:false,reason:'Strength does not match'}
+ ]}];h.render();edit(h,'Synthetic vial');
+ const reportSelect=()=>find(h,n=>n.type==='select'&&n.props.name==='batchReportRef');
+ assert.equal(input(h,'batchChanged').props.value,'false');assert.equal(input(h,'batchLot').props.value,'SYNTHETIC-A');assert.equal(reportSelect().props.value,'public:one');assert.equal(input(h,'batchCoaAvailable').props.checked,true);assert(text(h.tree).includes('Exact product and lot match'));
+ assert.equal(find(h,n=>n.type==='a'&&text(n)==='Read original report').props.href,'/coas/original-a.pdf');
+ assert.equal(find(h,n=>n.type==='option'&&n.props.value==='private:two').props.disabled,true,'Different lot cannot attach');
+ type(h,'batchLot','SYNTHETIC-B');assert.equal(input(h,'batchChanged').props.value,'true');assert.equal(reportSelect().props.value,'');assert.equal(input(h,'batchCoaAvailable').props.checked,false);assert.equal(input(h,'batchCoaAvailable').props.disabled,true);
+ assert.equal(find(h,n=>n.type==='option'&&n.props.value==='public:one').props.disabled,true);assert.equal(find(h,n=>n.type==='option'&&n.props.value==='private:two').props.disabled,false);assert.equal(find(h,n=>n.type==='option'&&n.props.value==='public:wrong').props.disabled,true,'Wrong strength cannot attach');
+ reportSelect().props.onChange({target:{value:'private:two'}});h.render();assert.equal(input(h,'batchCoaAvailable').props.disabled,false);assert.equal(input(h,'batchCoaAvailable').props.checked,false,'Associating a report does not silently enable COA delivery');
+ assert(text(h.tree).includes('original has no public download link'));assert(!nodes(h.tree).some(n=>n.type==='a'&&text(n)==='Read original report'));
+ input(h,'batchCoaAvailable').props.onChange({target:{checked:true}});h.render();assert.equal(input(h,'batchCoaAvailable').props.checked,true);submit(h);assert.equal(h.saves.length,1);
+ assert.equal(input(h,'maxQuantity').props.max,'100000');type(h,'maxQuantity','100000');assert.equal(input(h,'maxQuantity').props.value,'100000');
+ h.props.busy=true;h.render();type(h,'batchLot','MUST-NOT-CHANGE');reportSelect().props.onChange({target:{value:'public:one'}});input(h,'batchCoaAvailable').props.onChange({target:{checked:false}});h.render();assert.equal(input(h,'batchLot').props.value,'SYNTHETIC-B');assert.equal(reportSelect().props.value,'private:two');assert.equal(input(h,'batchCoaAvailable').props.checked,true);
+ h.props.busy=false;h.render();click(h,'Discard product draft');edit(h,'Synthetic vial');assert.equal(input(h,'batchLot').props.value,'SYNTHETIC-A');assert.equal(reportSelect().props.value,'public:one');
+ console.log('PASS: grouped product formats, search/SKU filters, status controls, publication holds, base/fixed-pack fields, draft-preserving availability, preorder separation, real price previews, schedule validation/durations, exact lot/COA choices, owner release review, held-lot guard, 100000 maximum, removal, busy guards and discard. Actual component/helpers, isolated fixtures, no network.');
 } finally { Date.now = originalNow; }

@@ -6,28 +6,33 @@ import { Experience } from '@/components/store/experience';
 import { notFound, permanentRedirect, redirect } from 'next/navigation';
 import { pageRecords, productAt, mayIndex } from '@/lib/seo-policy';
 import { routeMetadata, requestSEO, routeStructuredData, jsonLd } from '@/lib/seo';
-import { batchRecords } from '@/lib/testing';
+import { batchRecords, batchRecordsFor } from '@/lib/testing';
+import { publicCatalog } from '@/lib/public-catalog';
 
 type Props = { params: Promise<{ path: string[] }>; searchParams: Promise<Record<string, string | string[]>> };
 export const dynamic = 'force-dynamic';
 const queryParams = (query: Record<string, string | string[]>) => new URLSearchParams(Object.entries(query).flatMap(([key, value]) => (Array.isArray(value) ? value : [value]).map(v => [key, v])));
-function validPath(path: string) {
+async function validPath(path: string) {
   if (pageRecords['/' + path] || productAt('/' + path)) return true;
   if (['cart', 'checkout', 'payment/return', 'login', 'register', 'forgot-password', 'reset-password', 'admin', 'admin/login', 'account', 'about-biomod', 'coa', 'affiliate-program'].includes(path)) return true;
   if (/^account\/(orders|addresses|wishlist|rewards|affiliate|notifications|profile)$/.test(path)) return true;
-  if (path.startsWith('testing/')) return batchRecords.some(record => record.record_id === path.slice(8) || record.product_lot === path.slice(8));
+  if (path.startsWith('testing/')) {
+    const snapshot = await publicCatalog();
+    const records = [...batchRecords, ...(snapshot.verified ? batchRecordsFor(snapshot.products) : [])];
+    return records.some(record => record.record_id === path.slice(8) || record.product_lot === path.slice(8));
+  }
   return false;
 }
 export async function generateMetadata({ params, searchParams }: Props) {
   const { path } = await params;
   if (legacyRoutes[path.join('/')]) permanentRedirect(legacyRoutes[path.join('/')]);
-  if (!validPath(path.join('/'))) notFound();
+  if (!await validPath(path.join('/'))) notFound();
   return routeMetadata('/' + path.join('/'), queryParams(await searchParams), await requestSEO());
 }
 export default async function Page({ params, searchParams }: Props) {
   const { path } = await params, route = path.join('/');
   if (legacyRoutes[route]) permanentRedirect(legacyRoutes[route]);
-  if (!validPath(route)) notFound();
+  if (!await validPath(route)) notFound();
   // The generic account landing is the store backend for approved administrators.
   // Explicit customer subpages remain separate and retain owner-scoped records.
   if (route === 'account') {

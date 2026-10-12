@@ -88,7 +88,7 @@ for (const q of ['V260304-6 012', 'Tesamorelin 10mg V260304-6 012', '301-10-0001
 assert(!findRows('COA-2026-956704').includes(current), 'Historical report ID does not masquerade as the current certificate');
 assert(!findRows('Tesamorelin 20mg V260304-6 012').includes(current));
 
-const render = (route, query = {}) => renderToStaticMarkup(React.createElement(StoreProvider, { initialCatalog: products }, React.createElement(Experience, { path: route, query })));
+const render = (route, query = {}) => renderToStaticMarkup(React.createElement(StoreProvider, { initialCatalog: products.map(product => ({ ...product, resolvedBatch: batchFor(product.id) || null })) }, React.createElement(Experience, { path: route, query })));
 for (const [route, query] of [['product/tesamorelin-10mg', {}], ['testing', { product: '755' }], ['testing/301-10-0001', { product: '755' }]]) {
   const html = render(route, query);
   for (const value of ['Matching-lot certificate', '96.28% + 0.18%', '9.92 mg', 'V260304-6 012', 'Supplier-hosted report matching the listed lot.', 'Results apply to the submitted sample.', 'Confirm the lot supplied with your order.', 'Record updated October 10, 2026 (Pacific).']) assert(html.includes(escape(value)), route + ': ' + value);

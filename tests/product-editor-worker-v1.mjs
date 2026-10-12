@@ -1,5 +1,6 @@
 // Production-built Worker with real local D1 migrations. All auth is mocked; other outbound calls are forbidden.
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -21,13 +22,14 @@ const mf=new Miniflare({name:'isolated-product-editor',cf:false,modules:[config.
 },log:new Log(LogLevel.ERROR)});
 const headers={origin,'content-type':'application/json',cookie:`bm_access=isolated-fixture-token; bm_session=${sessionId}`};
 const guestHeaders={origin,'content-type':'application/json',cookie:`bm_session=${sessionId}`};
-const post=async(action,payload,requestHeaders=headers)=>{const r=await mf.dispatchFetch(origin+'/api/store/'+action,{method:'POST',headers:requestHeaders,body:JSON.stringify(payload)});assert.equal(r.headers.get('cache-control'),'no-store');return {status:r.status,body:await r.json()};};
+let db;
+const post=async(action,payload,requestHeaders=headers)=>{if(action==='admin-product'){const current=await db.prepare('SELECT data FROM product_overrides WHERE id=?').bind(payload.id).first();payload={expectedVersion:createHash('sha256').update(current?.data||'').digest('hex'),...payload};}const r=await mf.dispatchFetch(origin+'/api/store/'+action,{method:'POST',headers:requestHeaders,body:JSON.stringify(payload)});assert.equal(r.headers.get('cache-control'),'no-store');return {status:r.status,body:await r.json()};};
 const getState=async()=>{const r=await mf.dispatchFetch(origin+'/api/store/state',{headers:guestHeaders});assert.equal(r.status,200);return r.json();};
 const find=state=>state.products.find(p=>p.id===product.id);
 const base={id:product.id,price:10000,packPrices:{3:27000,5:null,10:80000},inStock:true,purchasable:true,stockQuantity:10,maxQuantity:10,expectedStock:10,sale:null};
 const pauseUntil=async timestamp=>{const duration=timestamp-Date.now();if(duration>0)await new Promise(resolve=>setTimeout(resolve,duration));};
 try{
- await mf.ready;const db=await mf.getD1Database('DB');
+ await mf.ready;db=await mf.getD1Database('DB');
  for(const name of (await fs.readdir(path.join(root,'drizzle'))).filter(n=>n.endsWith('.sql')).sort()){const sql=await fs.readFile(path.join(root,'drizzle',name),'utf8');await db.batch(migrationStatements(sql).map(q=>db.prepare(q)));}
  await db.prepare('INSERT INTO sessions(id,cart,wishlist,updated) VALUES(?,?,?,?)').bind(sessionId,'[]','[]',Date.now()).run();
  await db.prepare('INSERT INTO product_overrides(id,data) VALUES(?,?)').bind(product.id,JSON.stringify(base)).run();
@@ -48,7 +50,7 @@ try{
  for(const [code,percent] of [['bm10',10],['biomod15',15],['bmod20',20],['anna20',20],['kimc15',15]]){result=await post('promo',{code},guestHeaders);assert.equal(result.status,200);assert.equal(result.body.totals.total,22950-Math.round(22950*percent/100));assert.equal(result.body.promo.code,code.toUpperCase());}
  await pauseUntil(ends+60);active=find(await getState());assert.equal(active.price,10000);assert.equal(active.activeSale,undefined);assert.equal(active.packPrices['3'],27000);
  result=await post('cart',{cart:[{id:product.id,quantity:3,packId:'fixture-fixed',packSize:3,packKind:'fixed'}]},guestHeaders);assert.equal(result.status,200);assert.equal(result.body.totals.total,27000,'Expired sale cannot survive in the current checkout quote');
- result=await post('admin-product',{...base,id:held.id,expectedStock:null,availability:'available'});assert.equal(result.status,400);assert.match(result.body.error,/publication hold/);
+ result=await post('admin-product',{...base,id:held.id,expectedStock:null,availability:'available'});assert.equal(result.status,400);assert.match(result.body.error,/owner release confirmation/);
  const response=await mf.dispatchFetch(origin+'/api/store/admin-changes?source=admin',{headers});assert.equal(response.status,200);const audit=await response.json();
  const changes=audit.events.filter(e=>e.entityType==='product'&&e.entityId===String(product.id));assert(changes.length>=4);
  assert(changes.every(e=>e.actor===staffEmail&&e.source==='admin'));

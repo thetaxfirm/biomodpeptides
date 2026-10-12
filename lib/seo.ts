@@ -63,7 +63,7 @@ export async function routeStructuredData(path: string, config: SEOConfig = curr
       additionalProperty: [{ '@type': 'PropertyValue', name: 'Compound', value: p.identity },
         { '@type': 'PropertyValue', name: 'Container contents', value: p.sizes[0] },
         ...(p.casNumber ? [{ '@type': 'PropertyValue', name: 'CAS', value: p.casNumber }] : []),
-        ...certificateProperties(p.id)],
+        ...(snapshot.verified && live ? certificateProperties(p.id, live) : [])],
       ...(snapshot.verified && live && live.price > 0 ? { offers: { '@type': 'Offer', url: config.origin + clean,
         priceCurrency: 'USD', price: (live.price / 100).toFixed(2),
         ...(live.activeSale && !live.activePreorder && Number.isFinite(Date.parse(live.activeSale.ends)) ? { priceValidUntil: new Date(live.activeSale.ends).toISOString().slice(0, 10) } : {}),

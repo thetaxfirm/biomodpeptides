@@ -27,6 +27,11 @@ export type Product = {
     purchasable: boolean;
     availability?: 'available' | 'coming_soon' | 'sold_out' | 'unavailable';
     availabilityLabel?: string;
+    batch?: { lot: string | null; reportRef: string | null; coaAvailable: boolean };
+    resolvedBatch?: any;
+    soldBatch?: import('./batch-snapshot').SoldBatch;
+    publicationRelease?: { lot: string; reason?: string } | null;
+    editVersion?: string;
     sku: string;
     description: string;
     shortDescription: string;
