@@ -35,3 +35,35 @@
 .cart-choice-column li+li{margin-top:10px}
 .cart-choice-action{margin-top:auto;align-self:flex-start;min-height:44px}
 @media(max-width:700px){.cart-choice-grid{grid-template-columns:1fr;gap:20px}.cart-choice-column{padding:20px}.cart-choice-action{width:100%}}
+
+/* Initial-run preorders: an explicit offer with the dispatch terms alongside it. */
+.preorder-notice{padding:20px 22px;background:#f4ecf6;color:#2b1030;margin:20px 0;line-height:1.5;border-radius:4px}
+.preorder-notice-heading{display:flex;align-items:baseline;flex-wrap:wrap;gap:8px 16px;margin-bottom:9px}
+.preorder-notice-heading>strong{font-size:30px;line-height:1.15;font-weight:700;letter-spacing:-.02em}
+.preorder-notice-heading>span{font-size:16px;font-weight:600}
+.preorder-notice p{font-size:14px;line-height:1.6;margin:0;color:#49324e;max-width:none}
+.preorder-notice p strong{font-weight:600}
+.preorder-notice .preorder-order-terms{margin-top:10px;font-size:13px}
+.preorder-notice-compact{padding:14px 15px;margin:0 0 18px}
+.preorder-notice-compact .preorder-notice-heading{gap:6px 12px;margin-bottom:7px}
+.preorder-notice-compact .preorder-notice-heading>strong{font-size:24px}
+.preorder-notice-compact .preorder-notice-heading>span{font-size:14px}
+.preorder-notice-compact p{font-size:12px;line-height:1.6}
+.product-card[data-preorder=true] .product-info>.preorder-notice{margin-top:auto}
+.product-card[data-preorder=true] .card-pack-choice{margin-top:0}
+.preorder-original-price{font-size:.7em;font-weight:400;color:#666;text-decoration-thickness:1px;text-decoration-color:currentColor}
+.detail-copy .detail-price{display:flex;flex-wrap:wrap;align-items:baseline;gap:12px}
+.card-pack-summary .preorder-original-price{font-size:16px;color:#666}
+.product-price-pair{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px}
+.product-price-pair .preorder-original-price{font-size:15px}
+.product-grid.product-list .product-card[data-preorder=true] .product-info{display:flex}
+.softgel-collection-intro .preorder-notice{max-width:510px;background:#fbf1ea;margin:18px 0 22px}
+.softgel-collection-intro .preorder-notice p{font-size:14px;color:#49324e;margin:0}
+.preorder-release-intro{display:grid;grid-template-columns:1fr 1fr;gap:30px 60px;align-items:center;padding:32px 36px;background:#2b1030;color:#fbf1ea;margin-bottom:38px}
+.preorder-release-intro h2{font-size:clamp(30px,3vw,42px);line-height:1.16;margin-bottom:16px}
+.preorder-release-intro>div>p{font-size:16px;max-width:480px;color:#e9d9ef}
+.preorder-release-intro>.preorder-notice{margin:0;background:#fbf1ea;color:#2b1030}
+.preorder-release-intro>.preorder-notice>p{color:#49324e;font-size:14px;max-width:none}
+@media(max-width:700px){.preorder-release-intro{grid-template-columns:1fr;gap:24px;padding:26px 22px}.preorder-notice{padding:18px}.preorder-notice-compact{padding:14px}.preorder-release-intro h2{font-size:32px}}
+
+.preorder-line-note{display:block;margin-top:6px;font-size:12px;line-height:1.5;color:#49324e}.preorder-checkout-notice{font-size:14px;line-height:1.6;padding:16px;background:#f4ecf6;color:#2b1030}.softgel-story-hero .preorder-notice p{color:#49324e;font-size:14px;line-height:1.6}.softgel-story-hero .preorder-notice .preorder-order-terms{font-size:13px}

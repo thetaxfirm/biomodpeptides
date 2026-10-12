@@ -1,5 +1,23 @@
+/** Read only the saved purchase snapshot, never today's catalog or settings. */
+export type SavedPreorder = { percentOff: number; ships: string; basePrice: number };
+export function savedPreorder(value: unknown): SavedPreorder | null {
+    if (!value || typeof value !== 'object') return null;
+    const p = value as Record<string, unknown>;
+    if (typeof p.percentOff !== 'number' || !Number.isFinite(p.percentOff) || p.percentOff <= 0 || p.percentOff >= 100 || typeof p.ships !== 'string' || !p.ships.trim() || p.ships.length > 120 || !Number.isSafeInteger(p.basePrice) || Number(p.basePrice) < 1) return null;
+    return { percentOff: p.percentOff, ships: p.ships, basePrice: p.basePrice as number };
+}
+export function orderHasPreorder(data: { items?: unknown } | undefined): boolean {
+    return Array.isArray(data?.items) && data.items.some(item => Boolean(savedPreorder(item?.product?.activePreorder)));
+}
+export function orderPreorderNotice(data: { items?: unknown } | undefined): string {
+    if (!Array.isArray(data?.items)) return '';
+    const estimates = [...new Set(data.items.map(item => savedPreorder(item?.product?.activePreorder)?.ships).filter((value): value is string => Boolean(value)))];
+    if (!estimates.length) return '';
+    return 'Preorder: estimated dispatch ' + estimates.join(' / ') + '. All items in this order ship together when ready. Timing may change; this is not an immediate shipment.';
+}
+
 /** Payment status is not proof of physical dispatch. Shared by admin and customer views. */
-export type FulfillmentOrder = { status: string; data?: { internalTest?: boolean; shipment?: { status?: string; checkedAt?: number }; tracking?: string } };
+export type FulfillmentOrder = { status: string; data?: { items?: unknown; internalTest?: boolean; shipment?: { status?: string; checkedAt?: number }; tracking?: string } };
 const moving = new Set(['in_transit', 'out_for_delivery', 'available_for_pickup']);
 const problems = new Set(['return_to_sender', 'failure', 'cancelled', 'error']);
 export function fulfillmentLabel(order: FulfillmentOrder): string {
@@ -12,7 +30,7 @@ export function fulfillmentLabel(order: FulfillmentOrder): string {
     if (order.status === 'delivered') return 'Marked delivered by store; carrier delivery unconfirmed';
     if (order.data?.shipment) return 'Label created: awaiting carrier acceptance';
     if (order.status === 'shipped') return 'Marked dispatched by store; carrier acceptance unconfirmed';
-    if (order.status === 'paid') return 'Payment confirmed: awaiting packing and dispatch';
+    if (order.status === 'paid') return orderPreorderNotice(order.data) ? 'Payment confirmed. ' + orderPreorderNotice(order.data) : 'Payment confirmed: awaiting packing and dispatch';
     if (order.status === 'labeling') return 'Preparing shipment: label purchase in progress';
     return ({ creating: 'Checkout being prepared', awaiting_payment: 'Unpaid checkout: payment not confirmed', pending: 'Payment not confirmed: needs verification', review: 'Payment requires review', cancelled: 'Cancelled', canceled: 'Cancelled', refunded: 'Refunded', failed: 'Payment unsuccessful' } as Record<string, string>)[order.status] || order.status.replaceAll('_', ' ');
 }

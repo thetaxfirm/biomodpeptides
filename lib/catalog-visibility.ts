@@ -1,4 +1,5 @@
 import { products } from './catalog';
+import { savedPreorder } from './fulfillment';
 import type { CartLine } from './commerce';
 
 const currentProducts = new Map(products.map(product => [product.id, product]));
@@ -21,7 +22,7 @@ export function orderView(data: Record<string, any>) {
       id: item.id, quantity: item.quantity, lineTotal: item.lineTotal,
       ...(product ? { packId: item.packId, packSize: item.packSize, packKind: item.packKind, presaleId: item.presaleId } : {}),
       unavailable: !product,
-      product: { id: item.id, name: product?.name || 'Archived product', price: item.product?.price },
+      product: { id: item.id, name: product?.name || 'Archived product', price: item.product?.price, ...(savedPreorder(item.product?.activePreorder) ? { activePreorder: savedPreorder(item.product.activePreorder) } : {}) },
     };
   });
   return { ...(data.internalTest === true ? {internalTest:true} : {}), ...(data.recovery ? {recovery:{savings:data.recovery.savings,appliedAt:data.recovery.appliedAt}} : {}), items, subtotal: data.subtotal, discount: data.discount, shipping: data.shipping, tax: data.tax, total: data.total, address: data.address, tracking: data.tracking, ...(data.shipment ? { shipment: { status: data.shipment.status, checkedAt: data.shipment.checkedAt } } : {}), catalogUnavailable: unavailableOrder(data) };

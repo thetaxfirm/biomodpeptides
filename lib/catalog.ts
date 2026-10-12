@@ -1,4 +1,5 @@
 import source from './catalog-facts-v2.json';
+import { initialRunIds, initialRunPreorder } from './preorders';
 import specificationReviews from './product-specification-review-v1.json';
 const specificationReviewsBySlug: Record<string, string> = specificationReviews;
 import vialBranding from './vial-branding-v37.json';
@@ -18,6 +19,8 @@ export type Product = {
     regularPrice: number;
     sale?: { enabled: boolean; percentOff: number; starts: string; ends: string } | null;
     activeSale?: { percentOff: number; ends: string; basePrice: number; basePackPrices?: Record<string, number | null> };
+    preorder?: { enabled: boolean; percentOff: number; ships: string } | null;
+    activePreorder?: { percentOff: number; ships: string; basePrice: number; basePackPrices?: Record<string, number | null> };
     packPrices?: Record<string, number | null>;
     currency: string;
     inStock: boolean;
@@ -38,7 +41,7 @@ export type Product = {
     maxQuantity?: number;
     presaleId?: string | null;
 };
-export const products: Product[] = (source as Product[]).map(p => ({ ...p, categories: p.categories.map(c => c.slug === 'research-peptides' ? { slug: 'research-compounds', name: 'Research Compounds' } : c), ...(competitive as Record<string, Pick<Product, 'price' | 'packPrices'>>)[p.slug], ...(retail as Record<string, Pick<Product, 'price' | 'packPrices'>>)[p.slug], shortDescription: p.description, description: p.description.replaceAll('—', '-') })).map(p => specificationReviewsBySlug[p.slug] ? { ...p, casNumber: '', sourceIssues: [...p.sourceIssues, specificationReviewsBySlug[p.slug]], ...(p.slug === 'tb500-10mg' ? { identity: 'TB-500 (sequence confirmation pending)', description: 'TB-500 supplied in a 10 mg vial. Full-length versus fragment specification requires confirmation.', shortDescription: 'TB-500 supplied in a 10 mg vial. Full-length versus fragment specification requires confirmation.' } : {}) } : p).sort((a, b) => a.name.localeCompare(b.name));
+export const products: Product[] = (source as Product[]).map(p => ({ ...p, ...(initialRunIds.includes(p.id) ? { preorder: { ...initialRunPreorder } } : {}), categories: p.categories.map(c => c.slug === 'research-peptides' ? { slug: 'research-compounds', name: 'Research Compounds' } : c), ...(competitive as Record<string, Pick<Product, 'price' | 'packPrices'>>)[p.slug], ...(retail as Record<string, Pick<Product, 'price' | 'packPrices'>>)[p.slug], shortDescription: p.description, description: p.description.replaceAll('—', '-') })).map(p => specificationReviewsBySlug[p.slug] ? { ...p, casNumber: '', sourceIssues: [...p.sourceIssues, specificationReviewsBySlug[p.slug]], ...(p.slug === 'tb500-10mg' ? { identity: 'TB-500 (sequence confirmation pending)', description: 'TB-500 supplied in a 10 mg vial. Full-length versus fragment specification requires confirmation.', shortDescription: 'TB-500 supplied in a 10 mg vial. Full-length versus fragment specification requires confirmation.' } : {}) } : p).sort((a, b) => a.name.localeCompare(b.name));
 export const categories = [{ slug: 'research-compounds', name: 'Research Compounds' }, { slug: 'softgels', name: 'Softgels' }, { slug: 'spray-products', name: 'Nasal & spray products' }, { slug: 'aminos-liquids', name: 'Aminos & Liquids' }];
 export const money = (c: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(c / 100);
 export const size = (p: Product) => p.sizes[0] || '';

@@ -55,6 +55,7 @@ const provider={
 const filename=path.join(root,'components/store/account.tsx');
 const mod=new Module(filename,module);mod.filename=filename;mod.paths=Module._nodeModulePaths(root);
 mod.require=id=>{
+ if(id==='@/lib/preorders'||id==='./preorder-notice'){const m={exports:{}};const filename=require('node:path').join(root,id==='@/lib/preorders'?'lib/preorders.ts':'components/store/preorder-notice.tsx');new Function('exports','require',require('typescript').transpileModule(require('node:fs').readFileSync(filename,'utf8'),{compilerOptions:{module:1,target:9,jsx:4}}).outputText)(m.exports,require);return m.exports;}
  if(id==='@/lib/fulfillment'){const m={exports:{}};new Function('exports',require('typescript').transpileModule(require('node:fs').readFileSync(require('node:path').join(root,'lib/fulfillment.ts'),'utf8'),{compilerOptions:{module:1,target:9}}).outputText)(m.exports);return m.exports;}
   if(id==='react')return hooks;if(id==='react/jsx-runtime')return require('react/jsx-runtime');
   if(id==='./provider')return provider;

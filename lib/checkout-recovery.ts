@@ -1,3 +1,4 @@
+import { orderHasPreorder } from './fulfillment';
 // Private, order-bound recovery. No public coupon; no client-supplied percentages.
 import { createPaymentAdapter, paymentEnvironment, getPaymentStatus } from './payments';
 import { checkoutTax } from './checkout-tax';
@@ -23,7 +24,7 @@ export function recoveryAmounts(saved:Record<string,any>) {
 export function recoveryEligible(order:Order,env:CoaEnvironment,startsAt:number,now:number):boolean {
  const d=json(order.data), email=coaEmail(d?.email);
  const admin=(env.STORE_ADMIN_EMAILS||'').toLowerCase().split(',').map(x=>x.trim());
- return Boolean(d && email && !admin.includes(email) && !d.internalTest && !d.recovery && !d.campaignId && !order.payment_ref && !order.notification_id && ['awaiting_payment','pending'].includes(order.status) && d.environment===paymentEnvironment(env) && getPaymentStatus(env).state==='live' && getPaymentStatus(env).checkoutEnabled && order.created>=startsAt && now-order.created>=RECOVERY_DAY && now-order.created<WEEK && (!d.lastPaymentFormAt || (Number.isSafeInteger(d.lastPaymentFormAt) && now-d.lastPaymentFormAt>=RECOVERY_DAY)) && !unavailableOrder(d));
+ return Boolean(d && email && !admin.includes(email) && !d.internalTest && !d.recovery && !d.campaignId && !orderHasPreorder(d) && !order.payment_ref && !order.notification_id && ['awaiting_payment','pending'].includes(order.status) && d.environment===paymentEnvironment(env) && getPaymentStatus(env).state==='live' && getPaymentStatus(env).checkoutEnabled && order.created>=startsAt && now-order.created>=RECOVERY_DAY && now-order.created<WEEK && (!d.lastPaymentFormAt || (Number.isSafeInteger(d.lastPaymentFormAt) && now-d.lastPaymentFormAt>=RECOVERY_DAY)) && !unavailableOrder(d));
 }
 export async function recoveryAdminStatus(env:CoaEnvironment) {
  const row=await env.DB.prepare("SELECT value FROM settings WHERE key='checkout_recovery_v1'").first<{value:string}>();

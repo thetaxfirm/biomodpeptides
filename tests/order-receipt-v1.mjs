@@ -6,9 +6,9 @@ import assert from 'node:assert/strict';
 import ts from 'typescript';
 const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'biomod-receipt-v1-'));
 try {
-  for (const name of ['order-summary', 'private-presentation']) {
+  for (const name of ['order-summary', 'private-presentation', 'fulfillment']) {
     const source = await fs.readFile(new URL('../lib/' + name + '.ts', import.meta.url), 'utf8');
-    const out = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText.replace(/from '\.\/private-presentation'/g, "from './private-presentation.mjs'");
+    const out = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText.replace(/from '\.\/private-presentation'/g, "from './private-presentation.mjs'").replace(/from '\.\/fulfillment'/g, "from './fulfillment.mjs'");
     await fs.writeFile(path.join(temp, name + '.mjs'), out);
   }
   const s = await import(path.join(temp, 'order-summary.mjs'));

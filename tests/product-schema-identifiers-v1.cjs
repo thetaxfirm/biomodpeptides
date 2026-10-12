@@ -92,6 +92,18 @@ function noInventedIdentifiers(node) {
     assert.equal(assigned, 16);
     assert.equal(missing, 1);
 
+    const eligiblePreorder = snapshot.products.find(product => product.id === reviewed[0].id);
+    eligiblePreorder.activePreorder = { percentOff: 15, ships: 'early November 2026', basePrice: eligiblePreorder.price };
+    eligiblePreorder.price = Math.round(eligiblePreorder.price * .85);
+    const preorderOffer = productNode(await routeStructuredData('/product/' + eligiblePreorder.slug, config)).offers;
+    assert.equal(preorderOffer.availability, 'https://schema.org/PreOrder');
+    assert.equal(preorderOffer.price, (eligiblePreorder.price / 100).toFixed(2));
+    eligiblePreorder.inStock = false;
+    assert.equal(productNode(await routeStructuredData('/product/' + eligiblePreorder.slug, config)).offers.availability, 'https://schema.org/OutOfStock');
+    snapshot = { verified: true, products: products.map(product => ({ ...product })) };
+    const heldPreorder = products.find(product => product.categories.some(c => c.slug === 'softgels'));
+    assert.equal(await routeStructuredData('/product/' + heldPreorder.slug, config), null, 'Preorder cannot enable a publication hold');
+
     const ss31 = reviewed.find(product => product.slug === 'ss-31-50mg');
     assert(ss31);
     assert.equal(ss31.sku, '', 'Known source does not assign a SKU to SS-31 50mg');

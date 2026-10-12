@@ -1,5 +1,6 @@
 'use client';
 import { money } from '@/lib/catalog';
+import { savedPreorder, orderPreorderNotice } from '@/lib/fulfillment';
 // Full order for the admin Orders tab: who ordered, every item and quantity, and how the total was reached.
 const packLabel = (i: any) => i.packSize ? (i.packKind === 'fixed' ? 'Fixed ' : 'Mixed ') + i.packSize + '-pack' : '';
 export function OrderDetails({ order }: { order: any }) {
@@ -10,9 +11,10 @@ export function OrderDetails({ order }: { order: any }) {
     return <div className="order-details">
         <p><strong>Customer:</strong> {d.address?.name || 'Not recorded'}{d.email && <> · <a href={'mailto:' + d.email}>{d.email}</a></>}{d.address?.phone && <> · <a href={'tel:' + String(d.address.phone).replace(/[^0-9+]/g, '')}>{d.address.phone}</a></>}</p>
         <p><strong>Ship to:</strong> {d.address?.line1}{d.address?.line2 ? ', ' + d.address.line2 : ''}, {d.address?.city} {d.address?.state} {d.address?.zip}</p>
+        {orderPreorderNotice(d) && <p className="notice">{orderPreorderNotice(d)}</p>}
         <table className="order-items">
             <thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Line total</th></tr></thead>
-            <tbody>{items.length ? items.map((i, n) => <tr key={n}><td>{i.product?.name || 'Product ' + i.id}{packLabel(i) && <small> · {packLabel(i)}</small>}{i.presaleId && <small> · Presale</small>}</td><td>{i.quantity}</td><td>{Number.isSafeInteger(i.product?.price) ? money(i.product.price) : '—'}</td><td>{money(num(i.lineTotal))}</td></tr>) : <tr><td colSpan={4}>No items recorded on this order.</td></tr>}</tbody>
+            <tbody>{items.length ? items.map((i, n) => <tr key={n}><td>{i.product?.name || 'Product ' + i.id}{packLabel(i) && <small> · {packLabel(i)}</small>}{i.presaleId && <small> · Presale</small>}{savedPreorder(i.product?.activePreorder) && <small> · Preorder · {i.product.activePreorder.percentOff}% off included</small>}</td><td>{i.quantity}</td><td>{Number.isSafeInteger(i.product?.price) ? money(i.product.price) : '—'}</td><td>{money(num(i.lineTotal))}</td></tr>) : <tr><td colSpan={4}>No items recorded on this order.</td></tr>}</tbody>
             <tfoot>
                 <tr><td colSpan={3}>Subtotal ({units} unit{units === 1 ? '' : 's'})</td><td>{money(num(d.subtotal))}</td></tr>
                 {num(d.discount) > 0 && <tr><td colSpan={3}>Discounts{d.promo?.code ? ' (incl. promo ' + d.promo.code + ')' : ''}</td><td>−{money(num(d.discount))}</td></tr>}

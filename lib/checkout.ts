@@ -5,6 +5,7 @@ import { quote, CartLine } from './commerce';
 import { one, run, uid, timestamp, runtime, parse, database } from './runtime';
 import { createPaymentAdapter, paymentEnvironment, paymentReturnUrl } from './payments';
 import { checkoutTax } from './checkout-tax';
+import { savedPreorder } from './fulfillment';
 import { z } from 'zod';
 import { customer } from './auth';
 import { cheapestRate, easypostReady } from './easypost';
@@ -42,7 +43,7 @@ export async function deliveryQuote(lines: CartLine[], raw: unknown, preset?: { 
     const tax = await checkoutTax(runtime(), address, q.total, shipping);
     return { items: q.items, subtotal: q.subtotal, discount: q.discount, packDiscount: q.packDiscount, promoDiscount: q.promoDiscount, promo: q.promo, shipping, shippingService, tax, total: q.total + shipping + tax, address };
 }
-const quoteFingerprint = (q: Record<string, any>) => JSON.stringify({ items: q.items.map((i: any) => ({ id: i.id, quantity: i.quantity, packId: i.packId || null, packSize: i.packSize || null, packKind: i.packKind || null, lineTotal: i.lineTotal, presaleId: i.presaleId || null, price: i.product.price })), address: q.address, shipping: q.shipping, tax: q.tax, total: q.total, ...(q.promo ? { promoCode: q.promo.code } : {}) });
+export const quoteFingerprint = (q: Record<string, any>) => JSON.stringify({ items: q.items.map((i: any) => ({ id: i.id, quantity: i.quantity, packId: i.packId || null, packSize: i.packSize || null, packKind: i.packKind || null, lineTotal: i.lineTotal, presaleId: i.presaleId || null, price: i.product.price, preorder: savedPreorder(i.product.activePreorder) })), address: q.address, shipping: q.shipping, tax: q.tax, total: q.total, ...(q.promo ? { promoCode: q.promo.code } : {}) });
 export async function issueQuote(owner: string, lines: CartLine[], address: unknown, promoCode?: unknown) { const q = await deliveryQuote(lines, address, undefined, promoCode); const id = uid(); await run('INSERT INTO requests(id,owner,kind,data,created) VALUES(?,?,?,?,?)', id, owner, 'quote', JSON.stringify({ fingerprint: quoteFingerprint(q), shipping: q.shipping, shippingService: q.shippingService }), timestamp()); return { ...q, quoteId: id }; }
 export async function checkout(owner: string, lines: CartLine[], body: Record<string, any>, promoCode?: unknown) {
     if (body.accepted !== true)

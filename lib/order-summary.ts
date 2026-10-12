@@ -1,4 +1,5 @@
 import { presentationText } from './private-presentation';
+import { savedPreorder, orderPreorderNotice } from './fulfillment';
 import type { AnetOrderDetails } from './authorizenet-payments';
 // One readable summary of a saved order, shared by the admin Orders tab, the Authorize.net receipt and the store's order email.
 type Environment = Record<string, string | undefined>;
@@ -11,6 +12,8 @@ export function itemDetail(item: Record<string, any>): string {
         parts.push((item.packKind === 'fixed' ? 'Fixed ' : 'Mixed ') + item.packSize + '-pack');
     if (item.presaleId)
         parts.push('Presale');
+    const preorder = savedPreorder(item.product?.activePreorder);
+    if (preorder) parts.push('Preorder: ' + preorder.percentOff + '% off; estimated dispatch ' + preorder.ships);
     return parts.join(', ');
 }
 export function summaryItems(data: Record<string, any>): SummaryItem[] {
@@ -30,7 +33,7 @@ export function anetOrderDetails(data: Record<string, any>): AnetOrderDetails {
         taxCents: int(data.tax),
         shippingCents: int(data.shipping),
         shippingName: data.shippingService ? String(data.shippingService) : 'Shipping',
-        note: [promo, data.recovery?.savings ? 'Additional 7.5% recovery offer saved ' + money(int(data.recovery.savings)) : ''].filter(Boolean).join('; '),
+        note: [orderPreorderNotice(data), promo, data.recovery?.savings ? 'Additional 7.5% recovery offer saved ' + money(int(data.recovery.savings)) : ''].filter(Boolean).join('; '),
     };
 }
 const esc = (v: unknown) => String(v ?? '').replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
@@ -43,6 +46,7 @@ export function orderEmailHtml(orderId: string, data: Record<string, any>): stri
         + '<div style="background:#2b1030;color:#fbf1ea;padding:16px 20px;font-size:20px;font-weight:bold;letter-spacing:2px">BIOMOD</div><div style="padding:20px">'
         + '<h2 style="margin:0 0 4px;color:#2b1030">New paid order ' + esc(orderId.slice(0, 8)) + '</h2>'
         + '<p style="margin:0 0 16px;color:#5c5c5c">' + esc(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })) + ' (Pacific)</p>'
+        + (orderPreorderNotice(data) ? '<p style="padding:12px;background:#fbf1ea;color:#2b1030">' + esc(orderPreorderNotice(data)) + '</p>' : '')
         + '<table style="width:100%;border-collapse:collapse;font-size:14px"><tr><th style="text-align:left;padding-bottom:6px">Item</th><th style="padding-bottom:6px">Qty</th><th style="text-align:right;padding-bottom:6px">Total</th></tr>' + items + '</table>'
         + '<table style="width:100%;border-collapse:collapse;font-size:14px;margin-top:12px">'
         + row('Subtotal', money(int(data.subtotal)))

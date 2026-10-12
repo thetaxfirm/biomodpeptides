@@ -14,7 +14,7 @@ const dependencies={
  '@/lib/seo':{requestSEO:async()=>({}),routeMetadata:()=>({})},
  '@/lib/testing':{batchRecords:[]},
 };
-function load(file,overrides={}){const f=path.join(root,file),m=new Module(f,module);m.filename=f;m.paths=module.paths;m.require=id=>{if(id in overrides)return overrides[id];if(id in dependencies)return dependencies[id];if(id==='react/jsx-runtime')return require(id);throw Error('Unexpected dependency '+id)};m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{module:1,target:9,jsx:4,esModuleInterop:true}}).outputText,f);return m.exports;}
+function load(file,overrides={}){const f=path.join(root,file),m=new Module(f,module);m.filename=f;m.paths=module.paths;m.require=id=>{if(id in overrides)return overrides[id];if(id in dependencies)return dependencies[id];if(id==='@/lib/preorders')return load('lib/preorders.ts');if(id==='react/jsx-runtime')return require(id);throw Error('Unexpected dependency '+id)};m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{module:1,target:9,jsx:4,esModuleInterop:true}}).outputText,f);return m.exports;}
 function nodes(t,out=[]){if(Array.isArray(t))t.forEach(x=>nodes(x,out));else if(t?.props){out.push(t);nodes(t.props.children,out)}return out}
 (async()=>{
  dependencies['@/lib/auth-return']=load('lib/auth-return.ts');

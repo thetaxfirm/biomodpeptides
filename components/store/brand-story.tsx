@@ -1,12 +1,13 @@
 import { ArrowUpRight } from 'lucide-react';
 import { type Product } from '@/lib/catalog';
+import { PreorderNotice } from './preorder-notice';
 
 export function TrademarkNote() {
   return <p className="brand-trademarks">The Original Peptide Softgel™ and World’s First Peptide Softgel™ are BIOMOD brand marks.</p>;
 }
 
-export function SoftgelCollectionIntro() {
-  return <section className="softgel-collection-intro"><div><h2>The Original Peptide Softgel™</h2><p>Our own formulations. California softgel manufacturing. A brand rooted in Las Vegas research compound retail.</p><a className="editorial-link" href="/softgels">Inside BIOMOD softgels <ArrowUpRight size={18}/></a></div><img src="/products/softgel-bionic-bpc-157-arginate-kpv-vitamin-e-bottle-v9.png" alt="BIOMOD BIONIC bottle illustration" width={1254} height={1254}/></section>;
+export function SoftgelCollectionIntro({ preorderProduct }: { preorderProduct?: Product } = {}) {
+  return <section className="softgel-collection-intro"><div><h2>The Original Peptide Softgel™</h2><p>Our own formulations. California softgel manufacturing. A brand rooted in Las Vegas research compound retail.</p>{preorderProduct && <PreorderNotice product={preorderProduct} compact/>}<a className="editorial-link" href="/softgels">Inside BIOMOD softgels <ArrowUpRight size={18}/></a></div><img src="/products/softgel-bionic-bpc-157-arginate-kpv-vitamin-e-bottle-v9.png" alt="BIOMOD BIONIC bottle illustration" width={1254} height={1254}/></section>;
 }
 
 export function SoftgelProductStory({ product }: { product: Product }) {

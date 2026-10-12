@@ -65,7 +65,7 @@ export async function routeStructuredData(path: string, config: SEOConfig = curr
         ...certificateProperties(p.id)],
       ...(snapshot.verified && live && live.price > 0 ? { offers: { '@type': 'Offer', url: config.origin + clean,
         priceCurrency: 'USD', price: (live.price / 100).toFixed(2),
-        availability: live.inStock && live.purchasable ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+        availability: live.inStock && live.purchasable ? live.activePreorder ? 'https://schema.org/PreOrder' : 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
         seller: { '@id': organization['@id'] },
         ...(policies ? { hasMerchantReturnPolicy: { '@id': policies.hasMerchantReturnPolicy['@id'] } } : {}),
         ...(policies?.hasShippingService ? { shippingDetails: { '@type': 'OfferShippingDetails', hasShippingService: { '@id': policies.hasShippingService['@id'] } } } : {}),
