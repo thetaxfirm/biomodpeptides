@@ -28,7 +28,8 @@ export function safeAuthReturn(value: unknown): string {
 
 export function authLink(route: AuthRoute, returnTo: unknown): string {
   const destination = safeAuthReturn(returnTo);
-  return '/' + route + (destination === '/account' ? '' : '?returnTo=' + encodeURIComponent(destination));
+  const entry = route === 'login' && /^\/admin(?:[?#]|$)/.test(destination) ? '/admin/login' : '/' + route;
+  return entry + (destination === '/account' ? '' : '?returnTo=' + encodeURIComponent(destination));
 }
 
 /** End the browser session without deleting either stored cart. */

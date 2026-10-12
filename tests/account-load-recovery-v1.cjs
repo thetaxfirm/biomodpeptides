@@ -207,7 +207,7 @@ const submitProfile=host=>find(host,n=>n.type==='form').props.onSubmit({preventD
     host.unmount();host=harness(()=>AuthPage({mode:'forgot-password',returnTo:destination}));
     assert.equal(text(find(host,n=>n.type==='h1')),isAdmin?'Set your admin password':'Reset your password');
     assert.equal(text(host.tree).includes('Access is limited to approved administrator addresses.'),isAdmin);
-    assert(nodes(host.tree).some(n=>n.type==='a'&&n.props.href===(isAdmin?destination:authLink('login',destination))&&text(n)==='Back to sign in'));
+    assert(nodes(host.tree).some(n=>n.type==='a'&&n.props.href===authLink('login',destination)&&text(n)==='Back to sign in'));
     assert.equal(apiCalls.length,0,'Rendering destinations never submits auth or account actions');host.unmount();
   }
   assert(everyCall.every(c=>c.action==='account'||c.action==='profile'),'No cart, payment, email or order mutation calls');

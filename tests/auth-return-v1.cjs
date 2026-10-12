@@ -14,5 +14,7 @@ for (const destination of ['/admin', '/admin?tab=orders', '/admin?tab=promos']) 
     assert.equal(new URL(link, 'https://example.invalid').searchParams.get('returnTo'), destination);
   }
 }
+assert.equal(authLink('login', '/admin'), '/admin/login?returnTo=%2Fadmin');
+assert.equal(authLink('login', '/admin?tab=orders'), '/admin/login?returnTo=%2Fadmin%3Ftab%3Dorders');
 assert.equal(AUTH_RETURN_MAX_AGE, 3600);
 console.log('PASS: checkout/admin deep-link return routing and encoded open-redirect rejection');

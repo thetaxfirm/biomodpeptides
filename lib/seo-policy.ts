@@ -57,6 +57,7 @@ export function canonicalPath(path: string) {
 }
 export function pageInfo(path: string) {
   path = canonicalPath(path);
+  if (path === '/admin/login') return { title: 'Administrator Sign In', description: 'Sign in to TryBiomod store administration.', eligible: false };
   if (path === '/admin') return { title: 'TryBiomod Administration', description: 'Secure administrator access to the shared TryBiomod store.', eligible: false };
   const p = productAt(path);
   if (p) {

@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
 const queryParams = (query: Record<string, string | string[]>) => new URLSearchParams(Object.entries(query).flatMap(([key, value]) => (Array.isArray(value) ? value : [value]).map(v => [key, v])));
 function validPath(path: string) {
   if (pageRecords['/' + path] || productAt('/' + path)) return true;
-  if (['cart', 'checkout', 'payment/return', 'login', 'register', 'forgot-password', 'reset-password', 'admin', 'account', 'about-biomod', 'coa', 'affiliate-program'].includes(path)) return true;
+  if (['cart', 'checkout', 'payment/return', 'login', 'register', 'forgot-password', 'reset-password', 'admin', 'admin/login', 'account', 'about-biomod', 'coa', 'affiliate-program'].includes(path)) return true;
   if (/^account\/(orders|addresses|wishlist|rewards|affiliate|notifications|profile)$/.test(path)) return true;
   if (path.startsWith('testing/')) return batchRecords.some(record => record.record_id === path.slice(8) || record.product_lot === path.slice(8));
   return false;
@@ -38,6 +38,20 @@ export default async function Page({ params, searchParams }: Props) {
   if (route === 'coa') permanentRedirect('/testing');
   if (route === 'affiliate-program') permanentRedirect('/account/affiliate');
   const query = { ...await searchParams };
+  if (route === 'admin' || route === 'admin/login') {
+    const user = await customer();
+    const requested = Array.isArray(query.returnTo) ? query.returnTo[0] : query.returnTo;
+    const safe = safeAuthReturn(requested);
+    const destination = /^\/admin(?:[?#]|$)/.test(safe) ? safe : '/admin';
+    if (route === 'admin/login') {
+      query.returnTo = destination;
+      if (user && isAdminEmail(user.email)) redirect(destination);
+    } else if (!user) {
+      const tab = Array.isArray(query.tab) ? query.tab[0] : query.tab;
+      const returnTo = '/admin' + (tab ? '?tab=' + encodeURIComponent(tab) : '');
+      redirect('/admin/login?returnTo=' + encodeURIComponent(returnTo));
+    }
+  }
   if (authRoutes.some(authRoute => authRoute === route)) {
     const requested = query.returnTo ?? query.redirect;
     const destination = Array.isArray(requested) ? requested[0] : requested;

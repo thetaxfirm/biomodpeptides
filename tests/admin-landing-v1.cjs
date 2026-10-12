@@ -17,12 +17,19 @@ const dependencies={
 function load(file,overrides={}){const f=path.join(root,file),m=new Module(f,module);m.filename=f;m.paths=module.paths;m.require=id=>{if(id in overrides)return overrides[id];if(id in dependencies)return dependencies[id];if(id==='react/jsx-runtime')return require(id);throw Error('Unexpected dependency '+id)};m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{module:1,target:9,jsx:4,esModuleInterop:true}}).outputText,f);return m.exports;}
 function nodes(t,out=[]){if(Array.isArray(t))t.forEach(x=>nodes(x,out));else if(t?.props){out.push(t);nodes(t.props.children,out)}return out}
 (async()=>{
+ dependencies['@/lib/auth-return']=load('lib/auth-return.ts');
  const Page=load('app/[...path]/page.tsx').default;
- const visit=route=>Page({params:Promise.resolve({path:route.split('/')}),searchParams:Promise.resolve({})});
+ const visit=(route,query={})=>Page({params:Promise.resolve({path:route.split('/')}),searchParams:Promise.resolve(query)});
  for(const email of ['ash@biomodcompounds.com','chris@biomodcompounds.com','ASH@BIOMODCOMPOUNDS.COM']){
   user={id:'isolated-admin',email};await assert.rejects(visit('account'),e=>e.destination==='/admin');
-  for(const route of ['account/orders','account/profile','account/wishlist','admin']){const before=authReads;await visit(route);assert.equal(authReads,before,'Explicit destinations are preserved; admin guards remain in Admin/API');}
+  for(const route of ['account/orders','account/profile','account/wishlist']){const before=authReads;await visit(route);assert.equal(authReads,before,'Explicit destinations are preserved; admin guards remain in Admin/API');}
  }
+ user=null; await assert.rejects(visit('admin'),e=>e.destination==='/admin/login?returnTo=%2Fadmin');
+ await visit('admin/login');
+ await assert.rejects(visit('admin',{tab:'promos'}),e=>e.destination==='/admin/login?returnTo=%2Fadmin%3Ftab%3Dpromos');
+ for(const email of ['ash@biomodcompounds.com','chris@biomodcompounds.com']){user={email};await assert.rejects(visit('admin/login'),e=>e.destination==='/admin');await visit('admin');}
+ for(const destination of ['https://evil.example','//evil.example','/account','/admin/login','/%2fevil.example']) await assert.rejects(visit('admin/login',{returnTo:destination}),e=>e.destination==='/admin');
+ await assert.rejects(visit('admin/login',{returnTo:'/admin?tab=promos'}),e=>e.destination==='/admin?tab=promos');
  for(const identity of [null,{id:'buyer',email:'buyer@example.invalid'},{id:'lookalike',email:'ash@biomodcompounds.com.evil.invalid'}]){user=identity;await visit('account');}
  let store={customer:null,admin:false,cart:[]};
  const Header=load('components/store/header.tsx',{'./provider':{useStore:()=>({store})},'./product-image':{ProductImage:'img'},'lucide-react':new Proxy({},{get:()=>()=>null}),'@/components/ui/sheet':new Proxy({},{get:()=>()=>null}),'@/lib/catalog':{money:String}}).Header;
