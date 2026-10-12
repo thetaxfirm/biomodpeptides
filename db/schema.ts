@@ -60,3 +60,18 @@ export const staff=sqliteTable('staff',{
 export const staffAudit=sqliteTable('staff_audit',{
  id:text('id').primaryKey(),actor:text('actor').notNull(),email:text('email').notNull(),role:text('role').notNull(),active:integer('active').notNull(),created:integer('created').notNull(),
 },t=>[index('staff_audit_created').on(t.created),check('staff_audit_active',sql`${t.active} IN (0,1)`)]);
+
+// Append-only audit records are enforced by database triggers in 0020_change_history.sql.
+export const changeEvents=sqliteTable('change_events',{
+ id:text('id').primaryKey(),occurredAt:integer('occurred_at').notNull(),recordedAt:integer('recorded_at').notNull(),
+ source:text('source').notNull(),actor:text('actor').notNull(),actorType:text('actor_type').notNull(),action:text('action').notNull(),
+ entityType:text('entity_type').notNull(),entityId:text('entity_id').notNull(),summary:text('summary').notNull(),status:text('status').notNull(),
+ changes:text('changes').notNull(),evidenceUrl:text('evidence_url'),evidenceRef:text('evidence_ref'),
+},t=>[index('change_events_time').on(sql`${t.occurredAt} DESC`,sql`${t.id} DESC`),index('change_events_source_time').on(t.source,sql`${t.occurredAt} DESC`,sql`${t.id} DESC`),check('change_events_json',sql`json_valid(${t.changes})`)]);
+export const changeHistorySync=sqliteTable('change_history_sync',{
+ source:text('source').primaryKey(),syncedAt:integer('synced_at').notNull(),state:text('state').notNull(),description:text('description').notNull(),
+});
+// A singleton row exists only inside each audit transaction, never across network calls.
+export const changeContext=sqliteTable('change_context',{
+ id:integer('id').primaryKey(),actor:text('actor').notNull(),actorType:text('actor_type').notNull(),source:text('source').notNull(),action:text('action'),summary:text('summary'),
+},t=>[check('change_context_singleton',sql`${t.id}=1`)]);

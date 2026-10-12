@@ -65,7 +65,7 @@ function fixture(processor = async () => ({ processed: 0, accepted: 0, review: 0
   // Start is persisted before configuration reads; readiness precedes actual processing.
   let f;
   f = fixture(async (env, options) => {
-    assert.equal(env, f.env); assert.deepEqual(options, { limit: 5 });
+    assert.equal(env.DB, f.env.DB); assert.deepEqual(options, { limit: 5 });
     assert.equal(f.health().status, 'running'); assert.equal(f.health().phase, 'processing');
     assert.equal(f.health().enabled, true); assert.equal(f.health().mailConfigured, true);
     f.time(BASE + 3000);
@@ -133,6 +133,7 @@ function fixture(processor = async () => ({ processed: 0, accepted: 0, review: 0
   const http = { fetch: () => new Response('isolated fixture') };
   const worker = load('worker.ts', {
     './lib/checkout-recovery': { runCheckoutRecovery: async()=>({}) },
+    './lib/change-history': { withAuditDb: db=>db },
     'vinext/server/fetch-handler': http,
     './lib/traffic-metrics-server': { cleanupTraffic: async db => { assert.equal(db, f.env.DB); cleanup++; } },
     './lib/coa-scheduler': { runScheduledCoaOutbox: (env, time) => f.helper.runScheduledCoaOutbox(env, time, f.deps) },

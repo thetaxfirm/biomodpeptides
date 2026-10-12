@@ -1,3 +1,4 @@
+import { migrationStatements } from './sql-migration-fixture.mjs';
 // Actual built Worker + isolated local D1. No environment files, network services,
 // production bindings, customer data, or production event submissions are used.
 import assert from 'node:assert/strict';
@@ -42,10 +43,10 @@ const mf = new Miniflare({
 try {
   await mf.ready;
   const db = await mf.getD1Database('DB');
-  const migration = (await Promise.all(['0014_aggregate_traffic.sql', '0015_aggregate_shopping.sql'].map(name => fs.readFile(path.join(root, 'drizzle', name), 'utf8')))).join('\n');
-  // D1 exec parses each statement; strip comment-only lines without altering SQL.
-  const statements = migration.replace(/^--.*$/gm, '').split(';').map(value => value.trim()).filter(Boolean);
-  await db.batch(statements.map(sql => db.prepare(sql)));
+  for (const name of (await fs.readdir(path.join(root, 'drizzle'))).filter(name => name.endsWith('.sql')).sort()) {
+    const sql = await fs.readFile(path.join(root, 'drizzle', name), 'utf8');
+    await db.batch(migrationStatements(sql).map(statement => db.prepare(statement)));
+  }
   await db.batch([
     db.prepare('INSERT INTO traffic_daily VALUES(?,?,?,?)').bind(expired, 'home', 'internal', 2),
     db.prepare('INSERT INTO traffic_daily VALUES(?,?,?,?)').bind(cutoff, 'home', 'internal', 3),
@@ -89,7 +90,9 @@ try {
   const report = await mf.dispatchFetch(origin + '/api/metrics/report?days=invalid');
   assert.equal(report.status, 403, 'Anonymous authorization failure precedes invalid query validation in actual route');
   assert.equal(report.headers.get('set-cookie'), null); assert.equal(await total(), 4);
-  assert.equal((await db.prepare("SELECT COUNT(*) n FROM sqlite_master WHERE name IN ('sessions','rate_limits','orders')").first()).n, 0, 'Metrics work without commerce tables or sessions');
+  for (const table of ['sessions','rate_limits','orders']) assert.equal((await db.prepare(`SELECT COUNT(*) n FROM ${table}`).first()).n, 0, 'Metrics create no customer sessions, rate-limit identities or commerce records');
+  assert.equal((await db.prepare('SELECT COUNT(*) n FROM change_events').first()).n, 0, 'Routine page/stage events and retention housekeeping must not create admin history noise');
+  assert.equal((await db.prepare('SELECT COUNT(*) n FROM change_context').first()).n, 0);
   assert.equal(outboundAttempts, 0, 'No external services were contacted');
   console.log('PASS: actual built Worker scheduled cleanup, local D1 transaction/retention boundary and health, separate isolated page/stage ingestion, GPC/DNT no-write, foreign-origin rejection, no cookies, and report authorization before validation. Production untouched.');
 } finally {

@@ -1,3 +1,4 @@
+import { withAuditDb, auditRun, type AuditActor } from './change-history';
 import { unavailableOrder } from './catalog-visibility';
 import inventorySql from './inventory-statements.json';
 import { sendOrderNotification } from './order-summary';
@@ -46,6 +47,8 @@ export async function deliveryQuote(lines: CartLine[], raw: unknown, preset?: { 
 export const quoteFingerprint = (q: Record<string, any>) => JSON.stringify({ items: q.items.map((i: any) => ({ id: i.id, quantity: i.quantity, packId: i.packId || null, packSize: i.packSize || null, packKind: i.packKind || null, lineTotal: i.lineTotal, presaleId: i.presaleId || null, price: i.product.price, preorder: savedPreorder(i.product.activePreorder) })), address: q.address, shipping: q.shipping, tax: q.tax, total: q.total, ...(q.promo ? { promoCode: q.promo.code } : {}) });
 export async function issueQuote(owner: string, lines: CartLine[], address: unknown, promoCode?: unknown) { const q = await deliveryQuote(lines, address, undefined, promoCode); const id = uid(); await run('INSERT INTO requests(id,owner,kind,data,created) VALUES(?,?,?,?,?)', id, owner, 'quote', JSON.stringify({ fingerprint: quoteFingerprint(q), shipping: q.shipping, shippingService: q.shippingService }), timestamp()); return { ...q, quoteId: id }; }
 export async function checkout(owner: string, lines: CartLine[], body: Record<string, any>, promoCode?: unknown) {
+    const auditActor: AuditActor = { source: 'system', actor: 'Website checkout', actorType: 'system', action: 'checkout.state' };
+    const run = (sql: string, ...values: (string | number | null)[]) => auditRun(database(), auditActor, sql, ...values);
     if (body.accepted !== true)
         throw new Error('Confirm that you are 21 or older and purchasing for laboratory research only.');
     if (typeof body.requestKey !== 'string' || !/^[a-f0-9-]{36}$/.test(body.requestKey))
@@ -90,7 +93,7 @@ export async function checkout(owner: string, lines: CartLine[], body: Record<st
     const email = (await customer())?.email || '';
     const saved = { ...q, email, fingerprint, environment: paymentEnvironment(runtime()), campaignId, campaignLimit: campaign?.maxPerCustomer || null, unitCount: lines.reduce((s, l) => s + l.quantity, 0) };
     const id = uid();
-    const db=database();
+    const db=withAuditDb(database(), auditActor);
     try { await db.batch([
       db.prepare(inventorySql.insertOrder).bind(id,owner,body.requestKey,'creating',JSON.stringify(saved),q.total,adapter.reference(id),timestamp(),timestamp()),
       db.prepare(inventorySql.reserve).bind(id),
@@ -107,7 +110,9 @@ export async function checkout(owner: string, lines: CartLine[], body: Record<st
         throw new Error('Checkout could not be confirmed. Please contact us with order ' + id.slice(0, 8) + '. Do not submit another payment.');
     }
 }
-export async function reconcile(owner: string, id: string, hints: string[] = []) { const row = await one<{
+export async function reconcile(owner: string, id: string, hints: string[] = [], auditActor: AuditActor = { source: 'system', actor: 'Payment reconciliation', actorType: 'system', action: 'payment.reconcile' }) {
+ const run = (sql: string, ...values: (string | number | null)[]) => auditRun(database(), auditActor, sql, ...values);
+ const row = await one<{
     id: string;
     total: number;
     status: string;
@@ -121,7 +126,7 @@ export async function reconcile(owner: string, id: string, hints: string[] = [])
     await run('UPDATE orders SET status=?,updated=? WHERE id=?', 'review', timestamp(), id);
     throw new Error('This payment is outside the online verification window. Contact Biomod for reconciliation.');
 } const result = await createPaymentAdapter(runtime()).verifyPayment({ id, totalCents: row.total, currency: 'USD' }, row.checkout_ref, hints, row.created); if (result.state === 'paid' && (!result.notificationId || !result.providerReference))
-    throw new Error('Payment requires review.'); const state = result.noPaymentFound ? 'awaiting_payment' : result.state === 'failed' || result.state === 'pending' ? 'review' : result.state; const db=database();const written=await db.batch([
+    throw new Error('Payment requires review.'); const state = result.noPaymentFound ? 'awaiting_payment' : result.state === 'failed' || result.state === 'pending' ? 'review' : result.state; const db=withAuditDb(database(), auditActor);const written=await db.batch([
  db.prepare(inventorySql.paymentStatus + ' AND total=?').bind(state,result.state==='paid'?result.providerReference:null,result.notificationId||null,timestamp(),id,row.total),
  db.prepare(inventorySql.settleInventory).bind(id,id,id),
  db.prepare(inventorySql.clearSettledReservation).bind(id,id)

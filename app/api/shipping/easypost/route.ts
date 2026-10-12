@@ -1,6 +1,7 @@
+import { withAuditDb } from '@/lib/change-history';
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyEasypostWebhook } from '@/lib/easypost';
-import { run, runtime, timestamp } from '@/lib/runtime';
+import { runtime, timestamp } from '@/lib/runtime';
 export const dynamic = 'force-dynamic';
 // EasyPost webhook receiver. Register https://trybiomod.com/api/shipping/easypost in EasyPost (Settings -> Webhooks)
 // with a webhook secret, and save that secret in Cloudflare as EASYPOST_WEBHOOK_SECRET.
@@ -31,7 +32,8 @@ export async function POST(req: NextRequest) {
     if (!['unknown','pre_transit','in_transit','out_for_delivery','available_for_pickup','delivered','return_to_sender','failure','cancelled','error'].includes(status) || typeof t.shipment_id !== 'string') return reply(200);
     try {
         // Record the latest carrier status on the order, and mark it delivered when the carrier says so.
-        await run("UPDATE orders SET data=json_set(data,'$.shipment.status',?,'$.shipment.checkedAt',?),status=CASE WHEN ?='delivered' AND status IN ('paid','shipped') THEN 'delivered' WHEN ? IN ('in_transit','out_for_delivery','available_for_pickup') AND status='paid' THEN 'shipped' ELSE status END,updated=? WHERE json_extract(data,'$.shipment.tracking')=? AND json_extract(data,'$.shipment.shipmentId')=? AND coalesce(json_extract(data,'$.shipment.checkedAt'),0)<=?", status, observed, status, status, timestamp(), code, t.shipment_id, observed);
+        const db = withAuditDb(runtime().DB, { source: 'system', actor: 'Verified EasyPost tracking webhook', actorType: 'system' });
+        await db.prepare("UPDATE orders SET data=json_set(data,'$.shipment.status',?,'$.shipment.checkedAt',?),status=CASE WHEN ?='delivered' AND status IN ('paid','shipped') THEN 'delivered' WHEN ? IN ('in_transit','out_for_delivery','available_for_pickup') AND status='paid' THEN 'shipped' ELSE status END,updated=? WHERE json_extract(data,'$.shipment.tracking')=? AND json_extract(data,'$.shipment.shipmentId')=? AND coalesce(json_extract(data,'$.shipment.checkedAt'),0)<=?").bind(status, observed, status, status, timestamp(), code, t.shipment_id, observed).run();
         return reply(200);
     }
     catch {

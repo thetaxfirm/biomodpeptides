@@ -1,3 +1,4 @@
+import { migrationStatements } from './sql-migration-fixture.mjs';
 // Built Worker, isolated D1 and mocked authentication/carriers. No live account or email calls.
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -24,8 +25,8 @@ const origin='https://trybiomod.com',id='00000001-0000-4000-8000-000000000001';
 try{
  await mf.ready;const db=await mf.getD1Database('DB');
  for(const name of (await fs.readdir(path.join(root,'drizzle'))).filter(n=>n.endsWith('.sql')).sort()){
-  const sql=(await fs.readFile(path.join(root,'drizzle',name),'utf8')).replace(/^--.*$/gm,'');
-  await db.batch(sql.split(';').map(v=>v.trim()).filter(Boolean).map(v=>db.prepare(v)));
+  const sql=await fs.readFile(path.join(root,'drizzle',name),'utf8');
+  await db.batch(migrationStatements(sql).map(v=>db.prepare(v)));
  }
  await db.prepare('INSERT INTO orders(id,owner,request_key,status,total,data,created,updated) VALUES(?,?,?,?,?,?,?,?)').bind(id,'fixture-admin','fixture-session','shipped',10000,JSON.stringify({items:[],email:fixtureEmail,shipment:{shipmentId:'shp_fixture',tracking:'FIXTURETRACK',status:'pre_transit'}}),Date.now(),Date.now()).run();
  const anonymous=await mf.dispatchFetch(origin+'/api/admin/shipping');assert.equal(anonymous.status,403);assert.equal(calls.length,0);
@@ -38,6 +39,15 @@ try{
  const signature='hmac-sha256-hex='+createHmac('sha256',fixtureSecret).update(body).digest('hex');
  assert.equal((await mf.dispatchFetch(origin+'/api/shipping/easypost',{method:'POST',headers:{'x-hmac-signature':signature},body})).status,200);
  assert.equal((await db.prepare('SELECT status FROM orders WHERE id=?').bind(id).first()).status,'delivered');
+ const history=(await db.prepare('SELECT * FROM change_events').all()).results;
+ const refreshEvents=history.filter(event=>event.action==='shipping.refresh_tracking');assert.equal(refreshEvents.length,4);
+ for(const event of refreshEvents){assert.equal(event.actor,fixtureEmail);assert.equal(event.actor_type,'staff');assert.equal(event.source,'admin');}
+ const updates=history.filter(event=>event.action==='order.update');assert.equal(updates.length,2);
+ assert.equal(updates[0].actor,fixtureEmail);assert.equal(updates[0].source,'admin');
+ assert.equal(updates[1].actor,'Verified EasyPost tracking webhook');assert.equal(updates[1].source,'system');
+ assert(JSON.parse(updates[1].changes).some(change=>change.field==='Status'&&change.after==='delivered'));
+ assert(!JSON.stringify(history).includes('FIXTURETRACK'),'Tracking number must not be copied into audit history');
+ assert.equal((await db.prepare('SELECT COUNT(*) n FROM change_context').first()).n,0);
  assert(calls.every(c=>c.method==='GET'),'No label purchase, mail or other external mutation');
  console.log('PASS: actual built Worker authenticated carrier health, anonymous denial, isolated D1 tracking refresh and signed delivered transition. Only mocked read-only provider requests.');
 }finally{await mf.dispose();await fs.rm(temporary,{recursive:true,force:true});}

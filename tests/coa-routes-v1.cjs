@@ -11,7 +11,7 @@ const filename = path.join(root, 'app/api/store/[action]/route.ts');
 const requestId = '10000000-0000-4000-8000-000000000001';
 const account = { id: 'isolated-account', email: 'account@example.invalid' };
 const contact = { name: 'Isolated request', email: 'requester@example.invalid', subject: 'COA request: HEAT-R 30mg / 102-30-0001', message: 'Isolated documentation request.' };
-const env = Object.freeze({ fixture: 'isolated' });
+const env = Object.freeze({ fixture: 'isolated', DB: Object.freeze({ fixture: 'isolated-db' }) });
 const now = 2000000000000;
 let scenario, calls, saved, afterJobs = [], backgroundErrors = [], draining = false, responseReturned = false, forbiddenCalls = 0;
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
@@ -45,6 +45,7 @@ const called = name => calls.filter(call => call.name === name);
 const checkedAdmin = () => assert(called('admin-ok').length, 'Admin authorization must precede sensitive reads/writes');
 const status = value => ({ status: value, reason: value === 'accepted' ? 'accepted_by_email_provider' : 'fixture', acceptedAt: value === 'accepted' ? now : null, canProcess: value === 'queued' });
 const dependencies = {
+  '@/lib/change-history': { withAuditDb: (db, actor) => { assert.equal(db, env.DB); assert(['staff','system'].includes(actor.actorType)); return db; }, recordChange: async (db, event) => { checkedAdmin(); assert.equal(db,env.DB); assert.equal(event.status,'attempted'); assert.equal(event.action,'coa.process_requested'); }, auditRun: forbidden('unrelated admin audit write') },
   '@/lib/checkout-recovery': { recoveryAdminStatus: async()=>{checkedAdmin();return {enabled:false,jobs:[]};} },
   '@/lib/auth': {
     customer: async () => { note('customer'); return scenario.role === 'signedout' ? null : account; },
@@ -70,34 +71,34 @@ const dependencies = {
       if (sql.startsWith('SELECT id,owner,status,total,data,created FROM orders ') || sql === 'SELECT * FROM campaigns') return [];
       throw Error('Unexpected read: ' + sql);
     },
-    one: forbidden('database one'), database: forbidden('database connection'),
+    one: forbidden('database one'), database: () => { checkedAdmin(); return env.DB; },
   },
   '@/lib/commerce': { config: async () => { checkedAdmin(); note('config'); return {}; }, catalog: async visible => { checkedAdmin(); assert.equal(visible, false); note('catalog'); return []; } },
   '@/lib/private-presentation': { presentationData: value => value },
   '@/lib/catalog-visibility': { adminOrderView: value => value, currentSelection: () => true },
   '@/lib/seo-policy': { seoConfig: () => ({}), searchReport: () => ({}) },
   '@/lib/coa-outbox': {
-    coaAutomationStatus: async (receivedEnv, ids) => { checkedAdmin(); assert.equal(receivedEnv, env); assert.deepEqual(ids, [...saved.keys()]); note('coa-status', ids); return { config: { enabled: true, replyTo: 'reply@example.invalid', notifyTo: null }, mailConfigured: true, sender: 'BIOMOD <sender@example.invalid>', approvedReportCount: 3, requests: Object.fromEntries(ids.map(id => [id, { coa: status('queued'), alert: null }])) }; },
+    coaAutomationStatus: async (receivedEnv, ids) => { checkedAdmin(); assert.deepEqual(receivedEnv, env); assert.deepEqual(ids, [...saved.keys()]); note('coa-status', ids); return { config: { enabled: true, replyTo: 'reply@example.invalid', notifyTo: null }, mailConfigured: true, sender: 'BIOMOD <sender@example.invalid>', approvedReportCount: 3, requests: Object.fromEntries(ids.map(id => [id, { coa: status('queued'), alert: null }])) }; },
     enqueueCoaRequest: async (receivedEnv, id) => {
-      assert.equal(receivedEnv, env); assert.equal(id, requestId); note('enqueue-coa', id);
+      assert.deepEqual(receivedEnv, env); assert.equal(id, requestId); note('enqueue-coa', id);
       if (scenario.publicRequest) assert(saved.has(id), 'The contact must be durably persisted before queueing'); else checkedAdmin();
       if (scenario.enqueueGate) await scenario.enqueueGate;
       if (scenario.enqueueFailure) throw Error('PRIVATE_MAIL_QUEUE_FAILURE');
       return status('queued');
     },
     enqueueRequestAlert: async (receivedEnv, id) => {
-      assert.equal(receivedEnv, env); assert.equal(id, requestId); assert(saved.has(id), 'The inquiry must be durably persisted before the alert'); note('enqueue-alert', id);
+      assert.deepEqual(receivedEnv, env); assert.equal(id, requestId); assert(saved.has(id), 'The inquiry must be durably persisted before the alert'); note('enqueue-alert', id);
       if (scenario.alertGate) await scenario.alertGate;
       if (scenario.alertFailure) throw Error('PRIVATE_ALERT_QUEUE_FAILURE');
       return status('queued');
     },
-    saveCoaConfig: async (receivedEnv, value) => { checkedAdmin(); assert.equal(receivedEnv, env); note('save-coa-config', value); return value; },
+    saveCoaConfig: async (receivedEnv, value) => { checkedAdmin(); assert.deepEqual(receivedEnv, env); note('save-coa-config', value); return value; },
     processCoaOutbox: async (receivedEnv, value) => {
       if (scenario.publicRequest) {
         note('background-' + value.purpose, value);
         try {
           assert(draining && responseReturned, 'Processing must begin only in the explicit post-response callback');
-          assert.equal(receivedEnv, env); assert(saved.has(value.requestId));
+          assert.deepEqual(receivedEnv, env); assert(saved.has(value.requestId));
           const kind = saved.get(value.requestId).kind;
           assert(['coa', 'request-alert'].includes(value.purpose));
           assert(kind === 'contact' || value.purpose === 'request-alert', 'Partner requests cannot process a COA');
@@ -107,11 +108,11 @@ const dependencies = {
         if (scenario.backgroundFailure === 'both' || scenario.backgroundFailure === value.purpose) throw Error('PRIVATE_BACKGROUND_PROVIDER_FAILURE');
         return { processed: 1, accepted: 1, review: 0 };
       }
-      checkedAdmin(); assert.equal(receivedEnv, env);
+      checkedAdmin(); assert.deepEqual(receivedEnv, env);
       assert.deepEqual(value, { requestId, purpose: 'coa', limit: 1 }, 'Manual COA action must not claim a generic request-alert');
       assert.equal(called('enqueue-coa').length, 1); note('process-coa', value); return { processed: 1, accepted: 1, review: 0 };
     },
-    coaDeliveryStatuses: async (receivedEnv, ids) => { checkedAdmin(); assert.equal(receivedEnv, env); assert.deepEqual(ids, [requestId]); assert.equal(called('process-coa').length, 1); note('delivery-status'); return { [requestId]: { coa: scenario.deliveryStatus === null ? null : status(scenario.deliveryStatus || 'accepted'), alert: null } }; },
+    coaDeliveryStatuses: async (receivedEnv, ids) => { checkedAdmin(); assert.deepEqual(receivedEnv, env); assert.deepEqual(ids, [requestId]); assert.equal(called('process-coa').length, 1); note('delivery-status'); return { [requestId]: { coa: scenario.deliveryStatus === null ? null : status(scenario.deliveryStatus || 'accepted'), alert: null } }; },
   },
 };
 // Staff-role compatibility: the routes call requireStaff(permission); these fixtures model an

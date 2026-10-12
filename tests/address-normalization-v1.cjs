@@ -37,6 +37,7 @@ global.fetch = async () => { throw new Error('Network is forbidden in this test'
 Module._load = function(request, parent, isMain) {
   if (parent?.filename.endsWith('/lib/checkout.ts')) {
     if (request === './runtime') return runtime;
+    if (request === './change-history') return { withAuditDb: db => db, auditRun: (_db, actor, sql, ...values) => { assert.equal(actor.actor, 'Website checkout'); return runtime.run(sql, ...values); } };
     if (request === './commerce') return { quote: async () => ({ items: [{ ...lines[0], product, lineTotal: 4900 }], subtotal: 4900, discount: 0, total: 4900, config: { shippingCents: 500, freeShippingAt: 20000 } }) };
     if (request === './auth') return { customer: async () => ({ email: 'fixture@example.invalid' }) };
     if (request === './easypost') return { easypostReady: () => true, cheapestRate: async (_env, parsed) => { shippingStates.push(parsed.state); return { cents: 500, service: 'Isolated shipping' }; } };

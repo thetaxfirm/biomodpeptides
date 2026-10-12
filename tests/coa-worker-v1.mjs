@@ -1,3 +1,4 @@
+import { migrationStatements } from './sql-migration-fixture.mjs';
 // Actual built Worker + isolated Miniflare D1. Every outbound request is intercepted.
 // Only synthetic inquiry records, unmistakable synthetic PDF bytes and fixture mail addresses are used; no real mail.
 import assert from 'node:assert/strict';
@@ -75,9 +76,10 @@ try {
   await mf.ready;
   const DB = await mf.getD1Database('DB');
   const env = { DB, RESEND_API_KEY: fixtureKey, ORDER_EMAIL_FROM: sender };
-  const migration = ['0014_aggregate_traffic.sql', '0015_aggregate_shopping.sql', '0016_coa_delivery.sql'];
-  const sql = 'CREATE TABLE settings(key TEXT PRIMARY KEY,value TEXT); CREATE TABLE requests(id TEXT PRIMARY KEY,kind TEXT,data TEXT,created INTEGER);\n' + (await Promise.all(migration.map(name => fs.readFile(path.join(root, 'drizzle', name), 'utf8')))).join('\n');
-  await DB.batch(sql.replace(/^--.*$/gm, '').split(';').map(value => value.trim()).filter(Boolean).map(statement => DB.prepare(statement)));
+  for (const name of (await fs.readdir(path.join(root, 'drizzle'))).filter(name => name.endsWith('.sql')).sort()) {
+    const sql = await fs.readFile(path.join(root, 'drizzle', name), 'utf8');
+    await DB.batch(migrationStatements(sql).map(statement => DB.prepare(statement)));
+  }
   await DB.batch(registry.reports.map(report => DB.prepare('INSERT INTO coa_original_reports(sha256,data,enabled) VALUES(?,?,1)').bind(report.sha256, JSON.stringify(report))));
   await DB.batch([
     DB.prepare('INSERT INTO traffic_daily VALUES(?,?,?,?)').bind(expired, 'home', 'internal', 2),
@@ -87,7 +89,7 @@ try {
   ]);
   const seed = async (report = registry.reports[0], options = {}) => {
     const id = requestId();
-    await DB.prepare('INSERT INTO requests VALUES(?,?,?,?)').bind(id, 'contact', JSON.stringify({ name: 'Synthetic inquiry', email: `customer-fixture-${requestCounter}@example.invalid`, subject: options.subject || `COA request: ${report.productName} / ${report.lot}`, message: 'PRIVATE_FIXTURE_REQUEST_TEXT' }), now).run();
+    await DB.prepare('INSERT INTO requests(id,kind,data,created) VALUES(?,?,?,?)').bind(id, 'contact', JSON.stringify({ name: 'Synthetic inquiry', email: `customer-fixture-${requestCounter}@example.invalid`, subject: options.subject || `COA request: ${report.productName} / ${report.lot}`, message: 'PRIVATE_FIXTURE_REQUEST_TEXT' }), now).run();
     return id;
   };
   const snapshot = async () => {
@@ -140,7 +142,14 @@ try {
   assert.equal((await DB.prepare('SELECT attempts FROM coa_delivery_outbox WHERE request_id=?').bind(disabledJob).first()).attempts, 0);
   assert.equal(forbiddenOutbound, 0);
   assert.equal(new Set(calls.map(call => call.key)).size, calls.length, 'Every accepted fixture send had one unique provider request');
-  assert.equal((await DB.prepare("SELECT COUNT(*) n FROM sqlite_master WHERE name IN ('orders','profiles','addresses','sessions')").first()).n, 0, 'No customer or commerce data was loaded');
+  for (const table of ['orders','profiles','addresses','sessions']) assert.equal((await DB.prepare(`SELECT COUNT(*) n FROM ${table}`).first()).n, 0, 'Full schema contains no customer or commerce records');
+  const history = (await DB.prepare('SELECT * FROM change_events').all()).results;
+  const emailChanges = history.filter(event => event.entity_type === 'email_job' && event.action === 'email_job.update');
+  assert.equal(emailChanges.filter(event => JSON.parse(event.changes).some(change => change.field === 'Status' && change.after === 'sending')).length, 10, 'Actual UPDATE RETURNING claims must be audited');
+  assert.equal(emailChanges.filter(event => JSON.parse(event.changes).some(change => change.field === 'Status' && change.after === 'accepted')).length, 10);
+  for (const event of emailChanges) { assert.equal(event.actor, 'COA email scheduler'); assert.equal(event.actor_type, 'system'); assert.equal(event.source, 'system'); }
+  assert.equal((await DB.prepare('SELECT COUNT(*) n FROM change_context').first()).n, 0);
+  for (const privateValue of ['PRIVATE_FIXTURE_REQUEST_TEXT', 'customer-fixture', settings.replyTo, settings.notifyTo, calls[0].providerId, registry.reports[0].base64]) assert(!JSON.stringify(history).includes(privateValue), 'Audit history excludes private mail content and delivery references');
   console.log('PASS: actual built Worker five-minute COA cron, isolated D1 queue only, original attachment bytes/hash and identity, immutable sender/reply-to, mocked acceptance persisted once, disabled no-send, five-job bound, and unaffected daily traffic/shopping retention. No real mail, customer records or production calls.');
 } finally {
   await mf.dispose();

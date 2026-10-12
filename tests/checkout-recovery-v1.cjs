@@ -15,6 +15,7 @@ global.fetch=async(url,options)=>{assert.equal(url,'https://api.resend.com/email
 const databases=[];
 function fixture(){
  const db=new DatabaseSync(':memory:');databases.push(db);
+ db.exec('CREATE TABLE change_context(id INTEGER PRIMARY KEY CHECK(id=1),actor TEXT,actor_type TEXT,source TEXT,action TEXT,summary TEXT)');
  db.exec('CREATE TABLE settings(key TEXT PRIMARY KEY,value TEXT); CREATE TABLE orders(id TEXT PRIMARY KEY,owner TEXT,status TEXT,data TEXT,total INTEGER,checkout_ref TEXT,created INTEGER,updated INTEGER,payment_ref TEXT,notification_id TEXT);');
  db.exec(fs.readFileSync(path.join(__dirname,'../drizzle/0018_checkout_recovery.sql'),'utf8'));
  db.prepare("UPDATE settings SET value=? WHERE key='checkout_recovery_v1'").run(JSON.stringify({enabled:true,startsAt:BASE}));

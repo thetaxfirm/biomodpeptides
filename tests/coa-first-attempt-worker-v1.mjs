@@ -1,3 +1,4 @@
+import { migrationStatements } from './sql-migration-fixture.mjs';
 // Actual built POST routes + after()/waitUntil + isolated D1. All outbound services
 // are intercepted. Only synthetic customers, inquiries, auth and report bytes exist.
 import assert from 'node:assert/strict';
@@ -70,9 +71,10 @@ const mf = new Miniflare({
 });
 try {
   await mf.ready; DB = await mf.getD1Database('DB');
-  const initial = "CREATE TABLE settings(key TEXT PRIMARY KEY,value TEXT); CREATE TABLE requests(id TEXT PRIMARY KEY,owner TEXT,kind TEXT,data TEXT,status TEXT DEFAULT 'new',created INTEGER); CREATE TABLE sessions(id TEXT PRIMARY KEY,cart TEXT DEFAULT '[]',wishlist TEXT DEFAULT '[]',updated INTEGER); CREATE TABLE rate_limits(key TEXT PRIMARY KEY,count INTEGER DEFAULT 1,expires INTEGER);\n";
-  const migration = await fs.readFile(path.join(root, 'drizzle/0016_coa_delivery.sql'), 'utf8');
-  await DB.batch((initial + migration).replace(/^--.*$/gm, '').split(';').map(v => v.trim()).filter(Boolean).map(sql => DB.prepare(sql)));
+  for (const name of (await fs.readdir(path.join(root, 'drizzle'))).filter(name => name.endsWith('.sql')).sort()) {
+    const sql = await fs.readFile(path.join(root, 'drizzle', name), 'utf8');
+    await DB.batch(migrationStatements(sql).map(statement => DB.prepare(statement)));
+  }
   await DB.batch(registry.reports.map(report => DB.prepare('INSERT INTO coa_original_reports VALUES(?,?,1)').bind(report.sha256, JSON.stringify(report))));
   const env = { DB, RESEND_API_KEY: fixtureKey, ORDER_EMAIL_FROM: sender };
   await saveCoaConfig(env, settings);
@@ -97,6 +99,10 @@ try {
   await until(() => calls.length === 2, 'Built response lifecycle did not start both scoped background attempts. Rebuild before running this test.');
   assert.deepEqual(calls.map(call => call.purpose).sort(), ['coa', 'request-alert']); assert(calls.every(call => call.requestId === firstId));
   assert((await rows(firstId)).every(row => row.status === 'sending' && row.attempts === 1));
+  const claimEvents = (await DB.prepare("SELECT * FROM change_events WHERE entity_type='email_job' AND action='email_job.update'").all()).results.filter(event => JSON.parse(event.changes).some(change => change.field === 'Status' && change.after === 'sending'));
+  assert.equal(claimEvents.length, 2, 'Actual D1 UPDATE RETURNING claims are audited before provider completion');
+  for (const event of claimEvents) { assert.equal(event.actor, 'Inquiry delivery automation'); assert.equal(event.actor_type, 'system'); assert.equal(event.source, 'system'); }
+  assert.equal((await DB.prepare('SELECT COUNT(*) n FROM change_context').first()).n, 0, 'No actor context spans pending provider calls');
   assert.equal((await rows(oldId))[0].attempts, 0, 'A new request must not drain an unrelated historical job');
   hold.resolve(); hold = null;
   await until(async () => (await rows(firstId)).every(row => row.status === 'accepted'), 'Background accepted state did not persist after the response');
@@ -148,7 +154,11 @@ try {
   assert.equal((await rows(oldId))[0].attempts, 0);
   assert.equal((await allRows()).filter(row => row.status === 'accepted').length, 5);
   assert.equal(forbiddenOutbound, 0); assert.deepEqual(outboundErrors, []);
-  assert.equal((await DB.prepare("SELECT COUNT(*) n FROM sqlite_master WHERE name IN ('orders','profiles','addresses','customer_carts')").first()).n, 0, 'No commerce/customer-record tables were loaded');
+  for (const table of ['orders','profiles','addresses','customer_carts']) assert.equal((await DB.prepare(`SELECT COUNT(*) n FROM ${table}`).first()).n, 0, 'Full schema contains no commerce/customer records');
+  const history = (await DB.prepare('SELECT * FROM change_events').all()).results;
+  const updates = history.filter(event => event.action === 'email_job.update'); assert(updates.length >= 14);
+  for (const event of updates) { assert.equal(event.actor, 'Inquiry delivery automation'); assert.equal(event.source, 'system'); }
+  for (const privateValue of ['PRIVATE_FIXTURE_MESSAGE', 'first-fixture@example.invalid', account.email, settings.replyTo, settings.notifyTo, registry.reports[0].base64]) assert(!JSON.stringify(history).includes(privateValue), 'History does not copy customer identity or mail contents');
   console.log('PASS: actual built contact/affiliate POST after()/waitUntil starts only saved-request mail, response precedes held provider, original bytes unchanged, owner-only alerts, dedupe/manual-review/disabled/failure safety, no historical drain or GET processing. All auth/email services synthetic and intercepted.');
 } finally {
   hold?.resolve(); await mf.dispose(); await fs.rm(temporary, { recursive: true, force: true });

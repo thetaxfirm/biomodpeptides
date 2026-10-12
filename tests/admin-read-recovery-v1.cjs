@@ -29,7 +29,7 @@ const alerts=h=>nodes(h.tree).filter(n=>n.props.role==='alert').map(text).join('
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return{promise,resolve,reject};};
 const flush=async h=>{for(let i=0;i<16;i++)await Promise.resolve();h?.render();};
 const noop=()=>null;
-function Field(){}function Check(){}function Choice(){}function Blank(){}function AuthPage(){}function ShippingLabel(){}function Dialog(){}function Tabs(){}function TabsTrigger(){}function CoaAutomation(){}function RequestInbox(){}
+function Field(){}function Check(){}function Choice(){}function Blank(){}function AuthPage(){}function ShippingLabel(){}function Dialog(){}function Tabs(){}function TabsTrigger(){}function CoaAutomation(){}function RequestInbox(){}function ChangeHistory(){}
 const ownerA={id:'fixture-admin-a',name:'Fixture A',email:'a@example.invalid'};
 const ownerB={id:'fixture-admin-b',name:'Fixture B',email:'b@example.invalid'};
 const fixture=(label='Snapshot A')=>({config:{presalesEnabled:false,rewardsEnabled:false,affiliateEnabled:false,packDiscounts:{},shippingCents:null,freeShippingAt:20000},products:[{id:900001,name:label,price:10000,stockQuantity:1,inStock:true,purchasable:true}],campaigns:[{id:'fixture-campaign',title:'Simulated campaign',active:false,starts:'2099-01-01',ends:'2099-02-01'}],orders:[{id:'fixture-order',status:'pending',total:10000,created:0,data:{items:[]}}],requests:[{id:'fixture-request',kind:'fixture',status:'new',created:0,data:{}}],searchPublishing:{}});
@@ -45,6 +45,7 @@ mod.require=id=>{
  if(id==='@/lib/catalog')return{money:c=>'$'+(c/100).toFixed(2)};if(id==='@/lib/packs')return{supportsPacks:()=>false};
  if(id==='./account')return{AuthPage};if(id==='./shipping-admin')return{ShippingLabel};
  if(id==='./coa-automation')return{CoaAutomation};
+ if(id==='./change-history')return{ChangeHistory};
  if(id==='./team-admin')return{TeamAdmin:noop};if(id==='@/lib/staff')return require('./staff-module-fixture.cjs').loadStaffModule();
  if(id==='./request-inbox')return{RequestInbox};
  if(id==='./primitives')return{Field,Check,Choice,Blank,formData:form=>form.fields};
@@ -68,9 +69,9 @@ const productNames=h=>nodes(h.tree).filter(n=>n.type===Dialog).map(n=>n.props.op
  reset();let h=mount();await flush(h);
  assert.equal(find(h,n=>n.type===Tabs).props.value,'orders');
  assert.deepEqual(nodes(h.tree).filter(n=>n.type===TabsTrigger).slice(0,2).map(n=>[n.props.value,text(n)]),[['orders','Orders'],['promos','Affiliate & promo codes']]);
- for(const initialTab of ['orders','promos','settings','unknown','https://example.invalid/','../orders']){
+ for(const initialTab of ['orders','promos','settings','changes','unknown','https://example.invalid/','../orders']){
   reset({store:{admin:false,customer:null}});h=mount({initialTab});
-  assert.equal(h.tree.type,AuthPage);assert.equal(h.tree.props.returnTo,'/admin?tab='+(['orders','promos','settings'].includes(initialTab)?initialTab:'orders'));assert.equal(reads(),0);
+  assert.equal(h.tree.type,AuthPage);assert.equal(h.tree.props.returnTo,'/admin?tab='+(['orders','promos','settings','changes'].includes(initialTab)?initialTab:'orders'));assert.equal(reads(),0);
  }
  const experienceFile=path.join(root,'components/store/experience.tsx');
  const experienceModule=new Module(experienceFile,module);experienceModule.filename=experienceFile;experienceModule.paths=Module._nodeModulePaths(root);
@@ -79,6 +80,21 @@ const productNames=h=>nodes(h.tree).filter(n=>n.type===Dialog).map(n=>n.props.op
  const routed=experienceModule.exports.Experience({path:'admin',query:{tab:'promos'}});assert.equal(routed.type,Admin);assert.equal(routed.props.initialTab,'promos');
  reset();h=mount(routed.props);await flush(h);assert.equal(find(h,n=>n.type===Tabs).props.value,'promos');
  h.props={initialTab:'orders'};h.render();assert.equal(find(h,n=>n.type===Tabs).props.value,'orders');
+ const changesRoute=experienceModule.exports.Experience({path:'admin',query:{tab:'changes'}});assert.equal(changesRoute.type,Admin);assert.equal(changesRoute.props.initialTab,'changes');
+ const permissionModule=require('./staff-module-fixture.cjs').loadStaffModule();
+ for(const role of ['owner','manager','support','fulfillment']) {
+  reset();apiImpl=async()=>({...fixture(),role,permissions:permissionModule.permissionsFor(role)});h=mount(changesRoute.props);await flush(h);
+  const mayRead=role==='owner'||role==='manager';
+  assert.equal(find(h,n=>n.type===Tabs).props.value,mayRead?'changes':'orders');
+  assert.equal(nodes(h.tree).some(n=>n.type===TabsTrigger&&n.props.value==='changes'),mayRead);
+  assert.equal(nodes(h.tree).some(n=>n.type===ChangeHistory),mayRead,'History is never mounted without reports permission');
+ }
+ reset();h=mount({initialTab:'changes'});await flush(h);const priorHistoryKey=find(h,n=>n.type===ChangeHistory).key;
+ button(h,'Refresh administration').props.onClick();await flush(h);assert.notEqual(find(h,n=>n.type===ChangeHistory).key,priorHistoryKey,'Global admin refresh remounts the history reader');
+ const urls=[];global.window={location:{href:'https://example.invalid/admin?measurement=off'},history:{replaceState:(_state,_title,url)=>urls.push(url)}};
+ find(h,n=>n.type===Tabs).props.onValueChange('changes');h.render();assert.equal(urls.at(-1),'/admin?measurement=off&tab=changes');
+ find(h,n=>n.type===Tabs).props.onValueChange('orders');h.render();assert.equal(urls.at(-1),'/admin?measurement=off&tab=orders');delete global.window;
+
 
  // An open, healthy empty snapshot can read two new orders without a remount or mutation.
  reset();apiImpl=async()=>({...fixture(),orders:[]});h=mount();await flush(h);

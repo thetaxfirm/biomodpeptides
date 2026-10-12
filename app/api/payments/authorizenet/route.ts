@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
         // A declined card leaves the order open so the customer can try another card on the hosted form.
         if (classifyAnetTransaction({ id: order.id, totalCents: order.total, currency: 'USD' }, details).state === 'failed')
             return reply(200);
-        await reconcile(order.owner, order.id, [transId]);
+        await reconcile(order.owner, order.id, [transId], { source: 'system', actor: 'Authorize.net webhook reconciliation', actorType: 'system', action: 'payment.webhook_reconcile' });
         return reply(200);
     }
     catch {

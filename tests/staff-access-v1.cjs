@@ -26,6 +26,8 @@ function d1(db) {
   assert.deepEqual(['orders', 'requests', 'promos', 'settings', 'team'].filter(t => staff.canSeeTab('support', t)), ['orders', 'requests']);
   assert.deepEqual(['orders', 'requests', 'promos', 'settings', 'team'].filter(t => staff.canSeeTab('fulfillment', t)), ['orders']);
   assert.equal(staff.canSeeTab('owner', 'not-a-tab'), false, 'Unlisted tabs are never shown');
+  for (const role of ['owner', 'manager']) assert.equal(staff.canSeeTab(role, 'changes'), true, role + ' may read change history');
+  for (const role of ['support', 'fulfillment', null, 'unknown']) assert.equal(staff.canSeeTab(role, 'changes'), false, String(role) + ' must not read change history');
 
   // Before the migration the Team tab reports it instead of failing the dashboard.
   const bare = { STORE_ADMIN_EMAILS: 'Owner@Example.invalid', DB: d1(new DatabaseSync(':memory:')) };

@@ -1,3 +1,4 @@
+import { changeHistory, auditRun, withAuditDb, recordChange, type AuditActor } from '@/lib/change-history';
 import { recoveryAdminStatus } from '@/lib/checkout-recovery';
 import { coaAutomationStatus, coaDeliveryStatuses, enqueueCoaRequest, enqueueRequestAlert, processCoaOutbox, saveCoaConfig } from '@/lib/coa-outbox';
 import { promoAnalytics } from '@/lib/promo-analytics';
@@ -36,10 +37,11 @@ const cartImports = () => createCartImports({ db: database(), normalize: validat
 // source of recipients/documents; the outbox keeps its leases, caps and retry policy.
 function scheduleInquiryDelivery(env: ReturnType<typeof runtime>, requestId: string, kind: 'contact' | 'affiliate') {
     try {
+        const deliveryEnv = { ...env, DB: withAuditDb(env.DB, { source: 'system', actor: 'Inquiry delivery automation', actorType: 'system' }) } as ReturnType<typeof runtime>;
         after(async () => {
             await Promise.allSettled([
-                ...(kind === 'contact' ? [processCoaOutbox(env, { requestId, purpose: 'coa', limit: 1 })] : []),
-                processCoaOutbox(env, { requestId, purpose: 'request-alert', limit: 1 }),
+                ...(kind === 'contact' ? [processCoaOutbox(deliveryEnv, { requestId, purpose: 'coa', limit: 1 })] : []),
+                processCoaOutbox(deliveryEnv, { requestId, purpose: 'request-alert', limit: 1 }),
             ]);
         });
     } catch {
@@ -61,6 +63,10 @@ export async function GET(req: NextRequest, { params }: {
 }) {
     try {
         const { action } = await params;
+        if (action === 'admin-changes') {
+            try { await requireStaff('reports:read'); } catch { return j({ error: 'Administrator reporting access required.' }, 403); }
+            return j(await changeHistory(database(), req.nextUrl.searchParams));
+        }
         if (action === 'admin-diagnostics')
             return j(await salesDiagnostics({ requireAdmin: () => requireStaff('reports:read'), all }, req.nextUrl.searchParams.get('days')));
         if (action === 'admin-promos')
@@ -421,19 +427,24 @@ export async function POST(req: NextRequest, { params }: {
         }
         if (action.startsWith('admin-')) {
             const actor = await requireStaff(adminActionPermission[action] || 'team:manage');
+            const auditActor: AuditActor = { source: 'admin', actor: actor.email, actorType: 'staff', action };
+            const auditEnv = () => ({ ...runtime(), DB: withAuditDb(database(), auditActor) } as ReturnType<typeof runtime>);
+            const run = (sql: string, ...values: (string | number | null)[]) => auditRun(database(), auditActor, sql, ...values);
             if (action === 'admin-staff') {
                 const member = z.object({ email: z.string().trim().min(3).max(254), name: z.string().trim().max(100).optional(), role: z.enum(['manager', 'fulfillment', 'support']), active: z.boolean() }).parse(b);
-                return j(await saveStaffMember(runtime(), actor.email, member));
+                return j(await saveStaffMember(auditEnv(), actor.email, member));
             }
             if (action === 'admin-coa-config') {
                 const settings = z.object({ enabled: z.boolean(), replyTo: z.string().email(), notifyTo: z.string().email().nullable().optional() }).parse(b);
-                await saveCoaConfig(runtime(), settings);
+                await saveCoaConfig(auditEnv(), settings);
                 return j({ message: 'COA email settings saved.' });
             }
             if (action === 'admin-coa-process') {
                 const id = z.string().uuid().parse(b.id);
-                await enqueueCoaRequest(runtime(), id);
-                await processCoaOutbox(runtime(), { requestId: id, purpose: 'coa', limit: 1 });
+                await recordChange(database(), { ...auditActor, action: 'coa.process_requested', entityType: 'request', entityId: id, summary: 'Staff requested original-report email processing', status: 'attempted' });
+                const env = auditEnv();
+                await enqueueCoaRequest(env, id);
+                await processCoaOutbox(env, { requestId: id, purpose: 'coa', limit: 1 });
                 const status = (await coaDeliveryStatuses(runtime(), [id]))[id]?.coa;
                 return j({ message: status?.status === 'accepted' ? 'The email provider accepted this COA email. Inbox delivery is not yet confirmed.' : status?.status === 'duplicate' ? 'This original report already has an email record. Check its existing status.' : status?.status === 'queued' || status?.status === 'sending' ? 'This COA is queued for email processing.' : 'This request requires review or COA automation is disabled.', status });
             }
@@ -451,7 +462,7 @@ export async function POST(req: NextRequest, { params }: {
                 const currentProduct = (await catalog(false)).find(p => p.id === b.id);
                 if (!currentProduct) throw new Error('Product not found.');
                 if (currentProduct.preorder !== undefined && !Object.hasOwn(b, 'preorder')) throw new Error('Preorder settings require the current product editor. Refresh administration before editing this product.');
-                const db=database();const guard=uid();try{await db.batch([db.prepare(inventorySql.checkInventoryEdit).bind(guard,data.stockQuantity,b.id,b.expectedStock??null,b.id),db.prepare(inventorySql.updateProduct).bind(b.id,JSON.stringify(data)),db.prepare(inventorySql.clearGuard).bind(guard)]);}catch{throw new Error('Inventory cannot be reduced below stock reserved by existing orders.');}
+                const db=withAuditDb(database(), {...auditActor, summary: `${currentProduct.name} pricing or availability updated`});const guard=uid();try{await db.batch([db.prepare(inventorySql.checkInventoryEdit).bind(guard,data.stockQuantity,b.id,b.expectedStock??null,b.id),db.prepare(inventorySql.updateProduct).bind(b.id,JSON.stringify(data)),db.prepare(inventorySql.clearGuard).bind(guard)]);}catch{throw new Error('Inventory cannot be reduced below stock reserved by existing orders.');}
                 return j({ message: 'Product updated.' });
             }
             if (action === 'admin-campaign') {
@@ -487,7 +498,7 @@ export async function POST(req: NextRequest, { params }: {
                 }>('SELECT owner FROM orders WHERE id=?', str(b.id, 50));
                 if (!o)
                     throw new Error('Order not found.');
-                return j(await reconcile(o.owner, b.id));
+                return j(await reconcile(o.owner, b.id, [], auditActor));
             }
             if (action === 'admin-order') {
                 const status = z.enum(['shipped', 'delivered']).parse(b.status);

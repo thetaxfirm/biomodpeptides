@@ -45,3 +45,9 @@ A change is complete only when all affected uses agree with the authoritative da
 ## Ongoing review
 
 The existing daily TryBiomod sprint checks changes by any contributor against this rule, including runtime changes that Git cannot see. Compare shared main, deployed build/version, nonsecret settings and affected public surfaces; use protected aggregate diagnostics when available. Investigate discrepancies, preserve valid newer work, and fix verified regressions within the owner's authorization. Notify the owner of material failures and unverified dependencies. Do not claim continuous monitoring or unseen changes were checked. The sprint retains its existing November 8 end date; the repository rule and push/PR checks continue afterward.
+
+## Shared Changes page
+
+`/admin?tab=changes` is the protected shared history for owners and managers. Application changes are recorded atomically with authenticated staff or known system attribution; direct database writes without operation context are explicitly unattributed. Never invent an actor for an older unlogged change. Source commit authors and provider accounts are separate evidence, not proof of which person used a shared account.
+
+After a release, run `node scripts/change-history-import-v1.mjs --remote` using existing authorized provider access and verify the page shows the new source/build/deployment evidence. The scheduled local importer supplements this step; it does not run while this computer is asleep or offline. Preserve append-only records. The page reports source-sync age and unavailable coverage. Cloudflare account audit access and Vercel history remain unverified/unavailable until separately connected; do not label them complete. See `docs/change-history-provider-v1.md`.
