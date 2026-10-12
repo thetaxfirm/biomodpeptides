@@ -57,6 +57,7 @@ export function canonicalPath(path: string) {
 }
 export function pageInfo(path: string) {
   path = canonicalPath(path);
+  if (path === '/admin') return { title: 'TryBiomod Administration', description: 'Secure administrator access to the shared TryBiomod store.', eligible: false };
   const p = productAt(path);
   if (p) {
     const contents = size(p).replace(/\s*\/\s*vial/i, '');

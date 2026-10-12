@@ -1,0 +1,6 @@
+.header { display: flex; align-items: center; gap: 24px; padding: 24px max(24px, calc((100vw - 1360px) / 2)); border-bottom: 1px solid #e7dfe9; color: #2a1033; background: #fff; }
+.header img { display: block; width: 180px; height: auto; }
+.header span { flex: 1; font-weight: 600; }
+.header a:last-child { color: inherit; text-decoration: underline; text-underline-offset: 4px; }
+.footer { padding: 32px 24px; text-align: center; color: #65556b; }
+@media (max-width: 600px) { .header { flex-wrap: wrap; gap: 16px; padding: 20px; } .header img { width: 150px; } .header span { flex-basis: calc(100% - 174px); } }

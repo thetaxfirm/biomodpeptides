@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Header } from "@/components/store/header";
+import { StoreChrome } from "@/components/store/store-chrome";
 import "./globals.css";
 import "./storefront-v6.css";
 import "./storefront-v7.css";
@@ -20,6 +20,6 @@ import { trafficConfiguration } from '@/lib/traffic-metrics';
 import { shoppingConfiguration } from '@/lib/shopping-metrics';
 import { runtime } from '@/lib/runtime';
 import searchPublication from '@/lib/seo-publication-v1.json';
-import {Footer} from "@/components/store/content";
+
 export const metadata: Metadata={title:{default:"Biomod Peptides | TryBiomod",template:"%s | Biomod Peptides"},description:"Biomod Peptides at TryBiomod.com. Research compound vials, product specifications and available lot-level documentation. For laboratory research only.",icons:{icon:"/favicon.svg"},robots:{index:false,follow:false}};
-export default async function RootLayout({children}:{children:React.ReactNode}){const snapshot=await publicCatalog(); return <html lang="en"><body><StoreProvider initialCatalog={snapshot.products} shoppingMeasurementEnabled={shoppingConfiguration(runtime()).enabled}><TrafficMeasurement enabled={trafficConfiguration(runtime()).enabled} reviewedProductSlugs={searchPublication.productSlugs}/><Header/>{children}<Footer/></StoreProvider></body></html>}
+export default async function RootLayout({children}:{children:React.ReactNode}){const snapshot=await publicCatalog(); return <html lang="en"><body><StoreProvider initialCatalog={snapshot.products} shoppingMeasurementEnabled={shoppingConfiguration(runtime()).enabled}><TrafficMeasurement enabled={trafficConfiguration(runtime()).enabled} reviewedProductSlugs={searchPublication.productSlugs}/><StoreChrome>{children}</StoreChrome></StoreProvider></body></html>}
