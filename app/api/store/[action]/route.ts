@@ -8,7 +8,7 @@ import { after, NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createCartImports } from '@/lib/cart-import';
 import { z } from 'zod';
-import { session, customer, requireCustomer, requireAdmin, authReady, authCall, storeAuth, rateLimit, requestPasswordRecovery } from '@/lib/auth';
+import { session, customer, requireCustomer, requireStaff, staffRole, authReady, authCall, storeAuth, rateLimit, requestPasswordRecovery } from '@/lib/auth';
 import { presentationData } from '@/lib/private-presentation';
 import { adminOrderView, currentCart, currentProductId, currentSelection, orderView, unavailableOrder } from '@/lib/catalog-visibility';
 import { catalog, config, quote, validateLines } from '@/lib/commerce';
@@ -20,7 +20,16 @@ import { anetOrderDetails } from '@/lib/order-summary';
 import { packSizes, supportsPacks } from '@/lib/packs';
 import { searchReport, seoConfig } from '@/lib/seo-policy';
 import { salesDiagnostics } from '@/lib/sales-diagnostics';
+import { can, permissionsFor, type StaffPermission } from '@/lib/staff';
+import { saveStaffMember, staffDirectory } from '@/lib/staff-store';
 export const dynamic = 'force-dynamic';
+// What each admin write needs. An admin action missing here requires the owner.
+const adminActionPermission: Record<string, StaffPermission> = {
+    'admin-order': 'orders:fulfill', 'admin-reconcile': 'orders:reconcile',
+    'admin-request': 'requests:write', 'admin-coa-process': 'requests:write',
+    'admin-config': 'store:write', 'admin-product': 'store:write', 'admin-campaign': 'store:write', 'admin-reward': 'store:write', 'admin-coa-config': 'store:write',
+    'admin-staff': 'team:manage',
+};
 const j = (value: unknown, status = 200) => NextResponse.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
 const cartImports = () => createCartImports({ db: database(), normalize: validateLines, validate: quote });
 // Start only this newly saved inquiry after the response. Durable jobs remain the
@@ -53,9 +62,9 @@ export async function GET(req: NextRequest, { params }: {
     try {
         const { action } = await params;
         if (action === 'admin-diagnostics')
-            return j(await salesDiagnostics({ requireAdmin, all }, req.nextUrl.searchParams.get('days')));
+            return j(await salesDiagnostics({ requireAdmin: () => requireStaff('reports:read'), all }, req.nextUrl.searchParams.get('days')));
         if (action === 'admin-promos')
-            return j(await promoAnalytics({ requireAdmin, all }, req.nextUrl.searchParams.get('days')));
+            return j(await promoAnalytics({ requireAdmin: () => requireStaff('reports:read'), all }, req.nextUrl.searchParams.get('days')));
         const u = await customer();
         if (action === 'state') {
             const secure = req.nextUrl.protocol === 'https:';
@@ -106,6 +115,7 @@ export async function GET(req: NextRequest, { params }: {
                 cartError = (e as Error).message;
             }
             const payment = getPaymentStatus(runtime());
+            const role = u ? await staffRole(u.email) : null;
             const packOwner = u ? 'customer:' + u.id : 'guest:' + s.id;
             if(u) await run('UPDATE saved_packs SET owner=? WHERE owner=?',packOwner,'guest:'+s.id);
             const savedPacks = (await all<{id:string;name:string;products:string;updated:number}>('SELECT id,name,products,updated FROM saved_packs WHERE owner=? ORDER BY updated DESC',packOwner)).map(p=>({...p,products:parse(p.products,[])})).filter(p=>currentSelection(p.products)).map(p=>presentationData(p));
@@ -113,7 +123,7 @@ export async function GET(req: NextRequest, { params }: {
                     id: string;
                     data: string;
                     active: number;
-                }>('SELECT id,data,active FROM campaigns WHERE active=1')).map<Record<string, any>>(c => ({ ...parse<Record<string, any>>(c.data, {}), id: c.id })).filter(c=>currentSelection(c.productIds)).map(c=>presentationData(c)), admin: Boolean(u && (runtime().STORE_ADMIN_EMAILS || '').toLowerCase().split(',').map(v => v.trim()).includes(u.email.toLowerCase())) });
+                }>('SELECT id,data,active FROM campaigns WHERE active=1')).map<Record<string, any>>(c => ({ ...parse<Record<string, any>>(c.data, {}), id: c.id })).filter(c=>currentSelection(c.productIds)).map(c=>presentationData(c)), admin: Boolean(role), staffRole: role, permissions: permissionsFor(role) });
         }
         if (action === 'pay') {
             // Authorize.net Accept Hosted: issue a fresh single-use token and POST the customer to the hosted card form.
@@ -165,13 +175,15 @@ export async function GET(req: NextRequest, { params }: {
                 }>('SELECT id,kind,data,status,created FROM requests WHERE owner=? AND kind IN (\'contact\',\'stock\',\'affiliate\') ORDER BY created DESC LIMIT 100', user.id)).map(r => ({ ...r, data: presentationData(parse(r.data, {})) })), rewards: presentationData(await all('SELECT points,reason,created FROM rewards WHERE owner=? ORDER BY created DESC LIMIT 100', user.id)) });
         }
         if (action === 'admin') {
-            await requireAdmin();
-            const requests = await all<{ id: string; data: string }>("SELECT * FROM requests WHERE kind IN ('contact','stock','affiliate') ORDER BY created DESC LIMIT 200");
-            return j({ checkoutRecovery: await recoveryAdminStatus(runtime()), searchPublishing: searchReport(seoConfig(runtime())), config: await config(), products: await catalog(false), orders: (await all<{
+            // Every role sees orders; other sections are sent only to roles that hold them.
+            const { role } = await requireStaff('orders:read');
+            const allowed = (permission: StaffPermission) => can(role, permission);
+            const requests = allowed('requests:write') ? await all<{ id: string; data: string }>("SELECT * FROM requests WHERE kind IN ('contact','stock','affiliate') ORDER BY created DESC LIMIT 200") : [];
+            return j({ role, permissions: permissionsFor(role), checkoutRecovery: await recoveryAdminStatus(runtime()), searchPublishing: allowed('reports:read') ? searchReport(seoConfig(runtime())) : null, config: await config(), products: await catalog(false), orders: (await all<{
                     data: string;
-                }>('SELECT id,owner,status,total,data,created FROM orders ORDER BY created DESC LIMIT 200')).map(o => ({ ...o, data: adminOrderView(parse(o.data, {})) })), requests: requests.map(o => ({ ...o, data: presentationData(parse(o.data, {})) })), coaAutomation: await coaAutomationStatus(runtime(), requests.map(r => r.id)), campaigns: (await all<{
+                }>('SELECT id,owner,status,total,data,created FROM orders ORDER BY created DESC LIMIT 200')).map(o => ({ ...o, data: adminOrderView(parse(o.data, {})) })), requests: requests.map(o => ({ ...o, data: presentationData(parse(o.data, {})) })), coaAutomation: allowed('requests:write') ? await coaAutomationStatus(runtime(), requests.map(r => r.id)) : null, campaigns: allowed('store:write') ? (await all<{
                     data: string;
-                }>('SELECT * FROM campaigns')).map<Record<string, any>>(o => { const {data, ...row}=o; return { ...row, ...parse<Record<string, any>>(data, {}) }; }).filter(c=>currentSelection(c.productIds)).map(c=>presentationData(c)) });
+                }>('SELECT * FROM campaigns')).map<Record<string, any>>(o => { const {data, ...row}=o; return { ...row, ...parse<Record<string, any>>(data, {}) }; }).filter(c=>currentSelection(c.productIds)).map(c=>presentationData(c)) : [], team: allowed('team:manage') ? await staffDirectory(runtime()) : null });
         }
         return j({ error: 'Not found.' }, 404);
     }
@@ -408,7 +420,11 @@ export async function POST(req: NextRequest, { params }: {
             return j(await reconcile(u.id, str(b.id, 50)));
         }
         if (action.startsWith('admin-')) {
-            await requireAdmin();
+            const actor = await requireStaff(adminActionPermission[action] || 'team:manage');
+            if (action === 'admin-staff') {
+                const member = z.object({ email: z.string().trim().min(3).max(254), name: z.string().trim().max(100).optional(), role: z.enum(['manager', 'fulfillment', 'support']), active: z.boolean() }).parse(b);
+                return j(await saveStaffMember(runtime(), actor.email, member));
+            }
             if (action === 'admin-coa-config') {
                 const settings = z.object({ enabled: z.boolean(), replyTo: z.string().email(), notifyTo: z.string().email().nullable().optional() }).parse(b);
                 await saveCoaConfig(runtime(), settings);

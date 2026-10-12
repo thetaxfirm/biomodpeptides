@@ -45,6 +45,7 @@ mod.require=id=>{
  if(id==='@/lib/catalog')return{money:c=>'$'+(c/100).toFixed(2)};if(id==='@/lib/packs')return{supportsPacks:()=>false};
  if(id==='./account')return{AuthPage};if(id==='./shipping-admin')return{ShippingLabel};
  if(id==='./coa-automation')return{CoaAutomation};
+ if(id==='./team-admin')return{TeamAdmin:noop};if(id==='@/lib/staff')return require('./staff-module-fixture.cjs').loadStaffModule();
  if(id==='./request-inbox')return{RequestInbox};
  if(id==='./primitives')return{Field,Check,Choice,Blank,formData:form=>form.fields};
  if(id==='@/components/ui/tabs')return{Tabs,TabsTrigger,TabsList:noop,TabsContent:noop};

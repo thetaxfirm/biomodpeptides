@@ -52,6 +52,11 @@ const dependencies = {
     },
   },
 };
+// Staff-role compatibility: the routes call requireStaff(permission); these fixtures model an
+// owner (full access), so delegate to the existing requireAdmin stub and its call log.
+dependencies['@/lib/auth'].requireStaff = async () => ({ ...(await dependencies['@/lib/auth'].requireAdmin()), role: 'owner' });
+dependencies['@/lib/auth'].staffRole = async () => null;
+
 class FixtureResponse extends Response {
   static json(value, options = {}) {
     return new FixtureResponse(JSON.stringify(value), { ...options, headers: { 'Content-Type': 'application/json', ...options.headers } });

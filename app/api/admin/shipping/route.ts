@@ -1,19 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAdmin } from '@/lib/auth';
+import { requireStaff } from '@/lib/auth';
 import { buyLabel, easypostReady, sendTrackingEmail, shippingConnection, readShipmentTracking } from '@/lib/easypost';
 import { one, run, parse, runtime, timestamp } from '@/lib/runtime';
 export const dynamic = 'force-dynamic';
 const j = (value: unknown, status = 200) => NextResponse.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
 // Label creation does not confirm dispatch. All provider calls require administrator access.
 export async function GET() {
-    try { await requireAdmin(); return j(await shippingConnection(runtime())); }
+    try { await requireStaff('orders:read'); return j(await shippingConnection(runtime())); }
     catch { return j({ error: 'Administrator sign-in required.' }, 403); }
 }
 export async function POST(req: NextRequest) {
     try {
         if (req.headers.get('origin') !== req.nextUrl.origin)
             return j({ error: 'Please refresh the page and try again.' }, 403);
-        await requireAdmin();
+        await requireStaff('orders:fulfill');
         const env = runtime();
         if (!easypostReady(env))
             return j({ error: 'EasyPost is not connected. Add EASYPOST_API_KEY in Cloudflare.' }, 400);

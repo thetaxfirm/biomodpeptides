@@ -112,6 +112,8 @@ async function apiCookieIntegration() {
         customer: async () => user, requireCustomer: async () => { if (!user) throw new Error('Please sign in.'); return user; },
         session: async () => sessionRow(), authReady: () => true,
         requireAdmin: async () => { throw new Error('No admin access in promo tests'); },
+        requireStaff: async () => { throw new Error('No admin access in promo tests'); },
+        staffRole: async () => null,
         rateLimit: async (key, limit) => { assert.equal(limit, 120); assert(key.endsWith(sessionId)); rateLimited++; },
         authCall: async () => { throw new Error('No external auth in promo tests'); },
         storeAuth: async () => { throw new Error('No external auth in promo tests'); },

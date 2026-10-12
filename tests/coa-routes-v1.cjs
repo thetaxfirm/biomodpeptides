@@ -114,6 +114,13 @@ const dependencies = {
     coaDeliveryStatuses: async (receivedEnv, ids) => { checkedAdmin(); assert.equal(receivedEnv, env); assert.deepEqual(ids, [requestId]); assert.equal(called('process-coa').length, 1); note('delivery-status'); return { [requestId]: { coa: scenario.deliveryStatus === null ? null : status(scenario.deliveryStatus || 'accepted'), alert: null } }; },
   },
 };
+// Staff-role compatibility: the routes call requireStaff(permission); these fixtures model an
+// owner (full access), so delegate to the existing requireAdmin stub and its call log.
+dependencies['@/lib/auth'].requireStaff = async () => ({ ...(await dependencies['@/lib/auth'].requireAdmin()), role: 'owner' });
+dependencies['@/lib/auth'].staffRole = async () => null;
+dependencies['@/lib/staff'] = require('./staff-module-fixture.cjs').loadStaffModule();
+dependencies['@/lib/staff-store'] = { staffDirectory: async () => { checkedAdmin(); return { ready: true, owners: [], staff: [], audit: [] }; }, saveStaffMember: async () => { throw Error('Staff writes are outside this suite'); } };
+
 class FixtureResponse extends Response {
   static json(value, options = {}) { return new FixtureResponse(JSON.stringify(value), { ...options, headers: { 'Content-Type': 'application/json', ...options.headers } }); }
 }

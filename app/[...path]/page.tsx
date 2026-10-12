@@ -1,6 +1,6 @@
 import { legacyRoutes } from '@/lib/legacy-routes';
 import { cookies } from 'next/headers';
-import { customer, isAdminEmail } from '@/lib/auth';
+import { customer, staffRole } from '@/lib/auth';
 import { AUTH_RETURN_COOKIE, authRoutes, safeAuthReturn } from '@/lib/auth-return';
 import { Experience } from '@/components/store/experience';
 import { notFound, permanentRedirect, redirect } from 'next/navigation';
@@ -32,7 +32,7 @@ export default async function Page({ params, searchParams }: Props) {
   // Explicit customer subpages remain separate and retain owner-scoped records.
   if (route === 'account') {
     const user = await customer();
-    if (user && isAdminEmail(user.email)) redirect('/admin');
+    if (user && await staffRole(user.email)) redirect('/admin');
   }
   if (route === 'about-biomod') permanentRedirect('/about');
   if (route === 'coa') permanentRedirect('/testing');
@@ -45,7 +45,7 @@ export default async function Page({ params, searchParams }: Props) {
     const destination = /^\/admin(?:[?#]|$)/.test(safe) ? safe : '/admin';
     if (route === 'admin/login') {
       query.returnTo = destination;
-      if (user && isAdminEmail(user.email)) redirect(destination);
+      if (user && await staffRole(user.email)) redirect(destination);
     } else if (!user) {
       const tab = Array.isArray(query.tab) ? query.tab[0] : query.tab;
       const returnTo = '/admin' + (tab ? '?tab=' + encodeURIComponent(tab) : '');
