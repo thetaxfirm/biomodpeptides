@@ -32,7 +32,7 @@ export function ShippingLabel({ order, onDone }: { order: any; onDone: () => voi
         }
     }
     if (s?.tracking)
-        return <div className="shipping-label"><p><strong>{s.service}</strong> · {s.tracking}{s.status ? ' · ' + String(s.status).replaceAll('_', ' ') : ''}{Number.isFinite(s.costCents) ? ' · label ' + money(s.costCents) : ''}</p><p><a className="text-button" href={s.labelUrl} target="_blank" rel="noopener">Print label</a>{s.trackingUrl && <> · <a className="text-button" href={s.trackingUrl} target="_blank" rel="noopener">Track</a></>} · <button className="text-button" disabled={busy} onClick={() => act({ resend: true })}>Resend tracking email</button></p></div>;
+        return <div className="shipping-label"><p><strong>{s.service}</strong> · {s.tracking}{s.status ? ' · ' + String(s.status).replaceAll('_', ' ') : ''}{Number.isFinite(s.costCents) ? ' · label ' + money(s.costCents) : ''}</p><p><a className="text-button" href={s.labelUrl} target="_blank" rel="noopener">Print label</a>{s.trackingUrl && <> · <a className="text-button" href={s.trackingUrl} target="_blank" rel="noopener">Track</a></>} · <button className="text-button" disabled={busy} onClick={() => act({ refreshTracking: true })}>Check carrier status</button> · <button className="text-button" disabled={busy} onClick={() => act({ resend: true })}>Resend tracking email</button></p></div>;
     if (order.status === 'labeling')
         return <p className="notice">A label purchase is in progress. Refresh in a moment.</p>;
     if (order.status !== 'paid')

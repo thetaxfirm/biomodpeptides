@@ -55,6 +55,7 @@ const provider={
 const filename=path.join(root,'components/store/account.tsx');
 const mod=new Module(filename,module);mod.filename=filename;mod.paths=Module._nodeModulePaths(root);
 mod.require=id=>{
+ if(id==='@/lib/fulfillment'){const m={exports:{}};new Function('exports',require('typescript').transpileModule(require('node:fs').readFileSync(require('node:path').join(root,'lib/fulfillment.ts'),'utf8'),{compilerOptions:{module:1,target:9}}).outputText)(m.exports);return m.exports;}
   if(id==='react')return hooks;if(id==='react/jsx-runtime')return require('react/jsx-runtime');
   if(id==='./provider')return provider;
   if(id==='@/lib/catalog')return {money:c=>'$'+(c/100).toFixed(2),compound:p=>p.name};
@@ -103,7 +104,7 @@ const order=(status='pending',id='00000001-0000-4000-8000-000000000001')=>({id,s
   host=harness(PaymentReturn);assert(text(host.tree).includes('Loading your orders'));assert.equal(apiCalls.length,1);
   firstLoad.resolve({orders:structuredClone(initial)});await flush(host);
   assert.equal(records(host).length,6,'Paid and fulfillment records are retained');
-  for(const label of ['Payment confirmed','Preparing shipment','Shipped','Delivered','Payment requires review','Payment confirmation pending'])assert(text(host.tree).includes(label));
+  for(const label of ['Payment confirmed','Preparing shipment','Marked dispatched by store; carrier acceptance unconfirmed','Marked delivered by store; carrier delivery unconfirmed','Payment requires review','Payment confirmation pending'])assert(text(host.tree).includes(label));
   assert.equal(buttons(host).length,2);assert.equal(apiCalls.filter(c=>c.action==='reconcile').length,0,'No automatic payment reconciliation');
   const verify=buttons(host)[0].props.onClick,other=buttons(host)[1].props.onClick;
   const verifying=verify();await verify();await other();assert.equal(apiCalls.filter(c=>c.action==='reconcile').length,1);host.render();
@@ -121,7 +122,7 @@ const order=(status='pending',id='00000001-0000-4000-8000-000000000001')=>({id,s
   assert(!nodes(host.tree).some(n=>n.props.role==='alert'));assert(text(records(host)[0]).includes('Payment confirmed'));host.unmount();
 
   // Pending/review stay pending/review; confirmed fulfillment states do not offer another verify.
-  for(const [status,label] of [['pending','Payment confirmation pending'],['review','Payment requires review'],['paid','Payment confirmed'],['labeling','Preparing shipment'],['shipped','Shipped'],['delivered','Delivered']]) {
+  for(const [status,label] of [['pending','Payment confirmation pending'],['review','Payment requires review'],['paid','Payment confirmed'],['labeling','Preparing shipment'],['shipped','Marked dispatched by store; carrier acceptance unconfirmed'],['delivered','Marked delivered by store; carrier delivery unconfirmed']]) {
     reset();let calls=0;
     apiImpl=async action=>action==='reconcile'?{status}:{orders:[order(++calls===1?'awaiting_payment':status)]};
     host=harness(PaymentReturn);await flush(host);

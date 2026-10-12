@@ -38,6 +38,8 @@ const provider={useStore:()=>({...state,refresh:()=>{refreshCalls++;return refre
 const filename=path.join(root,'components/store/admin.tsx');
 const mod=new Module(filename,module);mod.filename=filename;mod.paths=Module._nodeModulePaths(root);
 mod.require=id=>{
+ if(id==='@/lib/fulfillment'){const m={exports:{}};new Function('exports',require('typescript').transpileModule(require('node:fs').readFileSync(require('node:path').join(root,'lib/fulfillment.ts'),'utf8'),{compilerOptions:{module:1,target:9}}).outputText)(m.exports);return m.exports;}
+ if(id==='./fulfillment-admin')return {FulfillmentQueue:()=>null,CarrierConnection:()=>null};
  if(id==='react')return hooks;if(id==='react/jsx-runtime')return projectRequire('react/jsx-runtime');if(id==='./provider')return provider;
  if(id==='sonner')return{toast:{success:v=>successes.push(v),info:v=>infos.push(v)}};
  if(id==='@/lib/catalog')return{money:c=>'$'+(c/100).toFixed(2)};if(id==='@/lib/packs')return{supportsPacks:()=>false};

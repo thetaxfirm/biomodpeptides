@@ -1,0 +1,29 @@
+/** Payment status is not proof of physical dispatch. Shared by admin and customer views. */
+export type FulfillmentOrder = { status: string; data?: { shipment?: { status?: string; checkedAt?: number }; tracking?: string } };
+const moving = new Set(['in_transit', 'out_for_delivery', 'available_for_pickup']);
+const problems = new Set(['return_to_sender', 'failure', 'cancelled', 'error']);
+export function fulfillmentLabel(order: FulfillmentOrder): string {
+    if (['refunded','cancelled','canceled','failed'].includes(order.status)) return ({refunded:'Refunded',cancelled:'Cancelled',canceled:'Cancelled',failed:'Payment unsuccessful'} as Record<string,string>)[order.status];
+    const carrier = order.data?.shipment?.status;
+    if (carrier === 'delivered') return 'Delivered: confirmed by carrier';
+    if (carrier && moving.has(carrier)) return ({ in_transit: 'In transit: confirmed by carrier', out_for_delivery: 'Out for delivery', available_for_pickup: 'Available for recipient pickup' } as Record<string, string>)[carrier];
+    if (carrier && problems.has(carrier)) return 'Carrier reports ' + carrier.replaceAll('_', ' ') + ': review required';
+    if (order.status === 'delivered') return 'Marked delivered by store; carrier delivery unconfirmed';
+    if (order.data?.shipment) return 'Label created: awaiting carrier acceptance';
+    if (order.status === 'shipped') return 'Marked dispatched by store; carrier acceptance unconfirmed';
+    if (order.status === 'paid') return 'Payment confirmed: awaiting packing and dispatch';
+    if (order.status === 'labeling') return 'Preparing shipment: label purchase in progress';
+    return ({ creating: 'Checkout being prepared', awaiting_payment: 'Awaiting payment confirmation', pending: 'Payment confirmation pending', review: 'Payment requires review', cancelled: 'Cancelled', canceled: 'Cancelled', refunded: 'Refunded', failed: 'Payment unsuccessful' } as Record<string, string>)[order.status] || order.status.replaceAll('_', ' ');
+}
+export function needsFulfillmentAttention(order: FulfillmentOrder): boolean {
+    if (!['paid', 'labeling', 'shipped', 'delivered'].includes(order.status)) return false;
+    const carrier = order.data?.shipment?.status;
+    if (carrier === 'delivered' || (carrier && moving.has(carrier))) return false;
+    return true;
+}
+export function shipmentEmailText(status: string): string {
+    if (status === 'delivered') return 'The carrier reports that your package was delivered.';
+    if (moving.has(status)) return 'The carrier reports: ' + status.replaceAll('_', ' ') + '.';
+    if (problems.has(status)) return 'The carrier reports ' + status.replaceAll('_', ' ') + '. Please check tracking for details.';
+    return 'A shipping label has been created. Carrier acceptance has not been confirmed. Tracking will update when the carrier scans your package.';
+}

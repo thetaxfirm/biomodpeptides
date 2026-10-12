@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { shipmentEmailText } from './fulfillment';
 // EasyPost shipping: live checkout rates, label purchase and tracking webhooks.
 // Everything stays off until EASYPOST_API_KEY is set; checkout then falls back to the flat rate in store settings.
 type Environment = Record<string, string | undefined>;
@@ -120,8 +121,9 @@ export async function sendTrackingEmail(env: Environment, to: string, orderId: s
         + '<div style="font-family:Arial,sans-serif;color:#141414;max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e9d9ef;border-radius:8px;overflow:hidden">'
         + '<div style="background:#2b1030;color:#fbf1ea;padding:16px 20px;font-size:20px;font-weight:bold;letter-spacing:2px">BIOMOD</div>'
         + '<div style="padding:20px">'
-        + '<h2 style="margin:0 0 12px;color:#2b1030">Your BIOMOD order has shipped</h2>'
-        + '<p>' + (name ? 'Hi ' + esc(name.split(' ')[0]) + ', y' : 'Y') + 'our order ' + esc(orderId.slice(0, 8)) + ' is on its way via ' + esc(label.service) + '.</p>'
+        + '<h2 style="margin:0 0 12px;color:#2b1030">Tracking for your BIOMOD order</h2>'
+        + '<p>' + (name ? 'Hi ' + esc(name.split(' ')[0]) + ', y' : 'Y') + 'our order ' + esc(orderId.slice(0, 8)) + ' has tracking with ' + esc(label.service) + '.</p>'
+        + '<p>' + esc(shipmentEmailText(label.status)) + '</p>'
         + '<p><strong>Tracking number:</strong> ' + esc(label.tracking) + '</p>'
         + '<p><a href="' + esc(link) + '" style="display:inline-block;background:#2b1030;color:#fbf1ea;padding:10px 16px;border-radius:6px;text-decoration:none;font-weight:bold">Track your package</a></p>'
         + '<p style="font-size:12px;color:#5c5c5c">For laboratory research use only. Questions? Reply to contact@trybiomod.com.</p>'
@@ -130,7 +132,7 @@ export async function sendTrackingEmail(env: Environment, to: string, orderId: s
         const r = await fetch('https://api.resend.com/emails', {
             method: 'POST',
             headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ from: env.SHIP_EMAIL_FROM || 'BIOMOD <no-reply@trybiomod.com>', to: [to], reply_to: 'contact@trybiomod.com', subject: 'Your BIOMOD order ' + orderId.slice(0, 8) + ' has shipped', html }),
+            body: JSON.stringify({ from: env.SHIP_EMAIL_FROM || 'BIOMOD <no-reply@trybiomod.com>', to: [to], reply_to: 'contact@trybiomod.com', subject: 'Your BIOMOD order ' + orderId.slice(0, 8) + ' tracking information', html }),
             redirect: 'manual',
             signal: AbortSignal.timeout(10000),
         });
@@ -139,4 +141,25 @@ export async function sendTrackingEmail(env: Environment, to: string, orderId: s
     catch {
         return false;
     }
+}
+
+/** Read-only carrier diagnostics. Never exposes account IDs, addresses or credentials. */
+export async function shippingConnection(env: Environment) {
+    if (!easypostReady(env)) return { connected: false, message: 'Carrier connection is not configured.', webhookConfigured: false, webhookRegistered: false };
+    try {
+        await call(env, '/carrier_accounts');
+        const hooks = await call(env, '/webhooks');
+        const registered = Array.isArray(hooks.webhooks) && hooks.webhooks.some((h: any) => h.url === 'https://trybiomod.com/api/shipping/easypost' && !h.disabled_at);
+        return { connected: true, message: 'EasyPost accepted the connection check.', webhookConfigured: Boolean(env.EASYPOST_WEBHOOK_SECRET), webhookRegistered: registered };
+    } catch { return { connected: false, message: 'Carrier connection could not be verified. Check the EasyPost account.', webhookConfigured: Boolean(env.EASYPOST_WEBHOOK_SECRET), webhookRegistered: false }; }
+}
+export async function readShipmentTracking(env: Environment, shipmentId: string, tracking: string) {
+    if (!/^shp_[a-zA-Z0-9]+$/.test(shipmentId)) throw new ShippingError('This order has no valid carrier shipment reference.');
+    const shipment = await call(env, '/shipments/' + encodeURIComponent(shipmentId));
+    if (shipment.mode !== 'production' || shipment.id !== shipmentId || shipment.tracking_code !== tracking || shipment.tracker?.tracking_code !== tracking)
+        throw new ShippingError('Carrier tracking did not match this production shipment. No order changes were saved.');
+    const status = shipment.tracker?.status;
+    if (!['unknown', 'pre_transit', 'in_transit', 'out_for_delivery', 'delivered', 'available_for_pickup', 'return_to_sender', 'failure', 'cancelled', 'error'].includes(status))
+        throw new ShippingError('Carrier tracking status is unavailable.');
+    return status as string;
 }

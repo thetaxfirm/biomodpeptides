@@ -23,6 +23,7 @@ function Check(){}function Blank(){}function Promo(){}
 const cache=new Map();
 function load(relative){if(cache.has(relative))return cache.get(relative).exports;const filename=path.join(root,relative),mod=new Module(filename,module);mod.filename=filename;mod.paths=Module._nodeModulePaths(root);cache.set(relative,mod);
  mod.require=id=>{
+ if(id==='@/lib/fulfillment'){const m={exports:{}};new Function('exports',require('typescript').transpileModule(require('node:fs').readFileSync(require('node:path').join(root,'lib/fulfillment.ts'),'utf8'),{compilerOptions:{module:1,target:9}}).outputText)(m.exports);return m.exports;}
   if(id==='react')return hooks;if(id==='react/jsx-runtime')return require('react/jsx-runtime');
   if(id==='next/navigation')return{usePathname:()=>window.location.pathname,useSearchParams:()=>new URLSearchParams(window.location.search)};
   if(id==='sonner')return{toast:{success:noop,error:noop,info:noop},Toaster:noop};

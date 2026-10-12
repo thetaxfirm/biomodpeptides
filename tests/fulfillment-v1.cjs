@@ -1,0 +1,41 @@
+// Real shipping functions/routes; in-memory orders, synthetic fixtures and mocked providers only.
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),Module=require('node:module');
+const {DatabaseSync}=require('node:sqlite'),{createHmac}=require('node:crypto');
+const ts=require('typescript'),React=require('react'),{renderToStaticMarkup}=require('react-dom/server');
+const root=path.resolve(__dirname,'..'),db=new DatabaseSync(':memory:');
+db.exec('CREATE TABLE orders(id TEXT PRIMARY KEY,status TEXT,data TEXT,updated INTEGER)');
+let authorized=true,now=1000,calls=[],mode='production',carrierStatus='pre_transit';
+const env={EASYPOST_API_KEY:'EZTK_isolated_fixture',EASYPOST_WEBHOOK_SECRET:'isolated-fixture-secret',RESEND_API_KEY:'isolated-mail'};
+const runtime={runtime:()=>env,timestamp:()=>++now,parse:(v,f)=>v?JSON.parse(v):f,one:async(sql,...v)=>db.prepare(sql).get(...v),run:async(sql,...v)=>({meta:db.prepare(sql).run(...v)})};
+class NextResponse extends Response{static json(value,init){return new NextResponse(JSON.stringify(value),{...init,headers:{'Content-Type':'application/json',...init?.headers}})}}
+const cache={};function load(relative){if(cache[relative])return cache[relative];const filename=path.join(root,relative),m=new Module(filename,module);m.filename=filename;m.paths=Module._nodeModulePaths(root);m.require=id=>{if(id==='next/server')return{NextResponse};if(id==='@/lib/auth')return{requireAdmin:async()=>{if(!authorized)throw Error('Unauthorized');}};if(id==='@/lib/runtime')return runtime;if(id==='./fulfillment'||id==='@/lib/fulfillment')return load('lib/fulfillment.ts');if(id==='@/lib/easypost')return load('lib/easypost.ts');return require(id);};m._compile(ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText,filename);return cache[relative]=m.exports;}
+const id='00000001-0000-4000-8000-000000000001';
+function seed(status='paid',extra={}){db.prepare('INSERT OR REPLACE INTO orders VALUES(?,?,?,?)').run(id,status,JSON.stringify({email:'fixture@example.invalid',address:{name:'Isolated fixture',line1:'1 Example',city:'Las Vegas',state:'NV',zip:'89118'},items:[],...extra}),0);}
+const record=()=>{const r=db.prepare('SELECT * FROM orders WHERE id=?').get(id);return{...r,data:JSON.parse(r.data)}};
+function request(body,origin='https://trybiomod.com'){const r=new Request('https://trybiomod.com/api/admin/shipping',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({id,...body})});r.nextUrl=new URL(r.url);return r;}
+global.fetch=async(url,init)=>{calls.push({url,method:init.method,body:init.body&&JSON.parse(init.body)});
+ if(url==='https://api.resend.com/emails')return Response.json({id:'fixture-message'});
+ if(url.endsWith('/carrier_accounts'))return Response.json({carrier_accounts:[]});
+ if(url.endsWith('/webhooks'))return Response.json({webhooks:[{url:'https://trybiomod.com/api/shipping/easypost',disabled_at:null}]});
+ if(url.endsWith('/shipments'))return Response.json({id:'shp_fixture',rates:[{id:'rate_fixture',carrier:'USPS',service:'GroundAdvantage',rate:'5.00'}]});
+ if(url.endsWith('/shipments/shp_fixture/buy'))return Response.json({id:'shp_fixture',tracking_code:'FIXTURETRACK',postage_label:{label_url:'https://example.invalid/label'},tracker:{public_url:'https://example.invalid/tracking'}});
+ if(url.endsWith('/shipments/shp_fixture'))return Response.json({id:'shp_fixture',mode,tracking_code:'FIXTURETRACK',tracker:{tracking_code:'FIXTURETRACK',status:carrierStatus}});
+ throw Error('Unexpected isolated provider request');};
+(async()=>{
+ const f=load('lib/fulfillment.ts'),api=load('app/api/admin/shipping/route.ts'),webhook=load('app/api/shipping/easypost/route.ts');
+ for(const status of ['paid','shipped']){const o={status,data:{shipment:{status:'pre_transit'}}};assert.match(f.fulfillmentLabel(o),/awaiting carrier acceptance/);assert(f.needsFulfillmentAttention(o));}
+ assert(!f.needsFulfillmentAttention({status:'pending'}));assert(!f.needsFulfillmentAttention({status:'shipped',data:{shipment:{status:'in_transit'}}}));assert(f.needsFulfillmentAttention({status:'shipped',data:{shipment:{status:'failure'}}}));
+ assert.equal(f.fulfillmentLabel({status:'refunded',data:{shipment:{status:'in_transit'}}}),'Refunded');
+ assert.match(f.fulfillmentLabel({status:'delivered'}),/by store.*unconfirmed/);
+ const {FulfillmentQueue}=load('components/store/fulfillment-admin.tsx');const html=renderToStaticMarkup(React.createElement(FulfillmentQueue,{orders:[{id,status:'shipped',created:0,data:{shipment:{status:'pre_transit'}}},{id:'unpaid',status:'pending',created:1}]}));assert.match(html,/fulfillment queue \(1\)/);assert.match(html,/does not schedule a pickup/);assert(!html.includes('#order-unpaid'));
+ authorized=false;assert.equal((await api.GET()).status,403);assert.equal(calls.length,0);authorized=true;
+ let r=await api.GET();assert.equal(r.status,200);const health=await r.json();assert(health.connected&&health.webhookRegistered&&health.webhookConfigured);assert(!JSON.stringify(health).includes('EZTK'));
+ seed();const before=calls.length;assert.equal((await api.POST(request({},'https://bad.invalid'))).status,403);assert.equal(calls.length,before);
+ r=await api.POST(request({}));assert.equal(r.status,200);assert.equal(record().status,'paid','Label purchase must not mark dispatch');assert(record().data.labelCreatedAt);assert.equal(record().data.shippedAt,undefined);assert.match(calls.find(c=>c.url.includes('resend')).body.html,/Carrier acceptance has not been confirmed/);assert.doesNotMatch(calls.find(c=>c.url.includes('resend')).body.subject,/shipped/);
+ const bought=calls.filter(c=>c.url.endsWith('/buy')).length;assert.equal((await api.POST(request({}))).status,409);assert.equal(calls.filter(c=>c.url.endsWith('/buy')).length,bought);
+ for(const [status,expected]of[['pre_transit','paid'],['in_transit','shipped'],['delivered','delivered']]){carrierStatus=status;const start=calls.length;r=await api.POST(request({refreshTracking:true}));assert.equal(r.status,200);assert.equal(record().status,expected);assert.equal(record().data.shipment.status,status);assert(calls.slice(start).every(c=>c.method==='GET'),'Refresh never buys or sends');}
+ mode='test';const saved=JSON.stringify(record());assert.equal((await api.POST(request({refreshTracking:true}))).status,400);assert.equal(JSON.stringify(record()),saved);mode='production';
+ async function event(status,eventMode='production',shipmentId='shp_fixture',signed=true){const body=JSON.stringify({description:'tracker.updated',created_at:new Date(++now).toISOString(),result:{object:'Tracker',mode:eventMode,shipment_id:shipmentId,tracking_code:'FIXTURETRACK',status}});return webhook.POST(new Request('https://trybiomod.com/api/shipping/easypost',{method:'POST',headers:{'x-hmac-signature':signed?'hmac-sha256-hex='+createHmac('sha256',env.EASYPOST_WEBHOOK_SECRET).update(body).digest('hex'):'bad'},body}));}
+ seed('paid',{shipment:{shipmentId:'shp_fixture',tracking:'FIXTURETRACK',status:'pre_transit'}});assert.equal((await event('delivered','production','shp_fixture',false)).status,401);assert.equal(record().status,'paid');await event('delivered','test');assert.equal(record().status,'paid');await event('delivered','production','shp_other');assert.equal(record().status,'paid');await event('in_transit');assert.equal(record().status,'shipped');await event('delivered');assert.equal(record().status,'delivered');
+ console.log('PASS: actual fulfillment queue, truthful label/customer email, paid-state preservation, duplicate-label guard, admin/origin protection, read-only tracking refresh, production identity verification and signed carrier transitions. All data/providers isolated.');
+})().catch(e=>{console.error(e);process.exitCode=1}).finally(()=>db.close());

@@ -10,6 +10,8 @@ const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'biomod-easypost-v1-'));
 try {
   const file = path.join(temp, 'easypost.mjs');
   await fs.writeFile(file, ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText);
+  await fs.writeFile(path.join(temp, 'fulfillment.mjs'), ts.transpileModule(await fs.readFile(new URL('../lib/fulfillment.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText);
+  await fs.writeFile(file, (await fs.readFile(file,'utf8')).replace("'./fulfillment'","'./fulfillment.mjs'"));
   const e = await import(file);
   const env = { EASYPOST_API_KEY: 'EZTK_test_key_123456' };
   const vial = { quantity: 2, product: { categories: [{ slug: 'research-compounds' }] } };
@@ -45,6 +47,9 @@ try {
   assert.equal(calls.at(-1)[3].rate.id, 'rate_usps');
   assert.equal(await e.sendTrackingEmail({}, 'a@b.co', 'order-1', label), false, 'no key: no email');
   assert.equal(await e.sendTrackingEmail({ RESEND_API_KEY: 're_test' }, 'a@b.co', 'order-1', label, 'Ada Lovelace'), true);
+  assert.match(calls.at(-1)[3].html, /Carrier acceptance has not been confirmed/);
+  assert.doesNotMatch(calls.at(-1)[3].html, /has shipped|is on its way/);
+  assert.doesNotMatch(calls.at(-1)[3].subject, /has shipped/);
   // Errors surface EasyPost's message.
   globalThis.fetch = async () => new Response(JSON.stringify({ error: { message: 'Invalid address' } }), { status: 422 });
   await assert.rejects(e.cheapestRate(env, to, [vial]), /Invalid address/);

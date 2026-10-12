@@ -60,6 +60,7 @@ const {authLink}=authReturnModule.exports;
 const filename=path.join(root,'components/store/account.tsx');
 const mod=new Module(filename,module);mod.filename=filename;mod.paths=Module._nodeModulePaths(root);
 mod.require=id=>{
+ if(id==='@/lib/fulfillment'){const m={exports:{}};new Function('exports',require('typescript').transpileModule(require('node:fs').readFileSync(require('node:path').join(root,'lib/fulfillment.ts'),'utf8'),{compilerOptions:{module:1,target:9}}).outputText)(m.exports);return m.exports;}
   if(id==='react')return hooks;if(id==='react/jsx-runtime')return require('react/jsx-runtime');
   if(id==='./provider')return provider;
   if(id==='@/lib/catalog')return {money:c=>'$'+(c/100).toFixed(2),compound:p=>p.name};
