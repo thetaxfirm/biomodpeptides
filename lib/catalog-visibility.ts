@@ -24,7 +24,7 @@ export function orderView(data: Record<string, any>) {
       product: { id: item.id, name: product?.name || 'Archived product', price: item.product?.price },
     };
   });
-  return { items, subtotal: data.subtotal, discount: data.discount, shipping: data.shipping, tax: data.tax, total: data.total, address: data.address, tracking: data.tracking, ...(data.shipment ? { shipment: { status: data.shipment.status, checkedAt: data.shipment.checkedAt } } : {}), catalogUnavailable: unavailableOrder(data) };
+  return { ...(data.internalTest === true ? {internalTest:true} : {}), ...(data.recovery ? {recovery:{savings:data.recovery.savings,appliedAt:data.recovery.appliedAt}} : {}), items, subtotal: data.subtotal, discount: data.discount, shipping: data.shipping, tax: data.tax, total: data.total, address: data.address, tracking: data.tracking, ...(data.shipment ? { shipment: { status: data.shipment.status, checkedAt: data.shipment.checkedAt } } : {}), catalogUnavailable: unavailableOrder(data) };
 }
 // Administrator copy: everything needed to pick, pack and ship the order, including the customer email, chosen service, promo and label.
 export function adminOrderView(data: Record<string, any>) {

@@ -1,3 +1,4 @@
+import { recoveryAdminStatus } from '@/lib/checkout-recovery';
 import { coaAutomationStatus, coaDeliveryStatuses, enqueueCoaRequest, enqueueRequestAlert, processCoaOutbox, saveCoaConfig } from '@/lib/coa-outbox';
 import { promoAnalytics } from '@/lib/promo-analytics';
 import { PROMO_COOKIE, promotion } from '@/lib/promotions';
@@ -139,6 +140,9 @@ export async function GET(req: NextRequest, { params }: {
                     return page('Payment received', '<h1>Payment received</h1><p>We already have a payment for this order.</p><p><a href="/payment/return">Check payment status</a></p>');
                 if (existing.state === 'review' || existing.underReview)
                     return fail('This payment is being reviewed. Please do not pay again. Contact us with order ' + o.id.slice(0, 8) + '.');
+                if (saved.internalTest === true) return fail('This is an internal test order.');
+                const locked = await run("UPDATE orders SET data=?,updated=? WHERE id=? AND data=? AND total=? AND status IN ('awaiting_payment','pending')", JSON.stringify({...saved,lastPaymentFormAt:timestamp()}),timestamp(),o.id,o.data,o.total);
+                if (!locked.meta.changes) return fail('The order changed. Review your current total in My orders before paying.');
                 const form = await adapter.hostedForm(order, { email: u.email, customerId: u.id, ...saved.address }, anetOrderDetails(saved));
                 return page('Secure payment', '<h1>Opening secure payment…</h1><form id="pay" method="post" action="' + esc(form.action) + '"><input type="hidden" name="token" value="' + esc(form.token) + '"><button type="submit">Continue to secure payment</button></form><script>document.getElementById("pay").submit()</script>');
             }
@@ -163,7 +167,7 @@ export async function GET(req: NextRequest, { params }: {
         if (action === 'admin') {
             await requireAdmin();
             const requests = await all<{ id: string; data: string }>("SELECT * FROM requests WHERE kind IN ('contact','stock','affiliate') ORDER BY created DESC LIMIT 200");
-            return j({ searchPublishing: searchReport(seoConfig(runtime())), config: await config(), products: await catalog(false), orders: (await all<{
+            return j({ checkoutRecovery: await recoveryAdminStatus(runtime()), searchPublishing: searchReport(seoConfig(runtime())), config: await config(), products: await catalog(false), orders: (await all<{
                     data: string;
                 }>('SELECT id,owner,status,total,data,created FROM orders ORDER BY created DESC LIMIT 200')).map(o => ({ ...o, data: adminOrderView(parse(o.data, {})) })), requests: requests.map(o => ({ ...o, data: presentationData(parse(o.data, {})) })), coaAutomation: await coaAutomationStatus(runtime(), requests.map(r => r.id)), campaigns: (await all<{
                     data: string;

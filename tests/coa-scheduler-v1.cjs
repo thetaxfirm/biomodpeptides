@@ -132,6 +132,7 @@ function fixture(processor = async () => ({ processed: 0, accepted: 0, review: 0
   f = fixture(); f.config({}); let cleanup = 0;
   const http = { fetch: () => new Response('isolated fixture') };
   const worker = load('worker.ts', {
+    './lib/checkout-recovery': { runCheckoutRecovery: async()=>({}) },
     'vinext/server/fetch-handler': http,
     './lib/traffic-metrics-server': { cleanupTraffic: async db => { assert.equal(db, f.env.DB); cleanup++; } },
     './lib/coa-scheduler': { runScheduledCoaOutbox: (env, time) => f.helper.runScheduledCoaOutbox(env, time, f.deps) },

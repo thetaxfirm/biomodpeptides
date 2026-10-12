@@ -4,7 +4,7 @@ import { sendOrderNotification } from './order-summary';
 import { quote, CartLine } from './commerce';
 import { one, run, uid, timestamp, runtime, parse, database } from './runtime';
 import { createPaymentAdapter, paymentEnvironment, paymentReturnUrl } from './payments';
-import { fixedTaxConfig, fixedTaxCents } from './tax';
+import { checkoutTax } from './checkout-tax';
 import { z } from 'zod';
 import { customer } from './auth';
 import { cheapestRate, easypostReady } from './easypost';
@@ -39,29 +39,7 @@ export async function deliveryQuote(lines: CartLine[], raw: unknown, preset?: { 
     }
     if (shipping === null)
         throw new Error('Delivery pricing is being finalized. Please contact us for help.');
-    // TaxJar is used when connected. Otherwise the configured fixed rate applies (lib/tax.ts).
-    // With neither configured, checkout stays closed: missing tax setup never becomes zero tax.
-    if (!runtime().TAXJAR_API_TOKEN) {
-        const fixed = fixedTaxConfig(runtime());
-        if (!fixed)
-            throw new Error('Checkout is not accepting orders yet. Tax and delivery setup is pending.');
-        const tax = fixedTaxCents(fixed, address.state, q.total);
-        return { items: q.items, subtotal: q.subtotal, discount: q.discount, packDiscount: q.packDiscount, promoDiscount: q.promoDiscount, promo: q.promo, shipping, shippingService, tax, total: q.total + shipping + tax, address };
-    }
-    if (!runtime().STORE_ORIGIN_ZIP || !runtime().STORE_ORIGIN_STATE)
-        throw new Error('Checkout is not accepting orders yet. Tax and delivery setup is pending.');
-    const r = await fetch('https://api.taxjar.com/v2/taxes', { method: 'POST', headers: { Authorization: 'Bearer ' + runtime().TAXJAR_API_TOKEN, 'Content-Type': 'application/json' }, body: JSON.stringify({ from_country: 'US', from_zip: runtime().STORE_ORIGIN_ZIP, from_state: runtime().STORE_ORIGIN_STATE, to_country: 'US', to_zip: address.zip, to_state: address.state, to_city: address.city, to_street: address.line1, amount: q.total / 100, shipping: shipping / 100 }) });
-    if (!r.ok)
-        throw new Error('Tax could not be calculated. Please try again later.');
-    const d = await r.json() as {
-        tax?: {
-            amount_to_collect?: number;
-        };
-    };
-    const t = d.tax?.amount_to_collect;
-    if (typeof t !== 'number' || !Number.isFinite(t) || t < 0)
-        throw new Error('Tax could not be verified.');
-    const tax = Math.round(t * 100);
+    const tax = await checkoutTax(runtime(), address, q.total, shipping);
     return { items: q.items, subtotal: q.subtotal, discount: q.discount, packDiscount: q.packDiscount, promoDiscount: q.promoDiscount, promo: q.promo, shipping, shippingService, tax, total: q.total + shipping + tax, address };
 }
 const quoteFingerprint = (q: Record<string, any>) => JSON.stringify({ items: q.items.map((i: any) => ({ id: i.id, quantity: i.quantity, packId: i.packId || null, packSize: i.packSize || null, packKind: i.packKind || null, lineTotal: i.lineTotal, presaleId: i.presaleId || null, price: i.product.price })), address: q.address, shipping: q.shipping, tax: q.tax, total: q.total, ...(q.promo ? { promoCode: q.promo.code } : {}) });
@@ -142,11 +120,16 @@ export async function reconcile(owner: string, id: string, hints: string[] = [])
     await run('UPDATE orders SET status=?,updated=? WHERE id=?', 'review', timestamp(), id);
     throw new Error('This payment is outside the online verification window. Contact Biomod for reconciliation.');
 } const result = await createPaymentAdapter(runtime()).verifyPayment({ id, totalCents: row.total, currency: 'USD' }, row.checkout_ref, hints, row.created); if (result.state === 'paid' && (!result.notificationId || !result.providerReference))
-    throw new Error('Payment requires review.'); const state = result.state === 'failed' ? 'review' : result.state; const db=database();const written=await db.batch([
- db.prepare(inventorySql.paymentStatus).bind(state,result.state==='paid'?result.providerReference:null,result.notificationId||null,timestamp(),id),
+    throw new Error('Payment requires review.'); const state = result.noPaymentFound ? 'awaiting_payment' : result.state === 'failed' || result.state === 'pending' ? 'review' : result.state; const db=database();const written=await db.batch([
+ db.prepare(inventorySql.paymentStatus + ' AND total=?').bind(state,result.state==='paid'?result.providerReference:null,result.notificationId||null,timestamp(),id,row.total),
  db.prepare(inventorySql.settleInventory).bind(id,id,id),
  db.prepare(inventorySql.clearSettledReservation).bind(id,id)
 ]);
+if (!written[0]?.meta?.changes) {
+ const latest=await one<{status:string}>('SELECT status FROM orders WHERE id=? AND owner=?',id,owner);
+ if(latest && ['paid','labeling','shipped','delivered'].includes(latest.status))return {status:latest.status};
+ throw new Error('The order changed during verification. Check payment status again before paying.');
+}
 // Email the store a full copy of the order the first time it is marked paid (the status update only changes a row once).
 if (state === 'paid' && written[0]?.meta?.changes) await sendOrderNotification(runtime(), id, saved);
 return { status: state, message: result.state === 'failed' ? 'The payment attempt failed. This order is held for review before inventory is released.' : result.message }; }

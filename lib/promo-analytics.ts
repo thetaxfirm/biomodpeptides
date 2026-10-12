@@ -37,7 +37,7 @@ function aggregateSql(knownCodes: string[]) {
   return `WITH source AS (
     SELECT status, total, payment_ref, notification_id,
       CASE WHEN json_valid(data) THEN data ELSE '{}' END AS safeData
-    FROM orders WHERE created >= ? AND created < ?
+    FROM orders WHERE created >= ? AND created < ? AND COALESCE(json_extract(CASE WHEN json_valid(data) THEN data ELSE '{}' END,'$.internalTest'),0)!=1
   ), attributed AS (
     SELECT status, total, payment_ref, notification_id,
       CASE json_extract(safeData, '$.environment')

@@ -40,6 +40,8 @@ function order(status, environment, created = start, proof = true, total = 12345
 function request(kind, status = 'new', created = start) {
   sql.prepare('INSERT INTO requests VALUES(?,?,?,?,?,?)').run('fixture-request-' + (++sequence), sensitive, kind, JSON.stringify({email:sensitive,address:sensitive,sessionId:sensitive}), status, created);
 }
+order('paid',savedEnvironments.anetLive,start,true,999999,JSON.stringify({environment:savedEnvironments.anetLive,internalTest:true}));
+order('awaiting_payment',savedEnvironments.anetLive,start,false,999999,JSON.stringify({environment:savedEnvironments.anetLive,internalTest:true}));
 order('paid',savedEnvironments.anetLive, start); // Inclusive lower bound.
 order('shipped',savedEnvironments.chaseLive, end - 1, true, 100); // Exclusive upper bound minus one millisecond.
 order('delivered',savedEnvironments.anetSandbox, start, true, 999);

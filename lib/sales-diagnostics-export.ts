@@ -26,7 +26,7 @@ export function salesDiagnosticsExport(report: SalesDiagnosticsReport) {
   metadata('measurement_scope', 'Existing order and request records only. No visitor, people, traffic-source or conversion-rate measurements.');
   metadata('window_scope', 'Order and request counts use complete UTC days; the current partial day is excluded.');
   metadata('order_cohort', 'Orders are grouped by creation date, with payment status as of this export. Payment completion dates are not recorded separately; these are not daily sales.');
-  metadata('customer_test_classification', 'All orders are unclassified as customer purchases or internal tests. A live payment can still be an internal test.');
+  metadata('customer_test_classification', 'Orders explicitly marked as internal tests are excluded. Remaining orders are unclassified as customer purchases or internal tests. A live payment can still be an internal test.');
   metadata('payment_evidence', 'Payment recorded requires a paid or fulfillment status plus both payment and verification references. Missing-reference orders are excluded from recorded payment totals.');
   metadata('gross_scope', 'Gross is recorded in USD cents, includes tax and shipping, is not net revenue and does not account for refunds.');
   metadata('request_scope', 'Repeated delivery calculations can issue multiple quotes for one account. Failed quotes are not recorded. Request counts cannot establish quote-to-purchase conversion or distinguish internal tests.');

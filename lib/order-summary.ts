@@ -30,7 +30,7 @@ export function anetOrderDetails(data: Record<string, any>): AnetOrderDetails {
         taxCents: int(data.tax),
         shippingCents: int(data.shipping),
         shippingName: data.shippingService ? String(data.shippingService) : 'Shipping',
-        note: promo,
+        note: [promo, data.recovery?.savings ? 'Additional 7.5% recovery offer saved ' + money(int(data.recovery.savings)) : ''].filter(Boolean).join('; '),
     };
 }
 const esc = (v: unknown) => String(v ?? '').replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
@@ -47,6 +47,7 @@ export function orderEmailHtml(orderId: string, data: Record<string, any>): stri
         + '<table style="width:100%;border-collapse:collapse;font-size:14px;margin-top:12px">'
         + row('Subtotal', money(int(data.subtotal)))
         + (int(data.discount) ? row('Discounts' + (data.promo?.code ? ' (promo ' + esc(data.promo.code) + ')' : ''), money(-int(data.discount))) : '')
+        + (data.recovery?.savings ? row('Includes additional 7.5% recovery savings', money(int(data.recovery.savings))) : '')
         + row('Shipping' + (data.shippingService ? ' - ' + esc(data.shippingService) : ''), money(int(data.shipping)))
         + row('Tax', money(int(data.tax)))
         + row('Total paid', money(int(data.total)), true) + '</table>'

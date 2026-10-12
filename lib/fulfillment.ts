@@ -1,8 +1,9 @@
 /** Payment status is not proof of physical dispatch. Shared by admin and customer views. */
-export type FulfillmentOrder = { status: string; data?: { shipment?: { status?: string; checkedAt?: number }; tracking?: string } };
+export type FulfillmentOrder = { status: string; data?: { internalTest?: boolean; shipment?: { status?: string; checkedAt?: number }; tracking?: string } };
 const moving = new Set(['in_transit', 'out_for_delivery', 'available_for_pickup']);
 const problems = new Set(['return_to_sender', 'failure', 'cancelled', 'error']);
 export function fulfillmentLabel(order: FulfillmentOrder): string {
+    if (order.data?.internalTest) return 'Internal test: not a customer sale';
     if (['refunded','cancelled','canceled','failed'].includes(order.status)) return ({refunded:'Refunded',cancelled:'Cancelled',canceled:'Cancelled',failed:'Payment unsuccessful'} as Record<string,string>)[order.status];
     const carrier = order.data?.shipment?.status;
     if (carrier === 'delivered') return 'Delivered: confirmed by carrier';
@@ -13,9 +14,10 @@ export function fulfillmentLabel(order: FulfillmentOrder): string {
     if (order.status === 'shipped') return 'Marked dispatched by store; carrier acceptance unconfirmed';
     if (order.status === 'paid') return 'Payment confirmed: awaiting packing and dispatch';
     if (order.status === 'labeling') return 'Preparing shipment: label purchase in progress';
-    return ({ creating: 'Checkout being prepared', awaiting_payment: 'Awaiting payment confirmation', pending: 'Payment confirmation pending', review: 'Payment requires review', cancelled: 'Cancelled', canceled: 'Cancelled', refunded: 'Refunded', failed: 'Payment unsuccessful' } as Record<string, string>)[order.status] || order.status.replaceAll('_', ' ');
+    return ({ creating: 'Checkout being prepared', awaiting_payment: 'Unpaid checkout: payment not confirmed', pending: 'Payment not confirmed: needs verification', review: 'Payment requires review', cancelled: 'Cancelled', canceled: 'Cancelled', refunded: 'Refunded', failed: 'Payment unsuccessful' } as Record<string, string>)[order.status] || order.status.replaceAll('_', ' ');
 }
 export function needsFulfillmentAttention(order: FulfillmentOrder): boolean {
+    if (order.data?.internalTest) return false;
     if (!['paid', 'labeling', 'shipped', 'delivered'].includes(order.status)) return false;
     const carrier = order.data?.shipment?.status;
     if (carrier === 'delivered' || (carrier && moving.has(carrier))) return false;

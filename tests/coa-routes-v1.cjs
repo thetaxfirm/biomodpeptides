@@ -45,6 +45,7 @@ const called = name => calls.filter(call => call.name === name);
 const checkedAdmin = () => assert(called('admin-ok').length, 'Admin authorization must precede sensitive reads/writes');
 const status = value => ({ status: value, reason: value === 'accepted' ? 'accepted_by_email_provider' : 'fixture', acceptedAt: value === 'accepted' ? now : null, canProcess: value === 'queued' });
 const dependencies = {
+  '@/lib/checkout-recovery': { recoveryAdminStatus: async()=>{checkedAdmin();return {enabled:false,jobs:[]};} },
   '@/lib/auth': {
     customer: async () => { note('customer'); return scenario.role === 'signedout' ? null : account; },
     requireAdmin: async () => { note('requireAdmin'); if (scenario.role !== 'admin') throw Error('Administrator access required.'); note('admin-ok'); return account; },

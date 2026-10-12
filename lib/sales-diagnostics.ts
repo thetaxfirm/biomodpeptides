@@ -39,7 +39,7 @@ export const diagnosticSql = {
       total,
       CASE WHEN ${paidStatus} AND ${proof} THEN 1 ELSE 0 END AS paymentRecorded,
       CASE WHEN ${paidStatus} AND NOT (${proof}) THEN 1 ELSE 0 END AS missingPaymentRecords
-    FROM orders WHERE created >= ? AND created < ?
+    FROM orders WHERE created >= ? AND created < ? AND COALESCE(json_extract(CASE WHEN json_valid(data) THEN data ELSE '{}' END,'$.internalTest'),0)!=1
   ) SELECT dayUtc, environment, status, COUNT(*) AS orders,
       SUM(paymentRecorded) AS paymentRecorded,
       SUM(CASE WHEN paymentRecorded = 1 THEN total ELSE 0 END) AS grossCents,
@@ -49,7 +49,7 @@ export const diagnosticSql = {
     FROM requests WHERE created >= ? AND created < ? AND kind IN ('quote','contact','stock','affiliate')
     GROUP BY dayUtc, kind ORDER BY dayUtc DESC, kind`,
   unresolvedOrders: `SELECT ${environment} AS environment, status, COUNT(*) AS records, MIN(created) AS oldestCreated
-    FROM orders WHERE status IN ('creating','awaiting_payment','pending','review')
+    FROM orders WHERE status IN ('creating','awaiting_payment','pending','review') AND COALESCE(json_extract(CASE WHEN json_valid(data) THEN data ELSE '{}' END,'$.internalTest'),0)!=1
     GROUP BY environment, status ORDER BY environment, status`,
   cartConflicts: `SELECT COUNT(*) AS records, MIN(created) AS oldestCreated
     FROM requests WHERE kind = 'cart_import' AND status = 'cart_conflict'`,

@@ -23,7 +23,7 @@ export function promoAnalyticsExport(report: PromoAnalyticsReport) {
   metadata('includes_partial_today', String(report.window.includesPartialToday));
   metadata('currency', 'USD');
   metadata('classification', report.classification);
-  metadata('environment_scope', 'All environments are exported separately. Live payments can include internal tests; customer-versus-test classification is unclassified.');
+  metadata('environment_scope', 'Orders explicitly marked as internal tests are excluded. All environments are exported separately. Live payments can include internal tests; customer-versus-test classification is unclassified.');
   metadata('measurement_scope', 'Orders with a saved promo code, grouped by order creation date and current payment evidence. Not cart applications, unique visitors, conversion rates or daily payment cohorts.');
   metadata('payment_evidence', 'Payment recorded requires a paid or fulfillment status plus complete payment and verification references. Missing-reference orders are excluded from recorded payment totals.');
   metadata('gross_scope', 'Recorded gross is USD cents on payment-recorded orders; it includes shipping and tax before refunds and is not net revenue. Missing or invalid gross amounts are excluded and counted as missing_amount_records.');

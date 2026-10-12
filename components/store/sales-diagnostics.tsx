@@ -54,7 +54,7 @@ export function SalesDiagnostics() {
     {report && <>
       <p>Reporting dates: {utcDate(report.window.start)} through {utcDate(report.window.end - 1)} UTC. Today is excluded. Refreshed {utcTime(report.asOf)}.</p>
       <section aria-labelledby="diagnostic-orders"><h3 id="diagnostic-orders">Orders started in this period</h3>
-        <p>Payment status is shown as of this refresh. All orders are unclassified as customer purchases or internal tests; a live payment can still be a test.</p>
+        <p>Payment status is shown as of this refresh. Orders explicitly marked as internal tests are excluded. Remaining orders are not independently classified; a live payment can still be a test.</p>
         <Table><TableHeader><TableRow><TableHead>Environment</TableHead><TableHead className={styles.number}>Orders started</TableHead><TableHead className={styles.number}>Payment recorded</TableHead><TableHead className={styles.number}>Recorded gross</TableHead></TableRow></TableHeader>
           <TableBody>{environments.map(environment => {
             const rows = report.orders.filter(row => row.environment === environment);

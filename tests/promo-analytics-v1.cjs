@@ -29,6 +29,7 @@ const all = async (query, ...values) => {
 };
 const getRow = (report, code, environment = 'live') => report.codes.find(p => p.code === code)?.rows.find(r => r.environment === environment);
 (async () => {
+ order({raw:JSON.stringify({environment:'authorizenet:live',internalTest:true,promo:{code:'ANNA20',savings:200}}),total:999999});
   assert.deepEqual(activePromotions(), [{ code: 'BM10', percentOff: 10 }, { code: 'BIOMOD15', percentOff: 15 }, { code: 'BMOD20', percentOff: 20 }, { code: 'ANNA20', percentOff: 20 }, { code: 'KIMC15', percentOff: 15 }]);
   assert.deepEqual(promotion(' anna20 '), { code: 'ANNA20', percentOff: 20 });
   for (const code of ['BIOMOD10', 'BIOMOD20', 'BIOM0D15']) assert.throws(() => promotion(code));

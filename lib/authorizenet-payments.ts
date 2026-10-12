@@ -38,6 +38,7 @@ export type AnetVerification = {
     notificationId?: string;
     /** A transaction exists but Authorize.net is holding it for fraud review. */
     underReview?: boolean;
+    noPaymentFound?: boolean;
     message: string;
 };
 export class AnetPaymentError extends Error {
@@ -276,7 +277,7 @@ export function reconcileAnetTransactions(order: AnetOrder, transactions: unknow
         return { state: 'paid', providerReference: transId, notificationId: 'anet:' + transId, message: 'Authorize.net confirmed authorization and capture for this order amount.' };
     }
     if (pending || !failed)
-        return { state: 'pending', providerReference, underReview: pending, message: pending ? 'Authorize.net is reviewing this payment.' : 'Payment confirmation is pending from Authorize.net.' };
+        return { state: 'pending', providerReference, underReview: pending, noPaymentFound: !pending, message: pending ? 'Authorize.net is reviewing this payment.' : 'No payment found. This checkout is unpaid.' };
     return { state: 'failed', providerReference, message: 'Authorize.net reported an unsuccessful payment attempt.' };
 }
 /** Verify the X-ANET-Signature header (HMAC-SHA512 of the raw body using the Signature Key). */

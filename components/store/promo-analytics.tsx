@@ -91,7 +91,7 @@ export function PromoAnalytics() {
       <div className={styles.notes}>
         <p>Counts measure orders with a saved code, not cart applications or unique visitors. Payment status is shown as of this refresh for orders started in the selected window; these are not daily payment cohorts.</p>
         <p>Payment recorded requires a paid or fulfillment status and complete payment and verification references. Gross includes shipping and tax before refunds. Promo savings cover payment-recorded orders only.</p>
-        <p>Customer purchases and internal tests are currently unclassified. A live payment can still be an internal test.</p>
+        <p>Orders explicitly marked as internal tests are excluded. Remaining orders are not independently classified; a live payment can still be an internal test.</p>
       </div>
     </>}
   </section>;

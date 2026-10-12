@@ -131,7 +131,11 @@ async function incomplete(fixture) {
         assert.equal(query, 'SELECT id,status,total,checkout_ref,data,created FROM orders WHERE id=? AND owner=?');
         assert.deepEqual(values, [order.id, user.id]); orderReads++; return { ...saved };
       },
-      all: forbidden('all'), run: forbidden('run'), database: forbidden('database'),
+      all: forbidden('all'), run: async (query, ...values) => {
+        assert.match(query, /^UPDATE orders SET data=\?,updated=\? WHERE id=\? AND data=\? AND total=\? AND status IN/);
+        assert.equal(values[2],order.id); assert.equal(values[3],saved.data); assert.equal(values[4],saved.total);
+        assert.equal(JSON.parse(values[0]).lastPaymentFormAt,now);writes++;return {meta:{changes:1}};
+      }, database: forbidden('database'),
     },
     '@/lib/payments': payment,
     '@/lib/catalog-visibility': visibility,
@@ -179,10 +183,10 @@ async function incomplete(fixture) {
     assert(!fixture.calls.some(call => call.kind === 'getHostedPaymentPageRequest'), 'Paid or under-review orders still cannot receive another form');
   }
   assert.equal(orderReads, 5);
-  assert.equal(writes, 0);
+  assert.equal(writes, 1);
   assert.equal(JSON.stringify(saved), before);
   assert.equal(liveCalls, 0);
-  console.log('PASS: settled lookup rejects >40 batches and a full fifth page; complete boundaries retain classification; actual GET pay issues no hosted token on real adapter cap errors; no live requests or order writes');
+  console.log('PASS: settled lookup rejects >40 batches and a full fifth page; complete boundaries retain classification; actual GET pay issues no hosted token on real adapter cap errors; no live requests; payment-form concurrency fence verified');
 })().catch(error => { originalError(error); process.exitCode = 1; }).finally(() => {
   global.fetch = originalFetch; Module._load = originalLoad; console.error = originalError;
   if (originalTs) require.extensions['.ts'] = originalTs; else delete require.extensions['.ts'];
