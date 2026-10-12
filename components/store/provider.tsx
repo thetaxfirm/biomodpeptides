@@ -2,6 +2,7 @@
 import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
 import { products as initialProducts, Product } from '@/lib/catalog';
 import { packDiscounts, packSizes } from '@/lib/packs';
+import { normalizeShippingOptions } from '@/lib/shipping-options';
 import { applySale } from '@/lib/sales';
 import { nextSaleBoundary } from '@/lib/sale-display';
 import type { CartLine, StoreConfig } from '@/lib/commerce';
@@ -9,7 +10,7 @@ import type { CartConflict } from '@/lib/cart-import';
 import { toast, Toaster } from 'sonner';
 import { measureShoppingStage, watchShoppingView, validShoppingQuote, validShoppingHandoff, type MeasureShopping } from '@/lib/shopping-measurement';
 import type { ShoppingStage } from '@/lib/shopping-metrics';
-const initialConfig: StoreConfig = { packDiscounts: { ...packDiscounts }, shippingCents: null, freeShippingAt: 20000, presalesEnabled: false, rewardsEnabled: false, affiliateEnabled: false };
+const initialConfig: StoreConfig = { packDiscounts: { ...packDiscounts }, shippingCents: null, freeShippingAt: 20000, shippingOptions: normalizeShippingOptions(), presalesEnabled: false, rewardsEnabled: false, affiliateEnabled: false };
 export async function api(action: string, body?: unknown) { const r = await fetch('/api/store/' + action, { method: body ? 'POST' : 'GET', headers: body ? { 'Content-Type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined }); const d = await r.json() as any; if (!r.ok)
     throw new Error(d.error || 'Please try again.'); return d; }
 type Store = {

@@ -3,6 +3,8 @@ import { requireStaff } from '@/lib/auth';
 import { buyLabel, easypostReady, sendTrackingEmail, shippingConnection, readShipmentTracking } from '@/lib/easypost';
 import { one, parse, runtime, timestamp } from '@/lib/runtime';
 import { auditRun, recordChange } from '@/lib/change-history';
+import { config } from '@/lib/commerce';
+import { savedShippingOption } from '@/lib/shipping-options';
 export const dynamic = 'force-dynamic';
 const j = (value: unknown, status = 200) => NextResponse.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
 const auditWarning = ' Change history could not record the final result. Do not repeat this action just to update history.';
@@ -79,7 +81,9 @@ export async function POST(req: NextRequest) {
         }
         let label;
         try {
-            label = await buyLabel(env, data.address, data.items || [], 'BIOMOD ' + id.slice(0, 8));
+            const selected = savedShippingOption(data.shippingOption);
+            if (data.shippingOption && !selected) throw new Error('The saved shipping option needs review before buying a label.');
+            label = await buyLabel(env, data.address, data.items || [], 'BIOMOD ' + id.slice(0, 8), selected || { shippingService: data.shippingService }, (await config()).shippingOptions);
         }
         catch (e) {
             await run("UPDATE orders SET status='paid',updated=? WHERE id=? AND status='labeling'", timestamp(), id);

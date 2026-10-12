@@ -9,43 +9,78 @@ import { checkoutTax } from './checkout-tax';
 import { savedPreorder } from './fulfillment';
 import { z } from 'zod';
 import { customer } from './auth';
-import { cheapestRate, easypostReady } from './easypost';
+import { carrierShippingOptions, easypostReady } from './easypost';
+import { normalizeShippingOptions, savedShippingOption, shippingTierEnabled, type ShippingOption } from './shipping-options';
 export const addressSchema = z.object({ name: z.string().trim().min(2).max(100), line1: z.string().trim().min(3).max(150), line2: z.string().trim().max(150).default(''), city: z.string().trim().min(2).max(100), state: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/, 'Enter a two-letter state abbreviation, such as NV.'), zip: z.string().regex(/^\d{5}(-\d{4})?$/), country: z.literal('US'), phone: z.string().trim().min(7).max(30) });
-/** Shipping: free over the threshold, otherwise the live EasyPost rate (when connected) or the flat rate from store settings.
- * A quoted rate is stored with the quote and reused at payment so the total cannot drift between the two steps. */
-export async function deliveryQuote(lines: CartLine[], raw: unknown, preset?: { shipping: number; shippingService: string }, promoCode?: unknown) {
+const QUOTE_LIFETIME = 600000;
+type ShippingPreset = { shipping: number; shippingService: string; shippingOption?: ShippingOption; shippingOptions?: ShippingOption[] };
+const quoteExpired = (created: number) => !Number.isFinite(created) || timestamp() - created < 0 || timestamp() - created > QUOTE_LIFETIME;
+/** Rates are requested once; changing the selection reuses the stored options and their original expiry. */
+export async function deliveryQuote(lines: CartLine[], raw: unknown, preset?: ShippingPreset, promoCode?: unknown) {
     const address = addressSchema.parse(raw);
     const q = await quote(lines, promoCode);
-    if (!lines.length)
-        throw new Error('Your cart is empty.');
-    let shipping: number | null = q.config.shippingCents;
-    let shippingService = 'Standard shipping';
-    if (q.total >= q.config.freeShippingAt) {
-        shipping = 0;
-        shippingService = 'Free standard shipping';
-    }
-    else if (preset && Number.isSafeInteger(preset.shipping) && preset.shipping >= 0) {
-        shipping = preset.shipping;
-        shippingService = preset.shippingService || shippingService;
-    }
-    else if (easypostReady(runtime())) {
-        try {
-            const live = await cheapestRate(runtime(), address, q.items as any);
-            shipping = live.cents;
-            shippingService = live.service;
+    if (!lines.length) throw new Error('Your cart is empty.');
+    const settings = normalizeShippingOptions(q.config.shippingOptions, runtime());
+    const freeStandard = settings.freeStandardEnabled && q.total >= q.config.freeShippingAt;
+    let shippingOption: ShippingOption | undefined;
+    let shippingOptions: ShippingOption[] = [];
+    let shipping: number;
+    let shippingService: string;
+    if (preset) {
+        if (!Number.isSafeInteger(preset.shipping) || preset.shipping < 0) throw new Error('Your shipping quote is invalid. Recalculate delivery.');
+        if (preset.shippingOption) {
+            const saved = savedShippingOption(preset.shippingOption);
+            if (!saved || !shippingTierEnabled(settings, saved.tier) || (saved.carrier && !settings.carriers.includes(saved.carrier)) || saved.free !== (saved.tier === 'standard' && freeStandard)) throw new Error('Your shipping options changed. Recalculate delivery.');
+            shippingOption = saved;
+            shippingOptions = preset.shippingOptions || [saved];
+            shipping = saved.shipping;
+            shippingService = saved.shippingService;
+        } else {
+            // Compatibility for pre-release stored quotes and internal callers. Never take this preset from the client.
+            shipping = preset.shipping;
+            shippingService = preset.shippingService || 'Standard shipping';
         }
-        catch (e) {
-            // Fall back to the flat rate so checkout keeps working if EasyPost is briefly unavailable.
-            console.error('EasyPost rate failed:', e instanceof Error ? e.message : 'unknown error');
+    } else {
+        if (easypostReady(runtime()) && settings.carriers.length && (settings.standardEnabled || settings.expeditedEnabled || settings.overnightEnabled)) {
+            try { shippingOptions = await carrierShippingOptions(runtime(), address, q.items as any, settings, freeStandard); }
+            catch { console.error('Live shipping rates are unavailable; checking configured standard fallback.'); }
         }
+        // Flat-rate fallback is Standard only, never a substitute for an overnight quote.
+        if (settings.standardEnabled && !shippingOptions.some(o => o.tier === 'standard') && (freeStandard || (Number.isSafeInteger(q.config.shippingCents) && q.config.shippingCents! >= 0))) {
+            shippingOptions.unshift({ id: 'flat_standard', tier: 'standard', shippingService: freeStandard ? 'Free standard shipping' : 'Standard shipping', shipping: freeStandard ? 0 : q.config.shippingCents!, carrierCents: null, handlingCents: 0, days: null, carrier: null, carrierService: null, source: 'flat', free: freeStandard });
+        }
+        shippingOption = shippingOptions[0];
+        if (!shippingOption) throw new Error('No enabled delivery option is available for this address. Please contact us for help.');
+        shipping = shippingOption.shipping;
+        shippingService = shippingOption.shippingService;
     }
-    if (shipping === null)
-        throw new Error('Delivery pricing is being finalized. Please contact us for help.');
     const tax = await checkoutTax(runtime(), address, q.total, shipping);
-    return { items: q.items, subtotal: q.subtotal, discount: q.discount, packDiscount: q.packDiscount, promoDiscount: q.promoDiscount, promo: q.promo, shipping, shippingService, tax, total: q.total + shipping + tax, address };
+    return { items: q.items, subtotal: q.subtotal, discount: q.discount, packDiscount: q.packDiscount, promoDiscount: q.promoDiscount, promo: q.promo, shipping, shippingService, shippingOption, shippingOptionId: shippingOption?.id, shippingOptions, tax, total: q.total + shipping + tax, address };
 }
-export const quoteFingerprint = (q: Record<string, any>) => JSON.stringify({ items: q.items.map((i: any) => ({ id: i.id, quantity: i.quantity, packId: i.packId || null, packSize: i.packSize || null, packKind: i.packKind || null, lineTotal: i.lineTotal, presaleId: i.presaleId || null, price: i.product.price, preorder: savedPreorder(i.product.activePreorder) })), address: q.address, shipping: q.shipping, tax: q.tax, total: q.total, ...(q.promo ? { promoCode: q.promo.code } : {}) });
-export async function issueQuote(owner: string, lines: CartLine[], address: unknown, promoCode?: unknown) { const q = await deliveryQuote(lines, address, undefined, promoCode); const id = uid(); await run('INSERT INTO requests(id,owner,kind,data,created) VALUES(?,?,?,?,?)', id, owner, 'quote', JSON.stringify({ fingerprint: quoteFingerprint(q), shipping: q.shipping, shippingService: q.shippingService }), timestamp()); return { ...q, quoteId: id }; }
+const fingerprintItems = (q: Record<string, any>) => q.items.map((i: any) => ({ id: i.id, quantity: i.quantity, packId: i.packId || null, packSize: i.packSize || null, packKind: i.packKind || null, lineTotal: i.lineTotal, presaleId: i.presaleId || null, price: i.product.price, preorder: savedPreorder(i.product.activePreorder) }));
+export const quoteFingerprint = (q: Record<string, any>) => JSON.stringify({ items: fingerprintItems(q), address: q.address, shipping: q.shipping, shippingService: q.shippingService || '', shippingOption: savedShippingOption(q.shippingOption), tax: q.tax, total: q.total, ...(q.promo ? { promoCode: q.promo.code } : {}) });
+const inputFingerprint = (q: Record<string, any>) => JSON.stringify({ items: fingerprintItems(q), address: q.address, subtotal: q.subtotal, discount: q.discount, ...(q.promo ? { promoCode: q.promo.code } : {}) });
+export async function issueQuote(owner: string, lines: CartLine[], address: unknown, promoCode?: unknown, selection?: { quoteId: string; shippingOptionId: string }) {
+    let created = timestamp();
+    let preset: ShippingPreset | undefined;
+    let expectedInput: string | undefined;
+    if (selection) {
+        const receipt = await one<{ data: string; created: number }>('SELECT data,created FROM requests WHERE id=? AND owner=? AND kind=?', selection.quoteId, owner, 'quote');
+        if (!receipt || quoteExpired(receipt.created)) throw new Error('Your checkout quote expired. Recalculate delivery.');
+        const stored = parse<Record<string, any>>(receipt.data, {});
+        const options = Array.isArray(stored.shippingOptions) ? stored.shippingOptions.map(savedShippingOption).filter((o: ShippingOption | null): o is ShippingOption => o !== null) : [];
+        const option = options.find((o: ShippingOption) => o.id === selection.shippingOptionId);
+        if (!option || typeof stored.inputFingerprint !== 'string') throw new Error('Choose an available shipping option from a new delivery quote.');
+        preset = { shipping: option.shipping, shippingService: option.shippingService, shippingOption: option, shippingOptions: options };
+        expectedInput = stored.inputFingerprint;
+        created = receipt.created;
+    }
+    const q = await deliveryQuote(lines, address, preset, promoCode);
+    if (expectedInput !== undefined && expectedInput !== inputFingerprint(q)) throw new Error('Your cart, address or promotion changed. Recalculate delivery.');
+    const id = uid();
+    await run('INSERT INTO requests(id,owner,kind,data,created) VALUES(?,?,?,?,?)', id, owner, 'quote', JSON.stringify({ fingerprint: quoteFingerprint(q), inputFingerprint: inputFingerprint(q), shipping: q.shipping, shippingService: q.shippingService, shippingOption: q.shippingOption, shippingOptionId: q.shippingOptionId, shippingOptions: q.shippingOptions }), created);
+    return { ...q, quoteId: id, quoteExpiresAt: created + QUOTE_LIFETIME };
+}
 export async function checkout(owner: string, lines: CartLine[], body: Record<string, any>, promoCode?: unknown) {
     const auditActor: AuditActor = { source: 'system', actor: 'Website checkout', actorType: 'system', action: 'checkout.state' };
     const run = (sql: string, ...values: (string | number | null)[]) => auditRun(database(), auditActor, sql, ...values);
@@ -55,7 +90,7 @@ export async function checkout(owner: string, lines: CartLine[], body: Record<st
         throw new Error('Refresh checkout and try again.');
     const cartQuote = await quote(lines, promoCode);
     const current = addressSchema.parse(body.address);
-    const fingerprint = JSON.stringify({ lines, address: current, ...(cartQuote.promo ? { promoCode: cartQuote.promo.code } : {}) });
+    const fingerprint = JSON.stringify({ lines, address: current, ...(cartQuote.promo ? { promoCode: cartQuote.promo.code } : {}), ...(typeof body.shippingOptionId === 'string' ? { shippingOptionId: body.shippingOptionId } : {}) });
     const old = await one<{
         id: string;
         status: string;
@@ -78,9 +113,14 @@ export async function checkout(owner: string, lines: CartLine[], body: Record<st
         data: string;
         created: number;
     }>('SELECT data,created FROM requests WHERE id=? AND owner=? AND kind=?', String(body.quoteId || ''), owner, 'quote');
-    const quoted = parse<Record<string, any>>(receipt?.data, {});
-    const q = await deliveryQuote(lines, current, typeof quoted.shipping === 'number' ? { shipping: quoted.shipping, shippingService: String(quoted.shippingService || '') } : undefined, promoCode);
-    if (!receipt || timestamp() - receipt.created > 600000 || quoted.fingerprint !== quoteFingerprint(q))
+    if (!receipt || quoteExpired(receipt.created)) throw new Error('Your checkout quote changed or expired. Recalculate delivery and review the order again.');
+    const quoted = parse<Record<string, any>>(receipt.data, {});
+    const selected = savedShippingOption(quoted.shippingOption);
+    if (quoted.shippingOption && (!selected || body.shippingOptionId !== selected.id)) throw new Error('Review your selected shipping option and recalculate delivery before paying.');
+    if (!quoted.shippingOption && body.shippingOptionId !== undefined) throw new Error('Recalculate delivery to use the current shipping options.');
+    if (!Number.isSafeInteger(quoted.shipping) || quoted.shipping < 0) throw new Error('Recalculate delivery before paying.');
+    const q = await deliveryQuote(lines, current, { shipping: quoted.shipping, shippingService: String(quoted.shippingService || ''), ...(selected ? { shippingOption: selected } : {}) }, promoCode);
+    if (quoted.fingerprint !== quoteFingerprint(q))
         throw new Error('Your checkout quote changed or expired. Recalculate delivery and review the order again.');
     if (!Number.isInteger(body.expectedTotal) || body.expectedTotal !== q.total)
         throw new Error('Your total changed. Recalculate delivery and review the updated total before paying.');
@@ -91,7 +131,8 @@ export async function checkout(owner: string, lines: CartLine[], body: Record<st
         data: string;
     }>('SELECT data FROM campaigns WHERE id=?', campaignId))?.data, {}) : null;
     const email = (await customer())?.email || '';
-    const saved = { ...q, email, fingerprint, environment: paymentEnvironment(runtime()), campaignId, campaignLimit: campaign?.maxPerCustomer || null, unitCount: lines.reduce((s, l) => s + l.quantity, 0) };
+    const { shippingOptions: _unselectedOptions, ...selectedQuote } = q;
+    const saved = { ...selectedQuote, email, fingerprint, environment: paymentEnvironment(runtime()), campaignId, campaignLimit: campaign?.maxPerCustomer || null, unitCount: lines.reduce((s, l) => s + l.quantity, 0) };
     const id = uid();
     const db=withAuditDb(database(), auditActor);
     try { await db.batch([

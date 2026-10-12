@@ -165,6 +165,31 @@ function blocked(h){assert.equal(button(h,'Continue to secure payment').props.di
  // Existing address/cart invalidation still removes the quote, with no replay.
  h=await forOwner();await quoteFor(h);form(h).props.onChange();h.render();assert.equal(button(h,'Continue to secure payment').props.disabled,true);assert.equal(deliveryCalls().length,1);
  await quoteFor(h);await update({cart:[{id:p.id,quantity:2}],totals:totals([{id:p.id,quantity:2}])});h.render();assert.equal(button(h,'Continue to secure payment').props.disabled,true);assert.equal(checkoutCalls().length,0);
+ // Customer service selection uses a server-authoritative quote, then carries
+ // its identifier to checkout. A slow/failing selection cannot fall back silently.
+ const standard={id:'rate_standard',tier:'standard',shippingService:'USPS Ground Advantage',shipping:500,carrierCents:500,handlingCents:0,days:3,carrier:'USPS',carrierService:'GroundAdvantage',source:'easypost',free:false};
+ const overnight={id:'rate_overnight',tier:'overnight',shippingService:'UPS Next Day Air',shipping:3300,carrierCents:2300,handlingCents:1000,days:1,carrier:'UPS',carrierService:'NextDayAir',source:'easypost',free:false};
+ const shipQuote=(option,id='ship-quote')=>({quoteId:id,total:p.price+option.shipping+321,shipping:option.shipping,tax:321,shippingService:option.shippingService,shippingOption:option,shippingOptionId:option.id,shippingOptions:[standard,overnight]});
+ const radio=(host,id)=>find(host,n=>n.type==='input'&&n.props.type==='radio'&&n.props.value===id);
+ h=await forOwner();deliveryImpl=async()=>shipQuote(standard);await quoteFor(h);
+ assert(text(h.tree).includes('$23.00 carrier rate + $10.00 handling'));
+ gate=deferred();deliveryImpl=()=>gate.promise;const select=radio(h,overnight.id).props.onChange;select();select();await flush();h.render();
+ assert.equal(deliveryCalls().length,2,'Selection is single-flight');assert.equal(button(h,'Continue to secure payment').props.disabled,true);
+ assert.deepEqual(deliveryCalls().at(-1).body,{address:fields,quoteId:'ship-quote',shippingOptionId:overnight.id});
+ gate.resolve(shipQuote(overnight,'overnight-quote'));await flush();h.render();assert.equal(radio(h,overnight.id).props.checked,true);
+ button(h,'Continue to secure payment').props.onClick();await flush();assert.equal(checkoutCalls()[0].body.shippingOptionId,overnight.id);assert.equal(checkoutCalls()[0].body.quoteId,'overnight-quote');assert.equal(checkoutCalls()[0].body.expectedTotal,p.price+3300+321);
+ for(const failure of ['error','wrong-choice','address','owner','promo']){
+  h=await forOwner();deliveryImpl=async()=>shipQuote(standard);await quoteFor(h);gate=deferred();deliveryImpl=()=>gate.promise;
+  radio(h,overnight.id).props.onChange();await flush();
+  if(failure==='address')form(h).props.onChange();
+  if(failure==='owner')await changeOwner(h,ownerB);
+  if(failure==='promo')find(h,n=>n.type===Promo).props.onUnappliedChange(true);
+  if(failure==='error')gate.reject(Error('Isolated rate failure'));else gate.resolve(shipQuote(failure==='wrong-choice'?standard:overnight));
+  await flush();h.render();assert.equal(button(h,'Continue to secure payment').props.disabled,true,failure);assert(!nodes(h.tree).some(n=>n.type==='input'&&n.props.name==='deliveryOption'),failure);assert.equal(checkoutCalls().length,0);
+ }
+ // Current free-standard settings drive cart copy, including explicit off and zero.
+ await loaded({store:{config:{freeShippingAt:0,shippingOptions:{freeStandardEnabled:false}}}});h=harness(Cart);assert(!text(h.tree).includes('Standard free'));
+ await update({config:{freeShippingAt:0,shippingOptions:{freeStandardEnabled:true}}});h.render();assert(text(h.tree).includes('Standard free; upgrades at checkout'));
  hosts.forEach(h=>h.unmount());
  console.log('PASS actual Checkout owner/lifecycle isolation: normal single-flight flow; reset quote/address/acceptance/key and form boundaries; owner A-B-A/signout; stale quote/handoff/error/promo callbacks; unmount/replay; preserved cart/address invalidation. Isolated fixtures only.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

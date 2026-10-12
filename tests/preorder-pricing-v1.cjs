@@ -7,7 +7,7 @@ require.extensions['.ts'] = (m,f) => m._compile(ts.transpileModule(fs.readFileSy
 const originalLoad = Module._load;
 let overrides = [];
 Module._load = function(name,parent,isMain) {
- if(name === './runtime' && parent.filename.endsWith('/lib/commerce.ts')) return {all:async()=>overrides,one:async()=>null,setting:async(k,f)=>f,parse:(v,f)=>v?JSON.parse(v):f};
+ if(name === './runtime' && parent.filename.endsWith('/lib/commerce.ts')) return {runtime:()=>({}),all:async()=>overrides,one:async()=>null,setting:async(k,f)=>f,parse:(v,f)=>v?JSON.parse(v):f};
  return originalLoad.call(this,name,parent,isMain);
 };
 global.fetch=async()=>{throw Error('No network in isolated preorder tests');};

@@ -132,3 +132,16 @@
 .change-last-loaded{font-size:12px;color:#666;margin-top:22px}
 @media(max-width:900px){.change-history-filters{grid-template-columns:1fr 1fr}.change-coverage ul{grid-template-columns:1fr}.change-history-heading{flex-wrap:wrap}}
 @media(max-width:600px){.change-history-filters{grid-template-columns:1fr}.change-history-filters .change-search,.change-filter-actions,.change-filter-error{grid-column:1}.change-event-header{flex-wrap:wrap;gap:4px}.change-event-byline{gap:4px 12px}.change-difference-heading{display:none}.change-difference-row{grid-template-columns:1fr;gap:8px;padding:16px}.change-difference-row>span{display:grid;grid-template-columns:52px minmax(0,1fr);gap:10px}.change-difference-row>strong{font-size:14px}.change-value-label{display:block;font-size:12px;font-weight:600;color:#555}.change-coverage{padding:18px}.change-event-time{flex-direction:column}.change-history-toolbar{align-items:flex-start}}
+
+/* Address-quoted delivery choices stay legible within the checkout summary. */
+.checkout-delivery{min-width:0;margin:24px 0;padding:0;border:0}
+.checkout-delivery legend{font-size:18px;font-weight:700;padding:0;margin-bottom:12px}
+.checkout-delivery-option{display:grid;grid-template-columns:18px minmax(0,1fr);gap:12px;padding:14px 12px;margin:8px 0;background:#fff;outline:1px solid #c9c2ca;outline-offset:-1px;cursor:pointer;border-radius:4px}
+.checkout-delivery-option[data-selected=true]{outline:2px solid #2d1232;outline-offset:-2px;background:#faf7fb}
+.checkout-delivery-option input[type=radio]{appearance:auto;flex:none;min-width:18px;width:18px;height:18px;padding:0;margin:3px 0 0;accent-color:#2d1232}
+.checkout-delivery-heading{display:flex;justify-content:space-between;gap:12px;font-size:15px;line-height:1.5}
+.checkout-delivery-heading>span:last-child{white-space:nowrap}
+.checkout-delivery-detail{display:block;font-size:13px;line-height:1.5;margin-top:4px;color:#514751;overflow-wrap:anywhere}
+.checkout-delivery-timing{font-size:13px;line-height:1.55;margin:12px 0 0;color:#514751}
+.checkout-delivery:disabled .checkout-delivery-option{cursor:wait}
+.checkout-selected-service{display:block;font-size:12px;line-height:1.5;font-weight:400;max-width:210px;color:#514751}

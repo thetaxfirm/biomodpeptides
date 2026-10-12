@@ -23,6 +23,7 @@ const originalLoad = Module._load, originalFetch = global.fetch;
 global.fetch = async () => { throw new Error('Network forbidden'); };
 Module._load = function(request, parent, isMain) {
   if (parent?.filename.endsWith('/lib/commerce.ts') && request === './runtime') return {
+    runtime: () => ({}),
     setting: async (key, fallback) => { settingReads++; assert.equal(key, 'store'); if (storageUnavailable) throw new Error('Storage unavailable'); return stored ?? fallback; },
     all: async () => { throw new Error('Unexpected catalog/database access'); },
     one: async () => { throw new Error('Unexpected row access'); },
@@ -42,17 +43,17 @@ const shippingId = origin + '/shipping-policy#standard-shipping';
 function assertReturnPolicy(policy) {
   assert.deepEqual(policy, { '@type': 'MerchantReturnPolicy', '@id': returnId, merchantReturnLink: origin + '/returns-refunds' });
 }
-function assertShippingPolicy(policy) {
+function assertShippingPolicy(policy, threshold = 200) {
   assert.equal(policy['@type'], 'ShippingService');
   assert.equal(policy['@id'], shippingId);
   assert.equal(policy.fulfillmentType, 'https://schema.org/FulfillmentTypeDelivery');
   assert.deepEqual(policy.shippingConditions, [{
     '@type': 'ShippingConditions',
     shippingDestination: { '@type': 'DefinedRegion', addressCountry: 'US' },
-    orderValue: { '@type': 'MonetaryAmount', minValue: 200, currency: 'USD' },
+    orderValue: { '@type': 'MonetaryAmount', minValue: threshold, currency: 'USD' },
     shippingRate: { '@type': 'MonetaryAmount', value: 0, currency: 'USD' },
   }], 'Free shipping applies only to U.S. orders meeting the published threshold');
-  assert.match(policy.description, /after discounts and before tax/);
+  if (threshold > 0) assert.match(policy.description, /after discounts and before tax/);
   assert.match(policy.description, /lower order totals.*checkout before payment/);
 }
 function assertNoInventedClaims(value) {
@@ -86,7 +87,8 @@ function assertNoInventedClaims(value) {
     }
   }
   const content = fs.readFileSync(require.resolve('../components/store/content.tsx'), 'utf8');
-  assert.match(content, /Standard shipping is free on orders of \$200 or more after discounts and before tax/);
+  assert.match(content, /shippingTerms/);
+  assert.doesNotMatch(content, /Standard shipping is free on orders of \$200/);
   assert.match(content, /Research product sales are generally final/);
   assert.match(content, /within 48 hours of delivery/);
 
@@ -104,10 +106,23 @@ function assertNoInventedClaims(value) {
     assertNoInventedClaims(data);
   }
   storageUnavailable = false;
-  for (const freeShippingAt of [25000, 19999, 0, -1, 20000.5, '20000', null, undefined, NaN, Infinity]) {
+  // Published policy and schema follow the same current admin configuration.
+  for (const freeShippingAt of [25000, 19999, 0]) {
     stored = { freeShippingAt, shippingCents: 1250 };
     const data = await routeStructuredData(productPath, live);
-    assert.equal(organizationOf(data).hasShippingService, undefined, 'Invalid or changed threshold omits shipping: ' + String(freeShippingAt));
+    assertShippingPolicy(organizationOf(data).hasShippingService, freeShippingAt / 100);
+    assert.deepEqual(productOf(data).offers.shippingDetails.hasShippingService, { '@id': shippingId });
+  }
+  for (const shippingOptions of [{freeStandardEnabled:false}, {standardEnabled:false}]) {
+    stored = { freeShippingAt: 20000, shippingOptions };
+    const data = await routeStructuredData(productPath, live);
+    assert.equal(organizationOf(data).hasShippingService, undefined, 'Disabled free standard shipping has no free shipping schema');
+    assert.equal(productOf(data).offers.shippingDetails, undefined);
+  }
+  for (const freeShippingAt of [-1, 20000.5, '20000', null, undefined, NaN, Infinity]) {
+    stored = { freeShippingAt, shippingCents: 1250 };
+    const data = await routeStructuredData(productPath, live);
+    assert.equal(organizationOf(data).hasShippingService, undefined, 'Invalid threshold omits shipping: ' + String(freeShippingAt));
     assert.equal(productOf(data).offers.shippingDetails, undefined);
   }
   stored = null;
@@ -141,5 +156,5 @@ function assertNoInventedClaims(value) {
     assert.equal(routeMetadata(path, new URLSearchParams('q=test'), live).robots.index, false);
   }
   assert.deepEqual([settingReads, catalogReads], readsBefore, 'Suppressed and unrelated pages do not touch store data');
-  console.log('PASS: truthful conditional U.S. shipping, link-only returns, stable in-document Offer references, live-config failure/mismatch suppression, verified catalog offers, preserved certificates/publication holds, and exactly two policy sitemap additions');
+  console.log('PASS: truthful conditional U.S. shipping, link-only returns, stable in-document Offer references, current shipping settings and failed-read suppression, verified catalog offers, preserved certificates/publication holds, and exactly two policy sitemap additions');
 })().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => { Module._load = originalLoad; global.fetch = originalFetch; });

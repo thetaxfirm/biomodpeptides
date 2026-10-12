@@ -1,3 +1,5 @@
+import { shippingTerms } from '@/lib/shipping-terms';
+import { useStore } from './provider';
 import { packSizes } from '@/lib/packs';
 import styles from './research-faq.module.css';
 
@@ -58,7 +60,7 @@ const groups = [
       {
         id: 'shipping-area',
         question: 'Where does Biomod ship?',
-        answer: 'Biomod ships within the United States. Standard shipping is free on orders of $200 or more after discounts and before tax.',
+        answer: 'Biomod ships within the United States. Available shipping services and charges are shown at checkout before payment.',
         href: '/shipping-policy',
         link: 'Read the shipping policy',
       },
@@ -101,6 +103,8 @@ const groups = [
 ];
 
 export function ResearchFAQ() {
+  const {store, ready, loadError} = useStore();
+  const terms = shippingTerms(ready && !loadError ? store.config : null);
   return <article className={styles.faq}>
     <header className="page-heading">
       <h1>Frequently asked questions</h1>
@@ -110,7 +114,7 @@ export function ResearchFAQ() {
       <h2 id={group.id}>{group.title}</h2>
       <div className={styles.answers}>{group.questions.map(item => <div className={styles.answer} key={item.id}>
         <h3 id={item.id}>{item.question}</h3>
-        <p>{item.answer}</p>
+        <p>{item.id === 'shipping-area' ? 'Biomod ships within the United States. ' + terms.standard : item.answer}</p>
         <a href={item.href}>{item.link}</a>
       </div>)}</div>
     </section>)}

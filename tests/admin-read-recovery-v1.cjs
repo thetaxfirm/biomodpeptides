@@ -29,7 +29,7 @@ const alerts=h=>nodes(h.tree).filter(n=>n.props.role==='alert').map(text).join('
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return{promise,resolve,reject};};
 const flush=async h=>{for(let i=0;i<16;i++)await Promise.resolve();h?.render();};
 const noop=()=>null;
-function Field(){}function Check(){}function Choice(){}function Blank(){}function AuthPage(){}function ShippingLabel(){}function Dialog(){}function Tabs(){}function TabsTrigger(){}function CoaAutomation(){}function RequestInbox(){}function ChangeHistory(){}function AdminProducts(){}
+function Field(){}function Check(){}function Choice(){}function Blank(){}function AuthPage(){}function ShippingLabel(){}function Dialog(){}function Tabs(){}function TabsTrigger(){}function CoaAutomation(){}function RequestInbox(){}function ChangeHistory(){}function AdminProducts(){}function AdminShippingSettings(){}
 const ownerA={id:'fixture-admin-a',name:'Fixture A',email:'a@example.invalid'};
 const ownerB={id:'fixture-admin-b',name:'Fixture B',email:'b@example.invalid'};
 const fixture=(label='Snapshot A')=>({config:{presalesEnabled:false,rewardsEnabled:false,affiliateEnabled:false,packDiscounts:{},shippingCents:null,freeShippingAt:20000},products:[{id:900001,name:label,price:10000,stockQuantity:1,inStock:true,purchasable:true}],campaigns:[{id:'fixture-campaign',title:'Simulated campaign',active:false,starts:'2099-01-01',ends:'2099-02-01'}],orders:[{id:'fixture-order',status:'pending',total:10000,created:0,data:{items:[]}}],requests:[{id:'fixture-request',kind:'fixture',status:'new',created:0,data:{}}],searchPublishing:{}});
@@ -47,6 +47,13 @@ mod.require=id=>{
  if(id==='./coa-automation')return{CoaAutomation};
  if(id==='./change-history')return{ChangeHistory};
  if(id==='./admin-products')return{AdminProducts};
+ if(id==='./admin-shipping-settings'){
+  const file=path.join(root,'components/store/admin-shipping-settings.tsx'),child=new Module(file,module);child.filename=file;child.paths=Module._nodeModulePaths(root);
+  child.require=dep=>dep==='@/lib/shipping-options'?{}:dep.endsWith('.module.css')?{}:mod.require(dep);
+  child._compile(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,file);
+  return{AdminShippingSettings,shippingSettingsFromForm:child.exports.shippingSettingsFromForm};
+ }
+
  if(id==='./team-admin')return{TeamAdmin:noop};if(id==='@/lib/staff')return require('./staff-module-fixture.cjs').loadStaffModule();
  if(id==='./request-inbox')return{RequestInbox};
  if(id==='./primitives')return{Field,Check,Choice,Blank,formData:form=>form.fields};
@@ -92,6 +99,7 @@ const productNames=h=>String(Boolean(productPanel(h).props.edited));
   assert.equal(nodes(h.tree).some(n=>n.type===TabsTrigger&&n.props.value==='changes'),mayRead);
   assert.equal(nodes(h.tree).some(n=>n.type===ChangeHistory),mayRead,'History is never mounted without reports permission');
   assert.equal(nodes(h.tree).some(n=>n.type===AdminProducts),mayRead,'Products editor is never mounted without store write permission');
+  assert.equal(nodes(h.tree).some(n=>n.type===AdminShippingSettings),mayRead,'Shipping settings are never mounted without store write permission');
  }
  reset();h=mount({initialTab:'changes'});await flush(h);const priorHistoryKey=find(h,n=>n.type===ChangeHistory).key;
  button(h,'Refresh administration').props.onClick();await flush(h);assert.notEqual(find(h,n=>n.type===ChangeHistory).key,priorHistoryKey,'Global admin refresh remounts the history reader');
@@ -185,6 +193,15 @@ const productNames=h=>String(Boolean(productPanel(h).props.edited));
  assert.equal(productWrite.expectedStock,37);assert.equal(productWrite.stockQuantity,35);assert.equal(productWrite.availability,'sold_out');assert.equal(productWrite.inStock,false);assert.equal(productWrite.purchasable,false);assert.equal(productWrite.price,12550);assert.equal(productWrite.maxQuantity,12);
  assert.deepEqual(productWrite.packPrices,{3:null,5:50075,10:80000});assert.deepEqual(productWrite.preorder,configured.preorder);assert.deepEqual(productWrite.sale,{enabled:true,percentOff:20,starts:'2099-01-01T00:00:00.000Z',ends:'2099-01-04T00:00:00.000Z'});
  assert.equal(productNames(h),'true');assert(button(h,'Refresh administration').props.disabled);assert.equal(productPanel(h).props.busy,false);assert.equal(reports.length,1);assert.equal(reads(),1,'Failed inventory write does not accept a replacement snapshot');
+
+ // Shipping settings share the existing guarded Settings save and retain all
+ // unrelated program/pack fields in the same payload.
+ reset();h=mount({initialTab:'settings'});await flush(h);allowedMutation='admin-config';
+ settingsForm(h).props.onChangeCapture();h.render();const shippingSettings=find(h,n=>n.type===AdminShippingSettings);assert.equal(shippingSettings.props.busy,false);assert.deepEqual(shippingSettings.props.config,fixture().config);
+ apiImpl=async action=>action==='admin-config'?{message:'Synthetic shipping settings saved'}:fixture();
+ await settingsForm(h).props.onSubmit({preventDefault(){},currentTarget:{fields:{pack3:'10',pack5:'15',pack10:'20',shipping:'',threshold:'200',shippingSettingsVersion:'1',standardEnabled:'on',expeditedEnabled:'on',overnightEnabled:'on',freeStandardEnabled:'on',standardHandling:'0',expeditedHandling:'2.50',overnightHandling:'10',shippingCarrierUSPS:'on',shippingCarrierUPS:'on'}}});h.render();
+ assert.deepEqual(calls.find(c=>c.action==='admin-config').body,{presalesEnabled:false,rewardsEnabled:false,affiliateEnabled:false,packDiscounts:{3:10,5:15,10:20},shippingCents:null,freeShippingAt:20000,shippingOptions:{standardEnabled:true,expeditedEnabled:true,overnightEnabled:true,freeStandardEnabled:true,standardHandlingCents:0,expeditedHandlingCents:250,overnightHandlingCents:1000,carriers:['USPS','UPS']}});
+ assert.equal(button(h,'Refresh administration').props.disabled,false);assert.equal(mutations(),1);
 
  // COA config/send delegates stay under parent draft, single-flight and owner guards.
  reset();h=mount({initialTab:'requests'});await flush(h);

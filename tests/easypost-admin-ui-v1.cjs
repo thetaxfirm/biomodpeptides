@@ -18,5 +18,8 @@ const {ShippingLabel}=load('components/store/shipping-admin.tsx');let writes=0;g
 const label=mount(ShippingLabel,{order:{id:'fixture-order',status:'paid',data:{shipment:{tracking:'FIXTURE',labelUrl:'https://example.invalid/label.png',status:'pre_transit'}}},onDone(){}});
 assert(!nodes(label.tree).some(n=>n.type==='img'));button(label,'Show label').props.onClick();label.render();assert(nodes(label.tree).some(n=>n.type==='img'&&n.props.referrerPolicy==='no-referrer'));assert.equal(writes,0);
 nodes(label.tree).find(n=>n.type==='img').props.onError();label.render();assert(text(label.tree).includes('cannot be previewed'));button(label,'Hide label').props.onClick();label.render();assert(!nodes(label.tree).some(n=>n.type==='img'));assert.equal(writes,0);
+let confirmation='';global.window={confirm:message=>{confirmation=message;return false;}};
+const paid=mount(ShippingLabel,{order:{id:'fixture-paid',status:'paid',data:{shippingService:'UPS Next Day Air'}},onDone(){}});
+assert(text(paid.tree).includes('Requested delivery:'));button(paid,'Buy shipping label').props.onClick();assert(confirmation.includes('UPS Next Day Air'));assert(!confirmation.includes('cheapest'));assert(confirmation.includes('saved customer charge will not change'));assert.equal(writes,0);
 console.log('PASS: actual embedded guide, duplicate-click guard, current connection/error states, unknown webhook state, label preview/hide/error without provider writes.');
 })().catch(e=>{console.error(e);process.exitCode=1});

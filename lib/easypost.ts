@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { shipmentEmailText } from './fulfillment';
+import { normalizeShippingOptions, shippingCarrier, shippingTier, shippingTierEnabled, shippingHandling, type ShippingOptionsConfig, type ShippingOption, type ShippingCarrier } from './shipping-options';
 // EasyPost shipping: live checkout rates, label purchase and tracking webhooks.
 // Everything stays off until EASYPOST_API_KEY is set; checkout then falls back to the flat rate in store settings.
 type Environment = Record<string, string | undefined>;
@@ -13,8 +14,8 @@ export class ShippingError extends Error {
 const API = 'https://api.easypost.com/v2';
 const number = (value: string | undefined, fallback: number) => { const n = Number(value); return Number.isFinite(n) && n > 0 ? n : fallback; };
 export const easypostReady = (env: Environment) => (env.EASYPOST_API_KEY || '').trim().length >= 10;
-/** Carrier names as EasyPost reports them. UPS through EasyPost's own account appears as UPSDAP, so matching is by prefix. */
-export const allowedCarriers = (env: Environment) => (env.EASYPOST_CARRIERS || 'USPS,UPS').split(',').map(c => c.trim().toUpperCase()).filter(Boolean);
+/** Carrier names as EasyPost reports them. UPSDAP is an explicit UPS alias. */
+export const allowedCarriers = (env: Environment) => normalizeShippingOptions(undefined, env).carriers;
 export function shipFrom(env: Environment) {
     return {
         name: env.SHIP_FROM_NAME || 'BIOMOD',
@@ -65,34 +66,61 @@ async function call(env: Environment, path: string, body?: unknown): Promise<Rec
     }
     return data;
 }
-function rates(shipment: Record<string, any>, env: Environment): Rate[] {
-    const allowed = allowedCarriers(env);
+function rates(shipment: Record<string, any>, env: Environment, carriers = allowedCarriers(env)): Rate[] {
+    if (shipment.mode !== 'production') throw new ShippingError('Live carrier rates are unavailable.');
     return (Array.isArray(shipment.rates) ? shipment.rates : [])
-        .filter((r: any) => typeof r?.carrier === 'string' && allowed.some(c => r.carrier.toUpperCase().startsWith(c)))
-        .map((r: any) => ({ id: String(r.id), carrier: String(r.carrier).replace(/DAP$/, ''), service: String(r.service || ''), cents: Math.round(Number(r.rate) * 100), days: Number.isFinite(Number(r.delivery_days)) ? Number(r.delivery_days) : null }))
-        .filter((r: Rate) => Number.isSafeInteger(r.cents) && r.cents > 0)
-        .sort((a: Rate, b: Rate) => a.cents - b.cents);
+        .filter((r: any) => r?.mode !== 'test' && r?.currency === 'USD' && shippingCarrier(r?.carrier) !== null && carriers.includes(shippingCarrier(r.carrier)!))
+        .map((r: any) => ({ id: String(r.id || ''), carrier: shippingCarrier(r.carrier)!, service: String(r.service || ''), cents: typeof r.rate === 'string' && /^\d+(?:\.\d{1,2})?$/.test(r.rate) ? Math.round(Number(r.rate) * 100) : NaN, days: typeof r.delivery_days === 'number' && Number.isSafeInteger(r.delivery_days) && r.delivery_days >= 1 && r.delivery_days <= 60 ? r.delivery_days : null }))
+        .filter((r: Rate) => /^rate_[a-zA-Z0-9_]+$/.test(r.id) && /^[a-zA-Z0-9_ -]{1,100}$/.test(r.service) && Number.isSafeInteger(r.cents) && r.cents > 0 && r.cents <= 10000000)
+        .sort((a: Rate, b: Rate) => a.cents - b.cents || a.id.localeCompare(b.id));
 }
 async function createShipment(env: Environment, to: ShipAddress, items: ShipItem[], reference?: string) {
     return call(env, '/shipments', { shipment: { to_address: toAddress(to), from_address: shipFrom(env), parcel: parcelFor(items, env), reference } });
 }
-export const serviceName = (r: Pick<Rate, 'carrier' | 'service'>) => r.carrier + ' ' + r.service.replace(/([a-z])([A-Z])/g, '$1 $2');
-/** Cheapest allowed rate for this cart and address, plus an optional handling fee (SHIP_HANDLING_CENTS). */
+export const serviceName = (r: Pick<Rate, 'carrier' | 'service'>) => r.carrier + ' ' + r.service.replaceAll('_', ' ').replace(/([a-z])([A-Z])/g, '$1 $2');
+/** One cheapest eligible carrier service per enabled tier, with explicit handling. */
+export async function carrierShippingOptions(env: Environment, to: ShipAddress, items: ShipItem[], settings: ShippingOptionsConfig, freeStandard = false): Promise<ShippingOption[]> {
+    const shipment = await createShipment(env, to, items);
+    const available = rates(shipment, env, settings.carriers);
+    const result: ShippingOption[] = [];
+    for (const tier of ['standard', 'expedited', 'overnight'] as const) {
+        if (!shippingTierEnabled(settings, tier)) continue;
+        const rate = available.find(r => shippingTier(r.carrier as ShippingCarrier, r.service, r.days) === tier);
+        if (!rate) continue;
+        const handlingCents = shippingHandling(settings, tier);
+        const free = tier === 'standard' && freeStandard;
+        result.push({ id: rate.id, tier, shippingService: free ? 'Free standard shipping · ' + serviceName(rate) : serviceName(rate), shipping: free ? 0 : rate.cents + handlingCents, carrierCents: rate.cents, handlingCents, days: rate.days, carrier: rate.carrier as ShippingCarrier, carrierService: rate.service, source: 'easypost', free });
+    }
+    return result;
+}
+/** Legacy API retained for integrations; checkout uses explicit carrierShippingOptions. */
 export async function cheapestRate(env: Environment, to: ShipAddress, items: ShipItem[]): Promise<{ cents: number; service: string }> {
     const shipment = await createShipment(env, to, items);
     const best = rates(shipment, env)[0];
-    if (!best)
-        throw new ShippingError('No USPS or UPS rate is available for this address.');
-    const handling = Math.max(0, Math.round(number(env.SHIP_HANDLING_CENTS, 0)));
-    return { cents: best.cents + handling, service: serviceName(best) };
+    if (!best) throw new ShippingError('No allowed carrier rate is available for this address.');
+    return { cents: best.cents + normalizeShippingOptions(undefined, env).standardHandlingCents, service: serviceName(best) };
 }
 export type Label = { shipmentId: string; carrier: string; service: string; costCents: number; tracking: string; trackingUrl: string; labelUrl: string; status: string };
-/** Buys the cheapest allowed label. Called only from the admin page for a paid order. */
-export async function buyLabel(env: Environment, to: ShipAddress, items: ShipItem[], reference: string): Promise<Label> {
+export type LabelSelection = Pick<ShippingOption, 'carrier' | 'carrierService' | 'tier' | 'source'> & { shippingService?: string };
+/** Re-rate at packing time, but never replace the service the customer paid for with a cheaper one. */
+export async function buyLabel(env: Environment, to: ShipAddress, items: ShipItem[], reference: string, selected?: LabelSelection | { shippingService?: string }, settings = normalizeShippingOptions(undefined, env)): Promise<Label> {
     const shipment = await createShipment(env, to, items, reference);
-    const best = rates(shipment, env)[0];
-    if (!best)
-        throw new ShippingError('No USPS or UPS rate is available for this address.');
+    const precise = selected && 'carrier' in selected && selected.source === 'easypost';
+    const carrier = precise ? shippingCarrier(selected.carrier) : null;
+    if (precise && (!carrier || !selected.carrierService)) throw new ShippingError('The saved shipping service is invalid. Review this order before buying a label.');
+    // A later settings change cannot silently downgrade an already purchased service.
+    const historicalCarrier = !precise && selected?.shippingService ? shippingCarrier(selected.shippingService.trim().split(' ')[0]) : null;
+    const available = rates(shipment, env, carrier ? [carrier] : historicalCarrier ? [historicalCarrier] : settings.carriers);
+    let best: Rate | undefined;
+    if (precise) best = available.find(r => r.carrier === carrier && r.service === selected.carrierService && shippingTier(r.carrier as ShippingCarrier, r.service, r.days) === selected.tier);
+    else {
+        const historical = selected?.shippingService?.trim() || '';
+        const generic = !historical || /^(?:free )?standard shipping$|^shipping$/i.test(historical);
+        if (!generic && !(selected && 'source' in selected && selected.source === 'flat')) {
+            best = available.find(r => serviceName(r).toLowerCase() === historical.toLowerCase());
+        } else best = available.find(r => shippingTier(r.carrier as ShippingCarrier, r.service, r.days) === 'standard');
+    }
+    if (!best) throw new ShippingError('The paid shipping service is not available for this address. No label was purchased. Review the order shipping selection.');
     const bought = await call(env, '/shipments/' + encodeURIComponent(String(shipment.id)) + '/buy', { rate: { id: best.id } });
     const tracking = String(bought.tracking_code || '');
     const labelUrl = String(bought.postage_label?.label_url || '');

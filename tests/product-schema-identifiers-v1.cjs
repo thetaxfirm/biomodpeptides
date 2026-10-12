@@ -27,6 +27,7 @@ const originalLoad = Module._load, originalFetch = global.fetch;
 global.fetch = async () => { throw new Error('Network forbidden in schema tests'); };
 Module._load = function(request, parent, isMain) {
   if (parent?.filename.endsWith('/lib/commerce.ts') && request === './runtime') return {
+    runtime: () => env,
     setting: async (key, fallback) => { assert.equal(key, 'store'); return { ...fallback, freeShippingAt: 20000 }; },
     all: async () => { throw new Error('Unexpected database read'); },
     one: async () => { throw new Error('Unexpected database read'); },

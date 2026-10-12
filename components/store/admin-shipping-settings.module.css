@@ -1,0 +1,25 @@
+.settings { padding:0; margin:8px 0 0; border:0; min-width:0; color:#321b3b; }
+.settings legend { font-size:25px; font-weight:700; padding:0; margin:0 0 14px; }
+.settings h3 { font-size:18px; line-height:1.35; margin:0; }
+.settings p { margin:0; font-size:13px; color:#665969; line-height:1.6; }
+.intro { margin-bottom:18px!important; max-width:700px; }
+.tiers { display:flex; flex-direction:column; gap:12px; }
+.tier { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); align-items:start; gap:9px 22px; padding:20px; border:1px solid #d7cadd; border-radius:5px; background:#fff; }
+.tier[data-enabled=true] { background:#f8f4fa; border-color:#c8b8cf; }
+.tierHeading { display:flex; flex-direction:column; gap:12px; grid-column:1; }
+.tier>p { grid-column:1; }
+.tier>.fee { grid-column:2; grid-row:1/3; align-self:start; }
+.tier>.formula { grid-column:2; }
+.tier>.saved { grid-column:1/-1; }
+.toggle { display:flex; align-items:center; gap:10px; font-size:14px; font-weight:600; cursor:pointer; min-width:0; line-height:1.5; }
+.toggle input[type=checkbox] { width:18px; height:18px; flex-shrink:0; margin:0; accent-color:#4b225a; }
+.fee { display:grid; gap:7px; font-size:13px; font-weight:600; max-width:320px; min-width:0; }
+.fee input { width:100%; min-width:0; max-width:100%; }
+.formula { font-size:12px; color:#634470; line-height:1.5; }
+.saved { font-size:12px!important; }
+.timing { margin-top:16px!important; }
+.section { display:grid; gap:14px; padding:23px 0 0; }
+.carriers { display:flex; flex-wrap:wrap; gap:15px 30px; }
+.warning { padding:12px 15px; background:#fff2e6; border-radius:4px; color:#82431d!important; }
+.note { padding:15px 18px; margin-top:22px!important; background:#f4eef7; border-radius:4px; color:#563663!important; }
+@media(max-width:560px) { .tier { grid-template-columns:1fr; gap:13px; padding:17px; } .tier>.fee,.tier>.formula,.tier>p,.tierHeading { grid-column:1; grid-row:auto; } .fee { max-width:none; } .tierHeading { flex-direction:row; align-items:center; justify-content:space-between; flex-wrap:wrap; } }

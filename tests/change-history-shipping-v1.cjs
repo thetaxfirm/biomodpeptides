@@ -40,6 +40,8 @@ m.filename = filename; m.require = name => {
   if (name === '@/lib/runtime') return runtime;
   if (name === '@/lib/change-history') return history;
   if (name === '@/lib/easypost') return shipping;
+  if (name === '@/lib/commerce') return {config: async()=>({shippingOptions:{}})};
+  if (name === '@/lib/shipping-options') return {savedShippingOption:()=>null};
   throw Error('Unexpected import ' + name);
 };
 m._compile(ts.transpileModule(fs.readFileSync(filename, 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText, filename);

@@ -31,7 +31,7 @@ export function CarrierConnection() {
     }
     return <section className={styles.panel} aria-labelledby="easypost-title">
         <h3 id="easypost-title">EasyPost shipping, inside your store</h3>
-        <p>EasyPost connects BIOMOD to USPS and UPS for shipping rates, postage labels and carrier tracking. Work from the orders below; you do not need to open the EasyPost dashboard for those tasks.</p>
+        <p>EasyPost connects BIOMOD to its configured carriers for shipping rates, postage labels and carrier tracking. Work from the orders below; you do not need to open the EasyPost dashboard for those tasks.</p>
         <div className={styles.connection}>
             <div><h4>Is the API connected?</h4><p aria-live="polite">{busy ? 'Checking EasyPost now…' : error || (result ? result.connected ? 'Connected: EasyPost accepted the API request.' : result.configured ? 'Configured, but the connection could not be verified.' : 'Not configured: a shipping API key is required.' : 'Not checked in this view. A saved API key alone does not confirm a working connection.')}</p>
             {result && <><p className={styles.note}>Checked {new Date(result.checkedAt).toLocaleString()}. This verifies API access, not production mode, account funding, a successful postage purchase or carrier pickup.</p><p><strong>Automatic tracking:</strong> {!result.webhookConfigured ? 'Signing secret not configured.' : result.webhookRegistered === null ? 'Registration could not be checked.' : result.webhookRegistered ? 'Webhook registered and signing secret configured. Successful event delivery is not yet proven by this check.' : 'No active webhook registration found for this store.'}</p></>}
@@ -42,7 +42,7 @@ export function CarrierConnection() {
             <li><strong>Review the paid order.</strong> Confirm the items, shipping address and any applicable original COA. Exclude internal tests. Pending payment is not ready to ship.</li>
             <li><strong>The Las Vegas team packs the box.</strong> Check the contents before buying postage. Current label pricing uses configured box and weight estimates; custom parcel measurements are not editable here yet.</li>
             <li><strong>Buy and print the label here.</strong> Use Buy shipping label on a paid order without a label. This charges the connected EasyPost account for postage, not the customer’s card. Open Show label to preview an existing label without leaving Admin. Do not buy another label just to print again.</li>
-            <li><strong>Hand the parcel to USPS or UPS.</strong> Arrange a pickup or drop-off separately. This Admin does not book pickups, and EasyPost does not pack or collect the box automatically.</li>
+            <li><strong>Hand the parcel to the selected carrier.</strong> Arrange a pickup or drop-off separately. This Admin does not book pickups, and EasyPost does not pack or collect the box automatically.</li>
             <li><strong>Check its progress here.</strong> Use Check carrier status on the order. Resend tracking email sends another customer email; it does not arrange shipping. Mail-provider acceptance does not confirm inbox delivery.</li>
         </ol>
         <details className={styles.help}><summary>What each shipping status means</summary><dl>
@@ -55,7 +55,7 @@ export function CarrierConnection() {
         <details className={styles.help}><summary>Connection problems, charges and tasks that still need the provider</summary>
             <p>If the connection check fails, labels and rates may be unavailable. A failed check does not erase an existing label. Keep existing labels and verify the account before retrying purchases.</p>
             <p>If a label purchase times out or says it may have succeeded, stop and check the existing shipment with the account owner before retrying. The account can have a charge even when the browser did not receive the label.</p>
-            <p>Account funding, carrier contracts, postage refunds and pickup booking are not available in this Admin yet. Those require the account owner or carrier. Checkout shipping charges and the actual postage bill can differ; label purchase currently selects the cheapest allowed USPS/UPS rate at that time.</p>
+            <p>Account funding, carrier contracts, postage refunds and pickup booking are not available in this Admin yet. Those require the account owner or carrier. Checkout shipping charges and the actual postage bill can differ. Label purchase matches the order’s saved carrier and service; it cannot silently replace an overnight service with a cheaper ground label. Configure delivery tiers, carriers and handling fees in Settings.</p>
             <p>Connection checks and Check carrier status do not buy postage or send customer emails. Only use the purchase or resend button when you intend that action.</p>
         </details>
     </section>;

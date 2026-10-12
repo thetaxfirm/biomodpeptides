@@ -80,7 +80,7 @@ function reconcile(q) {
   assert.equal(q.promo?.savings || 0, q.promoDiscount);
   for (const item of q.items) assert(Number.isSafeInteger(item.lineTotal) && item.lineTotal >= 0, 'No fractional/negative line amount');
 }
-function requestBody(q, extra = {}) { return { accepted: true, requestKey: randomUUID(), address, expectedTotal: q.total, quoteId: q.quoteId, ...extra }; }
+function requestBody(q, extra = {}) { return { accepted: true, requestKey: randomUUID(), address, expectedTotal: q.total, quoteId: q.quoteId, shippingOptionId: q.shippingOptionId, ...extra }; }
 async function denied(action, pattern) {
   const beforeOrders = orderRows(), beforePayments = paymentRequests.length;
   await assert.rejects(action, pattern);
@@ -258,7 +258,7 @@ async function apiCookieIntegration() {
   assert.equal(order.status, 'awaiting_payment'); assert.equal(order.total, 10254);
   assert.equal(paymentRequests.at(-1).totalCents, 10254, 'Payment adapter receives the authoritative discounted total');
   assert.deepEqual(saved.promo, { code: 'BM10', percentOff: 10, savings: 1000 });
-  assert.deepEqual(JSON.parse(saved.fingerprint), { lines: one, address, promoCode: 'BM10' });
+  assert.deepEqual(JSON.parse(saved.fingerprint), { lines: one, address, promoCode: 'BM10', shippingOptionId: q.shippingOptionId });
   const beforeResume = paymentRequests.length;
   const resumed = await checkout('promo-owner', one, requestBody(q), 'BM10');
   assert.equal(resumed.id, result.id); assert.equal(paymentRequests.length, beforeResume, 'Matching code resumes without a second payment');
@@ -285,7 +285,7 @@ async function apiCookieIntegration() {
   const plain = await issueQuote('plain-owner', one, address);
   const plainResult = await checkout('plain-owner', one, requestBody(plain));
   const plainSaved = JSON.parse(sql.prepare('SELECT data FROM orders WHERE id=?').get(plainResult.id).data);
-  assert.deepEqual(JSON.parse(plainSaved.fingerprint), { lines: one, address }, 'No-promo checkout remains compatible with existing fingerprints');
+  assert.deepEqual(JSON.parse(plainSaved.fingerprint), { lines: one, address, shippingOptionId: plain.shippingOptionId }, 'No-promo checkout binds the selected shipping service');
   assert.equal(plainSaved.promo, null); assert.equal(plainSaved.promoDiscount, 0);
   await apiCookieIntegration();
   assert.equal(JSON.stringify(products), originals, 'The source catalog is unchanged');

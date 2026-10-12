@@ -40,7 +40,7 @@ Module._load = function(request, parent, isMain) {
     if (request === './change-history') return { withAuditDb: db => db, auditRun: (_db, actor, sql, ...values) => { assert.equal(actor.actor, 'Website checkout'); return runtime.run(sql, ...values); } };
     if (request === './commerce') return { quote: async () => ({ items: [{ ...lines[0], product, lineTotal: 4900 }], subtotal: 4900, discount: 0, total: 4900, config: { shippingCents: 500, freeShippingAt: 20000 } }) };
     if (request === './auth') return { customer: async () => ({ email: 'fixture@example.invalid' }) };
-    if (request === './easypost') return { easypostReady: () => true, cheapestRate: async (_env, parsed) => { shippingStates.push(parsed.state); return { cents: 500, service: 'Isolated shipping' }; } };
+    if (request === './easypost') return { easypostReady: () => true, carrierShippingOptions: async (_env, parsed) => { shippingStates.push(parsed.state); return [{ id: 'rate_fixture', tier: 'standard', shipping: 500, shippingService: 'USPS Ground Advantage', carrierCents: 500, handlingCents: 0, days: 3, carrier: 'USPS', carrierService: 'GroundAdvantage', source: 'easypost', free: false }]; } };
     if (request === './payments') return {
       paymentEnvironment: () => 'isolated', paymentReturnUrl: () => 'https://example.invalid/return',
       createPaymentAdapter: () => ({ getStatus: () => ({ checkoutEnabled: true }), reference: id => id,
@@ -65,11 +65,11 @@ const { addressSchema, deliveryQuote, issueQuote, checkout } = require('../lib/c
   assert.equal(normalized.tax, 410, 'Existing Nevada tax calculation is retained');
   assert.equal(lower.state, ' nv ', 'Caller input is not mutated');
   const issued = await issueQuote('isolated-owner', lines, lower);
-  const body = { accepted: true, requestKey: '00000000-0000-4000-8000-000000000000', address, expectedTotal: issued.total, quoteId: issued.quoteId };
+  const body = { accepted: true, requestKey: '00000000-0000-4000-8000-000000000000', address, expectedTotal: issued.total, quoteId: issued.quoteId, shippingOptionId: issued.shippingOptionId };
   assert.deepEqual(await checkout('isolated-owner', lines, body), { id: 'isolated-2', url: '/isolated-payment' });
   assert.equal(adapterCalls, 1, 'Equivalent uppercase input reuses the normalized delivery quote');
   assert.deepEqual(savedOrder.address, address);
-  assert.equal(savedOrder.fingerprint, JSON.stringify({ lines, address }));
+  assert.equal(savedOrder.fingerprint, JSON.stringify({ lines, address, shippingOptionId: issued.shippingOptionId }));
   oldOrder = { id: 'isolated-existing', status: 'awaiting_payment', checkout_url: '/isolated-payment', data: JSON.stringify(savedOrder) };
   assert.deepEqual(await checkout('isolated-owner', lines, { ...body, address: lower }), { id: oldOrder.id, url: oldOrder.checkout_url });
   assert.equal(adapterCalls, 1, 'Case/whitespace changes do not create another payment attempt');

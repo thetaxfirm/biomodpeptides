@@ -41,5 +41,6 @@ export function ShippingLabel({ order, onDone }: { order: any; onDone: () => voi
         return <p className="notice">A label purchase is in progress. Refresh in a moment.</p>;
     if (order.status !== 'paid')
         return null;
-    return <button className="button button-gold" disabled={busy} onClick={() => act({}, 'Buy the cheapest USPS/UPS label for this order? Your EasyPost account will be charged.')}>{busy ? 'Buying label...' : 'Buy shipping label'}</button>;
+    const service = order.data?.shippingService || 'Standard shipping';
+    return <div><p><strong>Requested delivery:</strong> {service}. Label purchase must match the saved service. Handling fees are store charges, not postage.</p><button className="button button-gold" disabled={busy} onClick={() => act({}, `Buy the ${service} label for this order? Your EasyPost account will be charged the current carrier rate. The saved customer charge will not change.`)}>{busy ? 'Buying label...' : 'Buy shipping label'}</button></div>;
 }

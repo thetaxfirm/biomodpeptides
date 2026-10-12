@@ -52,9 +52,15 @@ const provider={
   },
   report:error=>reports.push(error),
 };
+function loadShippingPure(relative) {
+  const filename=path.join(root,relative),m=new Module(filename,module);m.filename=filename;m.paths=Module._nodeModulePaths(root);
+  m.require=id=>{if(id==='./shipping-options')return loadShippingPure('lib/shipping-options.ts');throw Error('Unexpected pure shipping dependency '+id);};
+  m._compile(ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,filename);return m.exports;
+}
 const filename=path.join(root,'components/store/account.tsx');
 const mod=new Module(filename,module);mod.filename=filename;mod.paths=Module._nodeModulePaths(root);
 mod.require=id=>{
+ if(id==='@/lib/shipping-terms')return loadShippingPure('lib/shipping-terms.ts');
  if(id==='@/lib/preorders'||id==='./preorder-notice'){const m={exports:{}};const filename=require('node:path').join(root,id==='@/lib/preorders'?'lib/preorders.ts':'components/store/preorder-notice.tsx');new Function('exports','require',require('typescript').transpileModule(require('node:fs').readFileSync(filename,'utf8'),{compilerOptions:{module:1,target:9,jsx:4}}).outputText)(m.exports,require);return m.exports;}
  if(id==='@/lib/fulfillment'){const m={exports:{}};new Function('exports',require('typescript').transpileModule(require('node:fs').readFileSync(require('node:path').join(root,'lib/fulfillment.ts'),'utf8'),{compilerOptions:{module:1,target:9}}).outputText)(m.exports);return m.exports;}
   if(id==='react')return hooks;if(id==='react/jsx-runtime')return require('react/jsx-runtime');

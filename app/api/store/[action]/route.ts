@@ -398,11 +398,16 @@ export async function POST(req: NextRequest, { params }: {
             return j({ message: 'Your partner application has been saved.' });
         }
         if (action === 'delivery') {
-            await cartImports().assertResolved((await requireCustomer()).id, s.id);
             const u = await requireCustomer();
+            // A choice refers only to a rate in this customer's stored quote.
+            // Both identifiers are required together; client prices are never accepted.
+            const selection = b.quoteId !== undefined || b.shippingOptionId !== undefined
+                ? z.object({ quoteId: z.string().uuid(), shippingOptionId: z.string().min(1).max(160).regex(/^[a-zA-Z0-9_-]+$/) }).parse({ quoteId: b.quoteId, shippingOptionId: b.shippingOptionId })
+                : undefined;
+            await cartImports().assertResolved(u.id, s.id);
             return j(await issueQuote(u.id, validateLines(parse((await one<{
                 cart: string;
-            }>('SELECT cart FROM customer_carts WHERE id=?', (await requireCustomer()).id))?.cart, [])), b.address, await currentPromoCode()));
+            }>('SELECT cart FROM customer_carts WHERE id=?', u.id))?.cart, [])), b.address, await currentPromoCode(), selection));
         }
         if (action === 'checkout') {
             const u = await requireCustomer();
@@ -450,10 +455,16 @@ export async function POST(req: NextRequest, { params }: {
                 return j({ message: status?.status === 'accepted' ? 'The email provider accepted this COA email. Inbox delivery is not yet confirmed.' : status?.status === 'duplicate' ? 'This original report already has an email record. Check its existing status.' : status?.status === 'queued' || status?.status === 'sending' ? 'This COA is queued for email processing.' : 'This request requires review or COA automation is disabled.', status });
             }
             if (action === 'admin-config') {
-                const cfg = z.object({ packDiscounts: z.record(z.number().min(0).max(100).nullable()), shippingCents: z.number().int().min(0).max(100000).nullable(), freeShippingAt: z.number().int().min(0).max(1000000), presalesEnabled: z.boolean(), rewardsEnabled: z.boolean(), affiliateEnabled: z.boolean() }).parse(b);
+                const cfg = z.object({ packDiscounts: z.record(z.number().min(0).max(100).nullable()), shippingCents: z.number().int().min(0).max(100000).nullable(), freeShippingAt: z.number().int().min(0).max(1000000), presalesEnabled: z.boolean(), rewardsEnabled: z.boolean(), affiliateEnabled: z.boolean(),
+                    shippingOptions: z.object({ standardEnabled: z.boolean(), expeditedEnabled: z.boolean(), overnightEnabled: z.boolean(), freeStandardEnabled: z.boolean(), standardHandlingCents: z.number().int().min(0).max(100000), expeditedHandlingCents: z.number().int().min(0).max(100000), overnightHandlingCents: z.number().int().min(0).max(100000), carriers: z.array(z.enum(['USPS', 'UPS', 'FedEx'])).min(1).transform(values => [...new Set(values)]) }).strict().optional(),
+                }).parse(b);
                 if (Object.keys(cfg.packDiscounts).some(k => !['1', '3', '5', '10'].includes(k)))
                     throw new Error('Unknown pack size.');
-                await run('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', 'store', JSON.stringify(cfg));
+                // Older admin pages do not know about delivery options or newer settings.
+                // Preserve the current merged runtime values unless explicitly submitted.
+                const currentConfig = await config();
+                const nextConfig = { ...currentConfig, ...cfg, packDiscounts: { ...currentConfig.packDiscounts, ...cfg.packDiscounts, '1': 0 }, shippingOptions: cfg.shippingOptions ?? currentConfig.shippingOptions };
+                await run('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', 'store', JSON.stringify(nextConfig));
                 return j({ message: 'Store settings saved.' });
             }
             if (action === 'admin-product') {

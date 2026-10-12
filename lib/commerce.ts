@@ -2,7 +2,8 @@ import { applyPromotion } from './promotions';
 import { applySale } from './sales';
 import { applyAvailability } from './availability';
 import { products, Product } from './catalog';
-import { all, one, setting, parse } from './runtime';
+import { all, one, setting, parse, runtime } from './runtime';
+import { normalizeShippingOptions, defaultShippingOptions, type ShippingOptionsConfig } from './shipping-options';
 import { packDiscounts, packSizes, fixedPackPrice, supportsPacks } from './packs';
 export type CartLine = {
     id: number;
@@ -16,12 +17,13 @@ export type StoreConfig = {
     packDiscounts: Record<string, number | null>;
     shippingCents: number | null;
     freeShippingAt: number;
+    shippingOptions: ShippingOptionsConfig;
     presalesEnabled: boolean;
     rewardsEnabled: boolean;
     affiliateEnabled: boolean;
 };
-export const defaultConfig: StoreConfig = { packDiscounts: { ...packDiscounts }, shippingCents: null, freeShippingAt: 20000, presalesEnabled: false, rewardsEnabled: false, affiliateEnabled: false };
-export async function config(): Promise<StoreConfig> { const stored = await setting<Partial<StoreConfig>>('store', {}); return { ...defaultConfig, ...stored, packDiscounts: { ...defaultConfig.packDiscounts, ...stored.packDiscounts, '1': 0 } }; }
+export const defaultConfig: StoreConfig = { packDiscounts: { ...packDiscounts }, shippingCents: null, freeShippingAt: 20000, shippingOptions: defaultShippingOptions, presalesEnabled: false, rewardsEnabled: false, affiliateEnabled: false };
+export async function config(): Promise<StoreConfig> { const stored = await setting<Partial<StoreConfig>>('store', {}); return { ...defaultConfig, ...stored, shippingOptions: normalizeShippingOptions(stored.shippingOptions, runtime()), packDiscounts: { ...defaultConfig.packDiscounts, ...stored.packDiscounts, '1': 0 } }; }
 export async function catalog(withSales = true): Promise<Product[]> { const rows = await all<{
     id: number;
     data: string;

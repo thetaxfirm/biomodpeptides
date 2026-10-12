@@ -12,6 +12,8 @@ try {
   await fs.writeFile(file, ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText);
   await fs.writeFile(path.join(temp, 'fulfillment.mjs'), ts.transpileModule(await fs.readFile(new URL('../lib/fulfillment.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText);
   await fs.writeFile(file, (await fs.readFile(file,'utf8')).replace("'./fulfillment'","'./fulfillment.mjs'"));
+  await fs.writeFile(path.join(temp, 'shipping-options.mjs'), ts.transpileModule(await fs.readFile(new URL('../lib/shipping-options.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText);
+  await fs.writeFile(file, (await fs.readFile(file, 'utf8')).replace("'./shipping-options'", "'./shipping-options.mjs'"));
   const e = await import(file);
   const env = { EASYPOST_API_KEY: 'EZTK_test_key_123456' };
   const vial = { quantity: 2, product: { categories: [{ slug: 'research-compounds' }] } };
@@ -21,10 +23,10 @@ try {
   assert.equal(e.easypostReady(env), true);
   const to = { name: 'Ada Lovelace', line1: '1 Main St', city: 'Las Vegas', state: 'NV', zip: '89118', phone: '702-498-2144' };
   const calls = [];
-  const shipment = { id: 'shp_1', rates: [
-    { id: 'rate_fedex', carrier: 'FedEx', service: 'Ground', rate: '5.00' },
-    { id: 'rate_ups', carrier: 'UPSDAP', service: 'Ground', rate: '9.10', delivery_days: 3 },
-    { id: 'rate_usps', carrier: 'USPS', service: 'GroundAdvantage', rate: '6.45', delivery_days: 4 },
+  const shipment = { id: 'shp_1', mode: 'production', rates: [
+    { id: 'rate_fedex', carrier: 'FedEx', service: 'Ground', rate: '5.00', currency: 'USD' },
+    { id: 'rate_ups', carrier: 'UPSDAP', service: 'Ground', rate: '9.10', currency: 'USD', delivery_days: 3 },
+    { id: 'rate_usps', carrier: 'USPS', service: 'GroundAdvantage', rate: '6.45', currency: 'USD', delivery_days: 4 },
   ] };
   globalThis.fetch = async (url, init) => {
     calls.push([url, init.method, init.headers.Authorization, init.body && JSON.parse(init.body)]);
