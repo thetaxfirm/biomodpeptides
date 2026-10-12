@@ -223,21 +223,22 @@ const productNames=h=>String(Boolean(productPanel(h).props.edited));
  reset();h=mount({initialTab:'requests'});await flush(h);
  let inbox=find(h,n=>n.type===RequestInbox);assert.deepEqual(inbox.props.requests,fixture().requests);assert.equal(inbox.props.busy,false);assert.equal(inbox.props.dirty,false);assert.equal(inbox.props.refreshing,false);
  const initialInbox=inbox.props;settingsForm(h).props.onChangeCapture();h.render();assert.equal(find(h,n=>n.type===RequestInbox).props.dirty,true);
- await initialInbox.onStatus(initialInbox.requests[0],'resolved');await initialInbox.onProcess('fixture-request');assert.equal(mutations(),0);
+ await initialInbox.onStatus(initialInbox.requests[0],'resolved');await assert.rejects(()=>initialInbox.onPrepareReply({id:'fixture-request',mode:'ai',expectedRevision:null}));assert.equal(mutations(),0);
  button(h,'Discard unsaved edits').props.onClick();h.render();
  const waitingRead=deferred();apiImpl=()=>waitingRead.promise;button(h,'Refresh administration').props.onClick();h.render();inbox=find(h,n=>n.type===RequestInbox);assert.equal(inbox.props.refreshing,true);
- await inbox.props.onStatus(inbox.props.requests[0],'spam');await inbox.props.onProcess('fixture-request');assert.equal(mutations(),0);
+ await inbox.props.onStatus(inbox.props.requests[0],'spam');await assert.rejects(()=>inbox.props.onPrepareReply({id:'fixture-request',mode:'ai',expectedRevision:null}));assert.equal(mutations(),0);
  waitingRead.resolve(fixture());await flush(h);
  allowedMutation='admin-request';const requestAction=deferred();apiImpl=action=>action==='admin-request'?requestAction.promise:Promise.resolve(fixture());
  inbox=find(h,n=>n.type===RequestInbox);const captured=inbox.props;const marking=captured.onStatus(captured.requests[0],'in_progress');captured.onStatus(captured.requests[0],'spam');h.render();
  assert.equal(mutations(),1);assert(find(h,n=>n.type===RequestInbox).props.busy);assert.deepEqual(calls.find(c=>c.action==='admin-request').body,{id:'fixture-request',status:'in_progress',expectedStatus:'new'});
  requestAction.resolve({message:'Synthetic request updated'});await marking;h.render();assert.equal(find(h,n=>n.type===RequestInbox).props.busy,false);
  const countAfterStatus=calls.length;await captured.onStatus(captured.requests[0],'resolved');assert.equal(calls.length,countAfterStatus,'A detached pre-refresh callback cannot change a newer request snapshot');
- allowedMutation='admin-coa-process';const inboxSend=deferred();apiImpl=action=>action==='admin-coa-process'?inboxSend.promise:Promise.resolve(fixture());inbox=find(h,n=>n.type===RequestInbox);
- const processing=inbox.props.onProcess('fixture-request');inbox.props.onProcess('fixture-request');h.render();assert.equal(calls.filter(c=>c.action==='admin-coa-process').length,1);assert(find(h,n=>n.type===RequestInbox).props.busy);
- inboxSend.resolve({message:'Synthetic mail acceptance only'});await processing;h.render();assert(!find(h,n=>n.type===RequestInbox).props.busy);
+ allowedMutation='admin-request-reply';const inboxSend=deferred();apiImpl=action=>action==='admin-request-reply'?inboxSend.promise:Promise.resolve(fixture());inbox=find(h,n=>n.type===RequestInbox);
+ const input={id:'fixture-request',mode:'staff',body:'Synthetic reply.',expectedRevision:null};
+ const processing=inbox.props.onPrepareReply(input);await assert.rejects(()=>inbox.props.onPrepareReply(input));h.render();assert.equal(calls.filter(c=>c.action==='admin-request-reply').length,1);assert(find(h,n=>n.type===RequestInbox).props.busy);
+ const reply={id:'fixture-request',status:'queued',revision:1};inboxSend.resolve({reply});assert.deepEqual(await processing,reply);h.render();assert(!find(h,n=>n.type===RequestInbox).props.busy);
  const staleInbox=find(h,n=>n.type===RequestInbox).props;state.store.customer=ownerB;apiImpl=async()=>fixture('New inbox owner');h.render();await flush(h);const inboxCount=calls.length;
- await staleInbox.onStatus(staleInbox.requests[0],'resolved');await staleInbox.onProcess('fixture-request');assert.equal(calls.length,inboxCount,'Earlier-owner inbox actions are inert');
+ await staleInbox.onStatus(staleInbox.requests[0],'resolved');await assert.rejects(()=>staleInbox.onPrepareReply(input));assert.equal(calls.length,inboxCount,'Earlier-owner inbox actions are inert');
 
  // Failed reads persist and retry remains a single-flight GET, never a mutation.
  reset();apiImpl=async()=>{throw Error('Simulated admin read outage');};h=mount();await flush(h);

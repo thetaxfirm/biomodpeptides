@@ -34,6 +34,7 @@ function setup() {
   sqlite.prepare('INSERT INTO staff_audit VALUES(?,?,?,?,?,?)').run('legacy-fixture', 'legacy-owner@example.invalid', 'staff-old@example.invalid', 'support', 1, Date.parse('2026-10-01T10:00:00Z'));
   const migration = fs.readFileSync(path.join(root, 'drizzle/0020_change_history.sql'), 'utf8');
   sqlite.exec(migration);
+  for (const file of fs.readdirSync(path.join(root, 'drizzle')).filter(f => f.endsWith('.sql') && f > '0020_change_history.sql').sort()) sqlite.exec(fs.readFileSync(path.join(root, 'drizzle', file), 'utf8'));
   return { sqlite, DB: d1(sqlite), migration };
 }
 const staff = { source: 'admin', actor: 'owner@example.invalid', actorType: 'staff' };

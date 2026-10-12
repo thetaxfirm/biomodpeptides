@@ -7,7 +7,6 @@ import fsSync from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { createRequire } from 'node:module';
-import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { Miniflare, Log, LogLevel } from 'miniflare';
 const require = createRequire(import.meta.url), ts = require('typescript');
@@ -53,19 +52,10 @@ const mf = new Miniflare({
     assert.deepEqual(payload.to, [expected.recipient]); assert.equal(payload.subject, expected.subject);
     assert(payload.text === expected.body, 'The queued message snapshot is unchanged');
     assert(!JSON.stringify(payload).includes('PRIVATE_FIXTURE_REQUEST_TEXT'), 'Untrusted request text must not enter email');
-    if (expected.purpose === 'coa') {
-      const report = registry.reports.find(item => item.sha256 === expected.document_hash);
-      assert(report, 'The queued report must be approved'); assert.equal(payload.attachments?.length, 1);
-      const attachment = payload.attachments[0]; assert.equal(attachment.filename, report.filename);
-      assert(attachment.content === report.base64, 'Original report bytes must remain unchanged without printing them');
-      const decoded = Buffer.from(attachment.content, 'base64');
-      assert.equal(createHash('sha256').update(decoded).digest('hex'), report.sha256);
-      assert(payload.text.includes(report.chemicalIdentity), 'Original chemical identity is disclosed, never rewritten');
-    } else {
-      assert.equal(payload.attachments, undefined);
-      assert(payload.text.includes('https://trybiomod.com/admin?tab=requests'));
-      assert(!payload.text.includes('customer-fixture'));
-    }
+    assert.equal(expected.purpose, 'request-alert', 'The scheduler cannot send customer COAs');
+    assert.equal(payload.attachments, undefined);
+    assert(payload.text.includes('https://trybiomod.com/admin?tab=requests'));
+    assert(!payload.text.includes('customer-fixture'));
     const providerId = `40000000-0000-4000-8000-${String(calls.length + 1).padStart(12, '0')}`;
     calls.push({ key, purpose: expected.purpose, providerId });
     return new Response(JSON.stringify({ id: providerId }), { status: 200, headers: { 'content-type': 'application/json' } });
@@ -111,11 +101,12 @@ try {
   const unmatched = await seed(undefined, { subject: 'COA request: HEAT-R 20mg / 102-30-0001' });
   await enqueueCoaRequest(env, unmatched);
   let rows = await snapshot(); assert.equal(rows.length, 5); assert.equal(rows.filter(row => row.status === 'queued').length, 4);
+  const oldCoas = rows.filter(row => row.purpose === 'coa');
   await saveCoaConfig(env, { ...settings, enabled: false });
   await cron(); assert.equal(calls.length, 0); assert((await snapshot()).every(row => row.attempts === 0));
   // Reconfiguration cannot reroute or alter previously queued messages.
   await saveCoaConfig(env, { ...settings, replyTo: 'changed-reply@example.invalid', notifyTo: 'changed-alerts@example.invalid' });
-  await cron(); assert.equal(calls.length, 4); assert.equal(calls.filter(call => call.purpose === 'coa').length, 3);
+  await cron(); assert.equal(calls.length, 1); assert.equal(calls.filter(call => call.purpose === 'coa').length, 0);
   rows = await snapshot();
   for (const row of rows.filter(row => row.status === 'accepted')) {
     assert.equal(row.attempts, 1); assert(row.accepted_at >= now); assert.equal(row.reply_to, settings.replyTo);
@@ -123,34 +114,35 @@ try {
   }
   assert.equal(rows.find(row => row.request_id === unmatched).status, 'manual_review');
   assert(!rows.some(row => row.request_id === unqueued), 'Cron never scans/queues historical inquiries');
-  await cron(); assert.equal(calls.length, 4, 'Accepted emails cannot be resent by later cron runs');
+  await cron(); assert.equal(calls.length, 1, 'Accepted emails cannot be resent by later cron runs');
   assert(await DB.prepare('SELECT day FROM traffic_daily WHERE day=?').bind(expired).first(), 'COA cron must not run daily cleanup');
   // Daily retention remains separate and preserves the outbox/accepted states.
-  await cron('0 9 * * *'); assert.equal(calls.length, 4);
+  await cron('0 9 * * *'); assert.equal(calls.length, 1);
   assert.equal(await DB.prepare('SELECT day FROM traffic_daily WHERE day=?').bind(expired).first(), null);
   assert.equal(await DB.prepare('SELECT day FROM shopping_daily WHERE day=?').bind(expired).first(), null);
   assert.equal((await DB.prepare('SELECT event_count n FROM traffic_daily WHERE day=?').bind(retained).first()).n, 3);
   assert.equal((await DB.prepare('SELECT event_count n FROM shopping_daily WHERE day=?').bind(retained).first()).n, 5);
   assert.equal((await DB.prepare('SELECT last_status FROM traffic_metrics_health WHERE id=1').first()).last_status, 'ok');
-  assert.equal((await snapshot()).filter(row => row.status === 'accepted').length, 4);
+  assert.equal((await snapshot()).filter(row => row.status === 'accepted').length, 1);
   // The production cron's actual handler processes at most five jobs per invocation.
-  for (let i = 0; i < 6; i++) await enqueueCoaRequest(env, await seed());
-  await snapshot(); await cron(); assert.equal(calls.length, 9); assert.equal((await snapshot()).filter(row => row.status === 'queued').length, 1);
-  await cron(); assert.equal(calls.length, 10); assert.equal((await snapshot()).filter(row => row.status === 'queued').length, 0);
-  const disabledJob = await seed(); await enqueueCoaRequest(env, disabledJob); await snapshot();
-  await saveCoaConfig(env, { ...settings, enabled: false }); await cron(); assert.equal(calls.length, 10);
+  for (let i = 0; i < 6; i++) await enqueueRequestAlert(env, await seed());
+  await snapshot(); await cron(); assert.equal(calls.length, 6); assert.equal((await snapshot()).filter(row => row.purpose === 'request-alert' && row.status === 'queued').length, 1);
+  await cron(); assert.equal(calls.length, 7); assert.equal((await snapshot()).filter(row => row.purpose === 'request-alert' && row.status === 'queued').length, 0);
+  const disabledJob = await seed(); await enqueueRequestAlert(env, disabledJob); await snapshot();
+  await saveCoaConfig(env, { ...settings, enabled: false }); await cron(); assert.equal(calls.length, 7);
   assert.equal((await DB.prepare('SELECT attempts FROM coa_delivery_outbox WHERE request_id=?').bind(disabledJob).first()).attempts, 0);
+  assert.deepEqual((await snapshot()).filter(row => row.purpose === 'coa'), oldCoas, 'All legacy COA queue and review rows remain untouched');
   assert.equal(forbiddenOutbound, 0);
   assert.equal(new Set(calls.map(call => call.key)).size, calls.length, 'Every accepted fixture send had one unique provider request');
   for (const table of ['orders','profiles','addresses','sessions']) assert.equal((await DB.prepare(`SELECT COUNT(*) n FROM ${table}`).first()).n, 0, 'Full schema contains no customer or commerce records');
   const history = (await DB.prepare('SELECT * FROM change_events').all()).results;
   const emailChanges = history.filter(event => event.entity_type === 'email_job' && event.action === 'email_job.update');
-  assert.equal(emailChanges.filter(event => JSON.parse(event.changes).some(change => change.field === 'Status' && change.after === 'sending')).length, 10, 'Actual UPDATE RETURNING claims must be audited');
-  assert.equal(emailChanges.filter(event => JSON.parse(event.changes).some(change => change.field === 'Status' && change.after === 'accepted')).length, 10);
+  assert.equal(emailChanges.filter(event => JSON.parse(event.changes).some(change => change.field === 'Status' && change.after === 'sending')).length, 7, 'Actual UPDATE RETURNING claims must be audited');
+  assert.equal(emailChanges.filter(event => JSON.parse(event.changes).some(change => change.field === 'Status' && change.after === 'accepted')).length, 7);
   for (const event of emailChanges) { assert.equal(event.actor, 'COA email scheduler'); assert.equal(event.actor_type, 'system'); assert.equal(event.source, 'system'); }
   assert.equal((await DB.prepare('SELECT COUNT(*) n FROM change_context').first()).n, 0);
   for (const privateValue of ['PRIVATE_FIXTURE_REQUEST_TEXT', 'customer-fixture', settings.replyTo, settings.notifyTo, calls[0].providerId, registry.reports[0].base64]) assert(!JSON.stringify(history).includes(privateValue), 'Audit history excludes private mail content and delivery references');
-  console.log('PASS: actual built Worker five-minute COA cron, isolated D1 queue only, original attachment bytes/hash and identity, immutable sender/reply-to, mocked acceptance persisted once, disabled no-send, five-job bound, and unaffected daily traffic/shopping retention. No real mail, customer records or production calls.');
+  console.log('PASS: actual built Worker five-minute staff-alert cron, isolated D1 queue only, retired COA queue unchanged and no attachments, immutable sender/reply-to, mocked acceptance persisted once, disabled no-send, five-job bound, and unaffected daily traffic/shopping retention. No real mail, customer records or production calls.');
 } finally {
   await mf.dispose();
   await fs.rm(temporary, { recursive: true, force: true });

@@ -30,7 +30,8 @@ async function drainAfter() {
   assert.deepEqual(backgroundErrors, [], 'Background dependency assertions must not be swallowed by allSettled');
 }
 function assertBackground(kind) {
-  const names = kind === 'contact' ? ['background-coa', 'background-request-alert'] : ['background-request-alert'];
+  const names = ['background-request-alert'];
+  assert.equal(called('prepare-reply').length,1);
   assert.deepEqual(calls.filter(call => call.name.startsWith('background-')).map(call => call.name), names);
   for (const name of names) {
     assert.equal(called(name).length, 1);
@@ -45,6 +46,17 @@ const called = name => calls.filter(call => call.name === name);
 const checkedAdmin = () => assert(called('admin-ok').length, 'Admin authorization must precede sensitive reads/writes');
 const status = value => ({ status: value, reason: value === 'accepted' ? 'accepted_by_email_provider' : 'fixture', acceptedAt: value === 'accepted' ? now : null, canProcess: value === 'queued' });
 const dependencies = {
+  '@/lib/request-replies': {
+    summarizeRequestReplies: async(receivedEnv,ids)=>{checkedAdmin();assert.equal(receivedEnv,env);return {};},
+    prepareRequestReply: async(receivedEnv,input,actor)=>{
+      assert.deepEqual(receivedEnv,env);assert(saved.has(input.requestId));
+      if(scenario.publicRequest){assert(draining && responseReturned);assert.deepEqual(actor,{email:'Website request automation',role:'system'});assert.deepEqual(input,{requestId,mode:'ai',expectedRevision:null});}
+      else {checkedAdmin();assert.equal(actor.email,account.email);assert.equal(input.expectedRevision,null);assert.equal(input.mode,'staff');assert.equal(input.body,'Reply fixture.');assert(!input.recipient);assert(!input.sender);}
+      note('prepare-reply',input);
+      if(scenario.prepareFailure)throw Object.assign(Error('Reply revision changed.'),{status:409});
+      return {id:requestId,revision:1,status:'queued'};
+    },
+  },
   '@/lib/change-history': { withAuditDb: (db, actor) => { assert.equal(db, env.DB); assert(['staff','system'].includes(actor.actorType)); return db; }, recordChange: async (db, event) => { checkedAdmin(); assert.equal(db,env.DB); assert.equal(event.status,'attempted'); assert.equal(event.action,'coa.process_requested'); }, auditRun: forbidden('unrelated admin audit write') },
   '@/lib/checkout-recovery': { recoveryAdminStatus: async()=>{checkedAdmin();return {enabled:false,jobs:[]};} },
   '@/lib/auth': {
@@ -159,7 +171,7 @@ async function request(action, data, headers = {}) {
   reset(); let result = await request('admin-coa-process', { id: requestId }, { origin: 'https://other.example.invalid' }); assert.equal(result.status, 403); assert.equal(calls.length, 0);
   reset(); result = await request('admin-coa-config', { enabled: true, replyTo: 'reply@example.invalid' }, { 'content-length': '30001' }); assert.equal(result.status, 413); assert.equal(calls.length, 0);
   reset(); result = await request('admin-coa-config', { enabled: 'true', replyTo: 'invalid' }); assert.equal(result.status, 400); assert.equal(called('save-coa-config').length, 0);
-  reset(); result = await request('admin-coa-process', { id: 'not-an-existing-request-id' }); assert.equal(result.status, 400); assert.equal(called('enqueue-coa').length, 0); assert.equal(called('process-coa').length, 0);
+  reset(); result = await request('admin-coa-process', { id: 'not-an-existing-request-id' }); assert.equal(result.status, 409); assert.equal(called('enqueue-coa').length, 0); assert.equal(called('process-coa').length, 0);
 
   reset(); saved.set(requestId, { id: requestId, kind: 'contact', created: now, data: JSON.stringify(contact) });
   result = await request('admin'); assert.equal(result.status, 200); assert.equal(result.body.coaAutomation.approvedReportCount, 3); assert.equal(result.body.requests[0].data.email, contact.email); assert.equal(called('coa-status').length, 1); assert(!calls.some(c => /enqueue|process|save/.test(c.name)), 'Admin refresh must not queue or send'); assert.equal(called('after-register').length, 0); assert.equal(afterJobs.length, 0);
@@ -243,15 +255,16 @@ async function request(action, data, headers = {}) {
     await assert.doesNotReject(() => drainAfter()); assertBackground('affiliate');
   }
 
-  // Admin selects an existing request ID only. Body-supplied recipients/documents are ignored.
-  for (const deliveryStatus of ['accepted', 'duplicate', 'queued', 'sending', 'manual_review', null]) {
-    reset({ deliveryStatus }); result = await request('admin-coa-process', { id: requestId, recipient: 'intruder@example.invalid', subject: 'Replacement subject', filename: 'replacement.pdf', base64: 'FORGED_BYTES' });
-    assert.equal(result.status, 200); assert.deepEqual(calls.map(c => c.name), ['session', 'rateLimit', 'requireAdmin', 'admin-ok', 'enqueue-coa', 'process-coa', 'delivery-status']); assert.equal(called('enqueue-alert').length, 0); assert.equal(called('after-register').length, 0); assert.equal(afterJobs.length, 0);
-    assert(!JSON.stringify(result.body).includes('intruder') && !JSON.stringify(result.body).includes('FORGED_BYTES'));
-    if (deliveryStatus === 'accepted') { assert.match(result.body.message, /provider accepted/); assert.match(result.body.message, /Inbox delivery is not yet confirmed/); }
-    else assert(!result.body.message.includes('provider accepted'), 'Unconfirmed results must not claim mail acceptance');
+  // Old tabs cannot bypass owner review through the retired direct-send action.
+  reset(); result=await request('admin-coa-process',{id:requestId});assert.equal(result.status,409);
+  assert.equal(called('enqueue-coa').length,0);assert.equal(called('process-coa').length,0);assert.match(result.body.error,/review in Jarvis/);
+  // Staff identity is derived from authentication, recipients and attachment data are not client inputs.
+  for(const prepareFailure of [false,true]){
+    reset({prepareFailure});saved.set(requestId,{id:requestId,kind:'contact',created:now,data:JSON.stringify(contact)});
+    result=await request('admin-request-reply',{id:requestId,mode:'staff',body:'Reply fixture.',expectedRevision:null,recipient:'intruder@example.invalid',sender:'forged@example.invalid',actor:'forged'});
+    assert.equal(result.status,prepareFailure?409:200);assert.equal(called('prepare-reply').length,1);assert.equal(called('process-coa').length,0);
+    if(!prepareFailure)assert.equal(result.body.reply.status,'queued');
   }
-  reset({ enqueueFailure: true }); result = await request('admin-coa-process', { id: requestId }); assert.equal(result.status, 400); assert.equal(called('process-coa').length, 0); assert.equal(called('delivery-status').length, 0);
   assert.equal(forbiddenCalls, 0);
-  console.log('PASS: actual COA API routes authorize before sensitive reads/writes; same-origin/body gates; validated settings and request ID only; inquiry persistence survives enqueue/registration/background failures; explicit after-response per-inquiry delivery; manual report-only processing; honest mail status; no network, real records or commerce mutations.');
+  console.log('PASS: actual COA API routes authorize before sensitive reads/writes; same-origin/body gates; validated settings and request ID only; inquiry persistence survives enqueue/registration/background failures; explicit after-response per-inquiry delivery; draft-only review queue and retired direct-send rejection; no network, real records or commerce mutations.');
 })().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => { global.fetch = oldFetch; });

@@ -17,7 +17,7 @@ type Props = {
   onProcess: (id: string) => void | Promise<void>;
 };
 const statusLabels: Record<DeliveryStatus['status'], string> = {
-  ready: 'Ready to send', queued: 'Queued', sending: 'Sending', accepted: 'Accepted by mail provider',
+  ready: 'Prepare for review', queued: 'Held for owner review', sending: 'Sending', accepted: 'Accepted by mail provider',
   manual_review: 'Review needed', duplicate: 'Duplicate request',
 };
 const reasonLabels: Record<string, string> = {
@@ -58,41 +58,39 @@ function DeliveryState({ delivery, label, relatedName }: { delivery: DeliverySta
 
 export function CoaAutomation({ report, requests = [], busy, dirty, refreshing, onDraft, onSave, onProcess }: Props) {
   if (!report || !report.config || !report.requests || typeof report.requests !== 'object') return <section className={styles.section} aria-labelledby="coa-automation-title">
-    <h2 id="coa-automation-title">COA email automation</h2>
+    <h2 id="coa-automation-title">Request alerts and previous COA activity</h2>
     <p role="status">Automation details are unavailable. Refresh administration to check the current configuration.</p>
   </section>;
   const savingDisabled = busy || refreshing;
-  const processDisabled = savingDisabled || dirty;
   const entries = Object.entries(report.requests).filter(([, delivery]) => delivery?.coa || delivery?.alert);
   const requestById = new Map(requests.map(request => [request.id, request]));
   return <section className={styles.section} aria-labelledby="coa-automation-title">
-    <h2 id="coa-automation-title">COA email automation</h2>
-    <p>Automation is <strong>{report.config.enabled ? 'enabled' : 'disabled'}</strong>. Original reports are sent only after the request matches an eligible report.</p>
+    <h2 id="coa-automation-title">Request alerts and previous COA activity</h2>
+    <p>Staff request alerts are <strong>{report.config.enabled ? 'enabled' : 'disabled'}</strong>. Customer replies are prepared from research@biomodpeptides.com and require Ash’s review and send approval in Jarvis. No COA is sent automatically.</p>
     <p className={styles.note}>Accepted means the mail provider accepted the message. It does not confirm inbox delivery. Request review status remains separate below.</p>
     <dl className={styles.configuration}>
-      <div><dt>Sender</dt><dd>{report.sender || 'Not configured'}</dd></div>
-      <div><dt>Reply-to address</dt><dd>{report.config.replyTo || 'Not configured'}</dd></div>
+      <div><dt>Staff alert sender</dt><dd>{report.sender || 'Not configured'}</dd></div>
+      <div><dt>Staff alert reply-to</dt><dd>{report.config.replyTo || 'Not configured'}</dd></div>
       <div><dt>Notification destination</dt><dd>{report.config.notifyTo || 'Not configured'}</dd></div>
     </dl>
-    {!report.mailConfigured && <p className="notice" role="status">Email sending is not configured. Reports cannot be sent yet.</p>}
+    {!report.mailConfigured && <p className="notice" role="status">Staff alert email is not configured. Customer drafts use the connected research mailbox in Jarvis.</p>}
     <form className={'store-form ' + styles.form} onChangeCapture={onDraft} onSubmit={event => { event.preventDefault(); if (!savingDisabled) void onSave(event); }}>
-      <label className={styles.checkbox}><input type="checkbox" name="enabled" defaultChecked={report.config.enabled} disabled={savingDisabled}/><span>Enable automatic COA replies</span></label>
+      <label className={styles.checkbox}><input type="checkbox" name="enabled" defaultChecked={report.config.enabled} disabled={savingDisabled}/><span>Enable staff request alerts</span></label>
       <div className={styles.fields}>
         <label className="field"><span>Reply-to email</span><input type="email" name="replyTo" defaultValue={report.config.replyTo} required disabled={savingDisabled} autoComplete="off"/></label>
         <label className="field"><span>Notification email (optional)</span><input type="email" name="notifyTo" defaultValue={report.config.notifyTo || ''} disabled={savingDisabled} autoComplete="off"/><small>For new contact and partner requests only; older requests do not trigger notifications. Leave blank to turn notifications off.</small></label>
       </div>
-      <button type="submit" className="button button-dark" disabled={savingDisabled}>Save COA settings</button>
+      <button type="submit" className="button button-dark" disabled={savingDisabled}>Save alert settings</button>
     </form>
-    <h3>COA outbox</h3>
+    <h3>Previous COA and alert activity</h3>
     <p className={styles.note}>Use Refresh administration above to load the latest send states. Existing messages are not resent by refreshing.</p>
-    {dirty && <p className="notice" role="status">Save or discard unsaved edits before sending a report.</p>}
+    {dirty && <p className="notice" role="status">Save or discard your alert settings before preparing replies.</p>}
     {!entries.length ? <p>No COA automation records are shown for the loaded requests.</p> : <div className={styles.outbox}>{entries.map(([id, delivery]) => {
       const coa = delivery.coa;
       const request = requestById.get(id);
       const requestName = displayText(request?.data?.name) || displayText(request?.data?.email) || 'Customer request';
       const subject = displayText(request?.data?.subject) || (request?.kind === 'affiliate' ? 'Partner application' : 'COA request');
       const created = acceptedTime(request?.created);
-      const eligible = report.config.enabled && report.mailConfigured && coa?.canProcess === true && ['ready', 'queued'].includes(coa.status) && Boolean(coa.reportId?.trim());
       return <article className={styles.request} key={id}>
         <h4>{requestName}</h4>
         <p>{subject}</p>
@@ -103,7 +101,7 @@ export function CoaAutomation({ report, requests = [], busy, dirty, refreshing, 
           {coa.reportId && <div><dt>Report</dt><dd>{coa.reportId}</dd></div>}
         </dl>}
         <div className={styles.states}>{coa && <DeliveryState delivery={coa} label="Original COA" relatedName={coa?.duplicateOfRequestId ? displayText(requestById.get(coa.duplicateOfRequestId)?.data?.name) || displayText(requestById.get(coa.duplicateOfRequestId)?.data?.email) : undefined}/>} {delivery.alert && <DeliveryState delivery={delivery.alert} label="Request notification"/>}</div>
-        {eligible && <button type="button" className="button button-dark" disabled={processDisabled} aria-label={'Send original COA for request ' + id} onClick={() => { if (!processDisabled && eligible) void onProcess(id); }}>Send original COA</button>}
+
       </article>;
     })}</div>}
   </section>;

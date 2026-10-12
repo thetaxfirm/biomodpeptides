@@ -29,7 +29,7 @@ export async function saveCoaConfig(env: CoaEnvironment, value: {enabled:unknown
  await env.DB.prepare("INSERT INTO settings(key,value) VALUES('coa_delivery_v1',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(JSON.stringify(config)).run();
  return config;
 }
-const statusOf = (row: Row, enabled: boolean): DeliveryStatus => ({ status:row.status,reason:row.reason,...(row.product_name?{productName:row.product_name}:{}),...(row.strength?{strength:row.strength}:{}),...(row.lot?{lot:row.lot}:{}),...(row.report_id?{reportId:row.report_id}:{}),acceptedAt:row.accepted_at,...(row.duplicate_of?{duplicateOfRequestId:row.duplicate_of}:{}),canProcess:enabled&&row.status==='queued' });
+const statusOf = (row: Row, enabled: boolean): DeliveryStatus => ({ status:row.status,reason:row.reason,...(row.product_name?{productName:row.product_name}:{}),...(row.strength?{strength:row.strength}:{}),...(row.lot?{lot:row.lot}:{}),...(row.report_id?{reportId:row.report_id}:{}),acceptedAt:row.accepted_at,...(row.duplicate_of?{duplicateOfRequestId:row.duplicate_of}:{}),canProcess:row.purpose==='request-alert'&&enabled&&row.status==='queued' });
 async function requestById(env: CoaEnvironment,id:string):Promise<StoredRequest|null> {
  if (!validId(id)) throw new Error('Choose an existing request.');
  return env.DB.prepare("SELECT id,kind,data,created FROM requests WHERE id=? AND kind IN ('contact','affiliate')").bind(id).first<StoredRequest>();
@@ -104,10 +104,13 @@ async function mark(env:CoaEnvironment,row:Row,status:Row['status'],reason:strin
  return env.DB.prepare('UPDATE coa_delivery_outbox SET status=?,reason=?,provider_id=?,accepted_at=?,lease_token=NULL,lease_until=NULL,updated=? WHERE id=? AND lease_token=? AND status=\'sending\'').bind(status,reason,acceptedId||null,acceptedId?now:null,now,row.id,row.lease_token).run().then(result=>result.meta.changes>0);
 }
 export async function processCoaOutbox(env:CoaEnvironment,options:{requestId?:string;purpose?:Purpose;limit?:number}={},deps:Dependencies={}){
+ // Customer COAs now require Ash's approval in Jarvis. Never retry the retired
+ // direct-send queue, including jobs created by an older deployed client.
+ if(options.purpose==='coa')return {processed:0,accepted:0,review:0};
  const config=await readCoaConfig(env);if(!config.enabled||!mailReady(env))return {processed:0,accepted:0,review:0};
  if(options.requestId!==undefined&&!validId(options.requestId))throw new Error('Choose an existing request.');
  if(options.purpose!==undefined&&!['coa','request-alert'].includes(options.purpose))throw new Error('Choose a valid message purpose.');
- const scopeWhere=(options.requestId?' AND request_id=?':'')+(options.purpose?' AND purpose=?':''),scopeValues=[...(options.requestId?[options.requestId]:[]),...(options.purpose?[options.purpose]:[])];
+ const scopeWhere=" AND purpose='request-alert'"+(options.requestId?' AND request_id=?':'')+(options.purpose?' AND purpose=?':''),scopeValues=[...(options.requestId?[options.requestId]:[]),...(options.purpose?[options.purpose]:[])];
  const now=(deps.now||Date.now)(),limit=Math.max(1,Math.min(10,Math.floor(options.limit||5)));
  // No historical request scan: only existing queued jobs are considered.
  // A terminal unknown outcome retains recipient/report dedupe until an operator investigates.
@@ -121,20 +124,10 @@ export async function processCoaOutbox(env:CoaEnvironment,options:{requestId?:st
   const row=await env.DB.prepare("UPDATE coa_delivery_outbox SET status='sending',reason='sending',lease_token=?,lease_until=?,attempts=attempts+1,first_attempt_at=COALESCE(first_attempt_at,?),updated=? WHERE id=? AND attempts<5 AND (status='queued' OR (status='sending' AND lease_until<=?)) AND next_attempt_at<=? AND (first_attempt_at IS NULL OR first_attempt_at>?) AND (first_attempt_at IS NOT NULL OR ((SELECT COUNT(*) FROM coa_delivery_outbox WHERE purpose=? AND first_attempt_at>=?)<? AND (?='request-alert' OR (SELECT COUNT(*) FROM coa_delivery_outbox WHERE purpose='coa' AND recipient_hash=? AND first_attempt_at>=?)<3))) RETURNING *").bind(token,claimAt+LEASE,claimAt,claimAt,candidate.id,claimAt,claimAt,claimAt-SAFE_RETRY,candidate.purpose,claimAt-DAY,CAPS[candidate.purpose],candidate.purpose,candidate.recipient_hash,claimAt-DAY).first<Row>();
   if(!row)continue;processed++;
   try {
+   if(row.purpose!=='request-alert')throw new Error('owner_review_required');
    if(!coaEmail(row.recipient)||!coaSender(row.sender)||!coaEmail(row.reply_to)||!row.subject||!row.body||await coaHash(payloadFingerprint(row))!==row.payload_hash)throw new Error('snapshot_integrity_failed');
    const payload:{from:string;to:string[];reply_to:string;subject:string;text:string;attachments?:{filename:string;content:string}[]}={from:row.sender!,to:[row.recipient!],reply_to:row.reply_to!,subject:row.subject,text:row.body};
-   if(row.purpose==='coa'){
-    const {originals,associations}=await loadCoaBatchContext(env.DB);
-    const report=coaReportByHash(row.document_hash||'',originals,associations);
-    if(!report||report.productName!==row.product_name||report.strength!==row.strength||report.lot!==row.lot||report.reportId!==row.report_id||row.template_version!==COA_TEMPLATE_VERSION)throw new Error('original_unavailable');
-    if(report.filename!==row.attachment_name)throw new Error('original_unavailable');
-    const original=await readCoaOriginal(env.DB,report);if(!original)throw new Error('original_unavailable');
-    payload.attachments=[await verifiedCoaAttachment(original)];
-    // Recheck after the original read/hash work, immediately before the provider call.
-    // Never substitute a newly selected report into an already queued message.
-    const current=await loadCoaBatchContext(env.DB);
-    if(!coaReportByHash(report.sha256,current.originals,current.associations))throw new Error('original_unavailable');
-   }else if(row.template_version!=='request-alert-v1')throw new Error('snapshot_integrity_failed');
+   if(row.template_version!=='request-alert-v1')throw new Error('snapshot_integrity_failed');
    const response=await (deps.fetch||fetch)('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+env.RESEND_API_KEY!.trim(),'Content-Type':'application/json','Idempotency-Key':row.idempotency_key},body:JSON.stringify(payload),redirect:'manual',signal:AbortSignal.timeout(10000)});
    if(response.ok){const data=await response.json() as {id?:unknown};if(typeof data.id!=='string'||!/^[a-f0-9-]{36}$/.test(data.id))throw new Error('provider_outcome_unknown');if(await mark(env,row,'accepted','accepted_by_email_provider',(deps.now||Date.now)(),data.id))accepted++;}
    else if(response.status===429||response.status>=500||response.status===409)throw new Error('provider_retry');

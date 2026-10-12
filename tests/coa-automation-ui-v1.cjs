@@ -30,9 +30,9 @@ const render=p=>renderToStaticMarkup(React.createElement(CoaAutomation,p));
 const sendButtons=p=>nodes(CoaAutomation(p)).filter(n=>n.type==='button'&&text(n)==='Send original COA');
 const form=p=>nodes(CoaAutomation(p)).find(n=>n.type==='form');
 const before=JSON.stringify(report),html=render(props);
-assert.match(html,/COA email automation/);assert.match(html,/Automation is <strong>enabled/);
+assert.match(html,/Request alerts and previous COA activity/);assert.match(html,/Staff request alerts are <strong>enabled/);assert(html.includes('No COA is sent automatically'));assert(html.includes('research@biomodpeptides.com'));assert(html.includes('review and send approval in Jarvis'));
 for(const address of ['reply@example.invalid','notify@example.invalid','sender@example.invalid'])assert(html.includes(address));
-for(const label of ['Ready to send','Queued','Sending','Accepted by mail provider','Review needed','Duplicate request'])assert(html.includes(label));
+for(const label of ['Prepare for review','Held for owner review','Sending','Accepted by mail provider','Review needed','Duplicate request'])assert(html.includes(label));
 assert.match(html,/does not confirm inbox delivery/);assert.match(html,/Request review status remains separate/);
 assert(html.includes('2026-10-11T09:00:00.000Z'));assert(html.includes('QA-REPORT'));assert(html.includes('QA-LOT'));
 assert(!html.includes('unassess'),'Unassessed ordinary requests are not outbox records');
@@ -43,16 +43,16 @@ assert(alertOnly.includes('Request notification'));assert(!alertOnly.includes('O
 assert(text(requestCards.find(n=>n.key==='ready-request')).includes('<script>Fixture Ready</script>'));assert(!text(requestCards.find(n=>n.key==='ready-request')).includes('Fixture Queue'));
 assert(text(requestCards.find(n=>n.key==='queued-request')).includes('Fixture Queue'));assert(text(requestCards.find(n=>n.key==='queued-request')).includes('COA for queued original'));
 assert(!html.includes('<script>'));assert(!html.includes('<b>COA'));assert(html.includes('&lt;script&gt;Fixture Ready&lt;/script&gt;'));
-assert.equal(sendButtons(props).length,2);sendButtons(props).forEach(button=>button.props.onClick());assert.deepEqual(sends,['ready-request','queued-request']);
+assert.equal(sendButtons(props).length,0,'No direct-send control remains for any historical status, even canProcess=true');assert.deepEqual(sends,[]);assert(!nodes(CoaAutomation(props)).some(n=>n.type==='button'&&/send.*coa/i.test(text(n))));
 assert.equal(JSON.stringify(report),before,'Rendering never mutates report data');
 for(const restriction of [{busy:true},{dirty:true},{refreshing:true}]){
- const p={...props,...restriction},buttons=sendButtons(p);assert.equal(buttons.length,2);assert(buttons.every(n=>n.props.disabled));
+ const p={...props,...restriction},buttons=sendButtons(p);assert.equal(buttons.length,0);
  const count=sends.length;buttons.forEach(n=>n.props.onClick());assert.equal(sends.length,count,'Disabled handlers do not submit a send');
 }
 for(const adjusted of [{...report,config:{...report.config,enabled:false}},{...report,mailConfigured:false}])assert.equal(sendButtons({...props,report:adjusted}).length,0);
 const unavailable=render({...props,report:null});assert.match(unavailable,/details are unavailable/);assert(!unavailable.includes('<form'));assert(!unavailable.includes('Send original COA'));
 const disabledHtml=render({...props,report:{...report,config:{enabled:false,replyTo:'',notifyTo:null},mailConfigured:false,sender:'',requests:{}}});
-assert.match(disabledHtml,/Automation is <strong>disabled/);assert.match(disabledHtml,/Email sending is not configured/);assert.match(disabledHtml,/No COA automation records/);assert(!disabledHtml.includes('notify@example.invalid'));
+assert.match(disabledHtml,/Staff request alerts are <strong>disabled/);assert.match(disabledHtml,/Staff alert email is not configured/);assert.match(disabledHtml,/No COA automation records/);assert(!disabledHtml.includes('notify@example.invalid'));
 const currentForm=form(props),event={prevented:0,preventDefault(){this.prevented++;},currentTarget:{}};
 currentForm.props.onChangeCapture();assert.equal(drafts,1);
 currentForm.props.onSubmit(event);assert.equal(event.prevented,1);assert.equal(saves.length,1);assert.equal(saves[0],event);
@@ -73,4 +73,4 @@ const duplicateReview=render({...props,report:{...report,requests:{duplicate:{co
 assert(!duplicateReview.includes('Earlier message accepted'));assert(!duplicateReview.includes('<time'),'Acceptance time only belongs to an actually accepted related message');
 const malformed=render({...props,report:{...report,requests:{unknown:{coa:status('unexpected',{canProcess:true}),alert:null},badDate:{coa:status('accepted',{acceptedAt:NaN}),alert:null}}}});
 assert(malformed.includes('Status unavailable'));assert(!malformed.includes('Invalid Date'));assert(!malformed.includes('Send original COA'));
-console.log('PASS: actual COA admin UI states/configuration, strict eligible-original send gates, accepted-not-delivered copy, unavailable/disabled behavior, dirty/busy/read guards, delegated form callbacks, and no private source payload rendering. No live I/O.');
+console.log('PASS: actual COA admin UI states/configuration, no direct customer-send controls or automatic COA sends, accepted-not-delivered copy, unavailable/disabled behavior, dirty/busy/read guards, delegated form callbacks, and no private source payload rendering. No live I/O.');

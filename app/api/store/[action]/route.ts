@@ -1,8 +1,10 @@
+import { replyBridgeRoute } from '@/lib/request-reply-route';
+import { summarizeRequestReplies, prepareRequestReply } from '@/lib/request-replies';
 import { adminBatchRecords, validateBatchEdit } from '@/lib/product-batch';
 import { coaHash, loadCoaReports, readCoaOriginal, verifiedCoaAttachment } from '@/lib/coa-delivery';
 import { changeHistory, auditRun, withAuditDb, recordChange, type AuditActor } from '@/lib/change-history';
 import { recoveryAdminStatus } from '@/lib/checkout-recovery';
-import { coaAutomationStatus, coaDeliveryStatuses, enqueueCoaRequest, enqueueRequestAlert, processCoaOutbox, saveCoaConfig } from '@/lib/coa-outbox';
+import { coaAutomationStatus, enqueueCoaRequest, enqueueRequestAlert, processCoaOutbox, saveCoaConfig } from '@/lib/coa-outbox';
 import { promoAnalytics } from '@/lib/promo-analytics';
 import { PROMO_COOKIE, promotion } from '@/lib/promotions';
 import inventorySql from '@/lib/inventory-statements.json';
@@ -30,7 +32,7 @@ export const dynamic = 'force-dynamic';
 // What each admin write needs. An admin action missing here requires the owner.
 const adminActionPermission: Record<string, StaffPermission> = {
     'admin-order': 'orders:fulfill', 'admin-reconcile': 'orders:reconcile',
-    'admin-request': 'requests:write', 'admin-coa-process': 'requests:write',
+    'admin-request': 'requests:write', 'admin-request-reply': 'requests:write', 'admin-coa-process': 'requests:write',
     'admin-config': 'store:write', 'admin-product': 'store:write', 'admin-campaign': 'store:write', 'admin-reward': 'store:write', 'admin-coa-config': 'store:write',
     'admin-staff': 'team:manage',
 };
@@ -43,7 +45,7 @@ function scheduleInquiryDelivery(env: ReturnType<typeof runtime>, requestId: str
         const deliveryEnv = { ...env, DB: withAuditDb(env.DB, { source: 'system', actor: 'Inquiry delivery automation', actorType: 'system' }) } as ReturnType<typeof runtime>;
         after(async () => {
             await Promise.allSettled([
-                ...(kind === 'contact' ? [processCoaOutbox(deliveryEnv, { requestId, purpose: 'coa', limit: 1 })] : []),
+                prepareRequestReply(env, { requestId, mode: 'ai', expectedRevision: null }, { email: 'Website request automation', role: 'system' }),
                 processCoaOutbox(deliveryEnv, { requestId, purpose: 'request-alert', limit: 1 }),
             ]);
         });
@@ -201,7 +203,7 @@ export async function GET(req: NextRequest, { params }: {
             const adminProducts = await catalog(false, allowed('store:write'));
             return j({ role, permissions: permissionsFor(role), batchRecords: allowed('store:write') ? await adminBatchRecords(database(), adminProducts) : [], checkoutRecovery: await recoveryAdminStatus(runtime()), searchPublishing: allowed('reports:read') ? searchReport(seoConfig(runtime())) : null, config: await config(), products: adminProducts, orders: (await all<{
                     data: string;
-                }>('SELECT id,owner,status,total,data,created FROM orders ORDER BY created DESC LIMIT 200')).map(o => ({ ...o, data: adminOrderView(parse(o.data, {})) })), requests: requests.map(o => ({ ...o, data: presentationData(parse(o.data, {})) })), coaAutomation: allowed('requests:write') ? await coaAutomationStatus(runtime(), requests.map(r => r.id)) : null, campaigns: allowed('store:write') ? (await all<{
+                }>('SELECT id,owner,status,total,data,created FROM orders ORDER BY created DESC LIMIT 200')).map(o => ({ ...o, data: adminOrderView(parse(o.data, {})) })), requests: requests.map(o => ({ ...o, data: parse(o.data, {}) })), requestReplies: allowed('requests:write') ? await summarizeRequestReplies(runtime(), requests.map(r => r.id)) : {}, coaAutomation: allowed('requests:write') ? await coaAutomationStatus(runtime(), requests.map(r => r.id)) : null, campaigns: allowed('store:write') ? (await all<{
                     data: string;
                 }>('SELECT * FROM campaigns')).map<Record<string, any>>(o => { const {data, ...row}=o; return { ...row, ...parse<Record<string, any>>(data, {}) }; }).filter(c=>currentSelection(c.productIds)).map(c=>presentationData(c)) : [], team: allowed('team:manage') ? await staffDirectory(runtime()) : null });
         }
@@ -217,6 +219,8 @@ export async function POST(req: NextRequest, { params }: {
     }>;
 }) {
     try {
+        const { action } = await params;
+        if (action === 'reply-bridge') return replyBridgeRoute(req, runtime());
         if (req.headers.get('origin') !== req.nextUrl.origin)
             return j({ error: 'Please refresh the page and try again.' }, 403);
         if (Number(req.headers.get('content-length') || 0) > 30000)
@@ -244,7 +248,6 @@ export async function POST(req: NextRequest, { params }: {
         const b = JSON.parse(raw);
         if (!b || typeof b !== 'object' || Array.isArray(b) || !req.headers.get('content-type')?.includes('application/json'))
             return j({ error: 'A JSON object is required.' }, 400);
-        const { action } = await params;
         const secure = req.nextUrl.protocol === 'https:';
         const s = await session(secure);
         await rateLimit(action + ':' + (req.headers.get('cf-connecting-ip') || s.id), action.startsWith('auth') ? 12 : 120);
@@ -458,14 +461,18 @@ export async function POST(req: NextRequest, { params }: {
                 await saveCoaConfig(auditEnv(), settings);
                 return j({ message: 'COA email settings saved.' });
             }
+            if (action === 'admin-request-reply') {
+                const input = z.object({ id: z.string().uuid(), mode: z.enum(['ai', 'staff']), body: z.string().max(12000).optional(), instruction: z.string().max(2000).optional(), expectedRevision: z.number().int().positive().nullable() }).parse(b);
+                try {
+                    const reply = await prepareRequestReply(runtime(), { ...input, requestId: input.id }, actor);
+                    return j({ reply, message: 'Reply queued for preparation. Ash must review and send it in Jarvis.' });
+                } catch (error) {
+                    const status = (error as Error & { status?: number }).status;
+                    return j({ error: status ? (error as Error).message : 'The reply could not be prepared. Refresh and try again.' }, status || 500);
+                }
+            }
             if (action === 'admin-coa-process') {
-                const id = z.string().uuid().parse(b.id);
-                await recordChange(database(), { ...auditActor, action: 'coa.process_requested', entityType: 'request', entityId: id, summary: 'Staff requested original-report email processing', status: 'attempted' });
-                const env = auditEnv();
-                await enqueueCoaRequest(env, id);
-                await processCoaOutbox(env, { requestId: id, purpose: 'coa', limit: 1 });
-                const status = (await coaDeliveryStatuses(runtime(), [id]))[id]?.coa;
-                return j({ message: status?.status === 'accepted' ? 'The email provider accepted this COA email. Inbox delivery is not yet confirmed.' : status?.status === 'duplicate' ? 'This original report already has an email record. Check its existing status.' : status?.status === 'queued' || status?.status === 'sending' ? 'This COA is queued for email processing.' : 'This request requires review or COA automation is disabled.', status });
+                return j({ error: 'Automatic COA sending is disabled. Prepare a reply for Ash to review in Jarvis.' }, 409);
             }
             if (action === 'admin-config') {
                 const cfg = z.object({ packDiscounts: z.record(z.number().min(0).max(100).nullable()), shippingCents: z.number().int().min(0).max(100000).nullable(), freeShippingAt: z.number().int().min(0).max(1000000), presalesEnabled: z.boolean(), rewardsEnabled: z.boolean(), affiliateEnabled: z.boolean(),
