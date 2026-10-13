@@ -27,4 +27,6 @@ Jarvis must be awake, running and connected for preparation and mailbox followup
 
 ## Final handoff refinements
 
-Unsaved inline reply bodies and AI instructions survive an admin tab round-trip. Owner changes, lost permissions and sign-out clear the protected draft. Preparation failures use actionable language and never appear ready. Jarvis retains sanitized preparation phase/category diagnostics across idle polls; no customer text or secret is recorded in that diagnostic status. The exact five-file Jarvis contribution and baseline/current hashes are archived under `docs/integrations/`, without committing unrelated shared Jarvis work.
+Unsaved inline reply bodies and AI instructions survive an admin tab round-trip. Owner changes, lost permissions and sign-out clear the protected draft. Preparation failures use actionable language and never appear ready. Jarvis retains sanitized preparation phase/category diagnostics across idle polls; no customer text or secret is recorded in that diagnostic status. The exact seven-file Jarvis contribution and baseline/current hashes are archived under `docs/integrations/`, without committing unrelated shared Jarvis work.
+
+Linked website drafts also retain validation through Open in compose and bulk Ready sending. Provider-draft export, scheduled sending and generic-send copies of protected original COAs are blocked. A newer acknowledged draft supersedes an older pending revision without rewriting sent or uncertain history. The final Jarvis checks cover 24 isolated regressions and TypeScript.

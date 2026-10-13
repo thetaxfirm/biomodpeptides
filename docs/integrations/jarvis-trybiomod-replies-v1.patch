@@ -27,7 +27,12 @@
  
  // Put a prepared email in the box. Never sends — Ash reviews and presses send.
  r.post("/mail/ready", handle(async (req) => {
-@@ -45,6 +48,7 @@
+@@ -41,10 +44,11 @@
+ r.get("/mail/ready/:id", handle(async (req) => {
+   const item = rts.getReady(req.params.id);
+   if (!item) throw new Error("not found");
+-  return item;
++  return { ...item, websiteReply: await websiteReplies.isTryBiomodReply(item.id) };
  }));
  
  r.patch("/mail/ready/:id", handle(async (req) => {
@@ -159,7 +164,7 @@
 +}
 --- a/server/services/trybiomodReplies.ts
 +++ b/server/services/trybiomodReplies.ts
-@@ -0,0 +1,254 @@
+@@ -0,0 +1,279 @@
 +import fs from 'node:fs';
 +import path from 'node:path';
 +import { createHash } from 'node:crypto';
@@ -236,6 +241,19 @@
 +    }else if(item.attachments.length||(payload?.attachments?.length||0)>0)throw Error('No approved original COA is attached to this reply.');
 +  }
 +  async function ackSent(r:Row) {if(!r.ack_json)return;await deps.request(JSON.parse(r.ack_json));db.prepare("UPDATE trybiomod_reply_drafts SET state='sent',ack_json=NULL,updated=? WHERE ready_id=? AND state='accepted'").run(now(),r.ready_id);}
++  function completeLocal(readyId:string) {
++    db.transaction(()=>{
++      const current=row(readyId);if(!current)throw Error('Prepared reply is missing.');
++      db.prepare('UPDATE trybiomod_reply_drafts SET complete_ack=1,updated=? WHERE ready_id=?').run(now(),readyId);
++      // Only a successfully acknowledged replacement retires unsent local
++      // revisions. Sent/uncertain provider outcomes remain preserved for review.
++      const older=db.prepare("SELECT * FROM trybiomod_reply_drafts WHERE id=? AND revision<? AND state='ready'").all(current.id,current.revision) as Row[];
++      for(const old of older){
++        const changed=db.prepare("UPDATE ready_to_send SET status='superseded',note=?,updated_at=datetime('now') WHERE id=? AND status='pending'").run(old.context_note+'\n\nSuperseded by a newer website reply. Nothing was sent from this revision.',old.ready_id);
++        if(changed.changes)setState(old,'superseded');
++      }
++    })();
++  }
 +  async function stage(raw:unknown) {
 +    phase='schema';
 +    try{
@@ -249,7 +267,7 @@
 +      assertAttachments(existing,ready);
 +      phase='complete';
 +      await deps.request({action:'complete',id:job.id,revision:job.revision,leaseToken:job.leaseToken,readyId:existing.ready_id,body:existing.complete_body,model:existing.model});
-+      db.prepare('UPDATE trybiomod_reply_drafts SET complete_ack=1,updated=? WHERE ready_id=?').run(now(),existing.ready_id);
++      completeLocal(existing.ready_id);
 +      phase='idle';return existing.ready_id;
 +    }
 +    phase='attachment';
@@ -289,7 +307,7 @@
 +    })();
 +    phase='complete';
 +    await deps.request({action:'complete',id:job.id,revision:job.revision,leaseToken:job.leaseToken,readyId,body:job.mode==='staff'?job.proposedBody:reply,model:written.model});
-+    db.prepare('UPDATE trybiomod_reply_drafts SET complete_ack=1,updated=? WHERE ready_id=?').run(now(),readyId);
++    completeLocal(readyId);
 +    phase='idle';return readyId;
 +    }catch(error){recordFailure(phase,error);phase='idle';throw error;}
 +  }
@@ -343,6 +361,17 @@
 +  }
 +  const protectedPath=(p:string)=>path.resolve(p).startsWith(path.resolve(deps.root,'trybiomod-original-coas')+path.sep);
 +  function isLinked(readyId:string){return Boolean(row(readyId));}
++  function assertGenericAllowed(payload:unknown){
++    const data=payload&&typeof payload==='object'?payload as Record<string,unknown>:{};
++    const copiedOriginal=Array.isArray(data.attachments)&&data.attachments.some((attachment:unknown)=>{
++      if(typeof attachment==='string')return protectedPath(attachment);
++      if(!attachment||typeof attachment!=='object')return false;
++      const file=attachment as Record<string,unknown>;
++      if(typeof file.path==='string'&&protectedPath(file.path))return true;
++      return typeof file.data==='string'&&Boolean(db.prepare('SELECT 1 FROM trybiomod_reply_drafts WHERE attachment_hash=? LIMIT 1').get(digest(Buffer.from(file.data,'base64'))));
++    });
++    if(copiedOriginal||data.websiteReply===true||typeof data.readyId==='string'&&isLinked(data.readyId))throw Error('Website replies and protected original reports must stay in Ready to Send. Review and send there so the current request, recipient and original COA are verified. Scheduling and Gmail draft export are unavailable for these replies.');
++  }
 +  function assertMutable(readyId:string) {if(row(readyId)||deps.getReady(readyId)?.attachments.some(a=>protectedPath(a.path)))throw Error('This website reply uses protected original reports. Change the report selection in TryBiomod admin; original PDFs cannot be edited or replaced here.');}
 +  function preview(readyId:string) {const r=row(readyId);if(!r)return;const item=deps.getReady(readyId);if(!item)throw Error('Draft no longer exists.');assertAttachments(r,item);}
 +  async function begin(item:Ready,payload:Payload):Promise<TryBiomodSendAttempt|null> {
@@ -368,7 +397,7 @@
 +    try{await ackSent({...r,ack_json:JSON.stringify(ack)});return {ackPending:false};}catch{return {ackPending:true};}
 +  }
 +  function status(){const lastFailure=db.prepare('SELECT last_failure_at AS occurredAt,last_failure_stage AS stage,last_failure_category AS category,failure_count AS count FROM trybiomod_reply_health WHERE id=1').get()||null;return {phase,lastFailure,lastCheckedAt,lastOutcome,lastFollowupOutcome,lastAcknowledgementOutcome,running,counts:db.prepare('SELECT state,COUNT(*) count FROM trybiomod_reply_drafts GROUP BY state').all()};}
-+  return {stage,poll,importFollowups,isLinked,assertMutable,preview,begin,failed,finished,status};
++  return {stage,poll,importFollowups,isLinked,assertGenericAllowed,assertMutable,preview,begin,failed,finished,status};
 +}
 +
 +
@@ -403,6 +432,7 @@
 +  })();return instance;
 +}
 +export async function isTryBiomodReply(id:string){return (await bridge()).isLinked(id);}
++export async function assertTryBiomodGenericAllowed(payload:unknown){(await bridge()).assertGenericAllowed(payload);}
 +export async function assertTryBiomodAttachmentMutable(id:string){(await bridge()).assertMutable(id);}
 +export async function validateTryBiomodPreview(id:string){(await bridge()).preview(id);}
 +export async function beginTryBiomodSend(item:Ready,payload:Payload){return (await bridge()).begin(item,payload);}
@@ -416,7 +446,7 @@
 +}
 --- a/server/services/trybiomodReplies.test.ts
 +++ b/server/services/trybiomodReplies.test.ts
-@@ -0,0 +1,50 @@
+@@ -0,0 +1,86 @@
 +import test from 'node:test';
 +import assert from 'node:assert/strict';
 +import fs from 'node:fs';
@@ -433,11 +463,11 @@
 +function job(matched=false){return {id:'fixture-job',requestId:'fixture-request',revision:1,leaseToken:'fixture-lease',mode:'staff',sender:TRYBIOMOD_SENDER,recipient:'fixture@example.invalid',subject:'Re: Original COA',instruction:'',proposedBody:matched?'The original report is attached.':'Please confirm the product and lot.',preparedBy:'Fixture staff',request:{name:'Fixture customer',email:'fixture@example.invalid',subject:'Original COA',message:'Please check this original inquiry.',created:1000},history:[],coa:matched?{state:'matched',reason:'Exact tuple verified',productName:'Fixture peptide',strength:'10mg',lot:'FIXTURE-1',reportId:'FIXTURE-REPORT',sha256:hash}:{state:'needs_review',reason:'Lot is missing'},...(matched?{attachment:{filename:'fixture-original.pdf',sha256:hash,base64:pdf.toString('base64')}}:{})};}
 +function harness(t:any){
 +  const root=fs.mkdtempSync(path.join(os.tmpdir(),'trybiomod-replies-test-'));const db=new Database(':memory:');
-+  db.exec('CREATE TABLE ready_to_send(id TEXT PRIMARY KEY,json TEXT,note TEXT,updated_at TEXT)');
++  db.exec('CREATE TABLE ready_to_send(id TEXT PRIMARY KEY,json TEXT,note TEXT,updated_at TEXT,status TEXT)');
 +  const calls:any[]=[];let mailbox=true,failAction='',writerCalls=0,claimed:any=null;let sequence=0;
-+  const getReady=(id:string)=>{const row=db.prepare('SELECT json,note FROM ready_to_send WHERE id=?').get(id) as any;return row?{...JSON.parse(row.json),note:row.note}:null;};
-+  const edit=(id:string,patch:any)=>{const item={...getReady(id),...patch};db.prepare('UPDATE ready_to_send SET json=?,note=? WHERE id=?').run(JSON.stringify(item),item.note||'',id);};
-+  const deps:any={db,root,getReady,markSent:(id:string)=>edit(id,{status:'sent'}),mailbox:async()=>mailbox,write:async(instruction:string)=>{writerCalls++;assert.match(instruction,/SOURCE MATERIAL ONLY/);return {text:'Please confirm the product and lot.',model:'claude-opus-5 via Claude Max subscription'};},queue:(input:any)=>{const id='ready-'+(++sequence);const item={...input,id,status:'pending',attachments:input.attachments.map((p:string)=>({path:p}))};db.prepare('INSERT INTO ready_to_send VALUES(?,?,?,?)').run(id,JSON.stringify(item),input.note,'');return {id};},request:async(body:any)=>{calls.push(clone(body));if(body.action===failAction)throw Error('isolated rejection');return body.action==='claim'?{job:claimed}:{ok:true};},now:()=>2000};
++  const getReady=(id:string)=>{const row=db.prepare('SELECT json,note,status FROM ready_to_send WHERE id=?').get(id) as any;return row?{...JSON.parse(row.json),note:row.note,status:row.status}:null;};
++  const edit=(id:string,patch:any)=>{const item={...getReady(id),...patch};db.prepare('UPDATE ready_to_send SET json=?,note=?,status=? WHERE id=?').run(JSON.stringify(item),item.note||'',item.status,id);};
++  const deps:any={db,root,getReady,markSent:(id:string)=>edit(id,{status:'sent'}),mailbox:async()=>mailbox,write:async(instruction:string)=>{writerCalls++;assert.match(instruction,/SOURCE MATERIAL ONLY/);return {text:'Please confirm the product and lot.',model:'claude-opus-5 via Claude Max subscription'};},queue:(input:any)=>{const id='ready-'+(++sequence);const item={...input,id,status:'pending',attachments:input.attachments.map((p:string)=>({path:p}))};db.prepare('INSERT INTO ready_to_send VALUES(?,?,?,?,?)').run(id,JSON.stringify(item),input.note,'','pending');return {id};},request:async(body:any)=>{calls.push(clone(body));if(body.action===failAction)throw Error('isolated rejection');return body.action==='claim'?{job:claimed}:{ok:true};},now:()=>2000};
 +  const service=createTryBiomodReplyBridge(deps);
 +  const payload=(id:string)=>{const item=getReady(id);return {to:item.to,account:item.account,body:item.body,threadId:item.threadId,includeBooking:false,signatureAccount:TRYBIOMOD_SENDER,attachments:item.attachments.map((a:any)=>({filename:path.basename(a.path),mimeType:'application/pdf',data:fs.readFileSync(a.path).toString('base64')}))};};
 +  t.after(()=>{db.close();fs.rmSync(root,{recursive:true,force:true});});
@@ -467,3 +497,172 @@
 +
 +test('safe failure diagnostics persist across idle polls and expose no customer or model text',async t=>{const h=harness(t);h.deps.write=async()=>{throw Error('PRIVATE MODEL RESPONSE with customer fixture@example.invalid');};const j=job();j.mode='ai';await assert.rejects(h.service.stage(j));const failed=h.service.status().lastFailure as any;assert.equal(failed.stage,'ai');assert.equal(failed.category,'operation_failed');await h.service.poll();assert.equal(h.service.status().lastOutcome,'idle');assert.deepEqual(h.service.status().lastFailure,failed);assert.doesNotMatch(JSON.stringify(h.service.status()),/PRIVATE|example.invalid/);});
 +test('in-flight drafting reports preparing and exact safe phase',async t=>{const h=harness(t);let release:any;h.deps.write=()=>new Promise(resolve=>release=resolve);const j=job();j.mode='ai';h.setClaim(j);const pending=h.service.poll();while(!release)await new Promise(resolve=>setImmediate(resolve));assert.equal(h.service.status().lastOutcome,'preparing');assert.equal(h.service.status().phase,'ai');release({text:'Please confirm the lot.',model:'claude-opus-5 via Claude Max subscription'});await pending;assert.equal(h.service.status().phase,'idle');assert.equal(h.service.status().lastOutcome,'draft_ready');});
++
++
++test('generic mail export and scheduling reject linked Ready IDs without touching providers; ordinary drafts remain allowed',async t=>{
++  const h=harness(t),id=await h.service.stage(job());const calls=h.calls.length;
++  for(const action of ['send','draft_create','draft_update','draft_send','schedule'])assert.throws(()=>h.service.assertGenericAllowed({readyId:id,action}),/stay in Ready to Send/);
++  assert.throws(()=>h.service.assertGenericAllowed({websiteReply:true}),/stay in Ready to Send/);
++  h.service.assertGenericAllowed({readyId:'ordinary-ready'});h.service.assertGenericAllowed({to:'ordinary@example.invalid'});
++  assert.equal(h.calls.length,calls);
++});
++test('replacement retires only older pending website revisions after complete ACK and preserves sent history',async t=>{
++  const h=harness(t),first=await h.service.stage(job());const attempt=await h.service.begin(h.getReady(first),h.payload(first));await h.service.finished(attempt,{id:'accepted-old',threadId:'bound-thread'},h.payload(first).body);
++  const old=await h.service.stage({...job(),revision:2});h.setFailure('complete');await assert.rejects(h.service.stage({...job(),revision:3}));
++  assert.equal(h.getReady(first).status,'sent');assert.equal(h.getReady(old).status,'pending');
++  h.setFailure('');const next=await h.service.stage({...job(),revision:3,leaseToken:'retry-three'});
++  assert.equal(h.getReady(first).status,'sent');assert.equal(h.getReady(old).status,'superseded');assert.equal(h.getReady(next).status,'pending');
++  assert.match(h.getReady(old).note,/Superseded by a newer website reply/);assert.equal((h.db.prepare('SELECT COUNT(*) count FROM ready_to_send').get() as any).count,3);
++  await assert.rejects(h.service.begin(h.getReady(old),h.payload(old)),/not ready/);
++});
++test('generic route guards run before provider side effects and linked composer policy keeps ordinary flows',()=>{
++  const google=fs.readFileSync(new URL('../routes/google.ts',import.meta.url),'utf8');
++  for(const route of ['r.post("/gmail/send"','r.post("/gmail/drafts"','r.put("/gmail/drafts/:draftId"','r.post("/gmail/drafts/:draftId/send"','r.post("/mail/schedule"']){
++    const section=google.slice(google.indexOf(route),google.indexOf(route)+260);assert.match(section,/await assertTryBiomodGenericAllowed\(req.body\)/);
++  }
++  const ready=fs.readFileSync(new URL('../routes/readyToSend.ts',import.meta.url),'utf8');assert.match(ready,/websiteReply: await websiteReplies.isTryBiomodReply\(item.id\)/);
++  const ui=fs.readFileSync(new URL('../../client/src/mail/ComposeWindow.tsx',import.meta.url),'utf8');
++  assert.match(ui,/setWebsiteReply\(item.websiteReply === true\)/);assert.match(ui,/disabled=\{sendBusy \|\| websiteReply \|\| readyPolicyLoading\} title=\{websiteReply/);
++  assert.match(ui,/checked.readyId[\s\S]*?\/mail\/ready\/\$\{checked.readyId\}\/send/);assert.match(ui,/schedOpen && !websiteReply && !readyPolicyLoading/);
++});
++
++test('copied protected original cannot escape through a generic route by omitting the Ready id',async t=>{
++  const h=harness(t),id=await h.service.stage(job(true));
++  assert.throws(()=>h.service.assertGenericAllowed({attachments:h.payload(id).attachments}),/protected original reports/);
++  assert.throws(()=>h.service.assertGenericAllowed({attachments:[h.getReady(id).attachments[0].path]}),/protected original reports/);
++  assert.throws(()=>h.service.assertGenericAllowed({attachments:h.getReady(id).attachments}),/protected original reports/);
++  h.service.assertGenericAllowed({attachments:[{data:Buffer.from('%PDF-unrelated-fixture').toString('base64')}]});
++});
+--- a/server/routes/google.ts
++++ b/server/routes/google.ts
+@@ -10,6 +10,7 @@
+ import * as im from "../services/imapMail.ts";
+ import * as rules from "../services/mailRules.ts";
+ import * as cache from "../services/mailListCache.ts";
++import { assertTryBiomodGenericAllowed } from "../services/trybiomodReplies.ts";
+ import { inboxMessageSuppressedBySpamRule } from "../services/mailSearch.ts";
+ import { PHOTO_DIR } from "../services/maccontacts.ts";
+ import { saveMailContactNote } from "../services/mailContactNotes.ts";
+@@ -413,6 +414,7 @@
+ }));
+ 
+ r.post("/gmail/send", handle(async (req) => {
++  await assertTryBiomodGenericAllowed(req.body);
+   const { to, subject, body, cc, bcc, threadId, inReplyTo, account, attachments, includeSignature, includeBooking, signatureAccount,
+     quotedHtml, quotedText, quoteHeader, quoteMode, sourceThreadId, sourceMessageId, replyWatch } = req.body;
+   if (!to || !subject) throw new Error("to and subject required");
+@@ -477,6 +479,7 @@
+ 
+ // Save as draft (Gmail accounts: lands in Gmail's Drafts)
+ r.post("/gmail/drafts", handle(async (req) => {
++  await assertTryBiomodGenericAllowed(req.body);
+   const { to, subject, body, cc, bcc, threadId, inReplyTo, account, attachments, includeSignature, includeBooking, signatureAccount,
+     quotedHtml, quotedText, quoteHeader, quoteMode } = req.body;
+   // Ash, 7/28: "record the email addresses so I don't need to type them every
+@@ -503,6 +506,7 @@
+   g.gmailDraftGet(req.userId, req.params.draftId, req.query.account as string | undefined)));
+ 
+ r.put("/gmail/drafts/:draftId", handle(async (req) => {
++  await assertTryBiomodGenericAllowed(req.body);
+   const { to, subject, body, cc, bcc, threadId, inReplyTo, account, attachments, includeSignature, includeBooking, signatureAccount,
+     quotedHtml, quotedText, quoteHeader, quoteMode } = req.body;
+   return g.gmailDraftUpdate(req.userId, req.params.draftId, {
+@@ -513,6 +517,7 @@
+ }));
+ 
+ r.post("/gmail/drafts/:draftId/send", handle(async (req) => {
++  await assertTryBiomodGenericAllowed(req.body);
+   const watches = await import("../services/mailReplyWatch.ts");
+   const preparedWatch = watches.prepareReplyWatch(req.userId, req.body?.replyWatch);
+   // save his latest edits first, then send that exact draft
+@@ -675,6 +680,7 @@
+ // ---- Schedule send: an email that leaves at a time you pick ----
+ r.post("/mail/schedule", async (req, res) => {
+   try {
++    await assertTryBiomodGenericAllowed(req.body);
+     const o = await import("../services/outbox.ts");
+     const b = req.body || {};
+     if (!b.to || !b.send_at) return res.status(400).json({ error: "to and send_at required" });
+--- a/client/src/mail/ComposeWindow.tsx
++++ b/client/src/mail/ComposeWindow.tsx
+@@ -191,6 +191,19 @@
+   const [showCc, setShowCc] = useState(!!compose.cc);
+   const [showBcc, setShowBcc] = useState(!!compose.bcc);
+   const [sendBusy, setSendBusy] = useState(false);
++  const [websiteReply, setWebsiteReply] = useState(false);
++  const [readyPolicyLoading, setReadyPolicyLoading] = useState(Boolean(compose.readyId));
++  useEffect(() => {
++    let active = true;
++    setReadyPolicyLoading(Boolean(compose.readyId));
++    setWebsiteReply(false);
++    if (compose.readyId) {
++      api.get(`/mail/ready/${encodeURIComponent(compose.readyId)}`).then((item) => {
++        if (active) { setWebsiteReply(item.websiteReply === true); setReadyPolicyLoading(false); }
++      }).catch(() => { /* Keep export/scheduling blocked until the Ready policy is known. */ });
++    }
++    return () => { active = false; };
++  }, [compose.readyId]);
+   const [sendRecovery, setSendRecovery] = useState<"microsoft" | null>(null);
+   const [schedOpen, setSchedOpen] = useState(false);
+   const [schedWhen, setSchedWhen] = useState("");
+@@ -354,7 +367,15 @@
+     const has = compose.body?.trim();
+     try {
+       // Dedicated writer on the smartest model (Fable 5) — not the agentic chat loop.
+-      const r = await api.post("/mail/rewrite", { body: compose.body || "", instruction: jarvisPrompt });
++      let r;
++      if (websiteReply && compose.readyId) {
++        await api.patch(`/mail/ready/${compose.readyId}`, { body: compose.body || "" });
++        const updated = await api.post(`/mail/ready/${compose.readyId}/rewrite`, { instruction: jarvisPrompt });
++        r = { text: updated.body };
++      } else {
++        if (readyPolicyLoading) throw new Error("Wait for this draft's review policy to load.");
++        r = await api.post("/mail/rewrite", { body: compose.body || "", instruction: jarvisPrompt });
++      }
+       const text = String(r.text || "").trim().replace(/^["']|["']$/g, "");
+       if (text) set({ body: normalizeComposerHtml(text) });
+       setJarvisPrompt("");
+@@ -466,6 +487,7 @@
+   // Schedule send: same email, it just leaves later. Cancellable until it fires.
+   async function scheduleSend(whenIso: string) {
+     if (sendBusy) return;
++    if (websiteReply || readyPolicyLoading) { toast("This website reply must be reviewed and sent from Ready to Send.", "error"); return; }
+     setSendBusy(true);
+     try {
+       const checked = checkedCompose();
+@@ -483,6 +505,7 @@
+ 
+   async function saveDraft() {
+     if (sendBusy) return;
++    if (websiteReply || readyPolicyLoading) { toast("This website reply stays in Ready to Send; Gmail draft export is unavailable.", "error"); return; }
+     setSendBusy(true);
+     try {
+       const checked = checkedCompose();
+@@ -715,22 +738,23 @@
+       )}
+ 
+       <div className="mail-compose-command-area shrink-0">
++        {websiteReply && <p className="px-4 py-2 text-xs">Website reply: review and send here or in Ready to Send. Scheduling and Gmail draft export are unavailable so the request and original COA stay verified.</p>}
+         <div className="mail-compose-command-bar" role="toolbar" aria-label="Email actions">
+           <button onClick={send} disabled={sendBusy || attaching}
+             title={!compose.to?.trim() ? "Add a recipient" : !compose.subject?.trim() ? "Add a subject" : "Send this email"}
+             className="mail-compose-command-action mail-compose-send disabled:opacity-40">
+             <SendIcon size={14} />{attaching ? `Attaching ${compose.pendingAttachments} file${(compose.pendingAttachments || 0) > 1 ? "s" : ""}…` : sendBusy ? "Sending…" : "Send"}
+           </button>
+-          <button onClick={saveDraft} disabled={sendBusy} title="Save this draft to Gmail"
++          <button onClick={saveDraft} disabled={sendBusy || websiteReply || readyPolicyLoading} title={websiteReply ? "Website replies stay in Ready to Send for verification" : "Save this draft to Gmail"}
+             className="mail-compose-command-action" aria-label="Save draft">
+             <FileText size={14} /> Save
+           </button>
+           <div className="mail-compose-schedule-wrap">
+-            <button onClick={() => setSchedOpen((open) => !open)} disabled={sendBusy || !compose.to || !compose.subject}
+-              title="Send this later" aria-expanded={schedOpen} className="mail-compose-command-action">
++            <button onClick={() => setSchedOpen((open) => !open)} disabled={sendBusy || websiteReply || readyPolicyLoading || !compose.to || !compose.subject}
++              title={websiteReply ? "Website replies require a fresh review when sent" : "Send this later"} aria-expanded={schedOpen} className="mail-compose-command-action">
+               <Clock size={14} /> Schedule
+             </button>
+-            {schedOpen && (
++            {schedOpen && !websiteReply && !readyPolicyLoading && (
+               <div className="mail-compose-schedule-popover">
+                 <div className="text-xs font-medium text-slate-700 mb-2">Send this later</div>
+                 {[["Tomorrow 8:00 AM", 1, 8], ["Tomorrow 1:00 PM", 1, 13], ["Monday 8:00 AM", -1, 8]].map(([label, days, hour]) => (

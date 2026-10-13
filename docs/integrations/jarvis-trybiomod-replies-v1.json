@@ -1,7 +1,7 @@
 {
-  "scope": "Exact five-file contribution only; not a Jarvis checkout or full repository sync",
+  "scope": "Exact seven-file contribution only; not a Jarvis checkout or full repository sync",
   "canonicalProject": "~/Projects/Jarvis",
-  "patchSha256": "d7cb00655e9d8991f3827fb1cb75305f35c73807187c8dd7a0cdbc80f4805cf2",
+  "patchSha256": "e693878c97e7e4f82697986ae2b076e1cac245ba3600d46ec6f0d27237e00ea1",
   "files": [
     {
       "file": "server/index.ts",
@@ -10,7 +10,7 @@
     },
     {
       "file": "server/routes/readyToSend.ts",
-      "sha256": "f047a526ef876e71c1a5bb90a6e46ab4137d655883b3826a685ebf6091fadae6",
+      "sha256": "ccaf8a5c0b790b0b5965722b7cdc0cba420a42dbfb5f03ef521992511b6485c2",
       "baselineSha256": "8068436cb14a227c3e7f01d23f83062983d6fada0a36bb01da16f0889796c2eb"
     },
     {
@@ -20,18 +20,28 @@
     },
     {
       "file": "server/services/trybiomodReplies.ts",
-      "sha256": "afa59fdfb852178771a1b244716dbc79cda73ef6076c6f4d701be694fa51a82e",
+      "sha256": "c4bbe4062ceb5b7356709e737e8fb6d304fbc229fca2a0f3441342a066328c83",
       "baselineSha256": null
     },
     {
       "file": "server/services/trybiomodReplies.test.ts",
-      "sha256": "d1626f8897540fbdc8e649aca44f704ad6258c94b36b2526168165f1414f21c6",
+      "sha256": "ffc84a69c997a556c2977da3d29d7095d1374f6eda6708e820c1dc75b6d56863",
       "baselineSha256": null
+    },
+    {
+      "file": "server/routes/google.ts",
+      "sha256": "d5110c594cde75184f90daa5f6c236aa824f350fe95cddfc9a41c1cdc1702937",
+      "baselineSha256": "4c3da5428980928f86c52a4571e61cd63eb4b03580cf39a349738964e471bfb7"
+    },
+    {
+      "file": "client/src/mail/ComposeWindow.tsx",
+      "sha256": "8ab7b6cac779650aaa3940cf27ea5351bd53d141e56399ebf56527c3aa41b546",
+      "baselineSha256": "0d65389059c8f9f9f4e447fd49a243f8dc074b6b40fc7a076f8ab0b206d7341e"
     }
   ],
   "tests": {
-    "isolated": 20,
-    "passed": 20,
+    "isolated": 24,
+    "passed": 24,
     "tsc": "passed"
   }
 }
