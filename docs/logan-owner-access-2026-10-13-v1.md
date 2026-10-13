@@ -37,3 +37,10 @@ User-owned repos cannot grant a collaborator Admin, and ruleset bypass is admin-
 Contributors still follow docs/website-change-rule-v1.md. Rollback: re-add the `pull_request` rule
 (1 approval). Cloudflare: Workers Platform Admin invite for Logan to be sent by the owner from the
 dashboard; the agent's token cannot invite members.
+
+## Follow-up, same day: owner sees every collaborator change
+`.github/workflows/contributor-change-alert.yml` opens an issue assigned to `thetaxfirm`, labelled
+`contributor-change`, for every push to main by anyone other than `thetaxfirm`. It lists each commit
+message, the files touched and the compare link. Dry-run on a throwaway branch created the issue
+correctly; the test issue and branch were deleted. Cloudflare-only changes (runtime settings, D1 edits)
+are not in Git and show in the Cloudflare audit log instead.

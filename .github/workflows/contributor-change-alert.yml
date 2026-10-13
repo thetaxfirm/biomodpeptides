@@ -1,0 +1,42 @@
+# Opens an issue assigned to the owner whenever someone other than the owner
+# pushes to main, so every live-site change by a collaborator lands in the owner's inbox.
+name: Contributor change alert
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  alert:
+    if: github.actor != 'thetaxfirm'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const p = context.payload;
+            const owner = context.repo.owner, repo = context.repo.repo;
+            const lines = [];
+            for (const c of p.commits) {
+              const { data } = await github.rest.repos.getCommit({ owner, repo, ref: c.id });
+              lines.push(`### ${c.message.split('\n')[0]}`);
+              const body = c.message.split('\n').slice(1).join('\n').trim();
+              if (body) lines.push(body);
+              lines.push(`[${c.id.slice(0, 7)}](${c.url}) by ${c.author.name}`);
+              lines.push((data.files || []).map(f => `- \`${f.filename}\` (${f.status}, +${f.additions} -${f.deletions})`).join('\n'));
+              lines.push('');
+            }
+            lines.push(`Full diff: ${p.compare}`);
+            lines.push('This change deploys to trybiomod.com automatically. Close this issue once reviewed.');
+            const first = p.commits[p.commits.length - 1]?.message.split('\n')[0] || 'push';
+            await github.rest.issues.create({
+              owner, repo,
+              title: `${context.actor} changed the live site: ${first}`.slice(0, 200),
+              body: lines.join('\n'),
+              assignees: ['thetaxfirm'],
+              labels: ['contributor-change'],
+            });
