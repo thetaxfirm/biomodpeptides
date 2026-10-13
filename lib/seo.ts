@@ -8,6 +8,7 @@ import { merchantPolicies } from './merchant-policies';
 import { certificateProperties } from './certificate-schema';
 import { productQuestions } from './product-questions';
 import { researchFaqSchemaItems } from './research-faq';
+import { pressReleaseAt } from './press-releases';
 import { headers } from 'next/headers';
 
 export const currentSEO = () => seoConfig(runtime());
@@ -79,6 +80,11 @@ export async function routeStructuredData(path: string, config: SEOConfig = curr
     // Mirrors the visible Product questions, using the live product so lot status matches.
     graph.push(faqPage(config.origin + clean, productQuestions(live ? { ...p, ...live } : p).map(item => ({ question: item.question, answer: item.answer.join(' ') }))));
   }
+  const release = pressReleaseAt(clean);
+  if (release) graph.push({ '@type': 'NewsArticle', '@id': config.origin + clean + '#article', mainEntityOfPage: { '@id': config.origin + clean + '#page' },
+    headline: release.headline, description: release.summary, datePublished: release.date, dateModified: release.date,
+    image: config.origin + '/brand/logo-navy-tm-v36.png', author: { '@id': organization['@id'] }, publisher: { '@id': organization['@id'] },
+    articleBody: release.body.join(' ') });
   // Question markup mirrors the visible /faq answers exactly.
   if (clean === '/faq') graph.push(faqPage(config.origin + clean, researchFaqSchemaItems().map(item => ({ question: item.question, answer: item.answer }))));
   return { '@context': 'https://schema.org', '@graph': graph };

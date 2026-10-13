@@ -65,9 +65,11 @@ function assertNoInventedClaims(value) {
 }
 (async () => {
   const originalStaticPaths = ['/', '/shop', '/about', '/contact', '/testing', '/quality-standard', '/choosing-a-research-supplier', '/research-use-only', '/faq'];
-  const expectedStaticPaths = [...originalStaticPaths, '/shipping-policy', '/returns-refunds'].sort();
-  assert.deepEqual(Object.keys(pageRecords).filter(path => pageRecords[path].eligible).sort(), expectedStaticPaths, 'Only two policy pages are added to the prior public page set');
-  assert.deepEqual(sitemapPaths(live).sort(), [...expectedStaticPaths, productPath].sort());
+  // '/news' (newsroom index, October 12, 2026) is the only later static addition; see tests/newsroom-v1.cjs.
+  const expectedStaticPaths = [...originalStaticPaths, '/shipping-policy', '/returns-refunds', '/news'].sort();
+  assert.deepEqual(Object.keys(pageRecords).filter(path => pageRecords[path].eligible && !path.startsWith('/news/')).sort(), expectedStaticPaths, 'Only two policy pages are added to the prior public page set');
+  const releasePaths = require('../lib/press-releases.ts').pressReleases.map(release => '/news/' + release.slug);
+  assert.deepEqual(sitemapPaths(live).sort(), [...expectedStaticPaths, ...releasePaths, productPath].sort());
   for (const path of ['/shipping-policy', '/returns-refunds', productPath]) {
     const data = await routeStructuredData(path, live);
     const organization = organizationOf(data);

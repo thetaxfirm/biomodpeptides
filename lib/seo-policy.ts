@@ -1,6 +1,7 @@
 import { products, compound, size, productFormat, type Product } from './catalog';
 
 import specificationReviews from './product-specification-review-v1.json';
+import { pressReleases } from './press-releases';
 
 export const previewOrigin = 'https://trybiomod.com';
 export const reviewedOn = '2026-10-08';
@@ -15,6 +16,7 @@ export const pageRecords: Record<string, { title: string; description: string; e
   '/quality-standard': { title: 'How to Read a Peptide COA: Lot, Purity and Assay', description: 'Learn how to match a peptide COA to its product lot, distinguish purity from measured content, and read the laboratory’s methods and limitations.', eligible: true },
   '/choosing-a-research-supplier': { title: 'Choosing a Research Peptide Supplier: Documents and Costs', description: 'Check product identity, supplied lots, original COA results and missing handling documents. Compare research peptide pack contents and total order costs.', eligible: true },
   '/research-use-only': { title: 'Research Use Policy', description: 'BIOMOD products are supplied for laboratory research. Review purchasing restrictions and the policy on dosing and medical advice.', eligible: true },
+  '/news': { title: 'Biomod Peptides News and Press Releases', description: 'Press releases and announcements from Biomod Peptides and TryBiomod.com, the online store for lyophilized research peptide vials and batch records.', eligible: true },
   '/faq': { title: 'How to Buy Research Peptides: COAs & Ordering', description: 'How to buy research peptides from Biomod, plus answers about peptide COAs, lot matching, purity versus measured content, pack sizes and U.S. shipping.', eligible: true },
   '/shipping-policy': { title: 'Shipping Policy', description: 'BIOMOD U.S. shipping information, processing times and delivery support.', eligible: true },
   '/returns-refunds': { title: 'Returns and Refunds', description: 'How to contact BIOMOD about damaged, incorrect or missing items and request an order review.', eligible: true },
@@ -23,6 +25,8 @@ export const pageRecords: Record<string, { title: string; description: string; e
   '/multi-pack': { title: 'Build and Save a Pack', description: 'Choose a 1, 3, 5 or 10-product BIOMOD pack. Save a selection and review current prices before adding it to your cart.', eligible: false },
   '/presales': { title: 'Presales', description: 'Current BIOMOD presale availability and release information.', eligible: false },
   '/international-partners': { title: 'Partnership Enquiries', description: 'Contact BIOMOD about research supply requirements and partnership enquiries.', eligible: false },
+  // Press releases are ordinary public pages: routed, indexed and listed like the guides.
+  ...Object.fromEntries(pressReleases.map(release => ['/news/' + release.slug, { title: release.headline, description: release.summary, eligible: true }])),
 };
 export const productReviewBlocks: Record<string, string> = {
   ...specificationReviews,

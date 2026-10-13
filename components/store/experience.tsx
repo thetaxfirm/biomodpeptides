@@ -1,4 +1,5 @@
 'use client';
+import { Newsroom, PressReleasePage } from './newsroom';
 import { Shop, ProductPage, PackBuilder, Presales } from './catalog';
 import { AuthPage, Cart, Checkout, Account, PaymentReturn } from './account';
 import { Testing } from './testing';
@@ -23,6 +24,8 @@ export function Experience({ path, query }: {
     return <Account section={path.slice(8)}/>; if (path === 'contact')
     return <Contact subject={query.subject||''}/>; if (path === 'admin')
     return <Admin initialTab={query.tab}/>; if (['about', 'quality-standard', 'choosing-a-research-supplier', 'research-use-only', 'shipping-policy', 'returns-refunds', 'terms-of-sale', 'privacy-policy', 'international-partners', 'faq'].includes(path))
-    return <ContentPage path={path}/>; if (path === 'about-biomod')
+    return <ContentPage path={path}/>; if (path === 'news')
+    return <Newsroom/>; if (path.startsWith('news/'))
+    return <PressReleasePage slug={path.slice(5)}/>; if (path === 'about-biomod')
     return <ContentPage path="about"/>; if (path === 'affiliate-program')
     return <Account section="affiliate"/>; return <Blank title="Page not found."><a href="/shop">Return to the catalog</a></Blank>; }
