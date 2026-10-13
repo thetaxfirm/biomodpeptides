@@ -33,6 +33,14 @@ const noReplies: Record<string, ReplySummary> = {};
 const sender = 'research@biomodpeptides.com';
 const labels: Record<string, string> = { new: 'New', in_progress: 'In progress', reviewed: 'Reviewed', resolved: 'Resolved', spam: 'Spam' };
 const replyStates: Record<ReplySummary['status'], string> = { queued: 'Queued for preparation', preparing: 'Preparing draft', ready: 'Ready for Ash’s review in Jarvis', needs_review: 'Needs review', sending: 'Sending approved reply from Jarvis', sent: 'Accepted by mail provider', cancelled: 'Draft cancelled' };
+const replyFailureReasons: Record<string, string> = {
+  bridge_preparation_failed: 'Jarvis could not finish preparing this reply. This attempt did not send a customer email. Check Jarvis, then choose Ask AI to draft again, or write a reply and save it for review.',
+};
+function replyReason(reason: string) {
+  if (replyFailureReasons[reason]) return replyFailureReasons[reason];
+  if (/^[a-z0-9]+(?:_[a-z0-9]+)+$/.test(reason)) return 'Reply preparation needs attention. Check the reply in Jarvis before trying again. Your original customer request is still saved.';
+  return reason;
+}
 const text = (value: unknown) => typeof value === 'string' ? value.trim() : '';
 function usableEmail(value: unknown) {
   const email = text(value);
@@ -175,7 +183,7 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
           <p className={styles.note}>Nothing sends from this page. Review the final reply and any original COA in Jarvis Ready to Send.</p>
           <dl className={styles.addresses}><div><dt>From</dt><dd>{sender}</dd></div><div><dt>To</dt><dd>{reply?.recipient || email}</dd></div><div><dt>Subject</dt><dd>{reply?.subject || (/^re:/i.test(subject) ? subject : `Re: ${subject}`)}</dd></div></dl>
           {reply && <p className={styles.replyState}><strong>{replyStates[reply.status]}</strong> · Revision {reply.revision}{reply.preparedBy ? ` · Prepared by ${reply.preparedBy}` : ''} · {timestamp(reply.updated)}{reply.status === 'sent' && <span> Provider acceptance does not confirm inbox delivery.</span>}</p>}
-          {reply?.reason && <p className={styles.note}>{reply.reason}</p>}
+          {reply?.reason && <p className={styles.note}>{replyReason(reply.reason)}</p>}
           <div className={styles.replyColumns}>
             <section className={styles.incoming}><h5>Original customer message</h5><strong>{subject}</strong><p className={styles.message}>{text(request.data.message) || 'No message text was included.'}</p>
               {reply?.history?.length ? <details className={styles.history}><summary>Conversation history ({reply.history.length})</summary>{reply.history.map(item => <article key={item.id}><strong>{item.direction === 'incoming' ? 'Customer message' : 'Outgoing message'}</strong><p className={styles.note}>{timestamp(item.created)}</p><p className={styles.message}>{item.body}</p></article>)}</details> : null}

@@ -121,6 +121,20 @@ assert(text(host.tree).includes('Sending approved reply from Jarvis'));assert.eq
 host.props.requestReplies={reply:reply('reply',{revision:4,status:'sent',body:'Newest staff reply',updated:newer.updated+4,coa:{state:'already_sent',reason:'Earlier provider acceptance recorded; do not resend the original.'},history:[{id:'synthetic-outgoing',direction:'outgoing',body:'Newest staff reply',created:newer.updated+4}]})};host.render();
 assert(text(host.tree).includes('Accepted by mail provider'));assert(text(host.tree).includes('Provider acceptance does not confirm inbox delivery'));assert(text(host.tree).includes('Earlier COA delivery recorded'));assert(text(host.tree).includes('Conversation history'));assert.equal(field('replyBody').props.disabled,false,'Follow-up draft is possible after provider acceptance');
 
+// Failed preparation is actionable and never looks ready to send; raw bridge codes stay off the UI.
+for (const state of ['queued','preparing','needs_review']) {
+ const failureHost=mount({...props,requests:[ordinary],requestReplies:{reply:reply('reply',{status:state,reason:state==='needs_review'?'bridge_preparation_failed':undefined})}});
+ assert.equal(controls(failureHost.tree,'Ready to send').length,0,'Only a ready reply gets a ready action');
+ button(failureHost.tree,state==='needs_review'?'Prepare reply':'Preparing reply').props.onClick();failureHost.render();
+ if(state==='needs_review') {
+  assert(text(failureHost.tree).includes('Jarvis could not finish preparing this reply.'));
+  assert(text(failureHost.tree).includes('This attempt did not send a customer email.'));
+  assert(text(failureHost.tree).includes('choose Ask AI to draft again, or write a reply and save it for review.'));
+  assert(!text(failureHost.tree).includes('bridge_preparation_failed'));
+  assert.equal(controls(failureHost.tree,'Ask AI to draft').length,1);
+ }
+}
+
 // A late response from this save cannot erase a draft when someone else has saved again.
 host=mount({...props,requests:[ordinary],requestReplies:{reply:reply('reply',{status:'ready',body:'Initial shared draft'})}});
 button(host.tree,'Ready to send').props.onClick();host.render();type('replyBody','My in-flight draft');type('replyInstruction','My in-flight instruction');

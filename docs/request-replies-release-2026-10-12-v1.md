@@ -24,3 +24,7 @@ Source authorship: Codex contribution in this task; deployment/provider accounts
 The storefront release gate, isolated real-SQLite reply/auth/race tests, UI draft/conflict tests, and actual built-Worker response/scheduler tests run without external mail. Jarvis has separate isolated bridge tests and full TypeScript checks. No test sends a real customer email.
 
 Jarvis must be awake, running and connected for preparation and mailbox followup sync. A queued request is not a ready draft. An accepted send is not inbox delivery. Exact deployment identifiers, final check counts, live draft evidence and any deployment blocker are recorded in the dated release receipt; this document alone does not establish deployment.
+
+## Final handoff refinements
+
+Unsaved inline reply bodies and AI instructions survive an admin tab round-trip. Owner changes, lost permissions and sign-out clear the protected draft. Preparation failures use actionable language and never appear ready. Jarvis retains sanitized preparation phase/category diagnostics across idle polls; no customer text or secret is recorded in that diagnostic status. The exact five-file Jarvis contribution and baseline/current hashes are archived under `docs/integrations/`, without committing unrelated shared Jarvis work.

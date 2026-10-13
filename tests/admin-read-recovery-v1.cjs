@@ -17,8 +17,8 @@ const hooks={...React,
  useEffect(fn,deps){const h=active,i=h.cursor++,old=h.slots[i];if(!old||deps.some((v,n)=>!Object.is(old[n],v))){h.slots[i]=deps;h.effectFns[i]=fn;h.effects.push(()=>{h.cleanups[i]?.();h.cleanups[i]=fn();});}},
 };
 let hosts=[];
-function mount(props={}){const h={props,slots:[],effectFns:[],cleanups:[],cursor:0,effects:[],dirty:false,writes:0,tree:null,beforeEffects:null,
- render(){for(let n=0;n<30;n++){this.cursor=0;this.effects=[];this.dirty=false;active=this;this.tree=Admin(this.props);if(n===0)this.beforeEffects=this.tree;for(const fn of this.effects)fn();if(!this.dirty)return this.tree;}throw Error('render loop');},
+function mount(props={},Component=Admin){const h={props,slots:[],effectFns:[],cleanups:[],cursor:0,effects:[],dirty:false,writes:0,tree:null,beforeEffects:null,
+ render(){for(let n=0;n<30;n++){this.cursor=0;this.effects=[];this.dirty=false;active=this;this.tree=Component(this.props);if(n===0)this.beforeEffects=this.tree;for(const fn of this.effects)fn();if(!this.dirty)return this.tree;}throw Error('render loop');},
  replay(){this.cleanups.forEach(fn=>fn?.());this.effectFns.forEach((fn,i)=>{if(fn)this.cleanups[i]=fn();});this.render();},
  unmount(){this.cleanups.forEach(fn=>fn?.());this.cleanups=[];},};h.render();hosts.push(h);return h;}
 function nodes(t,out=[]){if(Array.isArray(t))t.forEach(x=>nodes(x,out));else if(t&&typeof t==='object'&&t.props){out.push(t);nodes(t.props.children,out);}return out;}
@@ -29,12 +29,17 @@ const alerts=h=>nodes(h.tree).filter(n=>n.props.role==='alert').map(text).join('
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return{promise,resolve,reject};};
 const flush=async h=>{for(let i=0;i<16;i++)await Promise.resolve();h?.render();};
 const noop=()=>null;
-function Field(){}function Check(){}function Choice(){}function Blank(){}function AuthPage(){}function ShippingLabel(){}function Dialog(){}function Tabs(){}function TabsTrigger(){}function CoaAutomation(){}function RequestInbox(){}function ChangeHistory(){}function AdminProducts(){}function AdminShippingSettings(){}
+function Field(){}function Check(){}function Choice(){}function Blank(){}function AuthPage(){}function ShippingLabel(){}function Dialog(){}function Tabs(){}function TabsTrigger(){}function TabsContent(){}function CoaAutomation(){}function ChangeHistory(){}function AdminProducts(){}function AdminShippingSettings(){}
 const ownerA={id:'fixture-admin-a',name:'Fixture A',email:'a@example.invalid'};
 const ownerB={id:'fixture-admin-b',name:'Fixture B',email:'b@example.invalid'};
 const fixture=(label='Snapshot A')=>({config:{presalesEnabled:false,rewardsEnabled:false,affiliateEnabled:false,packDiscounts:{},shippingCents:null,freeShippingAt:20000},products:[{id:900001,name:label,price:10000,stockQuantity:1,inStock:true,purchasable:true}],campaigns:[{id:'fixture-campaign',title:'Simulated campaign',active:false,starts:'2099-01-01',ends:'2099-02-01'}],orders:[{id:'fixture-order',status:'pending',total:10000,created:0,data:{items:[]}}],requests:[{id:'fixture-request',kind:'fixture',status:'new',created:0,data:{}}],searchPublishing:{}});
 let state,apiImpl,refreshImpl,calls,reports,successes,infos,refreshCalls,allowedMutation;
 const provider={useStore:()=>({...state,refresh:()=>{refreshCalls++;return refreshImpl();}}),api:async(action,body)=>{assert(action==='admin'||action===allowedMutation,'Only GET admin and explicitly permitted simulated action are allowed');if(action==='admin')assert.equal(body,undefined,'Read retry never has a mutation payload');calls.push({action,body});return apiImpl(action,body);},report:e=>reports.push(e)};
+const inboxFilename=path.join(root,'components/store/request-inbox.tsx'),inboxModule=new Module(inboxFilename,module);
+inboxModule.filename=inboxFilename;inboxModule.paths=Module._nodeModulePaths(root);
+inboxModule.require=id=>id==='react'?hooks:id==='react/jsx-runtime'?projectRequire(id):id.endsWith('.module.css')?{__esModule:true,default:new Proxy({},{get:(_,key)=>String(key)})}:(()=>{throw Error('Unexpected inbox dependency '+id);})();
+inboxModule._compile(ts.transpileModule(fs.readFileSync(inboxFilename,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,inboxFilename);
+const {RequestInbox}=inboxModule.exports;
 const filename=path.join(root,'components/store/admin.tsx');
 const mod=new Module(filename,module);mod.filename=filename;mod.paths=Module._nodeModulePaths(root);
 mod.require=id=>{
@@ -57,7 +62,7 @@ mod.require=id=>{
  if(id==='./team-admin')return{TeamAdmin:noop};if(id==='@/lib/staff')return require('./staff-module-fixture.cjs').loadStaffModule();
  if(id==='./request-inbox')return{RequestInbox};
  if(id==='./primitives')return{Field,Check,Choice,Blank,formData:form=>form.fields};
- if(id==='@/components/ui/tabs')return{Tabs,TabsTrigger,TabsList:noop,TabsContent:noop};
+ if(id==='@/components/ui/tabs')return{Tabs,TabsTrigger,TabsList:noop,TabsContent};
  if(id==='@/components/ui/dialog')return{Dialog,DialogContent:noop,DialogTitle:noop,DialogDescription:noop};
  if(['./traffic-diagnostics','./promo-analytics','./seo-admin','./sales-diagnostics','./order-admin','@/components/ui/tabs','@/components/ui/table'].includes(id))return new Proxy({}, {get:()=>noop});
  throw Error('Unexpected dependency '+id);
@@ -239,6 +244,39 @@ const productNames=h=>String(Boolean(productPanel(h).props.edited));
  const reply={id:'fixture-request',status:'queued',revision:1};inboxSend.resolve({reply});assert.deepEqual(await processing,reply);h.render();assert(!find(h,n=>n.type===RequestInbox).props.busy);
  const staleInbox=find(h,n=>n.type===RequestInbox).props;state.store.customer=ownerB;apiImpl=async()=>fixture('New inbox owner');h.render();await flush(h);const inboxCount=calls.length;
  await staleInbox.onStatus(staleInbox.requests[0],'resolved');await assert.rejects(()=>staleInbox.onPrepareReply(input));assert.equal(calls.length,inboxCount,'Earlier-owner inbox actions are inert');
+
+ // The actual reply editor remains mounted through tabs, and clears at authorization boundaries.
+ reset();const replyFixture=()=>({...fixture(),requests:[{id:'reply-roundtrip',kind:'contact',status:'new',created:0,data:{name:'Synthetic request',email:'reply@example.invalid',subject:'Synthetic question',message:'Synthetic original'}}]});
+ apiImpl=async()=>replyFixture();h=mount({initialTab:'requests'});await flush(h);
+ let child=null,childKey=null;
+ const reconcileInbox=()=>{
+  const panel=nodes(h.tree).find(n=>n.type===TabsContent&&n.props.value==='requests');
+  const tab=nodes(h.tree).find(n=>n.type===Tabs)?.props.value;
+  // Radix mounts selected content; forceMount explicitly retains inactive content.
+  const present=panel&&(panel.props.forceMount||tab==='requests');
+  if(!present){child?.unmount();child=null;childKey=null;return null;}
+  const key=h.tree.key;
+  if(child&&childKey!==key){child.unmount();child=null;}
+  const item=nodes(panel).find(n=>n.type===RequestInbox);assert(item);
+  if(!child){child=mount(item.props,RequestInbox);childKey=key;}else{child.props=item.props;child.render();}
+  return panel;
+ };
+ let panel=reconcileInbox();assert.equal(panel.props.forceMount,true);assert.equal(panel.props.hidden,false);
+ button(child,'Prepare reply').props.onClick();child.render();
+ const replyField=name=>find(child,n=>n.type==='textarea'&&n.props.name===name);
+ replyField('replyBody').props.onChange({target:{value:'Synthetic unsaved reply'}});child.render();
+ replyField('replyInstruction').props.onChange({target:{value:'Synthetic unsaved instruction'}});child.render();
+ const sameChild=child;
+ find(h,n=>n.type===Tabs).props.onValueChange('orders');h.render();panel=reconcileInbox();
+ assert.equal(panel.props.hidden,true,'Inactive content stays hidden');assert.equal(child,sameChild,'Tab switch retains the editor instance');
+ find(h,n=>n.type===Tabs).props.onValueChange('requests');h.render();panel=reconcileInbox();
+ assert.equal(panel.props.hidden,false);assert.equal(replyField('replyBody').props.value,'Synthetic unsaved reply');assert.equal(replyField('replyInstruction').props.value,'Synthetic unsaved instruction');assert.equal(mutations(),0);
+ // Changing administrators immediately removes the protected subtree and its local draft.
+ state.store.customer=ownerB;h.render();assert.equal(reconcileInbox(),null);await flush(h);reconcileInbox();
+ assert.notEqual(child,sameChild);button(child,'Prepare reply').props.onClick();child.render();assert.equal(replyField('replyBody').props.value,'');assert.equal(replyField('replyInstruction').props.value,'');
+ // A refreshed role with no requests permission must not retain a hidden inbox.
+ apiImpl=async()=>({...replyFixture(),role:'fulfillment',permissions:permissionModule.permissionsFor('fulfillment')});button(h,'Refresh administration').props.onClick();await flush(h);assert.equal(reconcileInbox(),null);
+ state.store.customer=null;h.render();assert.equal(h.tree.type,AuthPage);assert.equal(reconcileInbox(),null);
 
  // Failed reads persist and retry remains a single-flight GET, never a mutation.
  reset();apiImpl=async()=>{throw Error('Simulated admin read outage');};h=mount();await flush(h);

@@ -1,0 +1,37 @@
+{
+  "scope": "Exact five-file contribution only; not a Jarvis checkout or full repository sync",
+  "canonicalProject": "~/Projects/Jarvis",
+  "patchSha256": "d7cb00655e9d8991f3827fb1cb75305f35c73807187c8dd7a0cdbc80f4805cf2",
+  "files": [
+    {
+      "file": "server/index.ts",
+      "sha256": "d138527b6d6be4f6dea9852d409ae9310933f85f9c7c94cb0532ff93244c9c62",
+      "baselineSha256": "bc3d5bf4ee5ac7ae3529d36d0bc2025b970115172f1957715403f48ed14a485c"
+    },
+    {
+      "file": "server/routes/readyToSend.ts",
+      "sha256": "f047a526ef876e71c1a5bb90a6e46ab4137d655883b3826a685ebf6091fadae6",
+      "baselineSha256": "8068436cb14a227c3e7f01d23f83062983d6fada0a36bb01da16f0889796c2eb"
+    },
+    {
+      "file": "server/services/emailWriter.ts",
+      "sha256": "cdbe693040fc09e3396dc35cf463b2f96f87f2ad789034197d90c6a3cc8ccb8a",
+      "baselineSha256": "8a3f614bef7a7c3a6e45f1a4f2e996e8fbe848d55f8fb4745ed3f97bd561165c"
+    },
+    {
+      "file": "server/services/trybiomodReplies.ts",
+      "sha256": "afa59fdfb852178771a1b244716dbc79cda73ef6076c6f4d701be694fa51a82e",
+      "baselineSha256": null
+    },
+    {
+      "file": "server/services/trybiomodReplies.test.ts",
+      "sha256": "d1626f8897540fbdc8e649aca44f704ad6258c94b36b2526168165f1414f21c6",
+      "baselineSha256": null
+    }
+  ],
+  "tests": {
+    "isolated": 20,
+    "passed": 20,
+    "tsc": "passed"
+  }
+}
