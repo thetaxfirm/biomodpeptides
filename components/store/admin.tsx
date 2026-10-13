@@ -49,7 +49,7 @@ export function Admin({ initialTab = 'orders' }: { initialTab?: string } = {}) {
     const drafts = useRef({ revision: 0, forms: new Map<string, number>() });
     // Stable reply-desk reads: live reply status, picker options and reply rules. Never send.
     const deskApi = useRef({
-        refresh: async (ids: string[]) => { const result = await api('admin-request-replies', { ids }); return { replies: result.replies as Record<string, ReplySummary>, forwards: result.forwards as Record<string, RequestForward[]> }; },
+        refresh: async (ids: string[]) => { const result = await api('admin-request-replies', { ids }); return { replies: result.replies as Record<string, ReplySummary>, forwards: result.forwards as Record<string, RequestForward[]>, activity: result.activity as Record<string, { at: number; text: string }[]> }; },
         forward: async (input: { id: string; to: string; note: string }) => (await api('admin-request-forward', input)).forward as RequestForward,
         options: async () => await api('admin-reply-desk', {}) as DeskOptions,
         rule: async (input: { rule?: string; removeId?: string }) => await api('admin-reply-rule', input) as DeskOptions,

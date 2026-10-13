@@ -80,6 +80,7 @@ const conflict=async(fn)=>assert.rejects(fn,e=>e.status===409);
   // The earlier AI draft for this request gets a learning row once the owner's edit is accepted.
   f.sql.prepare("UPDATE request_reply_drafts SET ai_draft='AI wording that was too long.' WHERE id=?").run(claimed.id);
   await f.bridge({action:'sent',id:claimed.id,revision:1,readyId,providerMessageId:'provider-desk-1',providerThreadId:'thread-desk-1',body:x2.body,sentAt:Date.now()});
+  assert.equal(f.sql.prepare('SELECT status FROM requests WHERE id=?').get(second).status,'resolved','A sent reply archives the request');
   const learned=f.sql.prepare('SELECT * FROM request_reply_learning').all();assert.equal(learned.length,1);assert.equal(learned[0].changed,1);assert.equal(learned[0].ai_draft,'AI wording that was too long.');assert.equal(learned[0].final_body,'Here is the report you asked about.');
   await api.saveReplyRule(f.env,{rule:'Sign off as Ash.'},owner);
   claimed=(await f.bridge({action:'claim'})).job;assert.equal(claimed.requestId,first);assert.deepEqual(claimed.style.rules,['Sign off as Ash.']);assert.equal(claimed.style.examples[0].sent,'Here is the report you asked about.');assert(claimed.codes.some(c=>c.code==='BM10'));

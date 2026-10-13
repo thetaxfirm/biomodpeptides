@@ -25,5 +25,7 @@ const api=require('../lib/request-forward.ts');
  const list=await api.forwardsFor(env,[id]);assert.equal(list[id].length,1);assert.equal(list[id][0].to,'logan@example.invalid');
  await assert.rejects(()=>api.forwardRequest(env,{requestId:id,to:'logan@example.invalid'},owner,{fetch:async()=>({ok:false,json:async()=>({})})}),e=>e.status===502);
  assert.equal((await api.forwardsFor(env,[id]))[id].at(-1).status,'failed');
+ sql.prepare("UPDATE requests SET status='deleted' WHERE id=?").run(id);
+ const act=(await api.activityFor(env,[id]))[id].map(x=>x.text);assert(act.some(t=>t.startsWith('Forwarded to logan@example.invalid by owner@example.invalid')));assert(act.some(t=>t.startsWith('Forward failed')));assert(act.some(t=>t.startsWith('Deleted')),'Status changes are in the activity record');
  console.log('PASS: forwards go only to owners/active staff, reply-to is the forwarder, customer never emailed, history recorded, failures visible. Isolated SQLite, mocked provider.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

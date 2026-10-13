@@ -50,8 +50,8 @@ async function main(){
  const rowIds=()=>nodes(host.tree).filter(n=>n.type==='article').map(n=>n.key);
  assert.deepEqual(rowIds(),['new-old','came-back','new-young']);
  assert(text(host.tree).includes('3d'),'Age is shown');assert(text(host.tree).includes('Customer replied'));
- filter(host,'Waiting on customer');assert.deepEqual(rowIds(),['answered']);
- filter(host,'Done');assert.deepEqual(rowIds(),['closed']);
+ filter(host,'Archive');assert.deepEqual(rowIds().sort(),['answered','closed'],'Replied and archived requests share the Archive');
+ openRow(host,'answered');assert(text(host.tree).includes('Activity ('));assert(text(host.tree).includes('Received from the website'));openRow(host,'answered');
  filter(host,'Spam');assert.deepEqual(rowIds(),['junk']);
  filter(host,'To reply');query(host,'NEW-YOUNG@EXAMPLE');assert.deepEqual(rowIds(),['new-young']);query(host,'');
  assert(text(host.tree).includes('3 of the last 4'),'Learning progress is visible');
@@ -90,7 +90,7 @@ async function main(){
  host=mount({...props,requestReplies:{'new-young':reply('new-young',{status:'needs_review',reason:'bridge_preparation_failed'})}});await flush(host);openRow(host,'new-young');
  assert(text(host.tree).includes('The AI could not finish this draft. Nothing was sent.'));assert(!text(host.tree).includes('bridge_preparation_failed'));
  // Status actions, and no live I/O anywhere.
- nodes(host.tree).find(n=>n.type==='button'&&text(n)==='Mark done').props.onClick();assert.deepEqual(changes.at(-1),['new-young','resolved']);
+ nodes(host.tree).find(n=>n.type==='button'&&text(n)==='Archive').props.onClick();assert.deepEqual(changes.at(-1),['new-young','resolved']);
  // Delete asks first, moves to Deleted (not All), and Restore brings it back. Forward goes only to a chosen team member.
  const fwd=[];host=mount({...props,requests:[...reqs,request('gone','deleted')],requestReplies:{},onForward:async input=>{fwd.push(input);return {id:'f1',to:input.to,by:'owner@example.invalid',note:input.note,status:'accepted',created:now};}});
  await flush(host);

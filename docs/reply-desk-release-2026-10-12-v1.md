@@ -35,3 +35,9 @@ Sends and AI drafts need Jarvis running and the research mailbox connected. Prov
 ## Follow-up: requested reports are always attached (same day)
 
 Owner instruction after a HEAT-R 20mg reply was staged saying "Attached" with no PDF: an earlier send of the same original (old COA automation or a previous reply) no longer withholds the attachment. The draft gets the exact verified original again and its COA note says it was emailed before. The only remaining duplicate guard stops two replies with the same report to the same customer from sending at the same moment. The validate step no longer refuses a report that was sent once before.
+
+## Follow-up: Archive and activity record (same day)
+
+- A reply accepted by the mail provider archives its request (status `resolved`, attributed to the Jarvis reply bridge). A customer follow-up returns it to To reply; drafting or sending on an archived request takes it out of the archive.
+- Views are now To reply, Archive (archived plus replied), Spam, Deleted and All. "Mark done" is now "Archive".
+- Each conversation shows an Activity record built from existing private data: received, every archive/spam/delete/restore with who did it (change history), each reply sent with the PDF attached, customer follow-ups, and forwards with notes. No new table.

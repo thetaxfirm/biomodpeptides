@@ -32,7 +32,7 @@ type Props = {
   canSend?: boolean;
   onStatus: (request: CustomerRequest, status: string) => void | Promise<void>;
   onPrepareReply: (input: PrepareReplyInput) => Promise<ReplySummary>;
-  onRefreshReplies?: (ids: string[]) => Promise<{ replies: Record<string, ReplySummary>; forwards?: Record<string, RequestForward[]> }>;
+  onRefreshReplies?: (ids: string[]) => Promise<{ replies: Record<string, ReplySummary>; forwards?: Record<string, RequestForward[]>; activity?: Record<string, { at: number; text: string }[]> }>;
   onForward?: (input: { id: string; to: string; note: string }) => Promise<RequestForward>;
   onLoadOptions?: () => Promise<DeskOptions>;
   onSaveRule?: (input: { rule?: string; removeId?: string }) => Promise<DeskOptions>;
@@ -84,7 +84,7 @@ function stageOf(request: CustomerRequest, reply?: ReplySummary): { stage: Stage
   if (request.status === 'deleted') return { stage: 'deleted', label: 'Deleted', since: request.created };
   if (request.status === 'spam') return { stage: 'spam', label: 'Spam', since: request.created };
   if (sendPending(reply)) return { stage: 'sending', label: 'Sending', since: reply!.approvedAt || reply!.updated };
-  if (request.status === 'resolved' && !customerReplied) return { stage: 'done', label: 'Done', since: lastOut || request.created };
+  if (request.status === 'resolved' && !customerReplied) return { stage: 'done', label: lastOut ? 'Replied' : 'Archived', since: lastOut || request.created };
   if (lastOut && !customerReplied) return { stage: 'waiting', label: 'Replied', since: lastOut };
   const label = customerReplied ? 'Customer replied' : working(reply) ? 'AI writing' : reply?.status === 'ready' ? 'Draft ready' : reply?.status === 'needs_review' ? 'Needs a look' : 'New';
   return { stage: 'todo', label, since: lastIn };
@@ -108,6 +108,7 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
   const [preparedReplies, setPreparedReplies] = useState<Record<string, ReplySummary>>({});
   const [liveReplies, setLiveReplies] = useState<Record<string, ReplySummary>>({});
   const [forwards, setForwards] = useState<Record<string, RequestForward[]>>({});
+  const [activity, setActivity] = useState<Record<string, { at: number; text: string }[]>>({});
   const [panel, setPanel] = useState<{ id: string; kind: 'forward' | 'delete'; to: string; note: string; busy: boolean; error: string } | null>(null);
   const [pending, setPending] = useState<Record<string, boolean>>({});
   const [options, setOptions] = useState<DeskOptions | null>(null);
@@ -140,7 +141,7 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
       if (stopped) return;
       const ids = requestIds ? requestIds.split(',') : [];
       if (ids.length && typeof document !== 'undefined' && document.visibilityState !== 'hidden') {
-        try { const fresh = await onRefreshReplies(ids); if (!stopped && mounted.current) { setLiveReplies(fresh?.replies || {}); if (fresh?.forwards) setForwards(fresh.forwards); } } catch { /* keep the last loaded status */ }
+        try { const fresh = await onRefreshReplies(ids); if (!stopped && mounted.current) { setLiveReplies(fresh?.replies || {}); if (fresh?.forwards) setForwards(fresh.forwards); if (fresh?.activity) setActivity(fresh.activity); } } catch { /* keep the last loaded status */ }
       }
       if (stopped) return;
       if (mounted.current) setNow(Date.now());
@@ -170,13 +171,13 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
 
   const rows = requests.map(request => ({ request, reply: replyOf(request.id), ...stageOf(request, replyOf(request.id)) }));
   const counts = { todo: 0, waiting: 0, done: 0, spam: 0, deleted: 0, all: rows.filter(row => row.stage !== 'deleted').length };
-  for (const row of rows) { if (row.stage === 'sending' || row.stage === 'todo') counts.todo++; else counts[row.stage]++; }
+  for (const row of rows) { if (row.stage === 'sending' || row.stage === 'todo') counts.todo++; else if (row.stage === 'waiting') counts.done++; else counts[row.stage]++; }
   const needle = query.trim().toLowerCase();
-  const shown = rows.filter(row => ((filter === 'all' && row.stage !== 'deleted') || (filter === 'todo' ? row.stage === 'todo' || row.stage === 'sending' : row.stage === filter))
+  const shown = rows.filter(row => ((filter === 'all' && row.stage !== 'deleted') || (filter === 'todo' ? row.stage === 'todo' || row.stage === 'sending' : filter === 'done' ? row.stage === 'done' || row.stage === 'waiting' : row.stage === filter))
     && (!needle || [row.request.id, row.request.kind, ...Object.values(row.request.data).filter(value => typeof value === 'string')].join(' ').toLowerCase().includes(needle)))
     // To reply: oldest first, so nothing waits behind newer mail. Everything else: newest first.
     .sort((a, b) => filter === 'todo' ? a.since - b.since : b.since - a.since);
-  const views = [['todo', 'To reply'], ['waiting', 'Waiting on customer'], ['done', 'Done'], ['spam', 'Spam'], ['all', 'All'], ['deleted', 'Deleted']] as const;
+  const views = [['todo', 'To reply'], ['done', 'Archive'], ['spam', 'Spam'], ['deleted', 'Deleted'], ['all', 'All']] as const;
 
   function open(id: string) {
     const reply = replyOf(id);
@@ -288,7 +289,7 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
     </div>
     <div className={styles.desk} data-open={active ? 'true' : 'false'}>
       <div className={styles.list} role="list" aria-label="Requests">
-        {!shown.length ? <p className={styles.empty}>{requests.length ? (filter === 'todo' ? 'Nothing waiting for a reply.' : 'No requests here.') : 'No customer requests yet.'}</p> : shown.map(row => {
+        {!shown.length ? <p className={styles.empty}>{requests.length ? (filter === 'todo' ? 'Nothing waiting for a reply.' : filter === 'done' ? 'Nothing archived yet. Requests move here once a reply is sent or you archive them.' : 'No requests here.') : 'No customer requests yet.'}</p> : shown.map(row => {
           const { request, reply } = row;
           const name = text(request.data.name) || text(request.data.email) || 'Customer';
           const preview = text(request.data.message) || text(request.data.subject);
@@ -312,7 +313,7 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
         onSubmit: (mode, send) => void submit(active.request, mode, send),
         onDictate: () => dictate(active.request),
         onStatus: status => { if (!disabled) { setPanel(null); void onStatus(active.request, status); } },
-        forwards: forwards[active.request.id] || [], team: options?.team || [], canForward: Boolean(onForward),
+        forwards: forwards[active.request.id] || [], activity: activity[active.request.id] || [], team: options?.team || [], canForward: Boolean(onForward),
         panel: panel?.id === active.request.id ? panel : null,
         onPanel: next => setPanel(next ? { id: active.request.id, to: '', note: '', busy: false, error: '', ...(panel?.id === active.request.id ? panel : {}), ...next } as any : null),
         onForward: () => void forward(active.request.id) })
@@ -327,11 +328,11 @@ type ConversationProps = {
   bodyField: { current: HTMLTextAreaElement | null };
   onClose: () => void; onEdit: (field: 'body' | 'instruction', value: string) => void; onDraft: (patch: Partial<Draft>) => void; onInsert: (snippet: string) => void;
   onSubmit: (mode: 'ai' | 'staff', send?: boolean) => void; onDictate: () => void; onStatus: (status: string) => void;
-  forwards: RequestForward[]; team: TeamMember[]; canForward: boolean;
+  forwards: RequestForward[]; team: TeamMember[]; canForward: boolean; activity: { at: number; text: string }[];
   panel: { kind: 'forward' | 'delete'; to: string; note: string; busy: boolean; error: string } | null;
   onPanel: (next: Partial<{ kind: 'forward' | 'delete'; to: string; note: string; busy: boolean; error: string }> | null) => void; onForward: () => void;
 };
-function conversation({ row, draft, automation, options, canSend, disabled, listening, preparing, bodyField, now, onClose, onEdit, onDraft, onInsert, onSubmit, onDictate, onStatus, forwards, team, canForward, panel, onPanel, onForward }: ConversationProps) {
+function conversation({ row, draft, automation, options, canSend, disabled, listening, preparing, bodyField, now, onClose, onEdit, onDraft, onInsert, onSubmit, onDictate, onStatus, forwards, team, canForward, panel, onPanel, onForward, activity }: ConversationProps) {
   const { request, reply } = row;
   const email = text(request.data.email), canReply = usableEmail(request.data.email);
   const name = text(request.data.name) || email || 'Customer';
@@ -363,8 +364,8 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
         {request.status === 'deleted'
           ? <button type="button" className={styles.action} disabled={disabled} onClick={() => onStatus('new')}>Restore</button>
           : request.status === 'spam' || request.status === 'resolved'
-          ? <button type="button" className={styles.link} disabled={disabled} onClick={() => onStatus('new')}>Reopen</button>
-          : <><button type="button" className={styles.action} disabled={disabled} onClick={() => onStatus('resolved')}>Mark done</button><button type="button" className={styles.link} disabled={disabled} onClick={() => onStatus('spam')}>Spam</button></>}
+          ? <button type="button" className={styles.action} disabled={disabled} onClick={() => onStatus('new')}>Move to To reply</button>
+          : <><button type="button" className={styles.action} disabled={disabled} onClick={() => onStatus('resolved')}>Archive</button><button type="button" className={styles.link} disabled={disabled} onClick={() => onStatus('spam')}>Spam</button></>}
         {request.status !== 'deleted' && <button type="button" className={styles.link} disabled={disabled} onClick={() => onPanel(panel?.kind === 'delete' ? null : { kind: 'delete', error: '' })}>Delete</button>}
       </div>
     </header>
@@ -389,7 +390,12 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
         <p className={styles.message}>{message.body || 'No message text was included.'}</p>
       </li>)}
     </ol>
-    {forwards.length > 0 && <p className={styles.note}>{forwards.map(f => `${f.status === 'failed' ? 'Forward failed to' : 'Forwarded to'} ${f.to} by ${f.by} · ${when(f.created)}`).join(' · ')}</p>}
+    {(() => {
+      // The full record of this request: received, replies (and PDFs) sent, forwards, archive/spam/delete/restore.
+      const local = forwards.filter(f => !activity.some(a => a.at === f.created)).map(f => ({ at: f.created, text: `${f.status === 'failed' ? 'Forward failed to' : 'Forwarded to'} ${f.to} by ${f.by}` }));
+      const items = [{ at: request.created, text: 'Received from the website' }, ...activity, ...local].sort((a, b) => a.at - b.at);
+      return <details className={styles.activity} open={row.stage === 'done' || row.stage === 'waiting' || row.stage === 'deleted'}><summary>Activity ({items.length})</summary><ol>{items.map((item, index) => <li key={index}><span className={styles.meta}>{when(item.at)}</span> {item.text}</li>)}</ol></details>;
+    })()}
     {request.status === 'deleted' && <p className={styles.warning}>This request is deleted. Restore it to reply.</p>}
     {request.kind === 'affiliate' && <p className={styles.note}>Partner application. Agree terms and create the code under Affiliate &amp; promo codes before promising one.</p>}
     {request.kind === 'stock' && <p className={styles.note}>Check stock under Products before promising a date.</p>}

@@ -66,3 +66,37 @@ export async function forwardRequest(env: Env, input: { requestId: string; to: s
   if (status === 'failed') fail('The forward did not go out. Try again in a minute.', 502);
   return { id, to: to!, by: actor.email, note, status, created: now };
 }
+
+// Everything done on a request, newest last: status changes, replies sent (and with which report), customer follow-ups, forwards.
+export type RequestActivity = { at: number; text: string };
+export async function activityFor(env: Env, ids: string[]): Promise<Record<string, RequestActivity[]>> {
+  const out: Record<string, RequestActivity[]> = {};
+  const unique = [...new Set(ids)].filter(v => /^[a-f0-9-]{36}$/.test(v)).slice(0, 200);
+  const add = (id: string, at: number, text: string) => { (out[id] ||= []).push({ at, text }); };
+  const statusWords: Record<string, string> = { resolved: 'Archived', spam: 'Marked as spam', deleted: 'Deleted', new: 'Moved back to To reply', in_progress: 'Opened for reply', reviewed: 'Marked reviewed' };
+  for (let i = 0; i < unique.length; i += 60) {
+    const chunk = unique.slice(i, i + 60), marks = chunk.map(() => '?').join(',');
+    try {
+      const events = (await env.DB.prepare(`SELECT entity_id,occurred_at,actor,actor_type,changes FROM change_events WHERE entity_type='request' AND action!='request.insert' AND entity_id IN (${marks}) ORDER BY occurred_at LIMIT 2000`).bind(...chunk).all<any>()).results;
+      for (const e of events) {
+        let changes: any[] = []; try { changes = JSON.parse(e.changes || '[]'); } catch { changes = []; }
+        const status = changes.find(c => c?.field === 'Status');
+        if (!status || status.after == null) continue;
+        const who = e.actor === 'Jarvis reply bridge' ? 'automatically after the reply was sent' : e.actor && e.actor_type !== 'unknown' ? 'by ' + e.actor : '';
+        add(e.entity_id, e.occurred_at, `${statusWords[status.after] || 'Status changed to ' + status.after}${who ? ' ' + who : ''}`);
+      }
+    } catch { /* history unavailable */ }
+    try {
+      const messages = (await env.DB.prepare(`SELECT m.request_id,m.direction,m.created,m.attachment_hash,d.coa_json,d.approved_by,d.prepared_by FROM request_reply_messages m LEFT JOIN request_reply_drafts d ON d.id=m.reply_job_id WHERE m.request_id IN (${marks}) ORDER BY m.created`).bind(...chunk).all<any>()).results;
+      for (const m of messages) {
+        if (m.direction === 'incoming') { add(m.request_id, m.created, 'Customer replied'); continue; }
+        let file = ''; try { const coa = JSON.parse(m.coa_json || '{}'); if (m.attachment_hash && coa.sha256 === m.attachment_hash) file = coa.filename || coa.reportId || ''; } catch { file = ''; }
+        const by = m.approved_by || '';
+        add(m.request_id, m.created, `Reply sent${by ? ' by ' + by : ''}${m.attachment_hash ? ' with PDF ' + (file || 'report') : ''}`);
+      }
+    } catch { /* no replies yet */ }
+    for (const [id, list] of Object.entries(await forwardsFor(env, chunk))) for (const f of list) add(id, f.created, `${f.status === 'failed' ? 'Forward failed to' : 'Forwarded to'} ${f.to} by ${f.by}${f.note ? ': "' + f.note.slice(0, 140) + '"' : ''}`);
+  }
+  for (const list of Object.values(out)) list.sort((a, b) => a.at - b.at);
+  return out;
+}

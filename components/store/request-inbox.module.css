@@ -104,3 +104,8 @@
 .forward { display: grid; gap: 10px; }
 .forward label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
 .forward select, .forward textarea { font: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: white; color: var(--ink); width: 100%; }
+
+.activity { margin: 0 0 14px; font-size: 14px; }
+.activity summary { cursor: pointer; padding: 4px 0; color: var(--muted); }
+.activity ol { list-style: none; margin: 6px 0 0; padding: 0 0 0 2px; display: grid; gap: 4px; }
+.activity li .meta { display: inline-block; min-width: 128px; font-variant-numeric: tabular-nums; }

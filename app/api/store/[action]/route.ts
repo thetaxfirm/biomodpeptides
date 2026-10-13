@@ -2,7 +2,7 @@ import { replyBridgeRoute } from '@/lib/request-reply-route';
 import { queryOrders, scanLimit } from '@/lib/order-queue';
 import { publicCatalog } from '@/lib/public-catalog';
 import { batchRecordsFor, batchStatus, batchPath } from '@/lib/testing';
-import { forwardRequest, forwardsFor, teamMembers } from '@/lib/request-forward';
+import { forwardRequest, forwardsFor, teamMembers, activityFor } from '@/lib/request-forward';
 import { summarizeRequestReplies, prepareRequestReply, replyDeskOptions, saveReplyRule } from '@/lib/request-replies';
 import { adminBatchRecords, validateBatchEdit } from '@/lib/product-batch';
 import { coaHash, loadCoaReports, readCoaOriginal, verifiedCoaAttachment } from '@/lib/coa-delivery';
@@ -496,7 +496,7 @@ export async function POST(req: NextRequest, { params }: {
             if (action === 'admin-reply-desk') return j({ ...(await replyDeskOptions(runtime())), links: await publicCoaLinks(), team: await teamMembers(runtime()) });
             if (action === 'admin-request-replies') {
                 const ids = z.object({ ids: z.array(z.string().uuid()).max(200) }).parse(b).ids;
-                return j({ replies: await summarizeRequestReplies(runtime(), ids), forwards: await forwardsFor(runtime(), ids) });
+                return j({ replies: await summarizeRequestReplies(runtime(), ids), forwards: await forwardsFor(runtime(), ids), activity: await activityFor(runtime(), ids) });
             }
             if (action === 'admin-request-forward') {
                 const input = z.object({ id: z.string().uuid(), to: z.string().email().max(254), note: z.string().max(2000).optional() }).parse(b);
