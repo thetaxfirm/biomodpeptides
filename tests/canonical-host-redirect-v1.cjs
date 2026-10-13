@@ -1,0 +1,18 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs'); const ts = require('typescript');
+require.extensions['.ts'] = (m, f) => m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,esModuleInterop:true}}).outputText,f);
+const {seoConfig,canonicalRedirect}=require('../lib/seo-policy.ts');
+const release=require('../lib/seo-publication-v1.json');
+const config=seoConfig({SEO_PUBLIC_ORIGIN:release.origin,SEO_PUBLIC_LAUNCH_APPROVED:'true',SEO_INDEXING_ENABLED:'true',SEO_REVIEWED_PRODUCT_SLUGS:release.productSlugs.join(',')});
+const go=(u,m='GET',c=config)=>canonicalRedirect(new URL(u),m,c);
+assert.equal(go('https://www.trybiomod.com/'),'https://trybiomod.com/');
+assert.equal(go('https://www.trybiomod.com/product/bpc-157-10mg?utm_source=x'),'https://trybiomod.com/product/bpc-157-10mg?utm_source=x');
+assert.equal(go('http://trybiomod.com/shop'),'https://trybiomod.com/shop');
+assert.equal(go('http://www.trybiomod.com/faq','HEAD'),'https://trybiomod.com/faq');
+assert.equal(go('https://trybiomod.com/shop'),null);
+for(const path of ['/admin','/admin/login','/api/store/cart','/auth/return','/checkout','/payment/return','/account','/reset-password'])assert.equal(go('https://www.trybiomod.com'+path),null,path);
+assert.equal(go('https://www.trybiomod.com/shop','POST'),null);
+assert.equal(go('https://biomod-peptides.biomodcompounds.workers.dev/shop'),null);
+assert.equal(go('https://www.trybiomod.com.evil.example/shop'),null);
+assert.equal(go('https://www.trybiomod.com/shop','GET',seoConfig({})),null);
+console.log('PASS: www and http public pages redirect permanently to https://trybiomod.com; private, API, non-GET and other hosts are untouched');

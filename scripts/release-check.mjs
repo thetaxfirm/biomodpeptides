@@ -25,7 +25,7 @@ const tests = [
   "auth-return-v1.cjs", "payment-return-v1.cjs",
   "payments-authorizenet-v1.mjs", "payment-lookup-completeness-v1.cjs",
   "product-discovery-v1.cjs", "storefront-search-v2.cjs",
-  "product-schema-identifiers-v1.cjs", "search-readable-facts-v1.cjs",
+  "product-schema-identifiers-v1.cjs", "search-readable-facts-v1.cjs", "canonical-host-redirect-v1.cjs",
   "promo-analytics-v1.cjs", "promo-analytics-export-v1.cjs",
   "sales-diagnostics-v1.cjs", "sales-diagnostics-export-v1.cjs",
   "shopping-measurement-client-v1.cjs", "traffic-measurement-v1.cjs",

@@ -75,6 +75,16 @@ export function mayIndex(path: string, query: URLSearchParams, config: SEOConfig
   if (p) return !productReviewBlocks[p.slug] && config.approvedProducts.has(p.slug);
   return Boolean(pageRecords[path]?.eligible);
 }
+// Search engines should see one host. Public GET/HEAD pages on www or plain http move
+// permanently to the canonical https origin. Private paths, API calls and other methods are
+// left alone so sessions, webhooks and payment returns keep their original host.
+export function canonicalRedirect(url: URL, method: string, config: SEOConfig): string | null {
+  if (!config.enabled || !['GET', 'HEAD'].includes(method.toUpperCase())) return null;
+  const canonical = new URL(config.publicOrigin);
+  if (url.origin === canonical.origin || privatePath(normalizedPath(url.pathname))) return null;
+  if (![canonical.hostname, 'www.' + canonical.hostname].includes(url.hostname)) return null;
+  return canonical.origin + url.pathname + url.search;
+}
 export function sitemapPaths(config: SEOConfig) {
   if (!config.enabled) return [];
   return [...Object.keys(pageRecords).filter(p => pageRecords[p].eligible), ...products.filter(p => config.approvedProducts.has(p.slug) && !productReviewBlocks[p.slug]).map(p => '/product/' + p.slug)];
