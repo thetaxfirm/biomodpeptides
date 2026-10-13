@@ -11,7 +11,16 @@ import { savedPreorder } from './fulfillment';
 import { z } from 'zod';
 import { customer } from './auth';
 import { carrierShippingOptions, easypostReady } from './easypost';
-import { normalizeShippingOptions, savedShippingOption, shippingTierEnabled, type ShippingOption } from './shipping-options';
+import { normalizeShippingOptions, savedShippingOption, shippingTierEnabled, enabledServiceSetting, type ShippingOption, type ShippingOptionsConfig } from './shipping-options';
+/** A quoted option is still payable only if the owner's current settings would produce the same charge. */
+function optionStillOffered(saved: ShippingOption, settings: ShippingOptionsConfig, freeStandard: boolean) {
+    if (!shippingTierEnabled(settings, saved.tier) || (saved.carrier && !settings.carriers.includes(saved.carrier))) return false;
+    if (!settings.services) return saved.free === (saved.tier === 'standard' && freeStandard);
+    if (saved.free && !(saved.tier === 'standard' && freeStandard)) return false;
+    if (saved.source === 'flat') return true;
+    const chosen = saved.serviceKey ? enabledServiceSetting(settings, saved.serviceKey) : null;
+    return Boolean(chosen && chosen.markupCents === saved.handlingCents);
+}
 export const addressSchema = z.object({ name: z.string().trim().min(2).max(100), line1: z.string().trim().min(3).max(150), line2: z.string().trim().max(150).default(''), city: z.string().trim().min(2).max(100), state: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/, 'Enter a two-letter state abbreviation, such as NV.'), zip: z.string().regex(/^\d{5}(-\d{4})?$/), country: z.literal('US'), phone: z.string().trim().min(7).max(30) });
 const QUOTE_LIFETIME = 600000;
 type ShippingPreset = { shipping: number; shippingService: string; shippingOption?: ShippingOption; shippingOptions?: ShippingOption[] };
@@ -31,7 +40,7 @@ export async function deliveryQuote(lines: CartLine[], raw: unknown, preset?: Sh
         if (!Number.isSafeInteger(preset.shipping) || preset.shipping < 0) throw new Error('Your shipping quote is invalid. Recalculate delivery.');
         if (preset.shippingOption) {
             const saved = savedShippingOption(preset.shippingOption);
-            if (!saved || !shippingTierEnabled(settings, saved.tier) || (saved.carrier && !settings.carriers.includes(saved.carrier)) || saved.free !== (saved.tier === 'standard' && freeStandard)) throw new Error('Your shipping options changed. Recalculate delivery.');
+            if (!saved || !optionStillOffered(saved, settings, freeStandard)) throw new Error('Your shipping options changed. Recalculate delivery.');
             shippingOption = saved;
             shippingOptions = preset.shippingOptions || [saved];
             shipping = saved.shipping;

@@ -1,61 +1,177 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { money } from '@/lib/catalog';
-import { normalizeShippingOptions } from '@/lib/shipping-options';
+import { normalizeShippingOptions, shippingServiceCatalog, type CatalogService, type ShippingOptionsConfig, type ShippingServiceSetting } from '@/lib/shipping-options';
 import styles from './admin-shipping-settings.module.css';
 
-const tiers = [
-    { key: 'standard', title: 'Standard', description: 'Eligible ground and economy services.' },
-    { key: 'expedited', title: 'Expedited', description: 'Eligible faster carrier services.' },
-    { key: 'overnight', title: 'Overnight', description: 'Eligible overnight carrier services.' },
-] as const;
-const carriers = ['USPS', 'UPS', 'FedEx'] as const;
 type ShippingSettingsConfig = { shippingCents: number | null; freeShippingAt: number; shippingOptions?: unknown };
-type FormValues = Record<string, FormDataEntryValue>;
-function dollars(value: FormDataEntryValue | undefined, label: string, maximum = 100000) {
-    const number = typeof value === 'string' && value.trim() !== '' ? Number(value) : NaN;
+type LiveRate = { key: string; name: string; cents: number; days: number | null; tier: string | null };
+type ServiceCheck = { key: string; label: string; status: 'ok' | 'missing' | 'wrong'; carrierCents: number | null; customerCents: number | null; message: string };
+type Check = { ok: true; checkedAt: string; destination: string; package: string; rates: LiveRate[]; options: { label: string; note: string; cents: number; days: number | null }[]; services: ServiceCheck[]; freeStandardLabel: string | null } | { ok: false; error: string };
+type Row = ShippingServiceSetting & { markup: string };
+type Draft = { rows: Row[]; freeStandardEnabled: boolean; threshold: string; fallback: string };
+const ENDPOINT = '/api/admin/shipping-services';
+const carriers = ['USPS', 'UPS', 'FedEx'] as const;
+const groups = { standard: 'Standard', expedited: 'Faster', overnight: 'Overnight' } as const;
+const destinations = [['ny', 'New York, NY 10118'], ['la', 'Los Angeles, CA 90012'], ['chi', 'Chicago, IL 60602'], ['mia', 'Miami, FL 33133'], ['lv', 'Las Vegas, NV 89101']] as const;
+const packages = [['v1', '1 vial'], ['v3', '3 vials'], ['v10', '10 vials'], ['b1', '1 bottle'], ['b3', '3 bottles']] as const;
+const centsText = (cents: number) => String(cents / 100);
+function parseDollars(value: string, label: string, maximum = 100000) {
+    const number = value.trim() === '' ? NaN : Number(value);
     const cents = Math.round(number * 100);
     if (!Number.isFinite(number) || number < 0 || cents > maximum) throw new Error(`${label} must be an amount from $0 to ${money(maximum)}.`);
     return cents;
 }
+/** Starting rows. Before the first save, mirror what checkout does today: allowed carriers, enabled groups, per-group fee. */
+function startingRows(options: ShippingOptionsConfig): Row[] {
+    return shippingServiceCatalog.map(service => {
+        const saved = options.services?.find(s => s.key === service.key);
+        if (saved) return { ...saved, markup: centsText(saved.markupCents) };
+        const legacyOn = !options.services && options.carriers.includes(service.carrier) && options[`${service.group}Enabled` as const];
+        const legacyFee = options[`${service.group}HandlingCents` as const];
+        return { key: service.key, enabled: Boolean(legacyOn), markupCents: options.services ? 0 : legacyFee, markup: centsText(options.services ? 0 : legacyFee), label: service.name, note: '' };
+    });
+}
+function draftFrom(config: ShippingSettingsConfig): Draft {
+    const options = normalizeShippingOptions(config.shippingOptions);
+    return { rows: startingRows(options), freeStandardEnabled: options.freeStandardEnabled, threshold: centsText(config.freeShippingAt), fallback: config.shippingCents == null ? '' : centsText(config.shippingCents) };
+}
+/** Validated save payload. Throws a message the owner can act on. */
+export function shippingServicesPayload(draft: Draft) {
+    const services = draft.rows.map(row => {
+        const name = shippingServiceCatalog.find(s => s.key === row.key)?.name || row.key;
+        const label = row.label.trim();
+        if (row.enabled && !label) throw new Error(`Give ${name} a name customers will see.`);
+        return { key: row.key, enabled: row.enabled, markupCents: parseDollars(row.markup, `The extra charge for ${name}`), label: label || name, note: row.note.trim() };
+    });
+    return { services, freeStandardEnabled: draft.freeStandardEnabled, freeShippingAt: parseDollars(draft.threshold, 'Free shipping minimum', 1000000), shippingCents: draft.fallback.trim() === '' ? null : parseDollars(draft.fallback, 'Backup standard price') };
+}
+async function call(body?: unknown): Promise<any> {
+    const response = await fetch(ENDPOINT, body === undefined ? { cache: 'no-store' } : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const data: any = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Shipping settings could not be reached.');
+    return data;
+}
 
-// Only the current form version includes delivery options. Older callers retain
-// their saved options rather than interpreting absent checkboxes as false.
-export function shippingSettingsFromForm(data: FormValues) {
-    const base = { shippingCents: data.shipping === '' ? null : dollars(data.shipping, 'Standard fallback'), freeShippingAt: dollars(data.threshold, 'Free standard threshold', 1000000) };
-    if (data.shippingSettingsVersion !== '1') return base;
-    const selectedCarriers = carriers.filter(carrier => data[`shippingCarrier${carrier}`] === 'on');
-    if (!selectedCarriers.length) throw new Error('Select at least one shipping carrier before saving.');
-    return { ...base, shippingOptions: {
-        standardEnabled: data.standardEnabled === 'on', expeditedEnabled: data.expeditedEnabled === 'on', overnightEnabled: data.overnightEnabled === 'on', freeStandardEnabled: data.freeStandardEnabled === 'on',
-        standardHandlingCents: dollars(data.standardHandling, 'Standard handling fee'), expeditedHandlingCents: dollars(data.expeditedHandling, 'Expedited handling fee'), overnightHandlingCents: dollars(data.overnightHandling, 'Overnight handling fee'), carriers: selectedCarriers,
-    } };
+function Verdict({ check, savedMatches, enabledCount }: { check: Check | null; savedMatches: boolean | null; enabledCount: number }) {
+    if (!check) return null;
+    if (!check.ok) return <div className={styles.verdict} data-state="fail" role="status"><strong>Could not check live prices</strong><p>{check.error}</p></div>;
+    const wrong = check.services.filter(s => s.status === 'wrong'), missing = check.services.filter(s => s.status === 'missing');
+    const state = savedMatches === false || wrong.length || !check.options.length ? 'fail' : missing.length ? 'warn' : 'ok';
+    const title = state === 'ok' ? `All ${check.options.length} shipping ${check.options.length === 1 ? 'option is' : 'options are'} working`
+        : state === 'warn' ? `${check.options.length} working, ${missing.length} not offered for this sample`
+        : savedMatches === false ? 'The save did not stick. Nothing changed for customers.'
+        : !check.options.length ? (enabledCount ? 'Customers would see no shipping options' : 'Every service is turned off')
+        : 'A price did not match your settings';
+    return <div className={styles.verdict} data-state={state} role="status">
+        <strong>{title}</strong>
+        <p>Checked live with the carriers just now: {check.package} to {check.destination}{savedMatches ? ', saved settings read back and matched' : ''}. Nothing was bought.</p>
+        {check.options.length > 0 && <ul className={styles.preview} aria-label="What a customer sees at checkout">{check.options.map(o => <li key={o.label}><span>{o.label}{o.note && <small>{o.note}</small>}</span><b>{money(o.cents)}</b></li>)}</ul>}
+        {check.freeStandardLabel && <p>Orders over the free shipping minimum get <b>{check.freeStandardLabel.replace(/^Free · /, '')}</b> free.</p>}
+        {[...wrong, ...missing].map(s => <p key={s.key} className={styles.problem}><b>{s.label}:</b> {s.message}</p>)}
+    </div>;
 }
 
 export function AdminShippingSettings({ config, busy = false }: { config: ShippingSettingsConfig; busy?: boolean }) {
-    const [options, setOptions] = useState(() => normalizeShippingOptions(config.shippingOptions));
-    const [fees, setFees] = useState(() => ({ standard: String(options.standardHandlingCents / 100), expedited: String(options.expeditedHandlingCents / 100), overnight: String(options.overnightHandlingCents / 100) }));
-    const enabledCount = [options.standardEnabled, options.expeditedEnabled, options.overnightEnabled].filter(Boolean).length;
-    return <fieldset className={styles.settings} disabled={busy}>
-        <legend>Shipping options</legend>
-        <input type="hidden" name="shippingSettingsVersion" value="1"/>
-        <p className={styles.intro}>Customers pay the live carrier quote plus your handling fee. Enabled options appear only when a connected carrier returns an eligible rate for the delivery address.</p>
-        <div className={styles.tiers}>{tiers.map(tier => {
-            const enabledKey = `${tier.key}Enabled` as const, value = Number(fees[tier.key]);
-            return <section key={tier.key} className={styles.tier} data-enabled={options[enabledKey]} aria-labelledby={`shipping-tier-${tier.key}`}>
-                <div className={styles.tierHeading}><h3 id={`shipping-tier-${tier.key}`}>{tier.title}</h3><label className={styles.toggle}><input type="checkbox" name={enabledKey} checked={options[enabledKey]} onChange={e => { if (!busy) setOptions(previous => ({ ...previous, [enabledKey]: e.target.checked })); }}/><span>Enable {tier.title.toLowerCase()}</span></label></div>
-                <p>{tier.description}</p>
-                <label className={styles.fee}><span>{tier.title} handling fee ($)</span><input name={`${tier.key}Handling`} type="number" min="0" max="1000" step="0.01" required value={fees[tier.key]} onChange={e => { if (!busy) setFees(previous => ({ ...previous, [tier.key]: e.target.value })); }}/></label>
-                <output className={styles.formula} aria-live="polite">{fees[tier.key].trim() !== '' && Number.isFinite(value) && value >= 0 ? `Live carrier quote + ${money(Math.round(value * 100))} handling` : 'Enter a handling fee to see the pricing.'}</output>
-                {!options[enabledKey] && <p className={styles.saved}>Disabled at checkout. The fee stays saved.</p>}
-            </section>;
-        })}</div>
-        {!enabledCount && <p className={styles.warning} role="status">All delivery tiers are disabled. Customers will have no shipping options until you enable a tier.</p>}
-        <p className={styles.timing}>Overnight refers to carrier transit time after dispatch. It does not change preorder dispatch dates or guarantee next-calendar-day, weekend or holiday delivery.</p>
-        <section className={styles.section} aria-labelledby="shipping-carriers-title"><h3 id="shipping-carriers-title">Eligible carriers</h3><div className={styles.carriers}>{carriers.map((carrier, index) => <label className={styles.toggle} key={carrier}><input type="checkbox" name={`shippingCarrier${carrier}`} required={index === 0 && !options.carriers.length} checked={options.carriers.includes(carrier)} onChange={e => { if (!busy) setOptions(previous => ({ ...previous, carriers: e.target.checked ? [...previous.carriers, carrier] : previous.carriers.filter(item => item !== carrier) })); }}/><span>{carrier}</span></label>)}</div><p>Select at least one. Selecting a carrier allows its eligible rates; it does not connect or activate a carrier account in EasyPost.</p>{!options.carriers.length && <p className={styles.warning} role="alert">Choose at least one carrier before saving.</p>}</section>
-        <section className={styles.section} aria-labelledby="shipping-free-title"><h3 id="shipping-free-title">Free standard shipping</h3><label className={styles.toggle}><input type="checkbox" name="freeStandardEnabled" checked={options.freeStandardEnabled} onChange={e => { if (!busy) setOptions(previous => ({ ...previous, freeStandardEnabled: e.target.checked })); }}/><span>Offer free standard shipping above a threshold</span></label><label className={styles.fee}><span>Free standard threshold ($)</span><input name="threshold" type="number" min="0" max="10000" step="0.01" required defaultValue={String(config.freeShippingAt / 100)}/></label><p>Uses the merchandise total after discounts. Expedited and overnight options keep their carrier rate plus handling fee.</p>{!options.standardEnabled && options.freeStandardEnabled && <p className={styles.warning}>Standard must also be enabled for the free standard offer to appear.</p>}</section>
-        <section className={styles.section} aria-labelledby="shipping-fallback-title"><h3 id="shipping-fallback-title">Standard fallback</h3><label className={styles.fee}><span>Standard fallback price ($), optional</span><input name="shipping" type="number" min="0" max="1000" step="0.01" defaultValue={config.shippingCents == null ? '' : String(config.shippingCents / 100)} placeholder="No fallback"/></label><p>Used if a live Standard quote is unavailable. This is the total fallback charge; no handling fee is added. Leave blank to require a live rate for paid Standard shipping. Eligible free Standard can still apply. Expedited and overnight always require an eligible live carrier rate.</p></section>
-        <p className={styles.note}>Save store settings below to apply changes to new quotes. Existing orders keep their saved shipping charges and service.</p>
-    </fieldset>;
+    const [draft, setDraft] = useState<Draft>(() => draftFrom(config));
+    const [savedDraft, setSavedDraft] = useState(() => JSON.stringify(draftFrom(config)));
+    const [perServiceSaved, setPerServiceSaved] = useState(() => Boolean(normalizeShippingOptions(config.shippingOptions).services));
+    const [destination, setDestination] = useState('ny');
+    const [sample, setSample] = useState('v3');
+    const [check, setCheck] = useState<Check | null>(null);
+    const [savedMatches, setSavedMatches] = useState<boolean | null>(null);
+    const [working, setWorking] = useState<'' | 'check' | 'save'>('');
+    const [error, setError] = useState('');
+    const started = useRef(false);
+    const verdictRef = useRef<HTMLDivElement>(null);
+    const locked = busy || working !== '';
+    const dirty = JSON.stringify(draft) !== savedDraft;
+    const live = new Map((check?.ok ? check.rates : []).map(r => [r.key, r]));
+    const enabledCount = draft.rows.filter(r => r.enabled).length;
+
+    async function runCheck(nextDestination = destination, nextSample = sample) {
+        setWorking('check'); setError(''); setSavedMatches(null);
+        try { setCheck((await call({ action: 'check', destination: nextDestination, sample: nextSample })).check); }
+        catch (e) { setError(e instanceof Error ? e.message : 'The check failed.'); }
+        finally { setWorking(''); }
+    }
+    async function save() {
+        let settings;
+        try { settings = shippingServicesPayload(draft); }
+        catch (e) { setError(e instanceof Error ? e.message : 'Check the shipping settings.'); return; }
+        setWorking('save'); setError('');
+        try {
+            const result = await call({ action: 'save', settings, destination, sample });
+            const next = draftFrom({ shippingCents: result.shippingCents, freeShippingAt: result.freeShippingAt, shippingOptions: result.settings });
+            setDraft(next); setSavedDraft(JSON.stringify(next)); setPerServiceSaved(true);
+            setSavedMatches(result.savedMatches === true); setCheck(result.check);
+            setTimeout(() => verdictRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }), 0);
+        } catch (e) { setError(e instanceof Error ? e.message : 'Shipping could not be saved.'); }
+        finally { setWorking(''); }
+    }
+    // Load live carrier prices once so every row shows what the customer would pay.
+    useEffect(() => { if (!started.current) { started.current = true; void runCheck(); } }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    const update = (key: string, patch: Partial<Row>) => setDraft(d => ({ ...d, rows: d.rows.map(r => r.key === key ? { ...r, ...patch } : r) }));
+
+    function serviceRow(service: CatalogService) {
+        const row = draft.rows.find(r => r.key === service.key)!;
+        const rate = live.get(service.key);
+        const extra = Number(row.markup);
+        const pays = rate && row.markup.trim() !== '' && Number.isFinite(extra) && extra >= 0 ? rate.cents + Math.round(extra * 100) : null;
+        const id = 'ship-' + service.key.replace(':', '-');
+        return <tr key={service.key} data-enabled={row.enabled}>
+            <td className={styles.offer}><input id={id} type="checkbox" checked={row.enabled} disabled={locked} onChange={e => update(service.key, { enabled: e.target.checked })}/></td>
+            <td className={styles.service}><label htmlFor={id}>{service.name}</label><small>{groups[service.group]} · {service.detail}</small></td>
+            <td className={styles.num} data-label="Carrier price">{rate ? <>{money(rate.cents)}{rate.days ? <small>{rate.days} {rate.days === 1 ? 'day' : 'days'}</small> : null}</> : <span className={styles.muted}>{check?.ok ? 'Not offered' : '…'}</span>}</td>
+            <td className={styles.extra} data-label="Your extra"><span className={styles.dollar}>$</span><input aria-label={`Extra charge for ${service.name}`} type="number" min="0" max="1000" step="0.01" inputMode="decimal" value={row.markup} disabled={locked} onChange={e => update(service.key, { markup: e.target.value })}/></td>
+            <td className={styles.num} data-label="Customer pays"><b>{pays === null ? '—' : money(pays)}</b></td>
+            <td className={styles.wording} data-label="Customer sees"><input aria-label={`Name customers see for ${service.name}`} maxLength={80} value={row.label} disabled={locked} placeholder={service.name} onChange={e => update(service.key, { label: e.target.value })}/><input aria-label={`Note customers see for ${service.name}`} maxLength={160} value={row.note} disabled={locked} placeholder="Optional note, e.g. Arrives in 1 to 2 days" onChange={e => update(service.key, { note: e.target.value })}/></td>
+        </tr>;
+    }
+    const unsupported = check?.ok ? check.rates.filter(r => !shippingServiceCatalog.some(s => s.key === r.key)) : [];
+
+    return <section className={styles.settings} aria-labelledby="shipping-settings-title">
+        <div className={styles.head}>
+            <h2 id="shipping-settings-title">Shipping</h2>
+            <p>Every service EasyPost can quote for USPS, UPS and FedEx. Tick what customers may choose, set what you add on top of the carrier price, and write what they see. Saving checks it live right away.</p>
+        </div>
+        {!perServiceSaved && <p className={styles.notice}>Not set up yet. Right now checkout shows only the cheapest service in each speed with no extra charge. Choose your options below and save.</p>}
+
+        <div className={styles.sampleBar}>
+            <label>Price check to <select value={destination} disabled={locked} onChange={e => { setDestination(e.target.value); void runCheck(e.target.value, sample); }}>{destinations.map(([id, title]) => <option key={id} value={id}>{title}</option>)}</select></label>
+            <label>Package <select value={sample} disabled={locked} onChange={e => { setSample(e.target.value); void runCheck(destination, e.target.value); }}>{packages.map(([id, title]) => <option key={id} value={id}>{title}</option>)}</select></label>
+            <button type="button" className={styles.secondary} disabled={locked} onClick={() => void runCheck()}>{working === 'check' ? 'Checking…' : 'Check live prices'}</button>
+        </div>
+
+        <div ref={verdictRef} className={styles.anchor}><Verdict check={check} savedMatches={savedMatches} enabledCount={enabledCount}/></div>
+
+        {carriers.map(carrier => <div key={carrier} className={styles.carrier}>
+            <h3>{carrier}</h3>
+            <table className={styles.table}>
+                <thead><tr><th className={styles.offer}>Offer</th><th>Service</th><th className={styles.num}>Carrier charges you</th><th>Your extra</th><th className={styles.num}>Customer pays</th><th>Customer sees</th></tr></thead>
+                <tbody>{shippingServiceCatalog.filter(s => s.carrier === carrier).map(serviceRow)}</tbody>
+            </table>
+        </div>)}
+        {unsupported.length > 0 && <p className={styles.muted}>Carriers also quoted {unsupported.map(r => r.name).join(', ')}. These are not offered yet.</p>}
+
+        <div className={styles.extras}>
+            <div>
+                <label className={styles.check}><input type="checkbox" checked={draft.freeStandardEnabled} disabled={locked} onChange={e => setDraft(d => ({ ...d, freeStandardEnabled: e.target.checked }))}/><span>Free shipping over a minimum</span></label>
+                <label className={styles.field}><span>Minimum order, after discounts ($)</span><input type="number" min="0" max="10000" step="0.01" value={draft.threshold} disabled={locked || !draft.freeStandardEnabled} onChange={e => setDraft(d => ({ ...d, threshold: e.target.value }))}/></label>
+                <p className={styles.muted}>The standard service that costs you the least becomes free. Faster services keep their price.</p>
+            </div>
+            <div>
+                <label className={styles.field}><span>Backup standard price if carriers do not answer ($)</span><input type="number" min="0" max="1000" step="0.01" value={draft.fallback} placeholder="None" disabled={locked} onChange={e => setDraft(d => ({ ...d, fallback: e.target.value }))}/></label>
+                <p className={styles.muted}>Leave empty to stop checkout instead of guessing a price.</p>
+            </div>
+        </div>
+
+        {error && <p className={styles.error} role="alert">{error}</p>}
+        <div className={styles.actions}>
+            <button type="button" className="button button-dark" disabled={locked || (!dirty && perServiceSaved)} onClick={() => void save()}>{working === 'save' ? 'Saving and checking…' : 'Save shipping and check it'}</button>
+            <span className={styles.muted}>{dirty ? 'Unsaved changes. ' : savedMatches && check?.ok ? '' : perServiceSaved ? 'Saved. ' : ''}Orders already placed keep the shipping they paid for.</span>
+            {savedMatches !== null && !dirty && <span className={styles.result} data-state={savedMatches && check?.ok && check.services.every(s => s.status === 'ok') && check.options.length ? 'ok' : 'fail'} role="status">{savedMatches && check?.ok && check.services.every(s => s.status === 'ok') && check.options.length ? 'Saved and checked live: everything works.' : 'Saved, but the live check found a problem. See the check above.'}</span>}
+        </div>
+    </section>;
 }

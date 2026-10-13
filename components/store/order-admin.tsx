@@ -18,7 +18,7 @@ export function OrderDetails({ order }: { order: any }) {
             <tfoot>
                 <tr><td colSpan={3}>Subtotal ({units} unit{units === 1 ? '' : 's'})</td><td>{money(num(d.subtotal))}</td></tr>
                 {num(d.discount) > 0 && <tr><td colSpan={3}>Discounts{d.promo?.code ? ' (incl. promo ' + d.promo.code + ')' : ''}</td><td>−{money(num(d.discount))}</td></tr>}
-                <tr><td colSpan={3}>Shipping{d.shippingService ? ' · ' + d.shippingService : ''}</td><td>{money(num(d.shipping))}</td></tr>
+                <tr><td colSpan={3}>Shipping{d.shippingService ? ' · ' + d.shippingService : ''}{d.shippingOption?.serviceKey && d.shippingOption.carrier ? ' (' + d.shippingOption.carrier + ' ' + String(d.shippingOption.carrierService || '').replaceAll('_', ' ') + ')' : ''}</td><td>{money(num(d.shipping))}</td></tr>
                 <tr><td colSpan={3}>Tax</td><td>{money(num(d.tax))}</td></tr>
                 <tr className="order-total"><td colSpan={3}>Total</td><td>{money(num(d.total ?? order.total))}</td></tr>
             </tfoot>

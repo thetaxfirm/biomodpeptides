@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { shipmentEmailText } from './fulfillment';
-import { normalizeShippingOptions, shippingCarrier, shippingTier, shippingTierEnabled, shippingHandling, type ShippingOptionsConfig, type ShippingOption, type ShippingCarrier } from './shipping-options';
+import { normalizeShippingOptions, shippingCarrier, shippingTier, shippingTierEnabled, shippingHandling, serviceKey, enabledServiceSetting, catalogService, shippingCarriers, type ShippingOptionsConfig, type ShippingOption, type ShippingCarrier } from './shipping-options';
 // EasyPost shipping: live checkout rates, label purchase and tracking webhooks.
 // Everything stays off until EASYPOST_API_KEY is set; checkout then falls back to the flat rate in store settings.
 type Environment = Record<string, string | undefined>;
@@ -78,11 +78,26 @@ async function createShipment(env: Environment, to: ShipAddress, items: ShipItem
     return call(env, '/shipments', { shipment: { to_address: toAddress(to), from_address: shipFrom(env), parcel: parcelFor(items, env), reference } });
 }
 export const serviceName = (r: Pick<Rate, 'carrier' | 'service'>) => r.carrier + ' ' + r.service.replaceAll('_', ' ').replace(/([a-z])([A-Z])/g, '$1 $2');
-/** One cheapest eligible carrier service per enabled tier, with explicit handling. */
-export async function carrierShippingOptions(env: Environment, to: ShipAddress, items: ShipItem[], settings: ShippingOptionsConfig, freeStandard = false): Promise<ShippingOption[]> {
-    const shipment = await createShipment(env, to, items);
-    const available = rates(shipment, env, settings.carriers);
+/** Customer options from already-fetched rates. Checkout and the admin live check share this exact pricing. */
+export function shippingOptionsFromRates(available: Rate[], settings: ShippingOptionsConfig, freeStandard = false): ShippingOption[] {
     const result: ShippingOption[] = [];
+    if (settings.services) {
+        // Per-service mode: every service the owner turned on, at carrier price plus the owner's extra.
+        const seen = new Set<string>();
+        let freeUsed = false;
+        for (const rate of available) {
+            const carrier = rate.carrier as ShippingCarrier, key = serviceKey(carrier, rate.service);
+            const chosen = enabledServiceSetting(settings, key);
+            const tier = shippingTier(carrier, rate.service, rate.days);
+            if (!chosen || !tier || seen.has(key)) continue;
+            seen.add(key);
+            // Rates arrive in carrier-cost order, so free standard goes to the enabled standard service that costs the store least.
+            const free = freeStandard && tier === 'standard' && !freeUsed;
+            if (free) freeUsed = true;
+            result.push({ id: rate.id, tier, shippingService: free ? 'Free · ' + chosen.label : chosen.label, shipping: free ? 0 : rate.cents + chosen.markupCents, carrierCents: rate.cents, handlingCents: chosen.markupCents, days: rate.days, carrier, carrierService: rate.service, source: 'easypost', free, ...(chosen.note ? { note: chosen.note } : {}), serviceKey: key });
+        }
+        return result.sort((a, b) => a.shipping - b.shipping || a.id.localeCompare(b.id));
+    }
     for (const tier of ['standard', 'expedited', 'overnight'] as const) {
         if (!shippingTierEnabled(settings, tier)) continue;
         const rate = available.find(r => shippingTier(r.carrier as ShippingCarrier, r.service, r.days) === tier);
@@ -92,6 +107,34 @@ export async function carrierShippingOptions(env: Environment, to: ShipAddress, 
         result.push({ id: rate.id, tier, shippingService: free ? 'Free standard shipping · ' + serviceName(rate) : serviceName(rate), shipping: free ? 0 : rate.cents + handlingCents, carrierCents: rate.cents, handlingCents, days: rate.days, carrier: rate.carrier as ShippingCarrier, carrierService: rate.service, source: 'easypost', free });
     }
     return result;
+}
+/** Live checkout options for the enabled services or tiers. */
+export async function carrierShippingOptions(env: Environment, to: ShipAddress, items: ShipItem[], settings: ShippingOptionsConfig, freeStandard = false): Promise<ShippingOption[]> {
+    const shipment = await createShipment(env, to, items);
+    return shippingOptionsFromRates(rates(shipment, env, settings.carriers), settings, freeStandard);
+}
+export type ServiceCheck = { key: string; label: string; status: 'ok' | 'missing' | 'wrong'; carrierCents: number | null; markupCents: number; customerCents: number | null; days: number | null; message: string };
+/** Admin live check: one real rate request to a sample address, run through the same pricing checkout uses. Buys nothing. */
+export async function liveShippingCheck(env: Environment, to: ShipAddress, items: ShipItem[], settings: ShippingOptionsConfig) {
+    const shipment = await createShipment(env, to, items);
+    const all = rates(shipment, env, [...shippingCarriers]);
+    const offered = shippingOptionsFromRates(all.filter(r => settings.carriers.includes(r.carrier as ShippingCarrier)), settings, false);
+    const withFree = shippingOptionsFromRates(all.filter(r => settings.carriers.includes(r.carrier as ShippingCarrier)), settings, true);
+    const services: ServiceCheck[] = (settings.services || []).filter(s => s.enabled).map(s => {
+        const option = offered.find(o => o.serviceKey === s.key);
+        const rate = all.find(r => serviceKey(r.carrier as ShippingCarrier, r.service) === s.key);
+        if (!option) return { key: s.key, label: s.label, status: 'missing', carrierCents: rate?.cents ?? null, markupCents: s.markupCents, customerCents: null, days: rate?.days ?? null, message: rate ? 'The carrier returned a rate, but it could not be offered. Contact support before relying on it.' : 'The carrier did not offer this service for the sample address and package. Customers will not see it there.' };
+        const right = option.shipping === option.carrierCents! + s.markupCents && option.shippingService === s.label && option.handlingCents === s.markupCents;
+        return { key: s.key, label: s.label, status: right ? 'ok' : 'wrong', carrierCents: option.carrierCents, markupCents: s.markupCents, customerCents: option.shipping, days: option.days, message: right ? 'Shown at checkout at the carrier price plus your extra.' : 'The checkout price did not match your settings.' };
+    });
+    const freeOption = withFree.find(o => o.free) || null;
+    return {
+        checkedAt: new Date().toISOString(),
+        rates: all.map(r => ({ key: serviceKey(r.carrier as ShippingCarrier, r.service), carrier: r.carrier, service: r.service, name: catalogService(serviceKey(r.carrier as ShippingCarrier, r.service))?.name || serviceName(r), cents: r.cents, days: r.days, tier: shippingTier(r.carrier as ShippingCarrier, r.service, r.days) })),
+        options: offered.map(o => ({ label: o.shippingService, note: o.note || '', cents: o.shipping, days: o.days, tier: o.tier })),
+        services,
+        freeStandardLabel: freeOption ? freeOption.shippingService : null,
+    };
 }
 /** Legacy API retained for integrations; checkout uses explicit carrierShippingOptions. */
 export async function cheapestRate(env: Environment, to: ShipAddress, items: ShipItem[]): Promise<{ cents: number; service: string }> {

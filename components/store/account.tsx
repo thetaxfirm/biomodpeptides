@@ -322,10 +322,13 @@ export function Checkout() {
                     <legend>Choose delivery</legend>
                     {(delivery.shippingOptions as ShippingOption[]).map(option => <label className="checkout-delivery-option" key={option.id} data-selected={delivery.shippingOptionId === option.id}>
                         <input type="radio" name="deliveryOption" value={option.id} checked={delivery.shippingOptionId === option.id} onChange={() => void selectDelivery(option.id)}/>
-                        <span><strong className="checkout-delivery-heading"><span>{option.tier === 'overnight' ? 'Overnight' : option.tier === 'expedited' ? 'Expedited' : 'Standard'}</span><span>{option.free ? 'Free' : money(option.shipping)}</span></strong><span className="checkout-delivery-detail">{option.shippingService}</span>
+                        {option.serviceKey ? <span><strong className="checkout-delivery-heading"><span>{option.shippingService}</span><span>{option.free ? 'Free' : money(option.shipping)}</span></strong>
+                            {option.note && <span className="checkout-delivery-detail">{option.note}</span>}
+                            {option.days !== null && <span className="checkout-delivery-detail">Carrier estimate: {option.days} business {option.days === 1 ? 'day' : 'days'} after dispatch</span>}
+                        </span> : <span><strong className="checkout-delivery-heading"><span>{option.tier === 'overnight' ? 'Overnight' : option.tier === 'expedited' ? 'Expedited' : 'Standard'}</span><span>{option.free ? 'Free' : money(option.shipping)}</span></strong><span className="checkout-delivery-detail">{option.shippingService}</span>
                             {option.days !== null && <span className="checkout-delivery-detail">Carrier estimate: {option.days} business {option.days === 1 ? 'day' : 'days'} after dispatch</span>}
                             {!option.free && option.handlingCents > 0 && option.carrierCents !== null && <span className="checkout-delivery-detail">{money(option.carrierCents)} carrier rate + {money(option.handlingCents)} handling</span>}
-                        </span>
+                        </span>}
                     </label>)}
                     <p id="delivery-timing" className="checkout-delivery-timing">Transit starts after dispatch. Preorder dispatch dates still apply. Weekends, holidays and carrier cutoffs may affect arrival.</p>
                     {busy && <p role="status">Confirming delivery and tax…</p>}

@@ -56,7 +56,7 @@ mod.require=id=>{
   const file=path.join(root,'components/store/admin-shipping-settings.tsx'),child=new Module(file,module);child.filename=file;child.paths=Module._nodeModulePaths(root);
   child.require=dep=>dep==='@/lib/shipping-options'?{}:dep.endsWith('.module.css')?{}:mod.require(dep);
   child._compile(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,file);
-  return{AdminShippingSettings,shippingSettingsFromForm:child.exports.shippingSettingsFromForm};
+  return{AdminShippingSettings};
  }
 
  if(id==='./team-admin')return{TeamAdmin:noop};if(id==='@/lib/staff')return require('./staff-module-fixture.cjs').loadStaffModule();
@@ -203,13 +203,13 @@ const productNames=h=>String(Boolean(productPanel(h).props.edited));
  assert.deepEqual(productWrite.packPrices,{3:null,5:50075,10:80000});assert.deepEqual(productWrite.preorder,configured.preorder);assert.deepEqual(productWrite.sale,{enabled:true,percentOff:20,starts:'2099-01-01T00:00:00.000Z',ends:'2099-01-04T00:00:00.000Z'});
  assert.equal(productNames(h),'true');assert(button(h,'Refresh administration').props.disabled);assert.equal(productPanel(h).props.busy,false);assert.equal(reports.length,1);assert.equal(reads(),1,'Failed inventory write does not accept a replacement snapshot');
 
- // Shipping settings share the existing guarded Settings save and retain all
- // unrelated program/pack fields in the same payload.
+ // Shipping has its own save-and-verify panel. The store Settings save sends only
+ // program/pack fields, so it can never overwrite shipping services or prices.
  reset();h=mount({initialTab:'settings'});await flush(h);allowedMutation='admin-config';
  settingsForm(h).props.onChangeCapture();h.render();const shippingSettings=find(h,n=>n.type===AdminShippingSettings);assert.equal(shippingSettings.props.busy,false);assert.deepEqual(shippingSettings.props.config,fixture().config);
  apiImpl=async action=>action==='admin-config'?{message:'Synthetic shipping settings saved'}:fixture();
- await settingsForm(h).props.onSubmit({preventDefault(){},currentTarget:{fields:{pack3:'10',pack5:'15',pack10:'20',shipping:'',threshold:'200',shippingSettingsVersion:'1',standardEnabled:'on',expeditedEnabled:'on',overnightEnabled:'on',freeStandardEnabled:'on',standardHandling:'0',expeditedHandling:'2.50',overnightHandling:'10',shippingCarrierUSPS:'on',shippingCarrierUPS:'on'}}});h.render();
- assert.deepEqual(calls.find(c=>c.action==='admin-config').body,{presalesEnabled:false,rewardsEnabled:false,affiliateEnabled:false,packDiscounts:{3:10,5:15,10:20},shippingCents:null,freeShippingAt:20000,shippingOptions:{standardEnabled:true,expeditedEnabled:true,overnightEnabled:true,freeStandardEnabled:true,standardHandlingCents:0,expeditedHandlingCents:250,overnightHandlingCents:1000,carriers:['USPS','UPS']}});
+ await settingsForm(h).props.onSubmit({preventDefault(){},currentTarget:{fields:{pack3:'10',pack5:'15',pack10:'20'}}});h.render();
+ assert.deepEqual(calls.find(c=>c.action==='admin-config').body,{presalesEnabled:false,rewardsEnabled:false,affiliateEnabled:false,packDiscounts:{3:10,5:15,10:20}});
  assert.equal(button(h,'Refresh administration').props.disabled,false);assert.equal(mutations(),1);
 
  // COA config/send delegates stay under parent draft, single-flight and owner guards.

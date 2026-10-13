@@ -12,7 +12,8 @@ export function shippingTerms(config: ShippingTermsConfig | null | undefined) {
     const banner = freeThreshold === null ? 'U.S. shipping · Review available services at checkout.'
         : freeThreshold === 0 ? 'U.S. shipping · Free standard delivery.'
         : `U.S. shipping · Free standard delivery on orders of ${dollars(freeThreshold)} or more.`;
-    const overnight = options?.overnightEnabled ? `When available for your address, overnight shipping is the carrier's quoted rate plus a ${dollars(options.overnightHandlingCents)} handling fee. The complete shipping charge is shown before payment.` : null;
+    const overnight = options?.services ? (options.overnightEnabled ? 'Overnight delivery is offered at checkout when a carrier serves your address. The complete shipping charge is shown before payment.' : null)
+        : options?.overnightEnabled ? `When available for your address, overnight shipping is the carrier's quoted rate plus a ${dollars(options.overnightHandlingCents)} handling fee. The complete shipping charge is shown before payment.` : null;
     return { freeThreshold, standard, banner, overnight };
 }
 export const shippingDispatchTerms = 'Carrier delivery estimates start after dispatch, not when the order is placed. Overnight service does not speed up preorder availability or order processing. Weekends, holidays, carrier cutoffs and destination restrictions may affect delivery; an arrival date is not guaranteed by this store.';
