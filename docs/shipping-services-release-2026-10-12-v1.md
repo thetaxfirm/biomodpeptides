@@ -27,3 +27,11 @@ Deployment version and live checks are recorded below after release.
 ## Affected
 
 `/admin?tab=settings`, `/admin?tab=orders`, `/checkout`, `/shipping-policy` overnight sentence; `/api/admin/shipping-services` (new), `/api/store/admin-config`. No migration. No product, price, order or credential change.
+
+## Release
+
+Source on main: ebf6838 then 0197e04 rebased to 9ac0cd0 (fast-forward, after collaborator commits 26e4303 and a41fc3f). Combined gate: TypeScript and 65 suites passed. Cloudflare Workers Builds deployed version 867322b5-a235-49b0-bf16-4322b44fcf26 at 2026-10-13T05:50:22Z.
+
+Live read-only checks: `/api/admin/shipping-services` returns 403 "Administrator sign-in required." when signed out; `/`, `/checkout`, `/shipping-policy` return 200; `/admin` redirects to sign-in. Production shipping settings were not changed by this release: per-service mode starts only when the owner saves the new panel.
+
+Gap: the signed-in live EasyPost check has not run yet; it needs an owner sign-in at /admin?tab=settings. The panel runs it on open and after every save.
