@@ -57,7 +57,7 @@ for (const key of ['product_id', 'product_slug', 'public_identity', 'sku', 'cas'
 assert.equal(current.previous_document_id, oldDoc.document_id);
 assert.equal(current.certificate_lot, '301-10-0001');
 assert.equal(batchStatus(current), 'matched');
-assert.equal(batchStatusLabel(current), 'Matching-lot certificate');
+assert.equal(batchStatusLabel(current), 'Lab report available');
 assert.equal(doc.url, url);
 assert.equal(doc.report_id, 'BIOM2604200372');
 assert.equal(doc.report_date, '04/22/2026');
@@ -91,15 +91,15 @@ assert(!findRows('V260304-6 012').includes(current), 'The replaced Vanguard repo
 const render = (route, query = {}) => renderToStaticMarkup(React.createElement(StoreProvider, { initialCatalog: products.map(product => ({ ...product, resolvedBatch: batchFor(product.id) || null })) }, React.createElement(Experience, { path: route, query })));
 for (const [route, query] of [['product/tesamorelin-10mg', {}], ['testing', { product: '755' }], ['testing/301-10-0001', { product: '755' }]]) {
   const html = render(route, query);
-  for (const value of ['Matching-lot certificate', '99.92%', '11.52 mg', 'BIOM2604200372', 'Independent laboratory report for the lot printed on the vial label (301-10-0001).', 'Results apply to the submitted sample.', 'Confirm the lot supplied with your order.', 'Record updated October 12, 2026 (Pacific).']) assert(html.includes(escape(value)), route + ': ' + value);
+  for (const value of ['Lab report available', '99.92%', '11.52 mg', 'BIOM2604200372', 'Independent laboratory report (Freedom Diagnostics) for the lot printed on the vial label, 301-10-0001.', 'Record updated October 12, 2026 (Pacific).']) assert(html.includes(escape(value)), route + ': ' + value);
   assert(html.includes('href="' + url + '"'), route + ': uses exact original source URL');
   assert(!html.includes(oldDoc.url) && !html.includes('99.76%') && !html.includes('10.43 mg') && !html.includes('96.28%'), route + ': no earlier report values in current record');
-  if (route.startsWith('testing')) assert(html.includes('Original source import September 11, 2026; later updates appear with their records.'));
+  if (route.startsWith('testing')) assert(!html.includes('Original source import') && !html.includes('not a completed test'), route + ': no internal import or negative wording');
 }
 assert.equal(batchPath(current), '/testing/301-10-0001?product=755', 'Existing public record path remains stable');
 const ordinary = batchFor(753);
 assert(ordinary);
-assert(!renderToStaticMarkup(React.createElement(BatchDetails, { record: ordinary })).includes('Independent laboratory report for the lot printed on the vial label (301-10-0001).'), 'The source disclosure is specific to this reconciliation');
+assert(!renderToStaticMarkup(React.createElement(BatchDetails, { record: ordinary })).includes('Independent laboratory report (Freedom Diagnostics) for the lot printed on the vial label, 301-10-0001.'), 'The source disclosure is specific to this reconciliation');
 
 // Re-evaluate the real overlay against changed in-memory inputs: no inherited
 // certificate when a source association, identity, size or listed lot changes.

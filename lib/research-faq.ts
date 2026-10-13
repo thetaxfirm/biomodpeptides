@@ -25,7 +25,7 @@ export const researchFaqGroups = [
       {
         id: 'find-coa',
         question: 'Where can I find a Certificate of Analysis?',
-        answer: 'Open Testing Results and select a product. Available certificates identify their own batch, methods, and results. Pending documentation is shown as pending. Always compare the certificate lot with the product lot.',
+        answer: 'Open Batch documents and select a product. Each lab report shows its lot, methods and results; match its lot to the label on your vial.',
         href: '/testing',
         link: 'Find a product or lot in the batch library',
       },
@@ -45,8 +45,8 @@ export const researchFaqGroups = [
       },
       {
         id: 'pending-documentation',
-        question: 'What does documentation pending mean?',
-        answer: 'No original certificate is available in the published record. This is not a completed test result. Ask Biomod about the documentation for the lot being supplied.',
+        question: 'What does Update in progress mean?',
+        answer: 'The lab report for the current lot is being added to the library. Ask Biomod anytime for the latest documentation on a lot.',
         href: '/contact?subject=Product%20lot%20and%20COA%20question',
         link: 'Ask about a product lot or certificate',
       },

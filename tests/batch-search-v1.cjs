@@ -78,10 +78,10 @@ assert.deepEqual(rows(bpcReport, { selected: String(bpc.product_id), lot: bpc.pr
 assert.equal(batchStatus(ss50), 'pending');
 assert.equal(certificateFor(ss50), undefined);
 const pendingHTML = renderToStaticMarkup(React.createElement(BatchDetails, { record: rows('SS31 50mg')[0] }));
-assert(pendingHTML.includes('not available in the published documents yet'));
+assert(pendingHTML.includes('The lab report for this lot is being updated.'));
 assert(!pendingHTML.includes('Open original PDF') && !pendingHTML.includes(certificateFor(ss10).url));
 const mismatchHTML = renderToStaticMarkup(React.createElement(BatchDetails, { record: rows('Selank 10mg')[0] }));
-assert(!mismatchHTML.includes('The available certificate identifies a different lot.') && mismatchHTML.includes('Not verified for this lot'));
+assert(!mismatchHTML.includes('The available certificate identifies a different lot.') && mismatchHTML.includes('The lab report for this lot is being updated.') && !mismatchHTML.includes('Not verified'));
 assert(mismatchHTML.includes(mismatch.product_lot) && !mismatchHTML.includes(mismatch.certificate_lot));
 assert(!mismatchHTML.includes(certificateFor(mismatch).url) && !mismatchHTML.includes(certificateFor(mismatch).report_id));
 

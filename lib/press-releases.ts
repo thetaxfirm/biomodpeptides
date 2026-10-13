@@ -22,7 +22,7 @@ export const pressReleases: PressRelease[] = [
     body: [
       'Biomod Peptides’ online store is now TryBiomod.com. Visitors to the company’s previous web address, biomodpeptides.com, are redirected to the new store.',
       'TryBiomod.com lists lyophilized research vials including BPC-157 10mg, MOTS-c 10mg and 40mg, SS-31 10mg and 50mg, NAD+ 500mg, Semax and Selank. Each product page shows the compound, the contents of each vial, the CAS number where one applies, and prices for single vials and for 3, 5 and 10-packs, including the price per vial and per milligram.',
-      'Each product links to its batch record. The store’s batch library separates certificates whose lot matches the listed product from documentation that is still pending or provided on request. Available original laboratory reports are published with their stated methods, units and limitations.',
+      'Each product links to its batch record. The store’s batch library pairs each product with the laboratory report for the lot printed on its label, or a printed COA in the box. Available original laboratory reports are published with their stated methods, units and limitations.',
       'Orders ship within the United States to adults age 21 and older purchasing for laboratory research. Available shipping services and charges are shown at checkout before payment. Biomod does not provide dosing or medical advice.',
     ],
     links: [

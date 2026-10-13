@@ -18,7 +18,7 @@ require.extensions['.css'] = module => { module.exports = new Proxy({ __esModule
 
 
 const { products } = require('../lib/catalog.ts');
-const { batchRecords, batchStatus, certificateFor, matchingCertificateFor, coaOnRequest, coaRequestNotice } = require('../lib/testing.ts');
+const { batchRecords, batchStatus, certificateFor, matchingCertificateFor, coaOnRequest, coaRequestNotice, byReportFirst } = require('../lib/testing.ts');
 const { Testing } = require('../components/store/testing.tsx');
 const { StoreProvider } = require('../components/store/provider.tsx');
 const escape = value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#x27;');
@@ -30,7 +30,7 @@ const records = [...html.matchAll(/<details\b([^>]*)>([\s\S]*?)<\/details>/g)];
 assert.equal(records.length, batchRecords.length, 'all original records have native disclosures in initial HTML');
 const counts = { publicPDF: 0, pending: 0, mismatch: 0, restricted: 0 };
 for (let i = 0; i < records.length; i++) {
-  const [, attributes, body] = records[i], record = initialCatalog.map(product => product.resolvedBatch).filter(Boolean)[i];
+  const [, attributes, body] = records[i], record = initialCatalog.map(product => product.resolvedBatch).filter(Boolean).sort(byReportFirst)[i];
   assert(!/\bopen=/.test(attributes), 'unfiltered records start collapsed');
   assert(body.includes('<summary') && body.includes(escape(record.product_name)), 'the native summary names the product');
   assert(body.includes('href="/product/' + record.product_slug + '"'), 'product links exist before hydration');
@@ -43,10 +43,10 @@ for (let i = 0; i < records.length; i++) {
     if (record.lot_match === 'mismatch') {
       counts.mismatch++;
       const historical = certificateFor(record);
-      assert(body.includes('Documentation pending') && !body.includes('Lot needs confirmation'));
+      assert(body.includes('Update in progress') && !body.includes('Lot needs confirmation'));
       assert(!body.includes(historical.url) && !body.includes(historical.report_id) && !body.includes(record.certificate_lot), 'Historical report metadata and PDF are not current-inventory evidence');
     }
-    assert(body.includes('An original certificate for this listed lot is not available') && !body.includes('Open original PDF'), 'pending is explicit, no fabricated link');
+    assert(body.includes('The lab report for this lot is being updated.') && !body.includes('Open original PDF'), 'pending is explicit, no fabricated link');
   } else {
     counts.publicPDF++;
     assert(body.includes('href="' + escape(certificate.url) + '"'), 'the original source URL is in the initial response');

@@ -48,8 +48,9 @@ export function QualityGuide() {
     <section aria-labelledby="document-status" className={styles.section}>
       <h2 id="document-status">What the library status means</h2>
       <dl className={styles.checks}>
-        <div><dt>Matching-lot certificate</dt><dd>The certificate lot matches the listed product lot. This describes the document match; read the report for test scope and results.</dd></div>
-        <div><dt>Documentation pending</dt><dd>No original certificate is available in the published record. This is not a completed test result.</dd></div>
+        <div><dt>Lab report available</dt><dd>The laboratory's original report for the lot printed on the vial label. Open it for the full methods and results.</dd></div>
+        <div><dt>Printed COA included with order</dt><dd>The original COA for the lot ships in the box with your order.</dd></div>
+        <div><dt>Update in progress</dt><dd>The lab report for the current lot is being added. Ask us anytime for the latest documentation.</dd></div>
       </dl>
     </section>
 

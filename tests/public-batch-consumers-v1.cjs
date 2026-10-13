@@ -42,7 +42,7 @@ for(const [Component,props] of [[BatchPassport,{product:changed}],[Testing,{}],[
  const html=render(Component,props);
  assert(!html.includes(original.product_lot),'Old lot never leaks into '+Component.name);
  assert(!html.includes('Read original certificate'),'Detached original is absent from '+Component.name);
- if(Component!==QualityGuide)assert(html.includes('Documentation pending')||html.includes('Contact BIOMOD to request the COA for the listed lot.'),'Current unmatched state is visible in '+Component.name);
+ if(Component!==QualityGuide)assert(html.includes('Update in progress')||html.includes('The lab report for this lot is being updated.'),'Current unmatched state is visible in '+Component.name);
 }
 assert(render(Testing).includes('SYNTHETIC-NEW-LOT'));
 assert.equal(certificateProperties(product.id,changed).length,0);
@@ -53,7 +53,7 @@ const matched={...pending,certificate_lot:pending.product_lot,document_id:doc.do
 changed={...product,resolvedBatch:matched};currentProducts=[changed];
 for(const [Component,props] of [[BatchPassport,{product:changed}],[Testing,{}],[QualityGuide,{}],[ProductResearchDetails,{product:changed}],[ProductComparison,{products:[changed],open:true,onOpenChange(){},onRemove(){}}]]) {
  const html=render(Component,props);assert(!html.includes(original.product_lot));
- assert(html.includes('Matching-lot certificate')||html.includes('lot number matching this listing')||html.includes('SYNTHETIC-REPORT'),'New report used by '+Component.name);
+ assert(html.includes('Lab report available')||html.includes('published with this product')||html.includes('SYNTHETIC-REPORT'),'New report used by '+Component.name);
 }
 const props=certificateProperties(product.id,changed);assert(props.some(p=>p.name==='Certificate lot'&&p.value==='SYNTHETIC-NEW-LOT'));assert(props.some(p=>p.name==='Certificate of analysis'&&p.url===doc.url));
 assert(llmsText('https://trybiomod.com',paths,[changed]).includes('Matching-lot COA: lot SYNTHETIC-NEW-LOT'));

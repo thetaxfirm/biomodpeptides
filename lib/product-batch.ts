@@ -1,6 +1,6 @@
 // Server only: resolve approved report associations without moving private originals into public data.
 import { products as sourceProducts, productFormat, type Product } from './catalog';
-import { batchFor, certificateFor, laboratoryDocuments, normalizedStrength } from './testing';
+import { batchFor, certificateFor, laboratoryDocuments, normalizedStrength, statusLabels } from './testing';
 import { loadCoaReports, type OriginalCoaMetadata, type CoaBatchAssociation } from './coa-delivery';
 
 export type ProductBatch = { lot: string | null; reportRef: string | null; coaAvailable: boolean };
@@ -117,7 +117,7 @@ function resolved(product: Product, batch: ProductBatch, originals: OriginalCoaM
         product_url: 'https://trybiomod.com/product/' + product.slug, public_identity: product.identity, sku: product.sku,
         product_lot: batch.lot, certificate_lot: document?.batch_number || null, document_id: document?.document_id || null,
         has_certificate_pdf: Boolean(document), lot_match: matched ? 'matches' : 'not_verifiable',
-        coa_status: isPrivate ? 'Original COA available on request' : matched ? 'Matching-lot certificate' : 'Documentation pending',
+        coa_status: isPrivate ? statusLabels.request : matched ? statusLabels.matched : statusLabels.pending,
         coa_available: Boolean(isPrivate || matched), coa_on_request: isPrivate, ...(document ? { certificate: publicCertificate(document), coa_pdf_url: document.url, hub_coa_link_url: document.url } : {}),
         ...(isPrivate ? { report_id: choice!.reportId } : {}),
         review_issues: [],

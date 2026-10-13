@@ -69,8 +69,8 @@ for (const product of products) {
   assert(html.includes('href="/quality-standard#read-the-results"'));
   assert(!/<(?:button|details|script)\b|\bhidden=|aria-hidden=/.test(html), 'answers remain readable in initial HTML');
   const status = batchStatus(batchFor(product.id));
-  if (status === 'matched') assert(html.includes('lot number matching this listing'));
-  else assert(html.includes('Contact BIOMOD to request the COA for the listed lot.') && !html.includes('lot number matching this listing'));
+  if (status === 'matched') assert(html.includes('published with this product'));
+  else assert(html.includes('The lab report for this lot is being updated.') && !html.includes('published with this product'));
 }
 assert.equal(eligibleCount, 17);
 
@@ -239,13 +239,13 @@ for (const [slug, [heading, source]] of Object.entries(expectedStudies)) {
   const evidence = remainingBatchEvidence[slug];
   if (evidence) {
     assert.deepEqual([current.id, batchStatus(currentRecord), currentRecord.product_lot, currentRecord.certificate_lot], evidence, slug + ': existing lot evidence is unchanged');
-    assert(currentPassport.includes('<dt>Listed product lot</dt><dd>' + escape(evidence[2]) + '</dd>'));
+    assert(currentPassport.includes('<dt>Lot</dt><dd>' + escape(evidence[2]) + '</dd>'));
     const certificate = matchingCertificateFor(currentRecord);
-    assert(currentPassport.includes('<dt>Certificate lot</dt><dd>' + escape(certificate?.batch_number || 'Not listed') + '</dd>'));
+    assert(certificate ? currentPassport.includes('<dt>Report lot</dt><dd>' + escape(certificate.batch_number) + '</dd>') : !currentPassport.includes('<dt>Report lot</dt>'));
     if (certificate) assert(currentPassport.includes('href="' + escape(certificate.url) + '"'), slug + ': original PDF remains attached only to its own record');
     else assert(!currentPassport.includes('.pdf'), slug + ': pending evidence never borrows a certificate');
     if (evidence[1] !== 'matched') {
-      assert(currentPassport.includes('Not verified for this lot') && !currentPassport.includes('Matching-lot certificate'), slug + ': literature does not validate the listed lot');
+      assert(currentPassport.includes('The lab report for this lot is being updated.') && !currentPassport.includes('Lab report available'), slug + ': literature does not validate the listed lot');
     }
   }
 }
@@ -254,9 +254,9 @@ assert(productHTML.includes(sizeHTML), 'actual product route includes live size 
 assert(productHTML.indexOf('other-vial-sizes-heading') < productHTML.indexOf('class="detail-price"'), 'choose the vial size before reading the selected price');
 assert(productHTML.includes('$123.45'), 'selected product price comes from live catalog');
 const passport = productHTML.match(/<section class="batch-passport">([\s\S]*?)<\/section>/)?.[1];
-assert(passport?.includes('Documentation pending') && !passport.includes('Matching-lot certificate') && !passport.includes('.pdf'), '40mg retains its own documentation; never borrows the10mg COA');
+assert(passport?.includes('Update in progress') && !passport.includes('Lab report available') && !passport.includes('.pdf'), '40mg retains its own documentation; never borrows the10mg COA');
 const tenPassport = renderPage(ten.slug, fixture).match(/<section class="batch-passport">([\s\S]*?)<\/section>/)?.[1];
-assert(tenPassport?.includes('Matching-lot certificate') && tenPassport.includes('MOTS-C_10-mg.pdf'), '10mg keeps its original matching report');
+assert(tenPassport?.includes('Lab report available') && tenPassport.includes('MOTS-C_10-mg.pdf'), '10mg keeps its original matching report');
 const ssTen = products.find(product => product.slug === 'ss-31-10mg');
 const ssFifty = products.find(product => product.slug === 'ss-31-50mg');
 assert(ssTen && ssFifty);
@@ -274,8 +274,8 @@ for (const current of [ssTen, ssFifty]) {
 }
 const ssTenPassport = renderPage(ssTen.slug).match(/<section class="batch-passport">([\s\S]*?)<\/section>/)?.[1];
 const ssFiftyPassport = renderPage(ssFifty.slug).match(/<section class="batch-passport">([\s\S]*?)<\/section>/)?.[1];
-assert(ssTenPassport?.includes('Matching-lot certificate') && ssTenPassport.includes('SS-31_10-mg.pdf'), 'SS-31 10 mg retains its own matching COA');
-assert(ssFiftyPassport?.includes('Documentation pending') && !ssFiftyPassport.includes('.pdf') && !ssFiftyPassport.includes('408-10-0001'), 'SS-31 50 mg cannot inherit the 10 mg certificate or lot');
+assert(ssTenPassport?.includes('Lab report available') && ssTenPassport.includes('SS-31_10-mg.pdf'), 'SS-31 10 mg retains its own matching COA');
+assert(ssFiftyPassport?.includes('Update in progress') && !ssFiftyPassport.includes('.pdf') && !ssFiftyPassport.includes('408-10-0001'), 'SS-31 50 mg cannot inherit the 10 mg certificate or lot');
 for (const slugs of [['wolverine-10mg', 'wolverine-20mg'], ['heat-r-20mg', 'heat-r-30mg']]) {
   for (const slug of slugs) {
     const current = products.find(product => product.slug === slug);

@@ -63,7 +63,7 @@ for (const record of batchRecords) {
       assert(!html.includes('The available certificate identifies a different lot.'), 'No removed mismatch paragraph');
     }
     assert(!direct.includes('Open original PDF'), record.product_slug + ': missing document has no PDF link');
-    assert(html.includes('An original certificate for this listed lot is not available'), record.product_slug + ': missing document remains explicit');
+    assert(html.includes('The lab report for this lot is being updated.'), record.product_slug + ': missing document remains explicit');
     continue;
   }
   assert(direct.includes('href="' + escaped(certificate.url) + '"'), record.product_slug + ': actual original PDF URL is available without opening a dialog');

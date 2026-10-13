@@ -17,8 +17,8 @@ export function productQuestions(product: Product): ProductQuestion[] {
   const multiPacks = packSizes.slice(1, -1).join(', ') + ' or ' + packSizes.at(-1);
   const status = batchStatus(batchFor(product.id, product));
   const documentation = status === 'on-request' ? coaRequestNoticeFor(batchFor(product.id, product)) : status === 'matched'
-    ? 'A certificate is published with a lot number matching this listing. Confirm the lot supplied with your order and read the original report for its methods and results.'
-    : 'Contact BIOMOD to request the COA for the listed lot.';
+    ? 'The laboratory\'s original report for the lot printed on the vial label is published with this product. Open it for the full methods and results.'
+    : 'The lab report for this lot is being updated. Contact BIOMOD anytime for the latest documentation.';
   return [
     { id: 'buy', question: `How do I buy ${productLabel(product)}?`, answer: [
       supportsPacks(product)

@@ -3,6 +3,8 @@ import additions from './coas-additions-v1.json';
 import reconciliations from './coas-reconciliations-v1.json';
 import { products, type Product } from './catalog';
 export const laboratoryDocuments = [...source.documents, ...reconciliations.documents] as any[];
+// Customer-facing status wording, shared by the batch library, product pages and the public catalog.
+export const statusLabels = { matched: 'Lab report available', printed: 'Printed COA included with order', request: 'COA available on request', pending: 'Update in progress' } as const;
 // Nominal strength as printed: "50mg / vial" is 50mg, and a blend printed "5 mg/5 mg" is its 10mg total.
 export const normalizedStrength = (value: unknown) => {
   if (typeof value !== 'string') return '';
@@ -19,7 +21,7 @@ export const batchRecords = [...source.records, ...additions].filter(record => p
   if (!product || record.public_identity !== review.expected_identity || product.slug !== review.product_slug || product.identity !== review.expected_identity || product.sizes.length !== 1 || product.sizes[0] !== review.expected_size ||
       !document?.is_certificate || document.report_to.toUpperCase() !== 'BIOMOD PEPTIDES' || document.compound !== review.reported_compound || normalizedStrength(document.nominal_amount) !== normalizedStrength(review.expected_size) || document.batch_number !== review.product_lot) return record;
   return { ...record, document_id: document.document_id, coa_pdf_url: document.url, hub_coa_link_url: document.url,
-    has_certificate_pdf: true, certificate_lot: document.batch_number, lot_match: 'matches', coa_status: 'Matching-lot certificate',
+    has_certificate_pdf: true, certificate_lot: document.batch_number, lot_match: 'matches', coa_status: statusLabels.matched,
     source_url: review.source_url, verification_urls: document.verification_urls, review_issues: document.report_scope_notes,
     certificate_dates: { test_date: document.test_date, issue_date: document.issue_date, report_date: document.report_date, release_date: document.release_date, sample_received_date: document.sample_received_date },
     recorded_on: review.recorded_on, certificate_source_note: review.source_note, previous_document_id: review.previous_document_id };
@@ -40,6 +42,9 @@ export const matchingCertificateFor = (r:any) => {
   return document && r.certificate_lot === lot && document.batch_number === lot ? document : undefined;
 };
 export const batchStatus = (r:any) => coaOnRequest(r)?'on-request':matchingCertificateFor(r)?'matched':'pending';
-export const batchStatusLabel = (r:any) => coaOnRequest(r)?(printedCoaProductIds.has(Number(r?.product_id))?'Printed COA included with order':'Original COA available on request'):batchStatus(r)==='matched'?'Matching-lot certificate':'Documentation pending';
+export const batchStatusLabel = (r:any) => coaOnRequest(r)?(printedCoaProductIds.has(Number(r?.product_id))?statusLabels.printed:statusLabels.request):batchStatus(r)==='matched'?statusLabels.matched:statusLabels.pending;
+// Products with a lab report list first; alphabetical order is kept within each group.
+const statusOrder: Record<string, number> = { matched: 0, 'on-request': 1, pending: 2 };
+export const byReportFirst = (a:any, b:any) => statusOrder[batchStatus(a)] - statusOrder[batchStatus(b)];
 export const reportedResult = (d:any,kind:string) => d?.results?.filter((r:any)=>r.kind===kind).map((r:any)=>r.result+(r.unit&&!r.result.includes(r.unit)?' '+r.unit:'')).join('; ') || 'Not reported';
 export const batchPath = (r:any) => '/testing/'+encodeURIComponent(r.product_lot && !/^pending|not listed$/i.test(r.product_lot)?r.product_lot:r.record_id)+'?product='+r.product_id;
