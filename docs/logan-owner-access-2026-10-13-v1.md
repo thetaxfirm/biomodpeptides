@@ -28,3 +28,12 @@ Set `STORE_ADMIN_EMAILS` back to the prior value above, or roll back to version 
 Owner request: Ash receives the paid-order email too. `ORDER_NOTIFY_EMAILS` changed from
 `chris@biomodcompounds.com` to `chris@biomodcompounds.com,ash@biomodcompounds.com`. Readback: 28 bindings,
 only `ORDER_NOTIFY_EMAILS` differs; `/` and `/admin/login` 200. Rollback: restore the prior value.
+
+## Follow-up, same day: Logan can ship directly
+Owner request: Logan changes trybiomod.com from his own Claude the same way the owner does.
+User-owned repos cannot grant a collaborator Admin, and ruleset bypass is admin-only, so the
+`pull_request` rule was removed from ruleset 24951226 ("protect main"). `deletion` and
+`non_fast_forward` stay. Logan (write) can push to main; Workers Builds deploys main.
+Contributors still follow docs/website-change-rule-v1.md. Rollback: re-add the `pull_request` rule
+(1 approval). Cloudflare: Workers Platform Admin invite for Logan to be sent by the owner from the
+dashboard; the agent's token cannot invite members.
