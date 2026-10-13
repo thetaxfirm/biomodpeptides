@@ -1,4 +1,5 @@
 import { replyBridgeRoute } from '@/lib/request-reply-route';
+import { queryOrders, scanLimit } from '@/lib/order-queue';
 import { summarizeRequestReplies, prepareRequestReply } from '@/lib/request-replies';
 import { adminBatchRecords, validateBatchEdit } from '@/lib/product-batch';
 import { coaHash, loadCoaReports, readCoaOriginal, verifiedCoaAttachment } from '@/lib/coa-delivery';
@@ -194,6 +195,13 @@ export async function GET(req: NextRequest, { params }: {
                 }>('SELECT id,status,total,data,created FROM orders WHERE owner=? ORDER BY created DESC LIMIT 100', user.id)).map(o => ({ ...o, data: orderView(parse(o.data, {})) })), requests: (await all<{
                     data: string;
                 }>('SELECT id,kind,data,status,created FROM requests WHERE owner=? AND kind IN (\'contact\',\'stock\',\'affiliate\') ORDER BY created DESC LIMIT 100', user.id)).map(r => ({ ...r, data: presentationData(parse(r.data, {})) })), rewards: presentationData(await all('SELECT points,reason,created FROM rewards WHERE owner=? ORDER BY created DESC LIMIT 100', user.id)) });
+        }
+        if (action === 'admin-orders') {
+            // Paged, searchable order queue. Counts cover the whole scanned history, not just one page.
+            await requireStaff('orders:read');
+            const p = req.nextUrl.searchParams;
+            const rows = (await all<{ id: string; owner: string; status: string; total: number; data: string; created: number }>('SELECT id,owner,status,total,data,created FROM orders ORDER BY created DESC LIMIT ?', scanLimit + 1)).map(o => ({ ...o, data: adminOrderView(parse(o.data, {})) }));
+            return j(queryOrders(rows, { tab: p.get('tab'), q: p.get('q'), offset: p.get('offset'), id: p.get('id') }));
         }
         if (action === 'admin') {
             // Every role sees orders; other sections are sent only to roles that hold them.

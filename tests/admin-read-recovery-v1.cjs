@@ -29,7 +29,7 @@ const alerts=h=>nodes(h.tree).filter(n=>n.props.role==='alert').map(text).join('
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return{promise,resolve,reject};};
 const flush=async h=>{for(let i=0;i<16;i++)await Promise.resolve();h?.render();};
 const noop=()=>null;
-function Field(){}function Check(){}function Choice(){}function Blank(){}function AuthPage(){}function ShippingLabel(){}function Dialog(){}function Tabs(){}function TabsTrigger(){}function TabsContent(){}function CoaAutomation(){}function ChangeHistory(){}function AdminProducts(){}function AdminShippingSettings(){}
+function Field(){}function Check(){}function Choice(){}function Blank(){}function AuthPage(){}function ShippingLabel(){}function OrdersAdmin(){}function Dialog(){}function Tabs(){}function TabsTrigger(){}function TabsContent(){}function CoaAutomation(){}function ChangeHistory(){}function AdminProducts(){}function AdminShippingSettings(){}
 const ownerA={id:'fixture-admin-a',name:'Fixture A',email:'a@example.invalid'};
 const ownerB={id:'fixture-admin-b',name:'Fixture B',email:'b@example.invalid'};
 const fixture=(label='Snapshot A')=>({config:{presalesEnabled:false,rewardsEnabled:false,affiliateEnabled:false,packDiscounts:{},shippingCents:null,freeShippingAt:20000},products:[{id:900001,name:label,price:10000,stockQuantity:1,inStock:true,purchasable:true}],campaigns:[{id:'fixture-campaign',title:'Simulated campaign',active:false,starts:'2099-01-01',ends:'2099-02-01'}],orders:[{id:'fixture-order',status:'pending',total:10000,created:0,data:{items:[]}}],requests:[{id:'fixture-request',kind:'fixture',status:'new',created:0,data:{}}],searchPublishing:{}});
@@ -48,7 +48,7 @@ mod.require=id=>{
  if(id==='react')return hooks;if(id==='react/jsx-runtime')return projectRequire('react/jsx-runtime');if(id==='./provider')return provider;
  if(id==='sonner')return{toast:{success:v=>successes.push(v),info:v=>infos.push(v)}};
  if(id==='@/lib/catalog')return{money:c=>'$'+(c/100).toFixed(2)};if(id==='@/lib/packs')return{supportsPacks:p=>Boolean(p.categories?.some(c=>['research-compounds','spray-products','softgels'].includes(c.slug)))};
- if(id==='./account')return{AuthPage};if(id==='./shipping-admin')return{ShippingLabel};
+ if(id==='./account')return{AuthPage};if(id==='./shipping-admin')return{ShippingLabel};if(id==='./orders-admin')return{OrdersAdmin};
  if(id==='./coa-automation')return{CoaAutomation};
  if(id==='./change-history')return{ChangeHistory};
  if(id==='./admin-products')return{AdminProducts};
@@ -75,7 +75,8 @@ const reads=()=>calls.filter(c=>c.action==='admin').length;
 const mutations=()=>calls.filter(c=>c.action!=='admin').length;
 const settingsForm=h=>nodes(h.tree).find(n=>n.type==='form');
 const event=()=>({preventDefault(){},currentTarget:{fields:{pack3:'',pack5:'',pack10:'',shipping:'',threshold:'200'}}});
-const shippingDone=h=>find(h,n=>n.type===ShippingLabel).props.onDone;
+const shippingDone=h=>find(h,n=>n.type===OrdersAdmin).props.reload;
+const queue=h=>find(h,n=>n.type===OrdersAdmin).props;
 const productPanel=h=>find(h,n=>n.type===AdminProducts);
 const editFirst=h=>{const panel=productPanel(h);panel.props.onEdit(panel.props.products[0]);};
 const productNames=h=>String(Boolean(productPanel(h).props.edited));
@@ -115,7 +116,7 @@ const productNames=h=>String(Boolean(productPanel(h).props.edited));
 
  // An open, healthy empty snapshot can read two new orders without a remount or mutation.
  reset();apiImpl=async()=>({...fixture(),orders:[]});h=mount();await flush(h);
- assert(nodes(h.tree).some(n=>n.type===Blank&&n.props.title==='No orders received.'));
+ const emptyToken=queue(h).reloadToken;assert.equal(emptyToken,1);
  const initialKey=settingsForm(h).key;
  find(h,n=>n.type===Tabs).props.onValueChange('promos');
  productPanel(h).props.onQuery('Snapshot');h.render();
@@ -124,24 +125,28 @@ const productNames=h=>String(Boolean(productPanel(h).props.edited));
  const manualRefresh=button(h,'Refresh administration').props.onClick;manualRefresh();manualRefresh();h.render();
  assert.equal(reads(),2);assert(button(h,'Refreshing administration…').props.disabled);assert.equal(settingsForm(h).key,initialKey);
  newRead.resolve(updated);await flush(h);
- assert(text(h.tree).includes('order001'));assert(text(h.tree).includes('order002'));assert(!nodes(h.tree).some(n=>n.type===Blank&&n.props.title==='No orders received.'));
+ assert.equal(queue(h).reloadToken,emptyToken+1,'A newer snapshot tells the order queue to reload');
  assert.equal(find(h,n=>n.type===Tabs).props.value,'promos');assert.equal(productPanel(h).props.query,'Snapshot');
  assert.notEqual(settingsForm(h).key,initialKey);assert(find(h,n=>n.type==='time').props.dateTime);assert.equal(mutations(),0);assert.equal(refreshCalls,0);
- const acceptedKey=settingsForm(h).key,acceptedTime=find(h,n=>n.type==='time').props.dateTime;
+ const acceptedKey=settingsForm(h).key,acceptedTime=find(h,n=>n.type==='time').props.dateTime,acceptedToken=queue(h).reloadToken;
  apiImpl=async()=>{throw Error('Simulated manual read outage');};button(h,'Refresh administration').props.onClick();await flush(h);
- assert.match(alerts(h),/could not refresh/);assert(text(h.tree).includes('order002'));assert.equal(settingsForm(h).key,acceptedKey);assert.equal(find(h,n=>n.type==='time').props.dateTime,acceptedTime);
+ assert.match(alerts(h),/could not refresh/);assert.equal(queue(h).reloadToken,acceptedToken,'A failed read keeps the loaded queue');assert.equal(settingsForm(h).key,acceptedKey);assert.equal(find(h,n=>n.type==='time').props.dateTime,acceptedTime);
  assert.equal(mutations(),0);
 
  // Input changes, controlled settings flags, editor and all admin forms protect drafts.
  reset();apiImpl=async()=>({...fixture(),orders:updated.orders});h=mount();await flush(h);
  const cleanRefresh=button(h,'Refresh administration').props.onClick;
- for(const formTitle of ['Mix-and-match discounts','Create a presale','Reward ledger','Tracking number / carrier']){
+ for(const formTitle of ['Mix-and-match discounts','Create a presale','Reward ledger']){
   const form=nodes(h.tree).find(n=>n.type==='form'&&(formTitle==='Tracking number / carrier'?nodes(n).some(f=>f.type===Field&&f.props.label===formTitle):text(n).includes(formTitle)));assert(form);
   const key=form.key;form.props.onChangeCapture();h.render();const before=reads();cleanRefresh();button(h,'Refresh administration').props.onClick();
   assert.equal(reads(),before);assert(button(h,'Refresh administration').props.disabled);assert(text(h.tree).includes('Save or discard unsaved edits'));
   find(h,n=>n.type===Tabs).props.onValueChange('products');h.render();assert.equal(find(h,n=>n.type===Tabs).props.value,'orders');
   button(h,'Discard unsaved edits').props.onClick();h.render();assert.equal(button(h,'Refresh administration').props.disabled,false);assert.notEqual(settingsForm(h).key,key);
  }
+ {const generation=queue(h).formGeneration;queue(h).markDraft('order:order001-new');h.render();const before=reads();cleanRefresh();button(h,'Refresh administration').props.onClick();
+  assert.equal(reads(),before);assert(button(h,'Refresh administration').props.disabled);assert(text(h.tree).includes('Save or discard unsaved edits'));
+  find(h,n=>n.type===Tabs).props.onValueChange('products');h.render();assert.equal(find(h,n=>n.type===Tabs).props.value,'orders');
+  button(h,'Discard unsaved edits').props.onClick();h.render();assert.equal(button(h,'Refresh administration').props.disabled,false);assert.notEqual(queue(h).formGeneration,generation);}
  find(h,n=>n.type===Check).props.onChange(true);h.render();assert.equal(find(h,n=>n.type===Check).props.checked,true);assert(button(h,'Refresh administration').props.disabled);
  button(h,'Discard unsaved edits').props.onClick();h.render();assert.equal(find(h,n=>n.type===Check).props.checked,false);
  editFirst(h);h.render();assert.equal(productNames(h),'true');assert(button(h,'Refresh administration').props.disabled);
@@ -165,9 +170,8 @@ const productNames=h=>String(Boolean(productPanel(h).props.edited));
  // Saving one form never clears a different draft; edits during a POST remain
  // unsaved. The successful action itself is never replayed by a later GET retry.
  reset();apiImpl=async()=>({...fixture(),orders:updated.orders});h=mount();await flush(h);allowedMutation='admin-order';
- const orderForms=nodes(h.tree).filter(n=>n.type==='form'&&nodes(n).some(f=>f.type===Field&&f.props.name==='tracking'));assert.equal(orderForms.length,2);
- orderForms[0].props.onChangeCapture();orderForms[1].props.onChangeCapture();h.render();apiImpl=async()=>({message:'Simulated fulfillment saved'});
- await orderForms[0].props.onSubmit({preventDefault(){},currentTarget:{fields:{tracking:'fixture tracking',status:'shipped'}}});h.render();
+ queue(h).markDraft('order:order001-new');queue(h).markDraft('order:order002-new');h.render();apiImpl=async()=>({message:'Simulated fulfillment saved'});
+ await queue(h).submit({preventDefault(){},currentTarget:{fields:{tracking:'fixture tracking',status:'shipped'}}},'order',d=>({...d,id:'order001-new'}),'order:order001-new');h.render();
  assert.equal(mutations(),1);assert.equal(reads(),1);assert(button(h,'Refresh administration').props.disabled);assert.match(alerts(h),/protect unsaved edits/);
  button(h,'Discard unsaved edits').props.onClick();h.render();apiImpl=async()=>updated;button(h,'Retry administration').props.onClick();await flush(h);assert.equal(mutations(),1);assert.equal(reads(),2);
  reset();h=mount();await flush(h);allowedMutation='admin-config';settingsForm(h).props.onChangeCapture();h.render();const saving=deferred();apiImpl=()=>saving.promise;
@@ -305,7 +309,7 @@ const productNames=h=>String(Boolean(productPanel(h).props.edited));
   apiImpl=async method=>{if(method===allowedMutation)return{message:'Simulated action confirmed'};throw Error('Simulated inline refresh failure');};
   if(action==='campaign')await button(h,'Enable').props.onClick();
   if(action==='request'){const inbox=find(h,n=>n.type===RequestInbox);await inbox.props.onStatus(inbox.props.requests[0],'resolved');}
-  if(action==='reconcile')await button(h,'Reconcile payment').props.onClick();
+  if(action==='reconcile')await queue(h).change('reconcile',{id:'fixture-order'},d=>infos.push(d.message||d.status));
   h.render();assert.equal(mutations(),1);assert.match(alerts(h),/could not refresh/);assert(text(h.tree).includes('Snapshot A'));
   const write=calls.find(c=>c.action===allowedMutation);
   if(action==='campaign')assert.equal(write.body.active,true);

@@ -1,0 +1,9 @@
+/* v35: short order status, shared by the admin Orders tab and the customer order list. */
+.order-status{display:inline-block;padding:3px 9px;border-radius:4px;font-size:13px;font-weight:600;line-height:1.4;white-space:nowrap;border:1px solid transparent}
+.order-status-action{background:#fbefe8;color:#7a3a1d;border-color:#ecc9b5}
+.order-status-progress{background:#edf3f7;color:#244b64;border-color:#c9dbe7}
+.order-status-done{background:#ecf4ee;color:#2c5536;border-color:#c6dccb}
+.order-status-waiting{background:#f6f2e3;color:#5e4f17;border-color:#e3d8b0}
+.order-status-problem{background:#fbeceb;color:#842a22;border-color:#ecc3bf}
+.order-status-muted{background:#f2f0f3;color:#504d52;border-color:#dcd8de}
+.order-status-row{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px}

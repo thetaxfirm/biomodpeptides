@@ -11,7 +11,8 @@ async function post(body: Record<string, unknown>) {
         throw new Error(d.error || 'Request failed.');
     return d;
 }
-export function ShippingLabel({ order, onDone }: { order: any; onDone: () => void }) {
+// compact: the buy button only, for one-line table rows. The confirmation still names the saved service.
+export function ShippingLabel({ order, onDone, compact = false }: { order: any; onDone: () => void; compact?: boolean }) {
     const [busy, setBusy] = useState(false);
     const [preview, setPreview] = useState(false);
     const [imageFailed, setImageFailed] = useState(false);
@@ -42,5 +43,7 @@ export function ShippingLabel({ order, onDone }: { order: any; onDone: () => voi
     if (order.status !== 'paid')
         return null;
     const service = order.data?.shippingService || 'Standard shipping';
-    return <div><p><strong>Requested delivery:</strong> {service}. Label purchase must match the saved service. Handling fees are store charges, not postage.</p><button className="button button-gold" disabled={busy} onClick={() => act({}, `Buy the ${service} label for this order? Your EasyPost account will be charged the current carrier rate. The saved customer charge will not change.`)}>{busy ? 'Buying label...' : 'Buy shipping label'}</button></div>;
+    const buy = <button className="button button-gold" disabled={busy} onClick={() => act({}, `Buy the ${service} label for this order? Your EasyPost account will be charged the current carrier rate. The saved customer charge will not change.`)}>{busy ? 'Buying label...' : 'Buy shipping label'}</button>;
+    if (compact) return buy;
+    return <div><p><strong>Requested delivery:</strong> {service}. Label purchase must match the saved service. Handling fees are store charges, not postage.</p>{buy}</div>;
 }

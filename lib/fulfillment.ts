@@ -47,3 +47,49 @@ export function shipmentEmailText(status: string): string {
     if (problems.has(status)) return 'The carrier reports ' + status.replaceAll('_', ' ') + '. Please check tracking for details.';
     return 'A shipping label has been created. Carrier acceptance has not been confirmed. Tracking will update when the carrier scans your package.';
 }
+
+// Short status: one state per order for the admin queue and the customer order list.
+export type OrderBucket = 'to_ship' | 'label' | 'shipped' | 'delivered' | 'unpaid' | 'review' | 'closed' | 'test';
+export type QueueTab = OrderBucket | 'all';
+export type Tone = 'action' | 'progress' | 'done' | 'waiting' | 'problem' | 'muted';
+
+export const bucketStatus: Record<OrderBucket, { label: string; tone: Tone }> = {
+    to_ship: { label: 'To ship', tone: 'action' },
+    label: { label: 'Label bought', tone: 'progress' },
+    shipped: { label: 'Shipped', tone: 'progress' },
+    delivered: { label: 'Delivered', tone: 'done' },
+    unpaid: { label: 'Unpaid', tone: 'waiting' },
+    review: { label: 'Needs review', tone: 'problem' },
+    closed: { label: 'Refunded / cancelled', tone: 'muted' },
+    test: { label: 'Internal test', tone: 'muted' },
+};
+
+/** Same rules as fulfillmentLabel(), reduced to one state per order. */
+export function orderBucket(order: FulfillmentOrder): OrderBucket {
+    if (order.data?.internalTest) return 'test';
+    if (['refunded', 'cancelled', 'canceled', 'failed'].includes(order.status)) return 'closed';
+    const carrier = order.data?.shipment?.status;
+    if (carrier === 'delivered' || order.status === 'delivered') return 'delivered';
+    if (carrier && problems.has(carrier)) return 'review';
+    if (carrier && moving.has(carrier)) return 'shipped';
+    if (order.status === 'labeling' || (order.data?.shipment && ['paid', 'shipped'].includes(order.status))) return 'label';
+    if (order.status === 'shipped') return 'shipped';
+    if (order.status === 'paid') return 'to_ship';
+    if (['creating', 'awaiting_payment', 'pending'].includes(order.status)) return 'unpaid';
+    return 'review';
+}
+
+/** Customer-facing short status. Never claims a carrier event the carrier has not reported. */
+export function customerOrderStatus(order: FulfillmentOrder): { label: string; tone: Tone } {
+    const bucket = orderBucket(order);
+    return ({
+        to_ship: { label: 'Processing', tone: 'progress' },
+        label: { label: 'Preparing shipment', tone: 'progress' },
+        shipped: { label: 'Shipped', tone: 'progress' },
+        delivered: { label: 'Delivered', tone: 'done' },
+        unpaid: { label: 'Awaiting payment', tone: 'waiting' },
+        review: { label: 'Under review', tone: 'problem' },
+        closed: { label: order.status === 'refunded' ? 'Refunded' : order.status === 'failed' ? 'Payment unsuccessful' : 'Cancelled', tone: 'muted' },
+        test: { label: 'Test order', tone: 'muted' },
+    } as Record<OrderBucket, { label: string; tone: Tone }>)[bucket];
+}
