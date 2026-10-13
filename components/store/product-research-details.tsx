@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import { type Product } from '@/lib/catalog';
 import { eligibleDiscovery, otherVialSizes } from '@/lib/product-discovery';
-import { packContents, packSizes, packUnitLimit } from '@/lib/packs';
-import { batchFor, batchPath, batchStatus, coaRequestNoticeFor } from '@/lib/testing';
+import { packContents, packUnitLimit } from '@/lib/packs';
+import { batchFor, batchPath } from '@/lib/testing';
+import { productQuestions } from '@/lib/product-questions';
 import styles from './product-research-details.module.css';
 
 // Literature context is deliberately limited to these reviewed molecule/size
@@ -210,25 +211,16 @@ export function VialSizeLinks({ product, products }: { product: Product; product
 export function ProductResearchDetails({ product }: { product: Product }) {
   if (!eligibleDiscovery(product)) return null;
   const record = batchFor(product.id,product);
-  const status = batchStatus(record);
   const study = researchBySlug[product.slug];
-  const packOptions = packSizes.slice(0, -1).join(', ') + ' or ' + packSizes.at(-1);
-  const documentation = status === 'on-request' ? coaRequestNoticeFor(record) : status === 'matched'
-    ? 'A certificate is published with a lot number matching this listing. Confirm the lot supplied with your order and read the original report for its methods and results.'
-    : 'Contact BIOMOD to request the COA for the listed lot.';
   return <><section className={styles.questions} aria-labelledby="product-questions-heading">
     <h2 id="product-questions-heading">Product questions</h2>
     <div className={styles.answers}>
-      <article>
-        <h3>What is included in a single vial or pack?</h3>
-        <p>The listed contents for one {product.name} vial are {packContents(product) || 'not provided'}.{product.sku && <> SKU: {product.sku}.</>}</p>
-        <p>Pack sizes of {packOptions} count complete vials. The listed contents apply to each vial. Availability and quantity limits apply.</p>
-      </article>
-      <article>
-        <h3>What documentation is available for this product?</h3>
-        <p>{documentation}</p>
-        <p><a href={'/testing?product=' + product.id}>Read this product&apos;s batch record</a>. <Link href="/quality-standard#read-the-results">Understand purity and measured content</Link>.</p>
-      </article>
+      {productQuestions(product).map(item => <article key={item.id}>
+        <h3>{item.question}</h3>
+        {item.answer.map(paragraph => <p key={paragraph}>{paragraph}</p>)}
+        {item.id === 'buy' && <p><Link href="/shop">Browse all research peptides</Link>.</p>}
+        {item.id === 'documentation' && <p><a href={'/testing?product=' + product.id}>Read this product&apos;s batch record</a>. <Link href="/quality-standard#read-the-results">Understand purity and measured content</Link>.</p>}
+      </article>)}
     </div>
   </section>
     {study && <section className={styles.research} aria-labelledby="product-research-heading">

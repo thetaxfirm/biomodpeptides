@@ -6,6 +6,8 @@ import { schemaAvailability } from './availability';
 import { publicCatalog } from './public-catalog';
 import { merchantPolicies } from './merchant-policies';
 import { certificateProperties } from './certificate-schema';
+import { productQuestions } from './product-questions';
+import { researchFaqSchemaItems } from './research-faq';
 import { headers } from 'next/headers';
 
 export const currentSEO = () => seoConfig(runtime());
@@ -35,13 +37,15 @@ export function routeMetadata(path: string, query: URLSearchParams = new URLSear
     twitter: { card: 'summary', title, description: info.description },
   };
 }
+const faqPage = (url: string, items: { question: string; answer: string }[]) => ({ '@type': 'FAQPage', '@id': url + '#faq', url,
+  mainEntity: items.map(item => ({ '@type': 'Question', name: item.question, acceptedAnswer: { '@type': 'Answer', text: item.answer } })) });
 export async function routeStructuredData(path: string, config: SEOConfig = currentSEO()) {
   const clean = canonicalPath(path), info = pageInfo(path), p = productAt(path);
   if (!mayIndex(path, new URLSearchParams(), config)) return null;
   // Stable policies are defined on their own pages and repeated on eligible
   // products, so every Offer reference also resolves within its document.
   const policies = p || clean === '/shipping-policy' || clean === '/returns-refunds' ? await merchantPolicies(config.origin) : null;
-  const organization = { '@type': 'Organization', '@id': config.origin + '/#organization', name: 'Biomod Peptides', alternateName: ['TryBiomod', 'BIOMOD'], description: 'Biomod Peptides supplies lyophilized compound vials for laboratory research through TryBiomod.com. Not for human or animal use.', url: config.origin, logo: config.origin + '/brand/logo-navy-tm-v36.svg', email: 'contact@trybiomod.com',
+  const organization = { '@type': 'Organization', '@id': config.origin + '/#organization', name: 'Biomod Peptides', alternateName: ['TryBiomod', 'BIOMOD'], description: 'Biomod Peptides supplies lyophilized compound vials for laboratory research through TryBiomod.com. Not for human or animal use.', url: config.origin, logo: config.origin + '/brand/logo-navy-tm-v36.png', email: 'contact@trybiomod.com',
     ...(policies ? { hasMerchantReturnPolicy: policies.hasMerchantReturnPolicy } : {}),
     ...(policies?.hasShippingService ? { hasShippingService: policies.hasShippingService } : {}),
   };
@@ -57,7 +61,7 @@ export async function routeStructuredData(path: string, config: SEOConfig = curr
     const snapshot = await publicCatalog();
     const live = snapshot.products.find(item => item.id === p.id);
     graph.push({ '@type': 'Product', '@id': config.origin + clean + '#product',
-      name: info.title, description: info.description, url: config.origin + clean,
+      name: info.name || info.title, description: info.description, url: config.origin + clean,
       image: config.origin + imagePath(p), ...(p.sku?.trim() ? { sku: p.sku.trim() } : {}),
       brand: { '@type': 'Brand', name: 'BIOMOD' }, category: p.categories[0]?.name,
       additionalProperty: [{ '@type': 'PropertyValue', name: 'Compound', value: p.identity },
@@ -72,7 +76,11 @@ export async function routeStructuredData(path: string, config: SEOConfig = curr
         ...(policies ? { hasMerchantReturnPolicy: { '@id': policies.hasMerchantReturnPolicy['@id'] } } : {}),
         ...(policies?.hasShippingService ? { shippingDetails: { '@type': 'OfferShippingDetails', hasShippingService: { '@id': policies.hasShippingService['@id'] } } } : {}),
       } } : {}) });
+    // Mirrors the visible Product questions, using the live product so lot status matches.
+    graph.push(faqPage(config.origin + clean, productQuestions(live ? { ...p, ...live } : p).map(item => ({ question: item.question, answer: item.answer.join(' ') }))));
   }
+  // Question markup mirrors the visible /faq answers exactly.
+  if (clean === '/faq') graph.push(faqPage(config.origin + clean, researchFaqSchemaItems().map(item => ({ question: item.question, answer: item.answer }))));
   return { '@context': 'https://schema.org', '@graph': graph };
 }
 // Escape characters that could end a script tag or break inline JSON. Written without unicode escape sequences on purpose.
