@@ -14,3 +14,7 @@ Counts at release: 24 products with lab reports (19 online, 5 printed in the box
 ## Tests
 
 Wording assertions in the gated suites and in `batch-search`, `testing-discovery`, `tesamorelin-report-reconciliation` and `product-research-details` follow the new text; negative checks assert the removed lines stay absent. `tests/product-research-details-v1.cjs` already failed on main 4176d62 at its heading-count and shop-heading checks (lines 64 and 347), unrelated to this change; its COA assertions pass with those two lines bypassed locally.
+
+## Release
+
+Commit fb54b09, built on main 4176d62 (`check:release`: 69 suites; production build passed). Cloudflare version e841fa96-1672-4de0-84ef-9dee6df0254e deployed 2026-10-13 from that build. Live, read-only: `/testing` shows 24 / 19 / 5 tiles, 52 records with all 24 reported products before the 28 "Update in progress" records; the "Printed COAs in the box" tile filters to 5 and toggles back to 52; a pending record panel reads "The lab report for this lot is being updated. Ask us anytime for the latest documentation."; phone width (375 px) lays out cleanly. `/product/kpv-10mg`, `/product/tesamorelin-10mg`, `/quality-standard` and `/faq` contain none of the removed phrases.
