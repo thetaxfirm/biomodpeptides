@@ -1,5 +1,7 @@
 import { replyBridgeRoute } from '@/lib/request-reply-route';
 import { queryOrders, scanLimit } from '@/lib/order-queue';
+import { publicCatalog } from '@/lib/public-catalog';
+import { batchRecordsFor, batchStatus, batchPath } from '@/lib/testing';
 import { summarizeRequestReplies, prepareRequestReply, replyDeskOptions, saveReplyRule } from '@/lib/request-replies';
 import { adminBatchRecords, validateBatchEdit } from '@/lib/product-batch';
 import { coaHash, loadCoaReports, readCoaOriginal, verifiedCoaAttachment } from '@/lib/coa-delivery';
@@ -54,6 +56,17 @@ function scheduleInquiryDelivery(env: ReturnType<typeof runtime>, requestId: str
         // A missing response lifecycle cannot undo a saved inquiry. The durable
         // queue is still available to the scheduled retry or authorized admin.
     }
+}
+// Public matching-lot certificate pages, the same ones /testing shows. Links only; no report bytes.
+async function publicCoaLinks() {
+    try {
+        const snapshot = await publicCatalog();
+        if (!snapshot.verified) return [];
+        return batchRecordsFor(snapshot.products).filter(record => batchStatus(record) === 'matched').map(record => {
+            const product = snapshot.products.find(item => item.id === record.product_id);
+            return { label: `${product?.name || record.product_name || 'Product'}${product?.sizes?.[0] ? ' ' + product.sizes[0] : ''} · lot ${record.product_lot}`, url: 'https://trybiomod.com' + batchPath(record) };
+        }).sort((a, b) => a.label.localeCompare(b.label));
+    } catch { return []; }
 }
 async function currentPromoCode() {
     const jar = await cookies();
@@ -479,14 +492,14 @@ export async function POST(req: NextRequest, { params }: {
                     return j({ error: status ? (error as Error).message : 'The reply could not be prepared. Refresh and try again.' }, status || 500);
                 }
             }
-            if (action === 'admin-reply-desk') return j(await replyDeskOptions(runtime()));
+            if (action === 'admin-reply-desk') return j({ ...(await replyDeskOptions(runtime())), links: await publicCoaLinks() });
             if (action === 'admin-request-replies') {
                 const ids = z.object({ ids: z.array(z.string().uuid()).max(200) }).parse(b).ids;
                 return j({ replies: await summarizeRequestReplies(runtime(), ids) });
             }
             if (action === 'admin-reply-rule') {
                 const input = z.object({ rule: z.string().max(500).optional(), removeId: z.string().uuid().optional() }).parse(b);
-                try { await saveReplyRule(runtime(), input, actor); return j({ ...(await replyDeskOptions(runtime())), message: input.removeId ? 'Rule removed.' : 'Rule saved. The next drafts will follow it.' }); }
+                try { await saveReplyRule(runtime(), input, actor); return j({ ...(await replyDeskOptions(runtime())), links: await publicCoaLinks(), message: input.removeId ? 'Rule removed.' : 'Rule saved. The next drafts will follow it.' }); }
                 catch (error) { const status = (error as Error & { status?: number }).status; return j({ error: status ? (error as Error).message : 'The rule could not be saved.' }, status || 500); }
             }
             if (action === 'admin-coa-process') {

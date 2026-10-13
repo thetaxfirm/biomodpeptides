@@ -35,7 +35,7 @@ const type=(host,name,value)=>{field(host,name).props.onChange({target:{value}})
 const flush=async host=>{for(let i=0;i<4;i++)await Promise.resolve();host.render();};
 const openRow=(host,id)=>{nodes(host.tree).find(n=>n.type==='button'&&n.props['aria-controls']==='request-reply-'+id).props.onClick();host.render();};
 const select=(host,label)=>nodes(host.tree).find(n=>n.type==='label'&&text(n).startsWith(label)).props.children[1];
-const options={coas:[{sha256:'a'.repeat(64),productName:'Fixture material',strength:'10 mg',form:'vial',lot:'QA-LOT',reportId:'QA-ORIGINAL',current:true}],codes:[{code:'BM10',percentOff:10}],rules:[{id:'00000000-0000-4000-8000-000000000001',rule:'Sign off as Ash'}],learning:{recent:4,unchanged:3},bridgeSeen:null};
+const options={links:[{label:'Fixture material 10 mg · lot QA-LOT',url:'https://trybiomod.com/testing/QA-LOT?product=1'}],coas:[{sha256:'a'.repeat(64),productName:'Fixture material',strength:'10 mg',form:'vial',lot:'QA-LOT',reportId:'QA-ORIGINAL',current:true}],codes:[{code:'BM10',percentOff:10}],rules:[{id:'00000000-0000-4000-8000-000000000001',rule:'Sign off as Ash'}],learning:{recent:4,unchanged:3},bridgeSeen:null};
 async function main(){
  const day=86400000,now=Date.now();
  const reqs=[request('new-old','new'),request('new-young','new'),request('answered','in_progress'),request('closed','resolved'),request('junk','spam'),request('came-back','resolved')];
@@ -63,6 +63,8 @@ async function main(){
  // Codes insert into the draft; the COA picker stages a chosen original.
  type(host,'replyBody','Hi there, use');select(host,'Insert code').props.onChange({target:{value:'BM10'}});host.render();
  assert.equal(field(host,'replyBody').props.value,'Hi there, use code BM10 (10% off at checkout)');
+ type(host,'replyBody','');select(host,'Insert COA link').props.onChange({target:{value:'https://trybiomod.com/testing/QA-LOT?product=1'}});host.render();assert.equal(field(host,'replyBody').props.value,'COA for Fixture material 10 mg · lot QA-LOT: https://trybiomod.com/testing/QA-LOT?product=1');
+ type(host,'replyBody','Hi there, use code BM10 (10% off at checkout)');
  select(host,'Attach COA').props.onChange({target:{value:'a'.repeat(64)}});host.render();assert(text(host.tree).includes('Will attach when you save or send'));
  // AI rewrite carries the current draft and the dictated instruction; remember saves a rule first.
  type(host,'replyInstruction','um make it friendlier');

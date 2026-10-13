@@ -19,7 +19,7 @@ export type ReplySummary = {
 };
 export type PrepareReplyInput = { id: string; mode: 'ai' | 'staff'; body?: string; instruction?: string; expectedRevision: number | null; coaSha256?: string | null; send?: boolean };
 export type DeskCoa = { sha256: string; productName: string; strength: string; form: string; lot: string; reportId: string; current: boolean };
-export type DeskOptions = { coas: DeskCoa[]; codes: { code: string; percentOff: number }[]; rules: { id: string; rule: string }[]; learning: { recent: number; unchanged: number }; bridgeSeen: number | null };
+export type DeskOptions = { links?: { label: string; url: string }[]; coas: DeskCoa[]; codes: { code: string; percentOff: number }[]; rules: { id: string; rule: string }[]; learning: { recent: number; unchanged: number }; bridgeSeen: number | null };
 type Props = {
   requests: readonly CustomerRequest[];
   automation?: CoaAutomationReport | null;
@@ -373,7 +373,11 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
           <option value="">{options ? (options.codes.length ? 'Choose a code' : 'No active codes') : 'Loading…'}</option>
           {options?.codes.map(code => <option key={code.code} value={code.code}>{code.code} · {code.percentOff}% off</option>)}
         </select></label>
-        <label><span>Attach COA</span><select value={coaChoice === null ? 'auto' : coaChoice} disabled={locked || writing || !options} onChange={event => onDraft({ coa: event.target.value === 'auto' ? null : event.target.value, edited: true })}>
+        <label><span>Insert COA link</span><select value="" disabled={locked || writing || !options?.links?.length} onChange={event => { const link = options?.links?.find(l => l.url === event.target.value); if (link) onInsert(`COA for ${link.label}: ${link.url}`); }}>
+          <option value="">{options ? (options.links?.length ? 'Choose a product' : 'No public COAs') : 'Loading…'}</option>
+          {options?.links?.map(link => <option key={link.url} value={link.url}>{link.label}</option>)}
+        </select></label>
+        <label><span>Attach COA PDF</span><select value={coaChoice === null ? 'auto' : coaChoice} disabled={locked || writing || !options} onChange={event => onDraft({ coa: event.target.value === 'auto' ? null : event.target.value, edited: true })}>
           <option value="auto">{isCoaRequest ? 'Match the requested lot' : 'No report'}</option>
           {isCoaRequest && <option value="">No report</option>}
           {options?.coas.map(coa => <option key={coa.sha256} value={coa.sha256}>{coa.productName} {coa.strength} · lot {coa.lot}{coa.current ? ' (current)' : ''}</option>)}
