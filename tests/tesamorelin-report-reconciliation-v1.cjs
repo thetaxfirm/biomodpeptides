@@ -35,7 +35,7 @@ const { Experience } = require('../components/store/experience.tsx');
 const { StoreProvider } = require('../components/store/provider.tsx');
 const current = batchFor(755), product = products.find(p => p.id === 755), historical = source.records.find(r => r.product_id === 755);
 const doc = certificateFor(current), oldDoc = source.documents.find(d => d.document_id === historical.document_id);
-const url = 'https://alphagradepeptides.com/wp-content/uploads/2026/09/biomod-tesamorelin-10mg-coa.pdf';
+const url = 'https://trybiomod.com/certificates/tesamorelin-10mg-lot-301-10-0001-freedom-biom2604200372.pdf';
 const escape = text => String(text).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#x27;');
 assert.equal(historical.document_id, 'coa-d3dcb0813151');
 assert.equal(historical.certificate_lot, '001-B');
@@ -59,49 +59,47 @@ assert.equal(current.certificate_lot, '301-10-0001');
 assert.equal(batchStatus(current), 'matched');
 assert.equal(batchStatusLabel(current), 'Matching-lot certificate');
 assert.equal(doc.url, url);
-assert.equal(doc.report_id, 'V260304-6 012');
-assert.equal(doc.report_date, '4/2/2026');
-assert.equal(doc.sha256, '74b2229680929a30771287e4ae1caa838e6749e550a184d55fc68e97628d92fb');
-assert.equal(doc.source_hosting, 'supplier');
+assert.equal(doc.report_id, 'BIOM2604200372');
+assert.equal(doc.report_date, '04/22/2026');
+assert.equal(doc.laboratory_name, 'Freedom Diagnostics');
+assert.equal(doc.sha256, '111fca0d0af3662ab4d986ef7768b614e9fb9203525f01a31cbba9e09e6fdc36');
+assert.equal(createHash('sha256').update(fs.readFileSync(path.join(root, 'public/certificates', doc.filename))).digest('hex'), doc.sha256, 'Hosted PDF is the unchanged original');
+assert.equal(doc.source_hosting, 'trybiomod');
 assert.equal(doc.verification_checked, false);
-assert.deepEqual(current.verification_urls, [], 'The previous ILS verifier must not authenticate a Vanguard report');
+assert.deepEqual(current.verification_urls, [], 'The previous ILS verifier must not authenticate a later report');
 assert.equal(current.certificate_dates.test_date, null, 'The previous report date must not be borrowed');
-assert.equal(reportedResult(doc, 'purity'), '96.28% + 0.18%');
-assert.equal(reportedResult(doc, 'assay'), '9.92 mg');
-assert.deepEqual(doc.results.map(r => [r.kind, r.result, r.unit, r.method, r.loq || null, r.page]), [
-  ['purity', '96.28% + 0.18%', '%', 'HPLC-UV/VIS', null, 1],
-  ['assay', '9.92', 'mg', 'HPLC-UV/VIS', null, 1],
-  ['heavy_metals', '0.02', 'ppm', 'ICP-MS', '0.01', 2],
-  ['heavy_metals', 'ND', 'ppm', 'ICP-MS', '0.01', 2],
-  ['heavy_metals', '0.03', 'ppm', 'ICP-MS', '0.02', 2],
-  ['heavy_metals', 'ND', 'ppm', 'ICP-MS', '0.005', 2],
-  ['endotoxins', 'Pass - <5.00 EU/mg*', 'EU/mg', 'LAL', null, 2],
-  ['sterility', 'Pass - No Growth Detected', null, 'USP <71>', null, 2],
+assert.equal(reportedResult(doc, 'purity'), '99.92%');
+assert.equal(reportedResult(doc, 'assay'), '11.52 mg');
+assert.deepEqual(doc.results.map(r => [r.kind, r.result, r.unit, r.method, r.page]), [
+  ['identity', 'Tesamorelin', null, 'LC-MS', 1],
+  ['purity', '99.92%', '%', 'HPLC-UV', 1],
+  ['assay', '11.52 mg', 'mg', 'HPLC-UV with LC-MS', 1],
 ]);
 assert(!JSON.stringify(doc).includes('99.76') && !JSON.stringify(doc).includes('10.43'), 'Different-lot values are not merged');
 const properties = certificateProperties(755);
-for (const [name, value] of [['Certificate lot', '301-10-0001'], ['Purity (reported)', '96.28% + 0.18%'], ['Measured content (reported)', '9.92 mg'], ['Certificate report date', '4/2/2026']]) {
+for (const [name, value] of [['Certificate lot', '301-10-0001'], ['Purity (reported)', '99.92%'], ['Measured content (reported)', '11.52 mg'], ['Certificate report date', '04/22/2026']]) {
   assert.equal(properties.find(p => p.name === name).value, value);
 }
 assert.equal(properties.find(p => p.name === 'Certificate of analysis').url, url);
 for (const slug of ['selank', 'semax', 'kpv-10mg', 'mots-c-40mg', 'ss-31-50mg']) assert.deepEqual(certificateProperties(products.find(p => p.slug === slug).id), [], slug + ': unresolved evidence still publishes no certificate results');
 const findRows = q => batchRecords.filter(r => batchMatchesSearch(r, products.find(p => p.id === r.product_id), q));
-for (const q of ['V260304-6 012', 'Tesamorelin 10mg V260304-6 012', '301-10-0001', 'BM-LYO-012']) assert.deepEqual(findRows(q).map(r => r.product_id), [755], q);
+for (const q of ['BIOM2604200372', 'Tesamorelin 10mg BIOM2604200372', '301-10-0001', 'BM-LYO-012']) assert.deepEqual(findRows(q).map(r => r.product_id), [755], q);
 assert(!findRows('COA-2026-956704').includes(current), 'Historical report ID does not masquerade as the current certificate');
-assert(!findRows('Tesamorelin 20mg V260304-6 012').includes(current));
+assert(!findRows('Tesamorelin 20mg BIOM2604200372').includes(current));
+assert(!findRows('V260304-6 012').includes(current), 'The replaced Vanguard report ID no longer matches the current certificate');
 
 const render = (route, query = {}) => renderToStaticMarkup(React.createElement(StoreProvider, { initialCatalog: products.map(product => ({ ...product, resolvedBatch: batchFor(product.id) || null })) }, React.createElement(Experience, { path: route, query })));
 for (const [route, query] of [['product/tesamorelin-10mg', {}], ['testing', { product: '755' }], ['testing/301-10-0001', { product: '755' }]]) {
   const html = render(route, query);
-  for (const value of ['Matching-lot certificate', '96.28% + 0.18%', '9.92 mg', 'V260304-6 012', 'Supplier-hosted report matching the listed lot.', 'Results apply to the submitted sample.', 'Confirm the lot supplied with your order.', 'Record updated October 10, 2026 (Pacific).']) assert(html.includes(escape(value)), route + ': ' + value);
+  for (const value of ['Matching-lot certificate', '99.92%', '11.52 mg', 'BIOM2604200372', 'Independent laboratory report for the lot printed on the vial label (301-10-0001).', 'Results apply to the submitted sample.', 'Confirm the lot supplied with your order.', 'Record updated October 12, 2026 (Pacific).']) assert(html.includes(escape(value)), route + ': ' + value);
   assert(html.includes('href="' + url + '"'), route + ': uses exact original source URL');
-  assert(!html.includes(oldDoc.url) && !html.includes('99.76%') && !html.includes('10.43 mg'), route + ': no earlier report values in current record');
+  assert(!html.includes(oldDoc.url) && !html.includes('99.76%') && !html.includes('10.43 mg') && !html.includes('96.28%'), route + ': no earlier report values in current record');
   if (route.startsWith('testing')) assert(html.includes('Original source import September 11, 2026; later updates appear with their records.'));
 }
 assert.equal(batchPath(current), '/testing/301-10-0001?product=755', 'Existing public record path remains stable');
 const ordinary = batchFor(753);
 assert(ordinary);
-assert(!renderToStaticMarkup(React.createElement(BatchDetails, { record: ordinary })).includes('Supplier-hosted report matching the listed lot.'), 'The source disclosure is specific to this reconciliation');
+assert(!renderToStaticMarkup(React.createElement(BatchDetails, { record: ordinary })).includes('Independent laboratory report for the lot printed on the vial label (301-10-0001).'), 'The source disclosure is specific to this reconciliation');
 
 // Re-evaluate the real overlay against changed in-memory inputs: no inherited
 // certificate when a source association, identity, size or listed lot changes.
@@ -122,6 +120,7 @@ function evaluate(change) {
   return { testing: m.exports, fixtures };
 }
 const originalRecord = f => f.source.records.find(r => r.product_id === 755);
+const tesaDoc = f => f.reconciliations.documents.find(d => d.document_id === f.reconciliations.reconciliations.find(r => r.product_id === 755).document_id);
 for (const [label, change] of [
   ['source lot', f => { originalRecord(f).product_lot = '301-10-0002'; }],
   ['source document', f => { originalRecord(f).document_id = 'different-new-source'; }],
@@ -130,11 +129,11 @@ for (const [label, change] of [
   ['catalog identity', f => { f.products.find(p => p.id === 755).identity = 'Other compound'; }],
   ['catalog size', f => { f.products.find(p => p.id === 755).sizes = ['20mg']; }],
   ['multiple sizes', f => { f.products.find(p => p.id === 755).sizes = ['10mg', '20mg']; }],
-  ['report missing', f => { f.reconciliations.documents = []; }],
-  ['report lot', f => { f.reconciliations.documents[0].batch_number = '001-B'; }],
-  ['report recipient', f => { f.reconciliations.documents[0].report_to = 'Other brand'; }],
-  ['report compound', f => { f.reconciliations.documents[0].compound = 'Other compound'; }],
-  ['report strength', f => { f.reconciliations.documents[0].nominal_amount = '20 mg'; }],
+  ['report missing', f => { f.reconciliations.documents = f.reconciliations.documents.filter(d => d !== tesaDoc(f)); }],
+  ['report lot', f => { tesaDoc(f).batch_number = '001-B'; }],
+  ['report recipient', f => { tesaDoc(f).report_to = 'Other brand'; }],
+  ['report compound', f => { tesaDoc(f).compound = 'Other compound'; }],
+  ['report strength', f => { tesaDoc(f).nominal_amount = '20 mg'; }],
 ]) {
   const { testing, fixtures } = evaluate(change);
   assert.deepEqual(testing.batchFor(755), originalRecord(fixtures), label + ': reviewed association must fail closed');
@@ -169,8 +168,8 @@ const button = walk(tree).find(n => n.type === 'button' && n.props.className ===
 assert(button); button.props.onClick(); tree = draw();
 const opened = renderToStaticMarkup(tree);
 assert(opened.includes('role="dialog"') && opened.includes('src="' + url + '#page=1&amp;zoom=100"'));
-for (const value of ['96.28% + 0.18%', '9.92 mg', 'HPLC-UV/VIS', '0.02 ppm', '0.03 ppm', 'ND ppm', 'LOQ: 0.005 ppm', 'Pass - <5.00 EU/mg*', 'USP <71>']) assert(opened.includes(escape(value)), value);
+for (const value of ['Tesamorelin', '99.92%', '11.52 mg', 'LC-MS', 'HPLC-UV']) assert(opened.includes(escape(value)), value);
 for (const note of doc.report_scope_notes) assert(opened.includes(escape(note)), 'Retain every report-specific caveat');
 assert(!opened.includes('±') && !opened.includes(oldDoc.url));
 assert.equal(JSON.stringify({ source, additions, reconciliations, products, policy, productReviewBlocks }), before, 'Reads and rendering do not mutate source records, identities, inventory or publication policy');
-console.log('PASS: exact Tesamorelin lot reconciliation, immutable ILS history, all reported values/methods/caveats, future-change guards, actual product/testing/batch SSR, current report search, structured-data evidence and actual certificate open handler with no network.');
+console.log('PASS: exact Tesamorelin label-lot reconciliation (Freedom BIOM2604200372), immutable ILS history, all reported values/methods/caveats, future-change guards, actual product/testing/batch SSR, current report search, structured-data evidence and actual certificate open handler with no network.');

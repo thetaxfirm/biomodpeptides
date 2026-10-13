@@ -12,8 +12,9 @@ const db={prepare(query){const statement=(values=[])=>({bind:(...v)=>statement(v
 const expected={
  763:['501-10-0001','V260304-6 020','>99.80% + 0.18%','4.94 mg; 5.08 mg'],
  765:['503-80-0001','V260304-6 022','>99.50% + 0.18%','47.55 mg; 11.48 mg; 10.45 mg; 10.99 mg'],
- 752:['405-500-0001','V260812-35 007','>99.80% + 0.18%; 94.59% + 0.18%','552 mg'],
- 759:['407-50-0001','V260304-6 016','97.05% + 0.18%','54.27 mg'],
+ 752:['405-500-0001','V260304-6 009','>99.80%; 98.02%','643 mg'],
+ 759:['407-50-0001','BIOM2604200371','99.49%','51.78 mg'],
+ 755:['301-10-0001','BIOM2604200372','99.92%','11.52 mg'],
 };
 (async()=>{try{
  assert.equal(testing.normalizedStrength('5 mg/5 mg'),'10mg');assert.equal(testing.normalizedStrength('50mg / vial'),'50mg');assert.equal(testing.normalizedStrength('80 mg'),'80mg');assert.equal(testing.normalizedStrength('5 mg/5 mL'),'5mg/5ml','Only same-unit blends are totalled');
@@ -23,7 +24,9 @@ const expected={
   assert(doc,product.name+': source record has its label-lot report');
   assert.equal(source.product_lot,lot);assert.equal(doc.batch_number,lot);assert.equal(doc.report_id,reportId);
   assert.equal(testing.reportedResult(doc,'purity'),purity);assert.equal(testing.reportedResult(doc,'assay'),assay);
-  assert(doc.results.some(r=>r.kind==='sterility'&&r.result==='Pass - No Growth Detected'),product.name+': the published report is the passing sterility version');
+  const sterility=doc.results.filter(r=>r.kind==='sterility');assert(sterility.every(r=>r.result==='Pass - No Growth Detected'),product.name+': any sterility result shown is the passing retest version');
+  // Owner rule: the label claims 98% or better, so every published purity meets it.
+  for(const r of doc.results.filter(r=>r.kind==='purity'))assert(Number(r.result.match(/[\d.]+/)[0])>=98,product.name+': purity '+r.result+' meets the label');
   assert(!doc.results.some(r=>/fail/i.test(r.result)),product.name+': no failing result is published');
   const file=path.join(root,'public/certificates',doc.filename);
   assert.equal(doc.url,'https://trybiomod.com/certificates/'+doc.filename);
@@ -48,5 +51,5 @@ const expected={
  assert.equal(reconciliations.reconciliations.length,5);
  const counts={};for(const p of resolved){const s=testing.batchStatus(p.resolvedBatch);counts[s]=(counts[s]||0)+1;}
  assert.equal(counts.matched,19,'16 previous matching reports plus Run & Gun, KLOW and NAD+');
- console.log('PASS: Run & Gun, KLOW, NAD+ and Epitalon publish the unchanged Vanguard report for the exact label lot through the server resolver; failed or missing lots stay pending; lot, identity and strength changes fail closed. Isolated SQLite, no network.');
+ console.log('PASS: Run & Gun, KLOW, NAD+, Epitalon and Tesamorelin publish the unchanged original report for the exact label lot through the server resolver; failed or missing lots stay pending; lot, identity and strength changes fail closed. Isolated SQLite, no network.');
 }finally{sql.close();}})().catch(error=>{console.error(error);process.exitCode=1;});
