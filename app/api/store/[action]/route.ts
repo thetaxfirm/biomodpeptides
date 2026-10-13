@@ -1,6 +1,6 @@
 import { replyBridgeRoute } from '@/lib/request-reply-route';
 import { queryOrders, scanLimit } from '@/lib/order-queue';
-import { summarizeRequestReplies, prepareRequestReply } from '@/lib/request-replies';
+import { summarizeRequestReplies, prepareRequestReply, replyDeskOptions, saveReplyRule } from '@/lib/request-replies';
 import { adminBatchRecords, validateBatchEdit } from '@/lib/product-batch';
 import { coaHash, loadCoaReports, readCoaOriginal, verifiedCoaAttachment } from '@/lib/coa-delivery';
 import { changeHistory, auditRun, withAuditDb, recordChange, type AuditActor } from '@/lib/change-history';
@@ -33,7 +33,7 @@ export const dynamic = 'force-dynamic';
 // What each admin write needs. An admin action missing here requires the owner.
 const adminActionPermission: Record<string, StaffPermission> = {
     'admin-order': 'orders:fulfill', 'admin-reconcile': 'orders:reconcile',
-    'admin-request': 'requests:write', 'admin-request-reply': 'requests:write', 'admin-coa-process': 'requests:write',
+    'admin-request': 'requests:write', 'admin-request-reply': 'requests:write', 'admin-reply-desk': 'requests:write', 'admin-request-replies': 'requests:write', 'admin-reply-rule': 'requests:write', 'admin-coa-process': 'requests:write',
     'admin-config': 'store:write', 'admin-product': 'store:write', 'admin-campaign': 'store:write', 'admin-reward': 'store:write', 'admin-coa-config': 'store:write',
     'admin-staff': 'team:manage',
 };
@@ -470,14 +470,24 @@ export async function POST(req: NextRequest, { params }: {
                 return j({ message: 'COA email settings saved.' });
             }
             if (action === 'admin-request-reply') {
-                const input = z.object({ id: z.string().uuid(), mode: z.enum(['ai', 'staff']), body: z.string().max(12000).optional(), instruction: z.string().max(2000).optional(), expectedRevision: z.number().int().positive().nullable() }).parse(b);
+                const input = z.object({ id: z.string().uuid(), mode: z.enum(['ai', 'staff']), body: z.string().max(12000).optional(), instruction: z.string().max(2000).optional(), expectedRevision: z.number().int().positive().nullable(), coaSha256: z.string().max(64).nullable().optional(), send: z.boolean().optional() }).parse(b);
                 try {
                     const reply = await prepareRequestReply(runtime(), { ...input, requestId: input.id }, actor);
-                    return j({ reply, message: 'Reply queued for preparation. Ash must review and send it in Jarvis.' });
+                    return j({ reply, message: input.send ? 'Sending from research@biomodpeptides.com through Jarvis.' : input.mode === 'ai' ? 'AI is writing the draft.' : 'Draft saved. Nothing was sent.' });
                 } catch (error) {
                     const status = (error as Error & { status?: number }).status;
                     return j({ error: status ? (error as Error).message : 'The reply could not be prepared. Refresh and try again.' }, status || 500);
                 }
+            }
+            if (action === 'admin-reply-desk') return j(await replyDeskOptions(runtime()));
+            if (action === 'admin-request-replies') {
+                const ids = z.object({ ids: z.array(z.string().uuid()).max(200) }).parse(b).ids;
+                return j({ replies: await summarizeRequestReplies(runtime(), ids) });
+            }
+            if (action === 'admin-reply-rule') {
+                const input = z.object({ rule: z.string().max(500).optional(), removeId: z.string().uuid().optional() }).parse(b);
+                try { await saveReplyRule(runtime(), input, actor); return j({ ...(await replyDeskOptions(runtime())), message: input.removeId ? 'Rule removed.' : 'Rule saved. The next drafts will follow it.' }); }
+                catch (error) { const status = (error as Error & { status?: number }).status; return j({ error: status ? (error as Error).message : 'The rule could not be saved.' }, status || 500); }
             }
             if (action === 'admin-coa-process') {
                 return j({ error: 'Automatic COA sending is disabled. Prepare a reply for Ash to review in Jarvis.' }, 409);

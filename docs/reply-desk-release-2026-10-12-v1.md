@@ -1,0 +1,27 @@
+# Reply desk v1
+
+Owner request, October 12, 2026: replying from Admin → Requests was too slow and too hard. Drafts were written by Jarvis on a 30-second pull, then had to be opened and sent from Jarvis Ready to Send in a different app; four ready drafts were sitting unsent there. No COA or discount-code picker, no dictation, and the AI did not learn from the owner's edits.
+
+## What changed
+
+- Requests is now one desk: a compact queue on the left (To reply, oldest first, with age; Waiting on customer; Done; Spam; All) and the conversation on the right with an editable draft. A customer follow-up after a reply or a closed request returns the thread to To reply.
+- Dictate (browser speech recognition) or type an instruction; the AI rewrites the current draft in place. Undo restores the previous text. "Remember this instruction" saves it as a standing reply rule.
+- Insert code lists the server-owned active promotion codes. Attach COA lists the approved private originals (product, strength, lot, current lot marked). A hand-picked original passes the same hash, duplicate-send and send-lock checks as an automatic match.
+- Owner Send: one click creates an exact staff revision marked approved by that owner. Jarvis claims approved sends first, stages them and sends through the same checks as its own Send button. Managers and support save drafts only. A send Jarvis refuses before the provider call clears the approval (`send_blocked`).
+- Learning: when a send is acknowledged, a private row keeps the AI wording beside what was actually sent. AI jobs carry the reply rules, the last six edited examples and the active codes. The desk shows how many of the last 20 AI drafts went out unchanged.
+- Speed: the desk polls reply status every 2.5 s while work is in flight (30 s otherwise) instead of reloading all administration. Jarvis polls every 4 s, drains up to five jobs in a row, and writes website drafts at medium effort.
+- Jarvis heartbeat: the claim call records when Jarvis last checked in; the desk warns when it has been quiet for 3 minutes (Mac asleep or Jarvis down).
+
+## Data
+
+Migration `0025_reply_desk.sql` adds four nullable columns to `request_reply_drafts` (`approved_at`, `approved_by`, `ai_draft`, `coa_choice`) and the private tables `request_reply_learning`, `request_reply_style` and `request_reply_bridge_seen`. Additive; no existing rows are rewritten. Customer text stays in private D1 only.
+
+## Tests
+
+`npm run check:release`: TypeScript and 63 isolated suites. `tests/request-inbox-v1.cjs` covered the retired card UI and is replaced by `tests/request-desk-v1.cjs` (queue order, resurfacing, code insert, COA pick, AI rewrite payload, undo, single owner Send, staff draft-only, plain failure text, unsafe addresses). `tests/request-replies-v1.cjs` adds owner-only send, approved-first claims, chosen original through the send lock, learning rows, rules and codes in AI jobs, desk options without report bytes, and `send_blocked`. `tests/admin-read-recovery-v1.cjs` opens the conversation from its queue row.
+
+Jarvis (`server/services/trybiomodReplies.ts`, `emailWriter.ts`, test file): 26 isolated tests and full TypeScript pass, including one approved send with the matched original, no second send of the same revision, and no provider call when the website refuses the send lock.
+
+## Limits
+
+Sends and AI drafts need Jarvis running and the research mailbox connected. Provider acceptance is not inbox delivery. Live checks of the signed-in desk need the owner's own browser session.

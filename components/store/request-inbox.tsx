@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { CoaAutomationReport } from './coa-automation';
-import type { DeliveryStatus } from '@/lib/coa-outbox';
 import styles from './request-inbox.module.css';
 
 export type CustomerRequest = {
@@ -14,10 +13,13 @@ export type ReplySummary = {
   status: 'queued' | 'preparing' | 'ready' | 'needs_review' | 'sending' | 'sent' | 'cancelled';
   mode: 'ai' | 'staff'; sender: string; recipient: string; subject: string; body: string;
   preparedBy: string; updated: number; readyId?: string; model?: string; reason?: string;
-  coa: { state: 'matched' | 'needs_review' | 'already_sent' | 'not_requested'; reason: string; productName?: string; strength?: string; lot?: string; reportId?: string; chemicalIdentity?: string; filename?: string };
+  instruction?: string; approvedAt?: number; approvedBy?: string; coaChoice?: string | null;
+  coa: { state: 'matched' | 'needs_review' | 'already_sent' | 'not_requested'; reason: string; productName?: string; strength?: string; lot?: string; reportId?: string; chemicalIdentity?: string; filename?: string; sha256?: string };
   history: { id: string; direction: 'incoming' | 'outgoing'; body: string; created: number }[];
 };
-export type PrepareReplyInput = { id: string; mode: 'ai' | 'staff'; body?: string; instruction?: string; expectedRevision: number | null };
+export type PrepareReplyInput = { id: string; mode: 'ai' | 'staff'; body?: string; instruction?: string; expectedRevision: number | null; coaSha256?: string | null; send?: boolean };
+export type DeskCoa = { sha256: string; productName: string; strength: string; form: string; lot: string; reportId: string; current: boolean };
+export type DeskOptions = { coas: DeskCoa[]; codes: { code: string; percentOff: number }[]; rules: { id: string; rule: string }[]; learning: { recent: number; unchanged: number }; bridgeSeen: number | null };
 type Props = {
   requests: readonly CustomerRequest[];
   automation?: CoaAutomationReport | null;
@@ -25,185 +27,373 @@ type Props = {
   busy: boolean;
   dirty: boolean;
   refreshing: boolean;
+  canSend?: boolean;
   onStatus: (request: CustomerRequest, status: string) => void | Promise<void>;
   onPrepareReply: (input: PrepareReplyInput) => Promise<ReplySummary>;
+  onRefreshReplies?: (ids: string[]) => Promise<Record<string, ReplySummary>>;
+  onLoadOptions?: () => Promise<DeskOptions>;
+  onSaveRule?: (input: { rule?: string; removeId?: string }) => Promise<DeskOptions>;
 };
-type Draft = { body: string; instruction: string; revision: number | null; edited: boolean; error: string; message: string };
+// coa: undefined = keep what the saved reply uses; null = auto-match the request; '' = none; sha = chosen report.
+type Draft = { body: string; instruction: string; revision: number | null; edited: boolean; error: string; message: string; coa?: string | null; undo?: string; remember: boolean };
+type Stage = 'todo' | 'sending' | 'waiting' | 'done' | 'spam';
 const noReplies: Record<string, ReplySummary> = {};
 const sender = 'research@biomodpeptides.com';
-const labels: Record<string, string> = { new: 'New', in_progress: 'In progress', reviewed: 'Reviewed', resolved: 'Resolved', spam: 'Spam' };
-const replyStates: Record<ReplySummary['status'], string> = { queued: 'Queued for preparation', preparing: 'Preparing draft', ready: 'Ready for Ash’s review in Jarvis', needs_review: 'Needs review', sending: 'Sending approved reply from Jarvis', sent: 'Accepted by mail provider', cancelled: 'Draft cancelled' };
-const replyFailureReasons: Record<string, string> = {
-  bridge_preparation_failed: 'Jarvis could not finish preparing this reply. This attempt did not send a customer email. Check Jarvis, then choose Ask AI to draft again, or write a reply and save it for review.',
-};
-function replyReason(reason: string) {
-  if (replyFailureReasons[reason]) return replyFailureReasons[reason];
-  if (/^[a-z0-9]+(?:_[a-z0-9]+)+$/.test(reason)) return 'Reply preparation needs attention. Check the reply in Jarvis before trying again. Your original customer request is still saved.';
-  return reason;
-}
+const DAY = 86400000;
 const text = (value: unknown) => typeof value === 'string' ? value.trim() : '';
 function usableEmail(value: unknown) {
   const email = text(value);
   return email.length <= 254 && /^[^\s@<>,;?&#%]+@[^\s@<>,;?&#%]+\.[^\s@<>,;?&#%]+$/.test(email);
 }
 function newDraft(reply?: ReplySummary): Draft {
-  return { body: reply?.body || '', instruction: '', revision: reply?.revision ?? null, edited: false, error: '', message: '' };
+  return { body: reply?.body || '', instruction: '', revision: reply?.revision ?? null, edited: false, error: '', message: '', remember: false };
 }
 function newestReply(remote?: ReplySummary, local?: ReplySummary) {
   if (!remote) return local;
   if (!local) return remote;
   return remote.revision > local.revision || (remote.revision === local.revision && remote.updated >= local.updated) ? remote : local;
 }
-function timestamp(value: number) { const date = new Date(value); return Number.isFinite(date.getTime()) ? date.toLocaleString() : 'Time unavailable'; }
+function when(value: number) {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return '';
+  const sameDay = new Date().toDateString() === date.toDateString();
+  return sameDay ? date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : date.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ', ' + date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+function age(value: number, now: number) {
+  const minutes = Math.max(0, Math.round((now - value) / 60000));
+  if (minutes < 60) return minutes + 'm';
+  if (minutes < 1440) return Math.round(minutes / 60) + 'h';
+  return Math.round(minutes / 1440) + 'd';
+}
 function websiteLink(value: unknown) {
   try { const url = new URL(text(value)); return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password ? url.href : null; }
   catch { return null; }
 }
-function coaSummary(coa: DeliveryStatus) {
-  if (coa.status === 'accepted') return 'COA email accepted by the mail provider. Inbox delivery is not confirmed; do not resend.';
-  if (coa.status === 'duplicate') return coa.relatedStatus === 'accepted'
-    ? 'The same COA was already accepted for an earlier request from this customer. No resend is needed; inbox delivery is not confirmed.'
-    : 'This COA has an earlier email record. Check the email activity below before taking action; do not send another copy.';
-  if (coa.status === 'queued') return 'This earlier COA email is held for owner review. Prepare a reply for Ash to review in Jarvis.';
-  if (coa.status === 'sending') return 'An earlier COA email has a sending record. Confirm its outcome before preparing another attachment; inbox delivery is not confirmed.';
-  if (coa.status === 'ready' && coa.canProcess && coa.reportId) return 'An approved original was recorded for this request. Prepare a reply to recheck the match for Ash’s review.';
-  return 'The COA needs a manual review. Check the exact product, strength, lot and original report before replying.';
+const working = (reply?: ReplySummary) => reply?.status === 'queued' || reply?.status === 'preparing';
+const sendPending = (reply?: ReplySummary) => reply?.status === 'sending' || Boolean(reply?.approvedAt && reply.status !== 'sent' && reply.status !== 'needs_review');
+function stageOf(request: CustomerRequest, reply?: ReplySummary): { stage: Stage; label: string; since: number } {
+  const history = reply?.history || [];
+  const outgoing = history.filter(m => m.direction === 'outgoing').map(m => m.created);
+  const incoming = history.filter(m => m.direction === 'incoming').map(m => m.created);
+  const lastOut = outgoing.length ? Math.max(...outgoing) : 0;
+  const lastIn = Math.max(request.created, ...incoming);
+  const customerReplied = lastOut > 0 && lastIn > lastOut;
+  if (request.status === 'spam') return { stage: 'spam', label: 'Spam', since: request.created };
+  if (sendPending(reply)) return { stage: 'sending', label: 'Sending', since: reply!.approvedAt || reply!.updated };
+  if (request.status === 'resolved' && !customerReplied) return { stage: 'done', label: 'Done', since: lastOut || request.created };
+  if (lastOut && !customerReplied) return { stage: 'waiting', label: 'Replied', since: lastOut };
+  const label = customerReplied ? 'Customer replied' : working(reply) ? 'AI writing' : reply?.status === 'ready' ? 'Draft ready' : reply?.status === 'needs_review' ? 'Needs a look' : 'New';
+  return { stage: 'todo', label, since: lastIn };
+}
+function friendlyReason(reason?: string) {
+  if (!reason) return '';
+  if (reason === 'send_blocked') return 'Jarvis stopped that send before anything went out (the request, recipient or report changed). Check the reply and press Send again.';
+  if (reason === 'bridge_preparation_failed' || /^[a-z0-9]+(?:_[a-z0-9]+)+$/.test(reason)) return 'The AI could not finish this draft. Nothing was sent. Ask again or write the reply yourself.';
+  return reason;
+}
+type Speech = { start(): void; stop(): void; abort(): void; continuous: boolean; interimResults: boolean; lang: string; onresult: ((event: any) => void) | null; onend: (() => void) | null; onerror: ((event: any) => void) | null };
+function speechRecognition(): (new () => Speech) | null {
+  if (typeof window === 'undefined') return null;
+  const w = window as any;
+  return w.SpeechRecognition || w.webkitSpeechRecognition || null;
 }
 
-export function RequestInbox({ requests, automation, requestReplies = noReplies, busy, dirty, refreshing, onStatus, onPrepareReply }: Props) {
-  const [expanded, setExpanded] = useState<string | null>(null);
+export function RequestInbox({ requests, automation, requestReplies = noReplies, busy, dirty, refreshing, canSend = false, onStatus, onPrepareReply, onRefreshReplies, onLoadOptions, onSaveRule }: Props) {
+  const [selected, setSelected] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [preparedReplies, setPreparedReplies] = useState<Record<string, ReplySummary>>({});
+  const [liveReplies, setLiveReplies] = useState<Record<string, ReplySummary>>({});
   const [pending, setPending] = useState<Record<string, boolean>>({});
+  const [options, setOptions] = useState<DeskOptions | null>(null);
+  const [filter, setFilter] = useState<'todo' | 'waiting' | 'done' | 'spam' | 'all'>('todo');
+  const [query, setQuery] = useState('');
+  const [listening, setListening] = useState<string | null>(null);
+  const [rulesOpen, setRulesOpen] = useState(false);
+  const [newRule, setNewRule] = useState('');
+  const [now, setNow] = useState(() => Date.now());
   const pendingIds = useRef(new Set<string>());
   const mounted = useRef(true);
-  const currentReplies = useRef(requestReplies);
-  currentReplies.current = requestReplies;
-  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  const speech = useRef<Speech | null>(null);
+  const bodyField = useRef<HTMLTextAreaElement | null>(null);
+  const replyOf = (id: string) => newestReply(newestReply(requestReplies[id], liveReplies[id]), preparedReplies[id]);
+  const replyRef = useRef(replyOf);
+  replyRef.current = replyOf;
+  const requestIds = requests.map(r => r.id).join(',');
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; speech.current?.abort(); }; }, []);
+  useEffect(() => {
+    if (!onLoadOptions) return;
+    let alive = true;
+    onLoadOptions().then(value => { if (alive && mounted.current) setOptions(value); }, () => undefined);
+    return () => { alive = false; };
+  }, [onLoadOptions]);
+  // Live status: every few seconds while the AI writes or Jarvis sends, otherwise every 30 seconds.
+  useEffect(() => {
+    if (!onRefreshReplies) return;
+    let stopped = false, timer: ReturnType<typeof setTimeout> | undefined;
+    const tick = async () => {
+      if (stopped) return;
+      const ids = requestIds ? requestIds.split(',') : [];
+      if (ids.length && typeof document !== 'undefined' && document.visibilityState !== 'hidden') {
+        try { const fresh = await onRefreshReplies(ids); if (!stopped && mounted.current) setLiveReplies(fresh); } catch { /* keep the last loaded status */ }
+      }
+      if (stopped) return;
+      if (mounted.current) setNow(Date.now());
+      const active = ids.some(id => { const reply = replyRef.current(id); return working(reply) || sendPending(reply); });
+      timer = setTimeout(tick, active ? 2500 : 30000);
+      (timer as any)?.unref?.();
+    };
+    timer = setTimeout(tick, 2500);
+    (timer as any)?.unref?.();
+    return () => { stopped = true; if (timer) clearTimeout(timer); };
+  }, [onRefreshReplies, requestIds]);
+  // A clean draft follows the newest saved/AI version; an edited one is never overwritten.
   useEffect(() => {
     setDrafts(previous => {
       let changed = false;
       const next = { ...previous };
       for (const [id, draft] of Object.entries(previous)) {
-        const reply = newestReply(requestReplies[id], preparedReplies[id]);
-        if (!draft.edited && reply && (draft.revision !== reply.revision || draft.body !== (reply.body || ''))) {
-          next[id] = { ...newDraft(reply), message: draft.message }; changed = true;
+        const reply = replyOf(id);
+        if (!draft.edited && reply && !working(reply) && (draft.revision !== reply.revision || draft.body !== (reply.body || ''))) {
+          next[id] = { ...newDraft(reply), message: draft.message, undo: draft.undo, coa: draft.coa }; changed = true;
         }
       }
       return changed ? next : previous;
     });
-  }, [requestReplies, preparedReplies]);
-  const [filter, setFilter] = useState('attention');
-  const [query, setQuery] = useState('');
+  }, [requestReplies, preparedReplies, liveReplies]);
   const disabled = busy || dirty || refreshing;
-  function openReply(id: string) {
-    const reply = newestReply(requestReplies[id], preparedReplies[id]);
-    setDrafts(previous => ({ ...previous, [id]: previous[id]?.edited ? previous[id] : newDraft(reply) }));
-    setExpanded(current => current === id ? null : id);
+
+  const rows = requests.map(request => ({ request, reply: replyOf(request.id), ...stageOf(request, replyOf(request.id)) }));
+  const counts = { todo: 0, waiting: 0, done: 0, spam: 0, all: rows.length };
+  for (const row of rows) { if (row.stage === 'sending' || row.stage === 'todo') counts.todo++; else counts[row.stage]++; }
+  const needle = query.trim().toLowerCase();
+  const shown = rows.filter(row => (filter === 'all' || (filter === 'todo' ? row.stage === 'todo' || row.stage === 'sending' : row.stage === filter))
+    && (!needle || [row.request.id, row.request.kind, ...Object.values(row.request.data).filter(value => typeof value === 'string')].join(' ').toLowerCase().includes(needle)))
+    // To reply: oldest first, so nothing waits behind newer mail. Everything else: newest first.
+    .sort((a, b) => filter === 'todo' ? a.since - b.since : b.since - a.since);
+  const views = [['todo', 'To reply'], ['waiting', 'Waiting on customer'], ['done', 'Done'], ['spam', 'Spam'], ['all', 'All']] as const;
+
+  function open(id: string) {
+    const reply = replyOf(id);
+    setDrafts(previous => ({ ...previous, [id]: previous[id] || newDraft(reply) }));
+    setSelected(current => current === id ? null : id);
   }
   function editDraft(id: string, field: 'body' | 'instruction', value: string) {
-    if (disabled || pendingIds.current.has(id) || newestReply(requestReplies[id], preparedReplies[id])?.status === 'sending') return;
-    setDrafts(previous => ({ ...previous, [id]: { ...(previous[id] || newDraft()), [field]: value, edited: true, error: '', message: '' } }));
+    if (disabled || pendingIds.current.has(id) || sendPending(replyOf(id)) || (field === 'body' && working(replyOf(id)))) return;
+    setDrafts(previous => ({ ...previous, [id]: { ...(previous[id] || newDraft()), [field]: value, ...(field === 'body' ? { edited: true } : {}), error: '', message: '' } }));
   }
-  async function prepareReply(request: CustomerRequest, mode: 'ai' | 'staff') {
+  function setDraft(id: string, patch: Partial<Draft>) {
+    setDrafts(previous => ({ ...previous, [id]: { ...(previous[id] || newDraft(replyOf(id))), ...patch } }));
+  }
+  function insertAtCursor(id: string, snippet: string) {
+    const draft = drafts[id]; if (!draft || disabled || working(replyOf(id))) return;
+    const field = bodyField.current, at = field && typeof document !== "undefined" && document.activeElement === field ? field.selectionStart : draft.body.length;
+    const before = draft.body.slice(0, at), after = draft.body.slice(at);
+    const glue = before && !/\s$/.test(before) ? ' ' : '';
+    editDraft(id, 'body', before + glue + snippet + after);
+  }
+  async function submit(request: CustomerRequest, mode: 'ai' | 'staff', send = false) {
     const id = request.id, draft = drafts[id];
     if (disabled || pendingIds.current.has(id) || !draft || !usableEmail(request.data.email)) return;
-    const latest = newestReply(requestReplies[id], preparedReplies[id]);
-    if (latest?.status === 'sending' || (latest?.revision ?? null) !== draft.revision) return;
-    if (mode === 'staff' && !draft.body.trim()) {
-      setDrafts(previous => ({ ...previous, [id]: { ...previous[id], error: 'Write a reply before saving it for review.' } })); return;
-    }
+    const latest = replyOf(id);
+    if (sendPending(latest) || (latest?.revision ?? null) !== draft.revision) return;
+    if (mode === 'staff' && !draft.body.trim()) { setDraft(id, { error: send ? 'Write the reply before sending it.' : 'Write a reply before saving it.' }); return; }
+    if (mode === 'ai' && !draft.instruction.trim() && draft.body.trim()) { setDraft(id, { error: 'Tell the AI what to change, or edit the reply yourself.' }); return; }
+    if (send && !canSend) return;
     pendingIds.current.add(id); setPending(previous => ({ ...previous, [id]: true }));
-    setDrafts(previous => ({ ...previous, [id]: { ...previous[id], error: '', message: '' } }));
+    setDraft(id, { error: '', message: '' });
+    const instruction = draft.instruction.trim();
     try {
-      const reply = await onPrepareReply({ id, mode, body: draft.body, instruction: draft.instruction, expectedRevision: draft.revision });
+      if (mode === 'ai' && draft.remember && instruction && onSaveRule) {
+        try { const next = await onSaveRule({ rule: instruction }); if (mounted.current) setOptions(next); } catch { /* the draft request still goes ahead */ }
+      }
+      const reply = await onPrepareReply({ id, mode, body: draft.body, instruction: mode === 'ai' ? instruction : '', expectedRevision: draft.revision, ...(draft.coa !== undefined ? { coaSha256: draft.coa } : {}), ...(send ? { send: true } : {}) });
       if (!mounted.current) return;
       setPreparedReplies(previous => ({ ...previous, [id]: reply }));
-      const newer = currentReplies.current[id];
-      setDrafts(previous => ({ ...previous, [id]: newer && newer.revision > reply.revision
-        ? { ...previous[id], edited: true, error: '', message: 'This reply was saved, but a newer revision is now available. Review it before making further changes.' }
-        : { ...newDraft(reply), message: 'Reply saved for preparation and review. Saving a draft does not send email.' } }));
+      setDrafts(previous => ({ ...previous, [id]: {
+        ...newDraft(reply),
+        body: mode === 'ai' ? (draft.body || '') : reply.body,
+        undo: mode === 'ai' && draft.body.trim() ? draft.body : undefined,
+        coa: draft.coa,
+        message: send ? '' : mode === 'ai' ? '' : 'Draft saved. Nothing was sent.',
+      } }));
     } catch (error) {
-      if (mounted.current) setDrafts(previous => ({ ...previous, [id]: { ...previous[id], error: error instanceof Error ? error.message : 'Could not prepare the reply. Your text is still here. Refresh administration and try again.' } }));
+      if (mounted.current) setDraft(id, { error: (error instanceof Error ? error.message : 'That did not go through.') + ' Your text is still here.' });
     } finally {
       pendingIds.current.delete(id);
       if (mounted.current) setPending(previous => ({ ...previous, [id]: false }));
     }
   }
-  const attention = requests.filter(r => !['resolved', 'spam'].includes(r.status));
-  const views = [ ['attention', 'Needs attention', attention.length], ['all', 'All', requests.length], ['resolved', 'Resolved', requests.filter(r => r.status === 'resolved').length], ['spam', 'Spam', requests.filter(r => r.status === 'spam').length] ] as const;
-  const needle = query.trim().toLowerCase();
-  const shown = requests.filter(request => (filter === 'all' || (filter === 'attention' ? !['resolved', 'spam'].includes(request.status) : request.status === filter)) && (!needle || [request.id, request.kind, ...Object.values(request.data).filter(value => typeof value === 'string')].join(' ').toLowerCase().includes(needle)));
+  function dictate(request: CustomerRequest) {
+    const id = request.id;
+    if (listening) { speech.current?.stop(); return; }
+    const Recognition = speechRecognition();
+    if (!Recognition) { setDraft(id, { error: 'This browser has no dictation. Use Chrome or Safari, or the Mac dictation key.' }); return; }
+    const recognition = new Recognition();
+    recognition.continuous = true; recognition.interimResults = true; recognition.lang = 'en-US';
+    const start = drafts[id]?.instruction ? drafts[id].instruction.trim() + ' ' : '';
+    recognition.onresult = event => {
+      let heard = '';
+      for (let i = 0; i < event.results.length; i++) heard += event.results[i][0].transcript;
+      setDrafts(previous => ({ ...previous, [id]: { ...(previous[id] || newDraft(replyOf(id))), instruction: start + heard.trim(), error: '' } }));
+    };
+    recognition.onerror = event => { if (mounted.current) setDraft(id, { error: event?.error === 'not-allowed' ? 'Allow microphone access for this site to dictate.' : 'Dictation stopped. Try again.' }); };
+    recognition.onend = () => { if (mounted.current) setListening(null); speech.current = null; };
+    speech.current = recognition; setListening(id);
+    try { recognition.start(); } catch { setListening(null); speech.current = null; }
+  }
+  async function saveRule(input: { rule?: string; removeId?: string }) {
+    if (!onSaveRule) return;
+    try { const next = await onSaveRule(input); if (mounted.current) { setOptions(next); setNewRule(''); } } catch { /* the rules list stays as loaded */ }
+  }
+
+  const bridgeQuiet = options?.bridgeSeen != null && now - options.bridgeSeen > 3 * 60000;
+  const active = rows.find(row => row.request.id === selected) || null;
   return <section className={styles.inbox} aria-labelledby="request-inbox-title" aria-busy={busy || refreshing}>
-    <h2 id="request-inbox-title">Customer requests</h2>
-    <p>Prepare an AI or staff-written reply here. Ash reviews and sends it from Jarvis Ready to Send. Status buttons organize this inbox; they do not send a reply, approve an affiliate or change an order.</p>
-    <div className={styles.toolbar}>
-      <div className={styles.filters} role="group" aria-label="Filter customer requests">{views.map(([value, label, count]) => <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)}>{label} <span>{count}</span></button>)}</div>
-      <label className={styles.search}><span>Find a request</span><input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Name, email, subject or reference"/></label>
+    <div className={styles.top}>
+      <h2 id="request-inbox-title">Customer requests</h2>
+      {options && <p className={styles.learning}>
+        {options.learning.recent ? <>AI drafts: <strong>{options.learning.unchanged} of the last {options.learning.recent}</strong> went out without edits.</> : <>The AI learns from every reply you send.</>}{' '}
+        <button type="button" className={styles.link} aria-expanded={rulesOpen} onClick={() => setRulesOpen(v => !v)}>Reply rules ({options.rules.length})</button>
+      </p>}
     </div>
-    <p className={styles.note}>{shown.length} shown from {requests.length} loaded requests. Refresh administration for current information.</p>
+    {rulesOpen && options && <div className={styles.rules}>
+      <p className={styles.note}>The AI follows these on every draft, along with the edits you made to earlier drafts.</p>
+      {options.rules.length ? <ol>{options.rules.map(rule => <li key={rule.id}><span>{rule.rule}</span><button type="button" className={styles.link} onClick={() => void saveRule({ removeId: rule.id })}>Remove</button></li>)}</ol> : <p className={styles.note}>No rules yet.</p>}
+      <form className={styles.ruleForm} onSubmit={event => { event.preventDefault(); if (newRule.trim()) void saveRule({ rule: newRule.trim() }); }}>
+        <input value={newRule} maxLength={500} onChange={event => setNewRule(event.target.value)} placeholder="e.g. We have no walk-in store. Orders ship from the website only." aria-label="New reply rule"/>
+        <button type="submit" className={styles.action} disabled={!newRule.trim()}>Add rule</button>
+      </form>
+    </div>}
+    {bridgeQuiet && <p className={styles.warning} role="status">Jarvis last checked in at {when(options!.bridgeSeen!)}. AI drafts and sends wait until your Mac is awake and Jarvis is running.</p>}
     {dirty && <p role="status">Save or discard your unsaved admin edits before changing a request.</p>}
-    {!shown.length ? <p className={styles.empty}>{requests.length ? 'No requests match this view.' : 'No customer requests yet.'}</p> : <div className={styles.list}>{shown.map(request => {
-      const email = text(request.data.email);
-      const reply = newestReply(requestReplies[request.id], preparedReplies[request.id]);
-      const draft = drafts[request.id];
-      const editing = expanded === request.id && draft;
-      const preparing = Boolean(pending[request.id]);
-      const locked = disabled || preparing || reply?.status === 'sending';
-      const conflict = Boolean(draft && draft.revision !== (reply?.revision ?? null));
-      const canReply = usableEmail(request.data.email);
-      const replyAction = reply?.status === 'sending' ? 'View sending status' : preparing || reply?.status === 'queued' || reply?.status === 'preparing' ? 'Preparing reply' : reply?.status === 'ready' ? 'Ready to send' : reply?.status === 'sent' ? 'View reply / follow up' : 'Prepare reply';
-      const website = websiteLink(request.data.website);
-      const delivery = automation?.requests?.[request.id];
-      const coa = delivery?.coa;
-      const category = request.kind === 'affiliate' ? 'Affiliate application' : request.kind === 'stock' ? 'Stock notification request' : coa ? 'COA request' : 'Customer message';
-      const name = text(request.data.name) || email || 'Customer request';
-      const subject = text(request.data.subject) || (request.kind === 'affiliate' ? 'Partner application' : request.kind === 'stock' ? 'Product availability' : 'Website message');
-      const date = new Date(request.created);
-      return <article className={styles.request} key={request.id} aria-label={name + ': ' + subject}>
-        <div className={styles.heading}><div><p className={styles.category}>{category}</p><h3>{name}</h3><p className={styles.subject}>{subject}</p></div><div className={styles.headingActions}><strong className={styles.status}>{labels[request.status] || 'Needs review'}</strong><button type="button" className="button button-dark" aria-expanded={expanded === request.id} aria-controls={`request-reply-${request.id}`} disabled={!canReply} onClick={() => openReply(request.id)}>{replyAction}</button></div></div>
-        <p className={styles.note}>{Number.isFinite(date.getTime()) && <><time dateTime={date.toISOString()}>{date.toLocaleString()}</time> · </>}Reference {request.id.slice(0, 8)}</p>
-        {email && <p className={styles.email}>{email}</p>}
-        {text(request.data.message) && <p className={styles.message}>{text(request.data.message)}</p>}
-        {website && <p><a href={website} target="_blank" rel="noopener noreferrer">View applicant’s website or profile</a></p>}
-        {coa && <div className={styles.coa}><h4>COA email</h4><p>{coaSummary(coa)}</p>{(coa.productName || coa.lot) && <p className={styles.note}>{coa.productName}{coa.lot ? ' · Lot ' + coa.lot : ''}</p>}</div>}
-        {request.kind === 'affiliate' && <p className={styles.note}>Review the application before agreeing to terms or assigning a code. Approved codes are managed under Affiliate &amp; promo codes.</p>}
-        {request.kind === 'stock' && <p className={styles.note}>Check current product availability before replying. Changing this status does not send a stock notification.</p>}
-        {delivery?.alert?.status === 'accepted' && <p className={styles.note}>Your request notification was accepted by the mail provider. That alert is not a reply to the customer.</p>}
-        <div className={styles.actions}>
-          {!['resolved', 'spam'].includes(request.status) ? <>
-            {request.status !== 'in_progress' && <button type="button" className={styles.action} disabled={disabled} onClick={() => { if (!disabled) void onStatus(request, 'in_progress'); }}>Start review</button>}
-            <button type="button" className={styles.action} disabled={disabled} onClick={() => { if (!disabled) void onStatus(request, 'resolved'); }}>Mark resolved</button>
-          </> : <button type="button" className={styles.action} disabled={disabled} onClick={() => { if (!disabled) void onStatus(request, 'new'); }}>Reopen request</button>}
-          {request.status !== 'spam' && <button type="button" className={styles.quietAction} disabled={disabled} onClick={() => { if (!disabled) void onStatus(request, 'spam'); }}>Move to spam</button>}
-        </div>
-        <p className={styles.note}>{!canReply ? 'No usable email address is saved for this request.' : 'Replies are prepared here and sent only after Ash’s review in Jarvis.'} {request.status === 'spam' ? 'Spam is kept here and can be reopened.' : 'Mark resolved after replying or confirming no further action is needed.'}</p>
-        {editing && <section className={styles.replyEditor} id={`request-reply-${request.id}`} aria-label={`Reply editor for ${name}`} aria-busy={preparing}>
-          <div className={styles.editorHeading}><h4>Prepare a reply</h4><button type="button" className={styles.quietAction} onClick={() => setExpanded(null)}>Close editor</button></div>
-          <p className={styles.note}>Nothing sends from this page. Review the final reply and any original COA in Jarvis Ready to Send.</p>
-          <dl className={styles.addresses}><div><dt>From</dt><dd>{sender}</dd></div><div><dt>To</dt><dd>{reply?.recipient || email}</dd></div><div><dt>Subject</dt><dd>{reply?.subject || (/^re:/i.test(subject) ? subject : `Re: ${subject}`)}</dd></div></dl>
-          {reply && <p className={styles.replyState}><strong>{replyStates[reply.status]}</strong> · Revision {reply.revision}{reply.preparedBy ? ` · Prepared by ${reply.preparedBy}` : ''} · {timestamp(reply.updated)}{reply.status === 'sent' && <span> Provider acceptance does not confirm inbox delivery.</span>}</p>}
-          {reply?.reason && <p className={styles.note}>{replyReason(reply.reason)}</p>}
-          <div className={styles.replyColumns}>
-            <section className={styles.incoming}><h5>Original customer message</h5><strong>{subject}</strong><p className={styles.message}>{text(request.data.message) || 'No message text was included.'}</p>
-              {reply?.history?.length ? <details className={styles.history}><summary>Conversation history ({reply.history.length})</summary>{reply.history.map(item => <article key={item.id}><strong>{item.direction === 'incoming' ? 'Customer message' : 'Outgoing message'}</strong><p className={styles.note}>{timestamp(item.created)}</p><p className={styles.message}>{item.body}</p></article>)}</details> : null}
-            </section>
-            <div className={styles.composer}>
-              <label><span>Proposed reply</span><textarea name="replyBody" rows={10} maxLength={12000} value={draft.body} disabled={locked} onChange={event => editDraft(request.id, 'body', event.target.value)} placeholder="Write a reply, or ask AI to prepare one for review."/></label>
-              <label><span>Instructions for AI (optional)</span><textarea name="replyInstruction" rows={3} maxLength={2000} value={draft.instruction} disabled={locked} onChange={event => editDraft(request.id, 'instruction', event.target.value)} placeholder="Add facts or guidance for the draft. Verify the proposed reply before sending."/></label>
-            </div>
-          </div>
-          <div className={styles.coa}><h5>Original COA for this reply</h5>
-            {!reply ? <p>The exact product, strength, lot and original report will be checked when the reply is prepared. No attachment is confirmed yet.</p> : <><p><strong>{reply.coa.state === 'matched' ? 'Exact original matched for review' : reply.coa.state === 'already_sent' ? 'Earlier COA delivery recorded' : reply.coa.state === 'needs_review' ? 'COA needs review' : 'No COA requested'}</strong></p><p>{reply.coa.reason}</p>{(reply.coa.productName || reply.coa.strength || reply.coa.lot || reply.coa.reportId) && <dl className={styles.coaFacts}>{[['Product', reply.coa.productName], ['Chemical identity', reply.coa.chemicalIdentity], ['Strength', reply.coa.strength], ['Lot', reply.coa.lot], ['Report', reply.coa.reportId], ['Original file', reply.coa.filename]].filter(([, value]) => value).map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>}{reply.coa.state === 'matched' && <p className={styles.note}>The original attachment is checked again before sending. A match is not proof that an email was sent.</p>}</>}
-          </div>
-          {conflict && <div className={styles.conflict} role="alert"><h5>A newer reply exists</h5><p>Your text is preserved. Review revision {reply?.revision} before replacing it.</p><p className={styles.message}>{reply?.body || 'The newer reply is still being prepared.'}</p><div className={styles.actions}><button type="button" className={styles.action} disabled={locked} onClick={() => { if (!locked) setDrafts(previous => ({ ...previous, [request.id]: newDraft(reply) })); }}>Replace my text with latest draft</button><button type="button" className={styles.action} disabled={locked} onClick={() => { if (!locked) setDrafts(previous => ({ ...previous, [request.id]: { ...previous[request.id], revision: reply?.revision ?? null, error: '', message: '' } })); }}>Keep my text for a new revision</button></div></div>}
-          {draft.error && <p className={styles.error} role="alert">{draft.error} Your draft text has been kept.</p>}
-          {draft.message && <p role="status">{draft.message}</p>}
-          <div className={styles.actions}><button type="button" className={styles.action} disabled={locked || conflict} onClick={() => void prepareReply(request, 'ai')}>{preparing ? 'Preparing…' : 'Ask AI to draft'}</button><button type="button" className="button button-dark" disabled={locked || conflict} onClick={() => void prepareReply(request, 'staff')}>Save reply for Ash’s review</button></div>
-          <p className={styles.note}>Saving a replacement creates a new revision and invalidates the earlier Jarvis draft. Request status stays separate.</p>
-        </section>}
-        <details className={styles.original}><summary>Saved request details</summary>{Object.entries(request.data).map(([key, value]) => <p key={key}><strong>{key}: </strong>{typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value ?? '')}</p>)}</details>
-      </article>;
-    })}</div>}
+    <div className={styles.toolbar}>
+      <div className={styles.filters} role="group" aria-label="Filter customer requests">{views.map(([value, label]) => <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)}>{label} <span>{counts[value]}</span></button>)}</div>
+      <label className={styles.search}><span className={styles.hidden}>Find a request</span><input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search name, email or words"/></label>
+    </div>
+    <div className={styles.desk} data-open={active ? 'true' : 'false'}>
+      <div className={styles.list} role="list" aria-label="Requests">
+        {!shown.length ? <p className={styles.empty}>{requests.length ? (filter === 'todo' ? 'Nothing waiting for a reply.' : 'No requests here.') : 'No customer requests yet.'}</p> : shown.map(row => {
+          const { request, reply } = row;
+          const name = text(request.data.name) || text(request.data.email) || 'Customer';
+          const preview = text(request.data.message) || text(request.data.subject);
+          const late = (row.stage === 'todo') && now - row.since > DAY;
+          return <article key={request.id} role="listitem" className={styles.row} data-selected={selected === request.id ? 'true' : 'false'}>
+            <button type="button" className={styles.rowButton} aria-expanded={selected === request.id} aria-controls={`request-reply-${request.id}`} onClick={() => open(request.id)}>
+              <span className={styles.rowTop}><strong>{name}</strong><span className={late ? styles.late : styles.age}>{age(row.since, now)}</span></span>
+              <span className={styles.rowSubject}>{text(request.data.subject) || (request.kind === 'affiliate' ? 'Partner application' : request.kind === 'stock' ? 'Product availability' : 'Website message')}</span>
+              <span className={styles.rowPreview}>{preview}</span>
+              <span className={styles.rowState} data-stage={row.stage}>{row.label}{reply?.coa?.state === 'matched' && row.stage !== 'done' ? ' · COA' : ''}</span>
+            </button>
+          </article>;
+        })}
+      </div>
+      {/* A plain render function (no hooks), so the open conversation is part of this tree. */}
+      {active ? conversation({ row: active, draft: drafts[active.request.id], automation, options, canSend, disabled, listening: listening === active.request.id, preparing: Boolean(pending[active.request.id]), bodyField, now,
+        onClose: () => setSelected(null),
+        onEdit: (field, value) => editDraft(active.request.id, field, value),
+        onDraft: patch => setDraft(active.request.id, patch),
+        onInsert: snippet => insertAtCursor(active.request.id, snippet),
+        onSubmit: (mode, send) => void submit(active.request, mode, send),
+        onDictate: () => dictate(active.request),
+        onStatus: status => { if (!disabled) void onStatus(active.request, status); } })
+        : <div className={styles.placeholder}><p>Pick a request on the left. The AI has usually written a draft already.</p></div>}
+    </div>
+  </section>;
+}
+
+type ConversationProps = {
+  row: { request: CustomerRequest; reply?: ReplySummary; stage: Stage; label: string; since: number };
+  draft?: Draft; automation?: CoaAutomationReport | null; options: DeskOptions | null; canSend: boolean; disabled: boolean; listening: boolean; preparing: boolean; now: number;
+  bodyField: { current: HTMLTextAreaElement | null };
+  onClose: () => void; onEdit: (field: 'body' | 'instruction', value: string) => void; onDraft: (patch: Partial<Draft>) => void; onInsert: (snippet: string) => void;
+  onSubmit: (mode: 'ai' | 'staff', send?: boolean) => void; onDictate: () => void; onStatus: (status: string) => void;
+};
+function conversation({ row, draft, automation, options, canSend, disabled, listening, preparing, bodyField, now, onClose, onEdit, onDraft, onInsert, onSubmit, onDictate, onStatus }: ConversationProps) {
+  const { request, reply } = row;
+  const email = text(request.data.email), canReply = usableEmail(request.data.email);
+  const name = text(request.data.name) || email || 'Customer';
+  const subject = text(request.data.subject) || (request.kind === 'affiliate' ? 'Partner application' : request.kind === 'stock' ? 'Product availability' : 'Website message');
+  const website = websiteLink(request.data.website);
+  const previousCoa = automation?.requests?.[request.id]?.coa;
+  const writing = working(reply), sending = sendPending(reply);
+  const locked = disabled || preparing || sending;
+  const conflict = Boolean(draft && draft.revision !== (reply?.revision ?? null));
+  const history = reply?.history?.length ? reply.history : [{ id: 'original:' + request.id, direction: 'incoming' as const, body: text(request.data.message), created: request.created }];
+  const coaChoice = draft?.coa !== undefined ? draft.coa : (reply?.coaChoice ?? null);
+  const chosen = coaChoice ? options?.coas.find(c => c.sha256 === coaChoice) : undefined;
+  const attachedNow = reply?.coa.state === 'matched' && (draft?.coa === undefined || draft.coa === reply.coaChoice) ? reply.coa : null;
+  const isCoaRequest = /^coa request:/i.test(subject);
+  const lastSent = [...history].reverse().find(m => m.direction === 'outgoing');
+  let status = '';
+  if (sending) status = reply?.status === 'sending' ? 'Sending from ' + sender + '…' : 'Queued to send. Jarvis sends it within seconds while your Mac is awake.';
+  else if (preparing) status = 'Saving…';
+  else if (writing) status = reply?.mode === 'ai' ? 'AI is writing. This usually takes under a minute.' : 'Saving the draft…';
+  else if (reply?.status === 'sent') status = 'Sent ' + when(reply.updated) + '. Accepted by the mail provider.';
+  else if (reply?.status === 'ready' && reply.mode === 'ai' && !draft?.edited) status = 'AI draft. Edit anything, or tell the AI what to change.';
+  else if (reply?.status === 'ready') status = 'Draft saved. Not sent.';
+  return <section key={request.id} className={styles.pane} id={`request-reply-${request.id}`} aria-label={`Reply to ${name}`} aria-busy={writing || sending}>
+    <header className={styles.paneHead}>
+      <button type="button" className={styles.back} onClick={onClose}>Back to list</button>
+      <div className={styles.who}><h3>{name}</h3><p>{email || 'No email address saved'}{website && <> · <a href={website} target="_blank" rel="noopener noreferrer">Website</a></>}</p></div>
+      <div className={styles.paneActions}>
+        {request.status === 'spam' || request.status === 'resolved'
+          ? <button type="button" className={styles.link} disabled={disabled} onClick={() => onStatus('new')}>Reopen</button>
+          : <><button type="button" className={styles.action} disabled={disabled} onClick={() => onStatus('resolved')}>Mark done</button><button type="button" className={styles.link} disabled={disabled} onClick={() => onStatus('spam')}>Spam</button></>}
+      </div>
+    </header>
+    <p className={styles.subjectLine}><strong>{subject}</strong> <span className={styles.note}>· Ref {request.id.slice(0, 8)}</span></p>
+    <ol className={styles.thread} aria-label="Conversation">
+      {history.map(message => <li key={message.id} data-direction={message.direction}>
+        <p className={styles.meta}>{message.direction === 'incoming' ? name : 'You'} · {when(message.created)}</p>
+        <p className={styles.message}>{message.body || 'No message text was included.'}</p>
+      </li>)}
+    </ol>
+    {request.kind === 'affiliate' && <p className={styles.note}>Partner application. Agree terms and create the code under Affiliate &amp; promo codes before promising one.</p>}
+    {request.kind === 'stock' && <p className={styles.note}>Check stock under Products before promising a date.</p>}
+    {previousCoa?.status === 'accepted' && <p className={styles.note}>An earlier automatic COA email to this customer was accepted by the mail provider.</p>}
+    {!canReply ? <p className={styles.warning}>No usable email address was saved, so there is no way to reply.</p> : !draft ? null : <div className={styles.composer}>
+      <div className={styles.composeHead}><span>To {reply?.recipient || email}</span><span className={styles.note}>From {sender}</span></div>
+      <label className={styles.hidden} htmlFor={`reply-body-${request.id}`}>Reply</label>
+      <textarea id={`reply-body-${request.id}`} ref={bodyField} name="replyBody" rows={11} maxLength={12000} value={draft.body} readOnly={writing} disabled={locked}
+        onChange={event => onEdit('body', event.target.value)} placeholder={writing ? 'The AI is writing…' : 'Write the reply, or tell the AI below what you want to say.'} data-writing={writing ? 'true' : 'false'}/>
+      {status && <p className={styles.status} role="status">{status}{draft.undo && !writing && !sending && <> <button type="button" className={styles.link} onClick={() => onDraft({ body: draft.undo!, undo: undefined, edited: true })}>Undo AI change</button></>}</p>}
+      {reply?.reason && reply.status !== 'sent' && !sending && <p className={styles.warning}>{friendlyReason(reply.reason)}</p>}
+      <div className={styles.ask}>
+        <label className={styles.hidden} htmlFor={`reply-ai-${request.id}`}>Tell the AI</label>
+        <textarea id={`reply-ai-${request.id}`} name="replyInstruction" rows={2} maxLength={2000} value={draft.instruction} disabled={locked}
+          onChange={event => onEdit('instruction', event.target.value)}
+          onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); if (!locked && !conflict) onSubmit('ai'); } }}
+          placeholder={listening ? 'Listening… say what the reply should say' : draft.body.trim() ? 'Tell the AI what to change: "shorter", "add the 10% code", "say the cart is fixed"' : 'Tell the AI what to write, or press the mic and say it'}/>
+        <button type="button" className={styles.mic} aria-pressed={listening} disabled={locked && !listening} onClick={onDictate}>{listening ? 'Stop' : 'Dictate'}</button>
+        <button type="button" className={styles.action} disabled={locked || conflict || writing} onClick={() => onSubmit('ai')}>{writing && reply?.mode === 'ai' ? 'Writing…' : draft.body.trim() ? 'Rewrite' : 'Write it'}</button>
+      </div>
+      <label className={styles.remember}><input type="checkbox" checked={draft.remember} disabled={locked} onChange={event => onDraft({ remember: event.target.checked })}/> Remember this instruction for future replies</label>
+      <div className={styles.inserts}>
+        <label><span>Insert code</span><select value="" disabled={locked || writing || !options?.codes.length} onChange={event => { const code = options?.codes.find(c => c.code === event.target.value); if (code) onInsert(`code ${code.code} (${code.percentOff}% off at checkout)`); }}>
+          <option value="">{options ? (options.codes.length ? 'Choose a code' : 'No active codes') : 'Loading…'}</option>
+          {options?.codes.map(code => <option key={code.code} value={code.code}>{code.code} · {code.percentOff}% off</option>)}
+        </select></label>
+        <label><span>Attach COA</span><select value={coaChoice === null ? 'auto' : coaChoice} disabled={locked || writing || !options} onChange={event => onDraft({ coa: event.target.value === 'auto' ? null : event.target.value, edited: true })}>
+          <option value="auto">{isCoaRequest ? 'Match the requested lot' : 'No report'}</option>
+          {isCoaRequest && <option value="">No report</option>}
+          {options?.coas.map(coa => <option key={coa.sha256} value={coa.sha256}>{coa.productName} {coa.strength} · lot {coa.lot}{coa.current ? ' (current)' : ''}</option>)}
+        </select></label>
+      </div>
+      {(attachedNow || chosen) && <p className={styles.attachment}>{attachedNow && (!chosen || chosen.sha256 === attachedNow.sha256)
+        ? <>Attached: <strong>{attachedNow.filename || attachedNow.reportId}</strong> · {attachedNow.productName} {attachedNow.strength}, lot {attachedNow.lot}</>
+        : <>Will attach when you save or send: <strong>{chosen!.productName} {chosen!.strength}, lot {chosen!.lot}</strong></>}</p>}
+      {reply && reply.coa.state !== 'matched' && reply.coa.state !== 'not_requested' && !chosen && <p className={styles.note}>{reply.coa.reason}</p>}
+      {conflict && <div className={styles.conflict} role="alert"><p>Someone saved a newer version of this reply. Your text is kept.</p><button type="button" className={styles.action} disabled={locked} onClick={() => onDraft({ ...newDraft(reply), coa: draft.coa })}>Use the newer version</button><button type="button" className={styles.action} disabled={locked} onClick={() => onDraft({ revision: reply?.revision ?? null, error: '', message: '' })}>Keep mine</button></div>}
+      {draft.error && <p className={styles.error} role="alert">{draft.error}</p>}
+      {draft.message && <p role="status" className={styles.note}>{draft.message}</p>}
+      <div className={styles.sendRow}>
+        {canSend
+          ? <button type="button" className={styles.send} disabled={locked || conflict || writing || !draft.body.trim()} onClick={() => onSubmit('staff', true)}>{sending ? 'Sending…' : 'Send'}</button>
+          : <p className={styles.note}>Ash sends replies. Save the draft and it appears here for him.</p>}
+        <button type="button" className={styles.action} disabled={locked || conflict || writing || !draft.body.trim()} onClick={() => onSubmit('staff')}>Save draft</button>
+        {lastSent && <span className={styles.note}>Last reply sent {when(lastSent.created)}</span>}
+      </div>
+    </div>}
+    <details className={styles.original}><summary>Everything the customer submitted</summary>{Object.entries(request.data).map(([key, value]) => <p key={key}><strong>{key}: </strong>{typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value ?? '')}</p>)}</details>
   </section>;
 }

@@ -266,7 +266,7 @@ const productNames=h=>String(Boolean(productPanel(h).props.edited));
   return panel;
  };
  let panel=reconcileInbox();assert.equal(panel.props.forceMount,true);assert.equal(panel.props.hidden,false);
- button(child,'Prepare reply').props.onClick();child.render();
+ find(child,n=>n.type==='button'&&n.props['aria-controls']==='request-reply-reply-roundtrip').props.onClick();child.render();
  const replyField=name=>find(child,n=>n.type==='textarea'&&n.props.name===name);
  replyField('replyBody').props.onChange({target:{value:'Synthetic unsaved reply'}});child.render();
  replyField('replyInstruction').props.onChange({target:{value:'Synthetic unsaved instruction'}});child.render();
@@ -277,7 +277,7 @@ const productNames=h=>String(Boolean(productPanel(h).props.edited));
  assert.equal(panel.props.hidden,false);assert.equal(replyField('replyBody').props.value,'Synthetic unsaved reply');assert.equal(replyField('replyInstruction').props.value,'Synthetic unsaved instruction');assert.equal(mutations(),0);
  // Changing administrators immediately removes the protected subtree and its local draft.
  state.store.customer=ownerB;h.render();assert.equal(reconcileInbox(),null);await flush(h);reconcileInbox();
- assert.notEqual(child,sameChild);button(child,'Prepare reply').props.onClick();child.render();assert.equal(replyField('replyBody').props.value,'');assert.equal(replyField('replyInstruction').props.value,'');
+ assert.notEqual(child,sameChild);find(child,n=>n.type==='button'&&n.props['aria-controls']==='request-reply-reply-roundtrip').props.onClick();child.render();assert.equal(replyField('replyBody').props.value,'');assert.equal(replyField('replyInstruction').props.value,'');
  // A refreshed role with no requests permission must not retain a hidden inbox.
  apiImpl=async()=>({...replyFixture(),role:'fulfillment',permissions:permissionModule.permissionsFor('fulfillment')});button(h,'Refresh administration').props.onClick();await flush(h);assert.equal(reconcileInbox(),null);
  state.store.customer=null;h.render();assert.equal(h.tree.type,AuthPage);assert.equal(reconcileInbox(),null);

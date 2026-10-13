@@ -65,6 +65,31 @@ const conflict=async(fn)=>assert.rejects(fn,e=>e.status===409);
  f=setup();f.registry();for(const subject of [`COA request: ${report.productName} / wrong-lot`,'COA request: BPC-157 / 201-10-0001']){request=f.request({subject});draft=await f.prepare(request);job=(await f.bridge({action:'claim'})).job;assert.equal(job.coa.state,'needs_review');assert.equal(job.attachment,undefined);await f.bridge({action:'fail',id:job.id,revision:1,leaseToken:job.leaseToken,reason:'manual_review'});}
  // Controlled internal automation only queues drafts; no customer text can grant a staff identity.
  request=f.request();draft=await api.prepareRequestReply(f.env,{requestId:request,mode:'ai',expectedRevision:null},{email:'Website request automation',role:'system'});assert.equal(draft.status,'queued');await assert.rejects(()=>api.prepareRequestReply(f.env,{requestId:f.request(),mode:'ai',expectedRevision:null},{email:'arbitrary system',role:'system'}),e=>e.status===403);
+ // Reply desk v1: only an owner Send approves; approved sends jump the queue; a hand-picked original attaches; sends teach the next draft.
+ {const owner={email:'synthetic-owner@example.invalid',role:'owner'};
+  f=setup();f.registry();const first=f.request(),second=f.request({subject:'General question'});
+  await f.prepare(first);
+  await assert.rejects(()=>api.prepareRequestReply(f.env,{requestId:second,mode:'staff',body:'Hi',expectedRevision:null,send:true},staff),e=>e.status===403,'Support cannot send');
+  await assert.rejects(()=>api.prepareRequestReply(f.env,{requestId:second,mode:'ai',expectedRevision:null,send:true},owner),e=>e.status===403,'Send is always an exact owner-approved text');
+  const picked=originals[1];
+  const approved=await api.prepareRequestReply(f.env,{requestId:second,mode:'staff',body:'Here is the report you asked about.',expectedRevision:null,coaSha256:picked.sha256,send:true},owner);
+  assert.equal(approved.approvedBy,owner.email);assert.equal(approved.coaChoice,picked.sha256);assert.equal(approved.coa.state,'matched');
+  let claimed=(await f.bridge({action:'claim'})).job;assert.equal(claimed.requestId,second,'Approved send is claimed before an older draft');assert.equal(claimed.approved.by,owner.email);assert.equal(claimed.attachment.base64,picked.base64);assert.equal(claimed.style,undefined);
+  const readyId=randomUUID();await f.bridge({action:'complete',id:claimed.id,revision:1,leaseToken:claimed.leaseToken,readyId,body:claimed.proposedBody,model:'staff'});
+  const x2={job:claimed,readyId,body:claimed.proposedBody};await f.bridge(validate(x2));assert.equal(f.row(claimed.id).status,'sending','A chosen original passes the same send lock');
+  // The earlier AI draft for this request gets a learning row once the owner's edit is accepted.
+  f.sql.prepare("UPDATE request_reply_drafts SET ai_draft='AI wording that was too long.' WHERE id=?").run(claimed.id);
+  await f.bridge({action:'sent',id:claimed.id,revision:1,readyId,providerMessageId:'provider-desk-1',providerThreadId:'thread-desk-1',body:x2.body,sentAt:Date.now()});
+  const learned=f.sql.prepare('SELECT * FROM request_reply_learning').all();assert.equal(learned.length,1);assert.equal(learned[0].changed,1);assert.equal(learned[0].ai_draft,'AI wording that was too long.');assert.equal(learned[0].final_body,'Here is the report you asked about.');
+  await api.saveReplyRule(f.env,{rule:'Sign off as Ash.'},owner);
+  claimed=(await f.bridge({action:'claim'})).job;assert.equal(claimed.requestId,first);assert.deepEqual(claimed.style.rules,['Sign off as Ash.']);assert.equal(claimed.style.examples[0].sent,'Here is the report you asked about.');assert(claimed.codes.some(c=>c.code==='BM10'));
+  const desk=await api.replyDeskOptions(f.env);assert.equal(desk.coas.length,originals.length);assert.equal(desk.learning.recent,1);assert.equal(desk.learning.unchanged,0);assert(desk.bridgeSeen>0,'Jarvis heartbeat recorded');assert(!JSON.stringify(desk).includes(picked.base64.slice(0,40)),'Desk options never carry report bytes');
+  await assert.rejects(()=>api.prepareRequestReply(f.env,{requestId:second,mode:'staff',body:'x',expectedRevision:1,coaSha256:'not-a-hash'},owner),e=>e.status===400);
+  // A send Jarvis refuses before any provider call clears the approval so the desk asks again.
+  const third=f.request({subject:'Another question'});const a3=await api.prepareRequestReply(f.env,{requestId:third,mode:'staff',body:'Plain answer.',expectedRevision:null,send:true},owner);
+  const j3=(await f.bridge({action:'claim'})).job;assert.equal(j3.id,a3.id);const r3=randomUUID();await f.bridge({action:'complete',id:j3.id,revision:1,leaseToken:j3.leaseToken,readyId:r3,body:j3.proposedBody,model:'staff'});
+  await f.bridge({action:'send_blocked',id:j3.id,revision:1,readyId:r3});assert.equal(f.row(j3.id).approved_at,null);assert.equal(f.row(j3.id).reason,'send_blocked');
+ }
  assert.equal(fetches,0);
  console.log('PASS: private draft CAS/roles, raw original and threaded follow-ups, bounded claims/leases, staff equality, exact private COA bytes and current-lot checks, duplicate/unknown send holds, one-time owner send locks, exact-body/idempotent ACK, immutable history and non-PII audit. Real isolated SQLite, zero providers.');
 }finally{for(const f of fixtures)f.sql.close();}})().catch(error=>{console.error(error);process.exitCode=1;});

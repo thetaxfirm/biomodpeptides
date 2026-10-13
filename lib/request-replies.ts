@@ -2,13 +2,14 @@
 import { coaEmail, coaHash, coaMessage, exactCoaReport, coaReportByHash, readCoaOriginal, verifiedCoaAttachment, isCoaRequest, type OriginalCoaMetadata } from './coa-delivery';
 import { loadCoaBatchContext } from './product-batch';
 import { withAuditDb, type AuditActor } from './change-history';
+import { activePromotions } from './promotions';
 export const REPLY_SENDER = 'research@biomodpeptides.com';
 type Env = { DB: D1Database };
 type Actor = { email: string; role: string };
 export type ReplyCoa = {state:'matched'|'needs_review'|'already_sent'|'not_requested';reason:string;productName?:string;strength?:string;lot?:string;reportId?:string;chemicalIdentity?:string;sha256?:string;filename?:string};
 export type ReplyMessage = {id:string;direction:'incoming'|'outgoing';body:string;created:number};
-export type ReplySummary = {id:string;requestId:string;revision:number;status:'queued'|'preparing'|'ready'|'needs_review'|'sending'|'sent'|'cancelled';mode:'ai'|'staff';sender:string;recipient:string;subject:string;body:string;preparedBy:string;updated:number;readyId?:string;model?:string;coa:ReplyCoa;history:ReplyMessage[];reason?:string};
-type Row={id:string;request_id:string;revision:number;status:ReplySummary['status'];mode:'ai'|'staff';sender:string;recipient:string;subject:string;proposed_body:string;instruction:string;body:string;prepared_by:string;request_hash:string;coa_json:string;ready_id:string|null;model:string|null;reason:string|null;attempts:number;lease_token:string|null;lease_until:number|null;send_locked_at:number|null;send_body_hash:string|null;provider_message_id:string|null;provider_thread_id:string|null;sent_at:number|null;created:number;updated:number};
+export type ReplySummary = {id:string;requestId:string;revision:number;status:'queued'|'preparing'|'ready'|'needs_review'|'sending'|'sent'|'cancelled';mode:'ai'|'staff';sender:string;recipient:string;subject:string;body:string;preparedBy:string;updated:number;readyId?:string;model?:string;coa:ReplyCoa;history:ReplyMessage[];reason?:string;instruction?:string;approvedAt?:number;approvedBy?:string;coaChoice?:string|null};
+type Row={id:string;request_id:string;revision:number;status:ReplySummary['status'];mode:'ai'|'staff';sender:string;recipient:string;subject:string;proposed_body:string;instruction:string;body:string;prepared_by:string;request_hash:string;coa_json:string;ready_id:string|null;model:string|null;reason:string|null;attempts:number;lease_token:string|null;lease_until:number|null;send_locked_at:number|null;send_body_hash:string|null;provider_message_id:string|null;provider_thread_id:string|null;sent_at:number|null;created:number;updated:number;approved_at:number|null;approved_by:string|null;ai_draft:string|null;coa_choice:string|null};
 type Inquiry={id:string;kind:string;data:string;created:number;status?:string};
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const HASH=/^[a-f0-9]{64}$/;
@@ -33,12 +34,17 @@ const noAttachmentClaim=(body:string)=>{
  const plain=body.replace(/<blockquote[\s\S]*?<\/blockquote>/gi,'').replace(/<[^>]*>/g,' ');
  if(/\b(?:attached|enclosed)\b|\b(?:please\s+)?(?:find|see|review|sending|send|include|included)\b[^.\n]{0,60}\b(?:attachment|pdf|report)\b/i.test(plain))fail('This reply mentions an attachment but no original is approved. Edit it to request clarification.',409);
 };
-async function coaFor(env:Env,request:Inquiry,ignoreId?:string):Promise<{coa:ReplyCoa;report?:OriginalCoaMetadata;attachment?:{filename:string;sha256:string;base64:string}}>{
- const inquiry=source(request);if(!isCoaRequest(inquiry.subject))return {coa:{state:'not_requested',reason:'No COA was requested in this inquiry.'}};
+// choice: null = match the request's exact product/lot automatically; '' = no report;
+// a sha256 = an approved original a staff member picked by hand from the private registry.
+async function coaFor(env:Env,request:Inquiry,ignoreId?:string,choice:string|null=null):Promise<{coa:ReplyCoa;report?:OriginalCoaMetadata;attachment?:{filename:string;sha256:string;base64:string}}>{
+ const inquiry=source(request),chosen=typeof choice==='string'&&HASH.test(choice);
+ if(choice==='')return {coa:{state:'not_requested',reason:'No report is attached to this reply.'}};
+ if(!chosen&&!isCoaRequest(inquiry.subject))return {coa:{state:'not_requested',reason:'No COA was requested in this inquiry.'}};
  try{
-  const context=await loadCoaBatchContext(env.DB),report=exactCoaReport(inquiry.subject,context.originals,context.associations);
+  const context=await loadCoaBatchContext(env.DB),picked=chosen?context.originals.filter(item=>item.sha256===choice):[],report=chosen?(picked.length===1?picked[0]:null):exactCoaReport(inquiry.subject,context.originals,context.associations);
+  if(chosen&&!report)return {coa:{state:'needs_review',reason:'The chosen report is no longer an approved original. Choose another report.'}};
   // Preserve old accepted/uncertain outcomes even if the current catalog association has changed.
-  const own=await env.DB.prepare("SELECT a.status,a.attempts,a.accepted_at,a.duplicate_of,b.status AS related_status,b.attempts AS related_attempts FROM coa_delivery_outbox a LEFT JOIN coa_delivery_outbox b ON b.request_id=a.duplicate_of AND b.purpose='coa' WHERE a.request_id=? AND a.purpose='coa'").bind(request.id).first<any>();
+  const own=chosen?null:await env.DB.prepare("SELECT a.status,a.attempts,a.accepted_at,a.duplicate_of,b.status AS related_status,b.attempts AS related_attempts FROM coa_delivery_outbox a LEFT JOIN coa_delivery_outbox b ON b.request_id=a.duplicate_of AND b.purpose='coa' WHERE a.request_id=? AND a.purpose='coa'").bind(request.id).first<any>();
   if(own&&(own.status==='accepted'||own.related_status==='accepted'))return {coa:{state:'already_sent',reason:'An earlier original email was accepted by the mail provider. Inbox delivery is not confirmed.',...(report?facts(report):{})}};
   if(own&&(own.status==='sending'||own.related_status==='sending'||own.attempts>0||own.related_attempts>0))return {coa:{state:'needs_review',reason:'An earlier COA send has an unconfirmed outcome. Review it before any resend.',...(report?facts(report):{})}};
   if(!report)return {coa:{state:'needs_review',reason:'No exact approved private original matches the product, strength, form and current lot. Review the original before attaching it.'}};
@@ -48,8 +54,8 @@ async function coaFor(env:Env,request:Inquiry,ignoreId?:string):Promise<{coa:Rep
   const locked=await env.DB.prepare("SELECT id FROM request_reply_drafts WHERE id!=? AND recipient=? AND status='sending' AND json_extract(coa_json,'$.sha256')=? LIMIT 1").bind(ignoreId||'',inquiry.email,report.sha256).first();
   if(prior?.status==='sending'||prior?.attempts>0||locked)return {coa:{state:'needs_review',reason:'A prior send of this original needs outcome review before another copy can be sent.',...facts(report)}};
   const original=await readCoaOriginal(env.DB,report);if(!original)throw Error('missing');const attachment=await verifiedCoaAttachment(original);
-  const current=await loadCoaBatchContext(env.DB);if(!coaReportByHash(report.sha256,current.originals,current.associations))throw Error('changed');
-  return {coa:{state:'matched',reason:'Exact approved product, strength, form, lot and original PDF hash verified. Owner review is required before sending.',...facts(report)},report,attachment:{filename:attachment.filename,sha256:report.sha256,base64:attachment.content}};
+  const current=await loadCoaBatchContext(env.DB);if(chosen?current.originals.filter(item=>item.sha256===report.sha256).length!==1:!coaReportByHash(report.sha256,current.originals,current.associations))throw Error('changed');
+  return {coa:{state:'matched',reason:chosen?'Chosen approved original. Its PDF hash is verified again before sending.':'Exact approved product, strength, form, lot and original PDF hash verified. Owner review is required before sending.',...facts(report)},report,attachment:{filename:attachment.filename,sha256:report.sha256,base64:attachment.content}};
  }catch{return {coa:{state:'needs_review',reason:'The original report cannot be verified. Review the product, strength, lot and original document before attaching it.'}};}
 }
 // Immutable provider payloads remain in storage; the inbox and next drafting turn get readable text.
@@ -60,7 +66,7 @@ function readableMessage(body:string):string {
 const visibleMessage=(m:ReplyMessage):ReplyMessage=>({...m,body:readableMessage(m.body)});
 async function eligibilityRevision(env:Env){const r=await env.DB.prepare('SELECT revision FROM request_reply_coa_guard WHERE id=1').first<{revision:number}>();if(!r||!Number.isSafeInteger(r.revision))fail('Original-report send safeguards are unavailable.');return r!.revision;}
 async function historyFor(env:Env,request:Inquiry):Promise<ReplyMessage[]>{const rows=(await env.DB.prepare('SELECT id,direction,body,created FROM request_reply_messages WHERE request_id=? ORDER BY created DESC,id DESC LIMIT 20').bind(request.id).all<ReplyMessage>()).results;return [{id:'original:'+request.id,direction:'incoming',body:source(request).message,created:request.created},...rows.reverse().map(visibleMessage)];}
-const summary=(row:Row,history:ReplyMessage[]):ReplySummary=>({id:row.id,requestId:row.request_id,revision:row.revision,status:row.status,mode:row.mode,sender:row.sender,recipient:row.recipient,subject:row.subject,body:row.body||row.proposed_body,preparedBy:row.prepared_by,updated:row.updated,...(row.ready_id?{readyId:row.ready_id}:{}),...(row.model?{model:row.model}:{}),coa:storedCoa(row),history,...(row.reason?{reason:row.reason}:{})});
+const summary=(row:Row,history:ReplyMessage[]):ReplySummary=>({id:row.id,requestId:row.request_id,revision:row.revision,status:row.status,mode:row.mode,sender:row.sender,recipient:row.recipient,subject:row.subject,body:row.body||row.proposed_body,preparedBy:row.prepared_by,updated:row.updated,...(row.ready_id?{readyId:row.ready_id}:{}),...(row.model?{model:row.model}:{}),coa:storedCoa(row),history,...(row.reason?{reason:row.reason}:{}),...(row.instruction?{instruction:row.instruction}:{}),...(row.approved_at?{approvedAt:row.approved_at,approvedBy:row.approved_by||''}:{}),coaChoice:row.coa_choice??null});
 export async function summarizeRequestReplies(env:Env,ids:string[]):Promise<Record<string,ReplySummary>>{
  const unique=[...new Set(ids)].filter(v=>UUID.test(v)).slice(0,200),out:Record<string,ReplySummary>={};
  for(let offset=0;offset<unique.length;offset+=60){const chunk=unique.slice(offset,offset+60),marks=chunk.map(()=>'?').join(',');const rows=(await env.DB.prepare(`SELECT * FROM request_reply_drafts WHERE request_id IN (${marks})`).bind(...chunk).all<Row>()).results;if(!rows.length)continue;
@@ -69,33 +75,74 @@ export async function summarizeRequestReplies(env:Env,ids:string[]):Promise<Reco
   for(const row of rows){const request=sources.find(r=>r.id===row.request_id);if(request)out[row.request_id]=summary(row,[{id:'original:'+request.id,direction:'incoming',body:source(request).message,created:request.created},...messages.filter(m=>m.request_id===row.request_id).map(({request_id:_,...m})=>visibleMessage(m))]);}
  }return out;
 }
-export async function prepareRequestReply(env:Env,input:{requestId:string;mode:'ai'|'staff';body?:string;instruction?:string;expectedRevision:number|null},actor:Actor):Promise<ReplySummary>{
+export type PrepareReplyRequest={requestId:string;mode:'ai'|'staff';body?:string;instruction?:string;expectedRevision:number|null;coaSha256?:string|null;send?:boolean};
+export async function prepareRequestReply(env:Env,input:PrepareReplyRequest,actor:Actor):Promise<ReplySummary>{
  const requestId=id(input.requestId);if(!['owner','manager','support'].includes(actor.role)&&!(actor.role==='system'&&actor.email==='Website request automation'))fail('Reply drafting is not permitted.',403);
  if(actor.role!=='system'&&!coaEmail(actor.email))fail('Invalid staff identity.',403);
  if(!['ai','staff'].includes(input.mode))fail('Choose AI or staff drafting.',400);const body=text(input.body??'',12000,input.mode==='staff'),instruction=text(input.instruction??'',2000);
- const request=await inquiryFor(env,requestId);if(!request)fail('Request not found.',404);if(['spam','resolved'].includes(request!.status||''))fail('Reopen this request before preparing a reply.');const incoming=source(request!);if(!incoming.email)fail('The original request needs a valid recipient.',400);
+ // Sending is the owner's decision. Staff save drafts; only an owner's click approves the send.
+ const send=input.send===true;if(send&&(actor.role!=='owner'||input.mode!=='staff'))fail('Only the owner can send a reply.',403);
+ if(input.coaSha256!==undefined&&input.coaSha256!==null&&input.coaSha256!==''&&(typeof input.coaSha256!=='string'||!HASH.test(input.coaSha256)))fail('Choose a valid report.',400);
+ const request=await inquiryFor(env,requestId);if(!request)fail('Request not found.',404);if(['spam','resolved'].includes(request!.status||'')&&!send)fail('Reopen this request before preparing a reply.');const incoming=source(request!);if(!incoming.email)fail('The original request needs a valid recipient.',400);
  const old=await env.DB.prepare('SELECT * FROM request_reply_drafts WHERE request_id=?').bind(requestId).first<Row>();
  if(old?.status==='sending'||old?.send_locked_at)fail('A send is awaiting confirmation. Review its outcome before replacing this reply.');
  if((old&&input.expectedRevision!==old.revision)||(!old&&input.expectedRevision!==null))fail('This reply changed. Refresh before preparing another revision.');
- const next=(old?.revision||0)+1,jobId=old?.id||crypto.randomUUID(),now=Date.now(),plan=await coaFor(env,request!,jobId);
+ // Sending reopens a closed request so the send safeguards (which refuse closed requests) still apply.
+ if(send&&['spam','resolved'].includes(request!.status||''))await dbFor(env,actor).prepare("UPDATE requests SET status='in_progress' WHERE id=?").bind(requestId).run();
+ const choice=input.coaSha256===undefined?(old?.coa_choice??null):input.coaSha256;
+ const next=(old?.revision||0)+1,jobId=old?.id||crypto.randomUUID(),now=Date.now(),plan=await coaFor(env,request!,jobId,choice);
  if(input.mode==='staff'&&plan.coa.state!=='matched')noAttachmentClaim(body);
+ if(send&&choice&&plan.coa.state!=='matched')fail(plan.coa.reason);
+ // Remember the last AI wording so the sent version can teach the next draft.
+ const aiDraft=input.mode==='ai'?null:old?.mode==='ai'&&old.body?old.body:old?.ai_draft??null;
  const proposed=body||(plan.report?coaMessage(plan.report).text:''),subject=/^re:/i.test(incoming.subject)?incoming.subject:'Re: '+incoming.subject;
+ const approvedAt=send?now:null,approvedBy=send?actor.email:null;
  const db=dbFor(env,actor);let result;
- if(old)result=await db.prepare("UPDATE request_reply_drafts SET revision=?,status='queued',mode=?,sender=?,recipient=?,subject=?,proposed_body=?,instruction=?,body='',prepared_by=?,request_hash=?,coa_json=?,ready_id=NULL,model=NULL,reason=NULL,attempts=0,lease_token=NULL,lease_until=NULL,send_locked_at=NULL,send_body_hash=NULL,provider_message_id=NULL,provider_thread_id=NULL,sent_at=NULL,updated=? WHERE id=? AND revision=? AND status!='sending' AND send_locked_at IS NULL").bind(next,input.mode,REPLY_SENDER,incoming.email,subject,proposed,instruction,actor.email,await coaHash(request!.data),JSON.stringify(plan.coa),now,jobId,old.revision).run();
- else result=await db.prepare("INSERT OR IGNORE INTO request_reply_drafts(id,request_id,revision,status,mode,sender,recipient,subject,proposed_body,instruction,body,prepared_by,request_hash,coa_json,attempts,created,updated) VALUES(?,?,1,'queued',?,?,?,?,?,?,'',?,?,?,0,?,?)").bind(jobId,requestId,input.mode,REPLY_SENDER,incoming.email,subject,proposed,instruction,actor.email,await coaHash(request!.data),JSON.stringify(plan.coa),now,now).run();
+ if(old)result=await db.prepare("UPDATE request_reply_drafts SET revision=?,status='queued',mode=?,sender=?,recipient=?,subject=?,proposed_body=?,instruction=?,body='',prepared_by=?,request_hash=?,coa_json=?,ready_id=NULL,model=NULL,reason=NULL,attempts=0,lease_token=NULL,lease_until=NULL,send_locked_at=NULL,send_body_hash=NULL,provider_message_id=NULL,provider_thread_id=NULL,sent_at=NULL,approved_at=?,approved_by=?,ai_draft=?,coa_choice=?,updated=? WHERE id=? AND revision=? AND status!='sending' AND send_locked_at IS NULL").bind(next,input.mode,REPLY_SENDER,incoming.email,subject,proposed,instruction,actor.email,await coaHash(request!.data),JSON.stringify(plan.coa),approvedAt,approvedBy,aiDraft,choice,now,jobId,old.revision).run();
+ else result=await db.prepare("INSERT OR IGNORE INTO request_reply_drafts(id,request_id,revision,status,mode,sender,recipient,subject,proposed_body,instruction,body,prepared_by,request_hash,coa_json,attempts,approved_at,approved_by,ai_draft,coa_choice,created,updated) VALUES(?,?,1,'queued',?,?,?,?,?,?,'',?,?,?,0,?,?,?,?,?,?)").bind(jobId,requestId,input.mode,REPLY_SENDER,incoming.email,subject,proposed,instruction,actor.email,await coaHash(request!.data),JSON.stringify(plan.coa),approvedAt,approvedBy,aiDraft,choice,now,now).run();
  if(!result.meta.changes)fail('This reply changed. Refresh before preparing another revision.');const saved=await rowFor(env,jobId);return summary(saved!,await historyFor(env,request!));
 }
 const matchReady=(row:Row|null,p:Record<string,any>)=>{if(!row||row.revision!==revision(p.revision)||row.ready_id!==reference(p.readyId))fail('This Ready to Send draft is no longer current.');return row!;};
 async function currentRequest(env:Env,row:Row){const request=await inquiryFor(env,row.request_id);if(!request||['spam','resolved'].includes(request.status||''))fail('The request is unavailable or closed. Reopen it and prepare a new reply.');if(await coaHash(request!.data)!==row.request_hash||source(request!).email!==row.recipient)fail('The original request or recipient changed. Prepare a new reply.');return request!;}
-async function currentCoa(env:Env,row:Row){const request=await currentRequest(env,row);const plan=await coaFor(env,request!,row.id),saved=storedCoa(row);if(saved.state==='matched'&&(plan.coa.state!=='matched'||saved.sha256!==plan.coa.sha256))return {coa:{...saved,state:'needs_review' as const,reason:'The originally prepared report changed or has a prior send. Prepare a new reviewed draft.'}};return plan;}
+async function currentCoa(env:Env,row:Row){const request=await currentRequest(env,row);const plan=await coaFor(env,request!,row.id,row.coa_choice??null),saved=storedCoa(row);if(saved.state==='matched'&&(plan.coa.state!=='matched'||saved.sha256!==plan.coa.sha256))return {coa:{...saved,state:'needs_review' as const,reason:'The originally prepared report changed or has a prior send. Prepare a new reviewed draft.'}};return plan;}
+const plainReply=(html:string)=>readableMessage(html.replace(/<blockquote[\s\S]*<\/blockquote>/gi,'')).replace(/\n{3,}/g,'\n\n').trim();
+const squash=(value:string)=>value.replace(/\s+/g,' ').trim().toLowerCase();
+// A private record of the AI's wording next to what the owner actually sent. Never shown publicly.
+async function learnFromSend(env:Env,row:Row,sentHtml:string){
+ const ai=row.mode==='ai'?row.body:row.ai_draft;if(!ai)return;const final=plainReply(sentHtml).slice(0,12000);if(!final)return;
+ const request=await inquiryFor(env,row.request_id);const message=request?source(request).message.slice(0,2000):'';
+ await env.DB.prepare('INSERT OR IGNORE INTO request_reply_learning(id,request_id,customer_message,instruction,ai_draft,final_body,changed,created) VALUES(?,?,?,?,?,?,?,?)').bind(row.id+':'+row.revision,row.request_id,message,row.instruction.slice(0,2000),ai.slice(0,12000),final,squash(ai)===squash(final)?0:1,Date.now()).run();
+}
+export type ReplyStyle={rules:string[];examples:{customer:string;draft:string;sent:string}[]};
+export async function replyStyle(env:Env):Promise<ReplyStyle>{
+ const rules=(await env.DB.prepare('SELECT rule FROM request_reply_style WHERE active=1 ORDER BY created LIMIT 40').all<{rule:string}>()).results.map(r=>r.rule);
+ const examples=(await env.DB.prepare('SELECT customer_message,ai_draft,final_body FROM request_reply_learning WHERE changed=1 ORDER BY created DESC LIMIT 6').all<{customer_message:string;ai_draft:string;final_body:string}>()).results.map(r=>({customer:r.customer_message.slice(0,1500),draft:r.ai_draft.slice(0,3000),sent:r.final_body.slice(0,3000)}));
+ return {rules,examples};
+}
+export type ReplyDeskOptions={coas:{sha256:string;productName:string;strength:string;form:string;lot:string;reportId:string;current:boolean}[];codes:{code:string;percentOff:number}[];rules:{id:string;rule:string}[];learning:{recent:number;unchanged:number};bridgeSeen:number|null};
+export async function replyDeskOptions(env:Env):Promise<ReplyDeskOptions>{
+ const context=await loadCoaBatchContext(env.DB);
+ const coas=context.originals.map(r=>({sha256:r.sha256,productName:r.productName,strength:r.strength,form:r.form,lot:r.lot,reportId:r.reportId,current:context.associations.some(a=>a.productId===r.productId&&a.coaAvailable&&a.lot===r.lot)})).sort((a,b)=>a.productName.localeCompare(b.productName)||Number(b.current)-Number(a.current)||a.lot.localeCompare(b.lot));
+ const rules=(await env.DB.prepare('SELECT id,rule FROM request_reply_style WHERE active=1 ORDER BY created LIMIT 40').all<{id:string;rule:string}>()).results;
+ const recent=(await env.DB.prepare('SELECT changed FROM request_reply_learning ORDER BY created DESC LIMIT 20').all<{changed:number}>()).results;
+ const seen=await env.DB.prepare('SELECT seen FROM request_reply_bridge_seen WHERE id=1').first<{seen:number}>();
+ return {coas,codes:activePromotions(),rules,learning:{recent:recent.length,unchanged:recent.filter(r=>!r.changed).length},bridgeSeen:seen?.seen||null};
+}
+export async function saveReplyRule(env:Env,input:{rule?:string;removeId?:string},actor:Actor){
+ if(!['owner','manager','support'].includes(actor.role))fail('Not permitted.',403);const db=dbFor(env,actor);
+ if(input.removeId){await db.prepare('UPDATE request_reply_style SET active=0 WHERE id=?').bind(id(input.removeId)).run();return;}
+ const rule=text(input.rule??'',500,true).trim();await db.prepare('INSERT INTO request_reply_style(id,rule,created_by,created,active) VALUES(?,?,?,?,1)').bind(crypto.randomUUID(),rule,actor.email,Date.now()).run();
+}
 export async function handleReplyBridge(env:Env,payload:unknown):Promise<Record<string,any>>{
  const p=object(payload),db=dbFor(env),now=Date.now();
  if(p.action==='claim'){
   await db.prepare("UPDATE request_reply_drafts SET status='needs_review',reason='Preparation retry limit reached. Review this draft.',lease_token=NULL,lease_until=NULL,updated=? WHERE status='preparing' AND lease_until<=? AND attempts>=5").bind(now,now).run();
-  const token=crypto.randomUUID();const row=await db.prepare("UPDATE request_reply_drafts SET status='preparing',lease_token=?,lease_until=?,attempts=attempts+1,updated=? WHERE id=(SELECT id FROM request_reply_drafts WHERE (status='queued' OR (status='preparing' AND lease_until<=?)) AND attempts<5 ORDER BY created,id LIMIT 1) AND (status='queued' OR (status='preparing' AND lease_until<=?)) RETURNING *").bind(token,now+LEASE,now,now,now).first<Row>();
+  await env.DB.prepare('UPDATE request_reply_bridge_seen SET seen=? WHERE id=1 AND seen<?').bind(now,now-30000).run();
+  // Owner-approved sends jump the queue; then oldest drafts first.
+  const token=crypto.randomUUID();const row=await db.prepare("UPDATE request_reply_drafts SET status='preparing',lease_token=?,lease_until=?,attempts=attempts+1,updated=? WHERE id=(SELECT id FROM request_reply_drafts WHERE (status='queued' OR (status='preparing' AND lease_until<=?)) AND attempts<5 ORDER BY approved_at IS NULL,updated,id LIMIT 1) AND (status='queued' OR (status='preparing' AND lease_until<=?)) RETURNING *").bind(token,now+LEASE,now,now,now).first<Row>();
   if(!row)return {job:null};const request=await inquiryFor(env,row.request_id);if(!request)fail('Original request unavailable.');const plan=await currentCoa(env,row);
   const written=await db.prepare("UPDATE request_reply_drafts SET coa_json=?,updated=? WHERE id=? AND revision=? AND status='preparing' AND lease_token=?").bind(JSON.stringify(plan.coa),Date.now(),row.id,row.revision,token).run();if(!written.meta.changes)fail('Draft changed during preparation.');
-  return {job:{id:row.id,requestId:row.request_id,revision:row.revision,leaseToken:token,mode:row.mode,sender:row.sender,recipient:row.recipient,subject:row.subject,instruction:row.instruction,proposedBody:row.proposed_body,request:source(request!),history:await historyFor(env,request!),coa:plan.coa,...('attachment' in plan&&plan.attachment?{attachment:plan.attachment}:{}),preparedBy:row.prepared_by}};
+  return {job:{id:row.id,requestId:row.request_id,revision:row.revision,leaseToken:token,mode:row.mode,sender:row.sender,recipient:row.recipient,subject:row.subject,instruction:row.instruction,proposedBody:row.proposed_body,request:source(request!),history:await historyFor(env,request!),coa:plan.coa,...('attachment' in plan&&plan.attachment?{attachment:plan.attachment}:{}),preparedBy:row.prepared_by,...(row.approved_at?{approved:{by:row.approved_by||'',at:row.approved_at}}:{}),...(row.mode==='ai'?{style:await replyStyle(env),codes:activePromotions()}:{})}};
  }
  const jobId=id(p.id),rev=revision(p.revision),row=await rowFor(env,jobId);
  if(p.action==='sent'){const provider=reference(p.providerMessageId),readyId=reference(p.readyId),thread=p.providerThreadId===undefined?null:reference(p.providerThreadId),body=text(p.body,60000,true),sentAt=stamp(p.sentAt),oldAck=await env.DB.prepare('SELECT * FROM request_reply_messages WHERE reply_job_id=? AND reply_revision=? AND ready_id=?').bind(jobId,rev,readyId).first<any>();if(oldAck){if(oldAck.provider_message_id!==provider||oldAck.provider_thread_id!==thread||oldAck.body!==body||oldAck.created!==sentAt)fail('This provider acknowledgement conflicts with the saved send.');return {ok:true};}}
@@ -108,6 +155,10 @@ export async function handleReplyBridge(env:Env,payload:unknown):Promise<Record<
   }if(statements.length)await db.batch(statements);return {ok:true};
  }
  if(!row||row.revision!==rev)fail('Reply revision changed.');
+ if(p.action==='send_blocked'){
+  // Jarvis refused an owner-approved send before any provider call. Clear the approval so the desk asks again.
+  const readyId=reference(p.readyId);await db.prepare("UPDATE request_reply_drafts SET approved_at=NULL,approved_by=NULL,reason='send_blocked',updated=? WHERE id=? AND revision=? AND ready_id=? AND status='ready' AND send_locked_at IS NULL").bind(now,jobId,rev,readyId).run();return {ok:true};
+ }
  if(p.action==='complete'||p.action==='fail'){
   if(p.action==='complete'&&row!.status==='ready'&&row!.ready_id===p.readyId&&row!.body===p.body&&row!.model===p.model)return {ok:true};
   if(row!.status!=='preparing'||row!.lease_token!==id(p.leaseToken)||!row!.lease_until||row!.lease_until<Date.now())fail('The preparation lease expired or changed.');
@@ -132,7 +183,8 @@ export async function handleReplyBridge(env:Env,payload:unknown):Promise<Record<
   const messageId=await coaHash(REPLY_SENDER+':'+provider),hash=storedCoa(current).state==='matched'?storedCoa(current).sha256||null:null;
   const previous=await env.DB.prepare('SELECT request_id,direction,body FROM request_reply_messages WHERE id=?').bind(messageId).first<any>();if(previous&&(previous.request_id!==current.request_id||previous.direction!=='outgoing'||previous.body!==body))fail('The provider identifier belongs to another message.');
   await db.batch([db.prepare("UPDATE request_reply_drafts SET status='sent',provider_message_id=?,provider_thread_id=?,sent_at=?,reason='The mail provider accepted this message. Inbox delivery is not confirmed.',send_locked_at=NULL,updated=? WHERE id=? AND revision=? AND ready_id=? AND status='sending'").bind(provider,thread,sentAt,now,jobId,rev,p.readyId),db.prepare("INSERT INTO request_reply_messages(id,request_id,direction,body,created,provider_message_id,provider_thread_id,sender,recipient,attachment_hash,reply_job_id,reply_revision,ready_id) SELECT ?,?,'outgoing',?,?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM request_reply_drafts WHERE id=? AND revision=? AND status='sent' AND provider_message_id=?) AND NOT EXISTS(SELECT 1 FROM request_reply_messages WHERE id=?)").bind(messageId,current.request_id,body,sentAt,provider,thread,REPLY_SENDER,current.recipient,hash,jobId,rev,p.readyId,jobId,rev,provider,messageId)]);
-  const final=await rowFor(env,jobId);if(final?.status!=='sent'||final.provider_message_id!==provider)fail('Provider acknowledgement needs review.');return {ok:true};
+  const final=await rowFor(env,jobId);if(final?.status!=='sent'||final.provider_message_id!==provider)fail('Provider acknowledgement needs review.');
+  await learnFromSend(env,current,body).catch(()=>undefined);return {ok:true};
  }
  return fail('Unknown reply bridge action.',400);
 }
