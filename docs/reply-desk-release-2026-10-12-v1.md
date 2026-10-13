@@ -31,3 +31,7 @@ Sends and AI drafts need Jarvis running and the research mailbox connected. Prov
 - Delete asks once, then moves the request to a Deleted view (left out of All); Restore brings it back. Reply history stays preserved, and a deleted request cannot be replied to until restored.
 - Forward sends the customer's message, recent thread and an optional note to one chosen owner or active staff member through the site's existing mail provider. The forwarder is the reply-to address; the customer is never a recipient. Forwards are recorded (migration `0026_request_forwards.sql`) and shown in the conversation. Cap: 100 per day.
 - Tests: `tests/request-forward-v1.cjs` (team-only recipients, reply-to, failure recorded) and Delete/Forward cases in `tests/request-desk-v1.cjs`.
+
+## Follow-up: requested reports are always attached (same day)
+
+Owner instruction after a HEAT-R 20mg reply was staged saying "Attached" with no PDF: an earlier send of the same original (old COA automation or a previous reply) no longer withholds the attachment. The draft gets the exact verified original again and its COA note says it was emailed before. The only remaining duplicate guard stops two replies with the same report to the same customer from sending at the same moment. The validate step no longer refuses a report that was sent once before.
