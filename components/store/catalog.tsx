@@ -32,7 +32,7 @@ function ResearchVialIndex({ current, products }: { current: Product; products: 
 }
 // Research vials carry their strength in the heading ("BPC-157 10 mg"), matching how they are searched.
 const sizedVial = (product: Product) => product.categories.some(c => c.slug === 'research-compounds') && /\d\s*mg\b/i.test(packContents(product));
-const vialTitle = (product: Product) => product.name.replace(/\s+\d+(?:\.\d+)?\s*mg$/i, '') + ' ' + packContents(product).replace(/(\d)\s*mg\b/gi, '$1 mg');
+const vialTitle = (product: Product) => product.name.replace(/\s+\d+(?:\.\d+)?\s*mg$/i, '') + ' ' + packContents(product).replace(/\s*\/\s*vial\b/i, '').replace(/(\d)\s*mg\b/gi, '$1 mg');
 function PackSelector({ product: p, value, onChange, compact = false }: { product: Product; value: number; onChange: (n: number) => void; compact?: boolean }) {
     const id = useId();
     if (compact) {
