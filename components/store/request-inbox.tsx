@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CoaAutomationReport } from './coa-automation';
 import styles from './request-inbox.module.css';
+import { issueTypes, resolutionTypes, issueLabel, resolutionLabel, type RequestIssue } from '@/lib/request-issues';
 
 export type CustomerRequest = {
   id: string; kind: string; status: string; created: number;
@@ -21,7 +22,8 @@ export type PrepareReplyInput = { id: string; mode: 'ai' | 'staff'; body?: strin
 export type DeskCoa = { sha256: string; productName: string; strength: string; form: string; lot: string; reportId: string; current: boolean };
 export type RequestForward = { id: string; to: string; by: string; note: string; status: 'sending' | 'unknown' | 'accepted' | 'failed'; created: number };
 export type TeamMember = { email: string; name: string; role: string };
-export type DeskOptions = { team?: TeamMember[]; links?: { label: string; url: string }[]; coas: DeskCoa[]; codes: { code: string; percentOff: number }[]; rules: { id: string; rule: string }[]; learning: { recent: number; unchanged: number }; bridgeSeen: number | null };
+export type CaseEntry = { requestId: string; issue: string; resolutions: string[]; note: string; updated: number; updatedBy: string; name: string; subject: string };
+export type DeskOptions = { team?: TeamMember[]; links?: { label: string; url: string }[]; coas: DeskCoa[]; codes: { code: string; percentOff: number }[]; rules: { id: string; rule: string; issue?: string | null }[]; learning: { recent: number; unchanged: number }; bridgeSeen: number | null };
 type Props = {
   requests: readonly CustomerRequest[];
   automation?: CoaAutomationReport | null;
@@ -32,10 +34,13 @@ type Props = {
   canSend?: boolean;
   onStatus: (request: CustomerRequest, status: string) => void | Promise<void>;
   onPrepareReply: (input: PrepareReplyInput) => Promise<ReplySummary>;
-  onRefreshReplies?: (ids: string[]) => Promise<{ replies: Record<string, ReplySummary>; forwards?: Record<string, RequestForward[]>; activity?: Record<string, { at: number; text: string }[]> }>;
+  onRefreshReplies?: (ids: string[]) => Promise<{ replies: Record<string, ReplySummary>; forwards?: Record<string, RequestForward[]>; activity?: Record<string, { at: number; text: string }[]>; issues?: Record<string, RequestIssue> }>;
+  onSaveIssue?: (input: { id: string; issue: string; resolutions: string[]; note: string }) => Promise<RequestIssue>;
+  onLoadCases?: () => Promise<CaseEntry[]>;
+  focusId?: string | null;
   onForward?: (input: { id: string; to: string; note: string }) => Promise<RequestForward>;
   onLoadOptions?: () => Promise<DeskOptions>;
-  onSaveRule?: (input: { rule?: string; removeId?: string }) => Promise<DeskOptions>;
+  onSaveRule?: (input: { rule?: string; removeId?: string; issue?: string | null }) => Promise<DeskOptions>;
 };
 // coa: undefined = keep what the saved reply uses; null = auto-match the request; '' = none; sha = chosen report.
 type Draft = { body: string; instruction: string; revision: number | null; edited: boolean; error: string; message: string; coa?: string | null; undo?: string; remember: boolean };
@@ -102,13 +107,17 @@ function speechRecognition(): (new () => Speech) | null {
   return w.SpeechRecognition || w.webkitSpeechRecognition || null;
 }
 
-export function RequestInbox({ requests, automation, requestReplies = noReplies, busy, dirty, refreshing, canSend = false, onStatus, onPrepareReply, onRefreshReplies, onLoadOptions, onSaveRule, onForward }: Props) {
+export function RequestInbox({ requests, automation, requestReplies = noReplies, busy, dirty, refreshing, canSend = false, onStatus, onPrepareReply, onRefreshReplies, onLoadOptions, onSaveRule, onForward, onSaveIssue, onLoadCases, focusId }: Props) {
   const [selected, setSelected] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [preparedReplies, setPreparedReplies] = useState<Record<string, ReplySummary>>({});
   const [liveReplies, setLiveReplies] = useState<Record<string, ReplySummary>>({});
   const [forwards, setForwards] = useState<Record<string, RequestForward[]>>({});
   const [activity, setActivity] = useState<Record<string, { at: number; text: string }[]>>({});
+  const [issues, setIssues] = useState<Record<string, RequestIssue>>({});
+  const [issueDrafts, setIssueDrafts] = useState<Record<string, { note: string }>>({});
+  const [cases, setCases] = useState<CaseEntry[] | null>(null);
+  const [ruleIssue, setRuleIssue] = useState<string>('');
   const [panel, setPanel] = useState<{ id: string; kind: 'forward' | 'delete'; to: string; note: string; busy: boolean; error: string } | null>(null);
   const [pending, setPending] = useState<Record<string, boolean>>({});
   const [options, setOptions] = useState<DeskOptions | null>(null);
@@ -141,7 +150,7 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
       if (stopped) return;
       const ids = requestIds ? requestIds.split(',') : [];
       if (ids.length && typeof document !== 'undefined' && document.visibilityState !== 'hidden') {
-        try { const fresh = await onRefreshReplies(ids); if (!stopped && mounted.current) { setLiveReplies(fresh?.replies || {}); if (fresh?.forwards) setForwards(fresh.forwards); if (fresh?.activity) setActivity(fresh.activity); } } catch { /* keep the last loaded status */ }
+        try { const fresh = await onRefreshReplies(ids); if (!stopped && mounted.current) { setLiveReplies(fresh?.replies || {}); if (fresh?.forwards) setForwards(fresh.forwards); if (fresh?.activity) setActivity(fresh.activity); if (fresh?.issues) setIssues(fresh.issues); } } catch { /* keep the last loaded status */ }
       }
       if (stopped) return;
       if (mounted.current) setNow(Date.now());
@@ -153,6 +162,12 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
     (timer as any)?.unref?.();
     return () => { stopped = true; if (timer) clearTimeout(timer); };
   }, [onRefreshReplies, requestIds]);
+  // Opened from an order: select that conversation once it is in the list.
+  useEffect(() => {
+    if (!focusId || !requests.some(r => r.id === focusId)) return;
+    setFilter('all'); setSelected(focusId);
+    setDrafts(previous => previous[focusId] ? previous : { ...previous, [focusId]: newDraft(replyOf(focusId)) });
+  }, [focusId, requestIds]);
   // A clean draft follows the newest saved/AI version; an edited one is never overwritten.
   useEffect(() => {
     setDrafts(previous => {
@@ -258,7 +273,20 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
       setPanel(null);
     } catch (error) { if (mounted.current) setPanel(current => current && { ...current, busy: false, error: error instanceof Error ? error.message : 'Email status unconfirmed. Check the mail provider before retrying.' }); }
   }
-  async function saveRule(input: { rule?: string; removeId?: string }) {
+  async function saveIssue(id: string, patch: Partial<{ issue: string; resolutions: string[]; note: string }>) {
+    if (!onSaveIssue) return;
+    const current = issues[id];
+    const next = { issue: patch.issue ?? current?.issue ?? '', resolutions: patch.resolutions ?? current?.resolutions ?? [], note: patch.note ?? current?.note ?? '' };
+    if (!next.issue) return;
+    setIssues(previous => ({ ...previous, [id]: { ...(previous[id] || { updated: Date.now(), updatedBy: '' }), ...next } as RequestIssue }));
+    try { const saved = await onSaveIssue({ id, ...next }); if (mounted.current) { setIssues(previous => ({ ...previous, [id]: saved })); setCases(null); } }
+    catch { if (mounted.current) setIssues(previous => { const copy = { ...previous }; if (current) copy[id] = current; else delete copy[id]; return copy; }); }
+  }
+  async function openRules() {
+    const next = !rulesOpen; setRulesOpen(next);
+    if (next && onLoadCases) { try { const list = await onLoadCases(); if (mounted.current) setCases(list); } catch { if (mounted.current) setCases([]); } }
+  }
+  async function saveRule(input: { rule?: string; removeId?: string; issue?: string | null }) {
     if (!onSaveRule) return;
     try { const next = await onSaveRule(input); if (mounted.current) { setOptions(next); setNewRule(''); } } catch { /* the rules list stays as loaded */ }
   }
@@ -270,14 +298,27 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
       <h2 id="request-inbox-title">Customer requests</h2>
       {options && <p className={styles.learning}>
         {options.learning.recent ? <>AI drafts: <strong>{options.learning.unchanged} of the last {options.learning.recent}</strong> went out without edits.</> : <>The AI learns from every reply you send.</>}{' '}
-        <button type="button" className={styles.link} aria-expanded={rulesOpen} onClick={() => setRulesOpen(v => !v)}>Reply rules ({options.rules.length})</button>
+        <button type="button" className={styles.link} aria-expanded={rulesOpen} onClick={() => void openRules()}>Issues &amp; rules ({options.rules.length} rules)</button>
       </p>}
     </div>
     {rulesOpen && options && <div className={styles.rules}>
-      <p className={styles.note}>The AI follows these on every draft, along with the edits you made to earlier drafts.</p>
-      {options.rules.length ? <ol>{options.rules.map(rule => <li key={rule.id}><span>{rule.rule}</span><button type="button" className={styles.link} onClick={() => void saveRule({ removeId: rule.id })}>Remove</button></li>)}</ol> : <p className={styles.note}>No rules yet.</p>}
-      <form className={styles.ruleForm} onSubmit={event => { event.preventDefault(); if (newRule.trim()) void saveRule({ rule: newRule.trim() }); }}>
-        <input value={newRule} maxLength={500} onChange={event => setNewRule(event.target.value)} placeholder="e.g. We have no walk-in store. Orders ship from the website only." aria-label="New reply rule"/>
+      <p className={styles.note}>Every case you tag, and how you resolved it, collects here. Write the rule once you know how you want that kind of case handled; the AI follows the general rules on every draft and an issue's rules on that kind of case.</p>
+      {[['', 'General (every reply)'] as const, ...issueTypes].map(([key, label]) => {
+        const rules = options.rules.filter(rule => (rule.issue || '') === key);
+        const list = key ? (cases || []).filter(c => c.issue === key) : [];
+        if (key && !rules.length && !list.length) return null;
+        const tally = resolutionTypes.map(([r, rl]) => [rl, list.filter(c => c.resolutions.includes(r)).length] as const).filter(([, n]) => n > 0);
+        return <section key={key || 'general'} className={styles.ruleGroup}>
+          <h3>{label}{key ? <span className={styles.note}> · {list.length} case{list.length === 1 ? '' : 's'}</span> : null}</h3>
+          {tally.length > 0 && <p className={styles.note}>How you handled them: {tally.map(([rl, n]) => `${rl} ${n}`).join(' · ')}</p>}
+          {list.length > 0 && <ul className={styles.caseList}>{list.slice(0, 6).map(c => <li key={c.requestId}><button type="button" className={styles.link} onClick={() => { setRulesOpen(false); open(c.requestId); }}>{c.name || 'Customer'}</button> <span className={styles.note}>{when(c.updated)}{c.resolutions.length ? ' · ' + c.resolutions.map(resolutionLabel).join(', ') : ''}{c.note ? ' · ' + c.note : ''}</span></li>)}</ul>}
+          {rules.length ? <ol>{rules.map(rule => <li key={rule.id}><span>{rule.rule}</span><button type="button" className={styles.link} onClick={() => void saveRule({ removeId: rule.id })}>Remove</button></li>)}</ol> : <p className={styles.note}>No rule yet.</p>}
+        </section>;
+      })}
+      {cases === null && onLoadCases && <p className={styles.note}>Loading cases…</p>}
+      <form className={styles.ruleForm} onSubmit={event => { event.preventDefault(); if (newRule.trim()) void saveRule({ rule: newRule.trim(), issue: ruleIssue || null }); }}>
+        <select value={ruleIssue} onChange={event => setRuleIssue(event.target.value)} aria-label="Rule applies to"><option value="">Every reply</option>{issueTypes.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>
+        <input value={newRule} maxLength={500} onChange={event => setNewRule(event.target.value)} placeholder="e.g. Out of stock: offer wait, refund, store credit, or a substitute plus 30% off the next order." aria-label="New reply rule"/>
         <button type="submit" className={styles.action} disabled={!newRule.trim()}>Add rule</button>
       </form>
     </div>}
@@ -313,6 +354,8 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
         onSubmit: (mode, send) => void submit(active.request, mode, send),
         onDictate: () => dictate(active.request),
         onStatus: status => { if (!disabled) { setPanel(null); void onStatus(active.request, status); } },
+        issue: issues[active.request.id] || null, canTag: Boolean(onSaveIssue), onIssue: patch => void saveIssue(active.request.id, patch),
+        issueNote: issueDrafts[active.request.id]?.note ?? issues[active.request.id]?.note ?? '', onIssueNote: note => setIssueDrafts(previous => ({ ...previous, [active.request.id]: { note } })),
         forwards: forwards[active.request.id] || [], activity: activity[active.request.id] || [], team: options?.team || [], canForward: Boolean(onForward),
         panel: panel?.id === active.request.id ? panel : null,
         onPanel: next => setPanel(next ? { id: active.request.id, to: '', note: '', busy: false, error: '', ...(panel?.id === active.request.id ? panel : {}), ...next } as any : null),
@@ -329,10 +372,11 @@ type ConversationProps = {
   onClose: () => void; onEdit: (field: 'body' | 'instruction', value: string) => void; onDraft: (patch: Partial<Draft>) => void; onInsert: (snippet: string) => void;
   onSubmit: (mode: 'ai' | 'staff', send?: boolean) => void; onDictate: () => void; onStatus: (status: string) => void;
   forwards: RequestForward[]; team: TeamMember[]; canForward: boolean; activity: { at: number; text: string }[];
+  issue: RequestIssue | null; canTag: boolean; onIssue: (patch: Partial<{ issue: string; resolutions: string[]; note: string }>) => void; issueNote: string; onIssueNote: (note: string) => void;
   panel: { kind: 'forward' | 'delete'; to: string; note: string; busy: boolean; error: string } | null;
   onPanel: (next: Partial<{ kind: 'forward' | 'delete'; to: string; note: string; busy: boolean; error: string }> | null) => void; onForward: () => void;
 };
-function conversation({ row, draft, automation, options, canSend, disabled, listening, preparing, bodyField, now, onClose, onEdit, onDraft, onInsert, onSubmit, onDictate, onStatus, forwards, team, canForward, panel, onPanel, onForward, activity }: ConversationProps) {
+function conversation({ row, draft, automation, options, canSend, disabled, listening, preparing, bodyField, now, onClose, onEdit, onDraft, onInsert, onSubmit, onDictate, onStatus, forwards, team, canForward, panel, onPanel, onForward, activity, issue, canTag, onIssue, issueNote, onIssueNote }: ConversationProps) {
   const { request, reply } = row;
   const email = text(request.data.email), canReply = usableEmail(request.data.email);
   const name = text(request.data.name) || email || 'Customer';
@@ -342,7 +386,10 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
   const writing = working(reply), sending = sendPending(reply);
   const locked = disabled || preparing || sending;
   const conflict = Boolean(draft && draft.revision !== (reply?.revision ?? null));
-  const history = reply?.history?.length ? reply.history : [{ id: 'original:' + request.id, direction: 'incoming' as const, body: text(request.data.message), created: request.created }];
+  const fromOrder = request.data.origin === 'order';
+  const allHistory = reply?.history?.length ? reply.history : [{ id: 'original:' + request.id, direction: 'incoming' as const, body: text(request.data.message), created: request.created }];
+  // An order conversation starts with internal order notes, shown to staff only.
+  const history = fromOrder ? allHistory.filter(m => !m.id.startsWith('original:')) : allHistory;
   const coaChoice = draft?.coa !== undefined ? draft.coa : (reply?.coaChoice ?? null);
   const chosen = coaChoice ? options?.coas.find(c => c.sha256 === coaChoice) : undefined;
   const attachedNow = reply?.coa.state === 'matched' && (draft?.coa === undefined || draft.coa === reply.coaChoice) ? reply.coa : null;
@@ -384,6 +431,15 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
       <div className={styles.sendRow}><button type="button" className={styles.send} disabled={panel.busy || !panel.to} onClick={onForward}>{panel.busy ? 'Forwarding…' : 'Forward'}</button><button type="button" className={styles.link} onClick={() => onPanel(null)}>Cancel</button><span className={styles.note}>The customer is not emailed. Replies to the forward come back to you.</span></div>
     </div>}
     <p className={styles.subjectLine}><strong>{subject}</strong> <span className={styles.note}>· Ref {request.id.slice(0, 8)}</span></p>
+    {fromOrder && <p className={styles.orderNote}><strong>Order details (only you see this):</strong> {text(request.data.message)}</p>}
+    {canTag && <div className={styles.case}>
+      <label><span>What is this about?</span><select value={issue?.issue || ''} onChange={event => onIssue({ issue: event.target.value })}>
+        <option value="" disabled>Choose an issue</option>{issueTypes.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+      </select></label>
+      {issue?.issue && <fieldset><legend>How you handled it</legend>{resolutionTypes.map(([key, label]) => <label key={key} className={styles.check}><input type="checkbox" checked={issue.resolutions.includes(key)} onChange={event => onIssue({ resolutions: event.target.checked ? [...issue.resolutions, key] : issue.resolutions.filter(r => r !== key) })}/> {label}</label>)}</fieldset>}
+      {issue?.issue && <label className={styles.caseNote}><span>Case note</span><input value={issueNote} maxLength={1000} onChange={event => onIssueNote(event.target.value)} onBlur={() => { if (issueNote !== (issue.note || '')) onIssue({ note: issueNote }); }} placeholder="e.g. Waiting on restock; offered 30% off next order"/></label>}
+      {issue?.issue && <p className={styles.note}>The AI drafts with this decision and with your {issueLabel(issue.issue)} rules.</p>}
+    </div>}
     <ol className={styles.thread} aria-label="Conversation">
       {history.map(message => <li key={message.id} data-direction={message.direction}>
         <p className={styles.meta}>{message.direction === 'incoming' ? name : 'You'} · {when(message.created)}</p>
@@ -393,7 +449,7 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
     {(() => {
       // The full record of this request: received, replies (and PDFs) sent, forwards, archive/spam/delete/restore.
       const local = forwards.filter(f => !activity.some(a => a.at === f.created)).map(f => ({ at: f.created, text: `${f.status === 'failed' ? 'Forward failed to' : f.status === 'accepted' ? 'Forwarded to' : 'Forward status unconfirmed to'} ${f.to} by ${f.by}` }));
-      const items = [{ at: request.created, text: 'Received from the website' }, ...activity, ...local].sort((a, b) => a.at - b.at);
+      const items = [{ at: request.created, text: fromOrder ? 'Conversation started from the order' + (request.data.startedBy ? ' by ' + text(request.data.startedBy) : '') : 'Received from the website' }, ...activity, ...local].sort((a, b) => a.at - b.at);
       return <details className={styles.activity} open={row.stage === 'done' || row.stage === 'waiting' || row.stage === 'deleted'}><summary>Activity ({items.length})</summary><ol>{items.map((item, index) => <li key={index}><span className={styles.meta}>{when(item.at)}</span> {item.text}</li>)}</ol></details>;
     })()}
     {request.status === 'deleted' && <p className={styles.warning}>This request is deleted. Restore it to reply.</p>}

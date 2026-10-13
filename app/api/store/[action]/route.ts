@@ -2,6 +2,7 @@ import { replyBridgeRoute } from '@/lib/request-reply-route';
 import { queryOrders, scanLimit } from '@/lib/order-queue';
 import { publicCatalog } from '@/lib/public-catalog';
 import { batchRecordsFor, batchStatus, batchPath } from '@/lib/testing';
+import { startOrderConversation, saveRequestIssue, issuesFor, caseLog } from '@/lib/request-cases';
 import { forwardRequest, forwardsFor, teamMembers, activityFor } from '@/lib/request-forward';
 import { summarizeRequestReplies, prepareRequestReply, replyDeskOptions, saveReplyRule } from '@/lib/request-replies';
 import { adminBatchRecords, validateBatchEdit } from '@/lib/product-batch';
@@ -36,7 +37,7 @@ export const dynamic = 'force-dynamic';
 // What each admin write needs. An admin action missing here requires the owner.
 const adminActionPermission: Record<string, StaffPermission> = {
     'admin-order': 'orders:fulfill', 'admin-reconcile': 'orders:reconcile',
-    'admin-request': 'requests:write', 'admin-request-reply': 'requests:write', 'admin-reply-desk': 'requests:write', 'admin-request-replies': 'requests:write', 'admin-reply-rule': 'requests:write', 'admin-request-forward': 'requests:write', 'admin-coa-process': 'requests:write',
+    'admin-request': 'requests:write', 'admin-request-reply': 'requests:write', 'admin-reply-desk': 'requests:write', 'admin-request-replies': 'requests:write', 'admin-reply-rule': 'requests:write', 'admin-request-forward': 'requests:write', 'admin-order-conversation': 'requests:write', 'admin-request-issue': 'requests:write', 'admin-case-log': 'requests:write', 'admin-coa-process': 'requests:write',
     'admin-config': 'store:write', 'admin-product': 'store:write', 'admin-campaign': 'store:write', 'admin-reward': 'store:write', 'admin-coa-config': 'store:write',
     'admin-staff': 'team:manage',
 };
@@ -496,15 +497,26 @@ export async function POST(req: NextRequest, { params }: {
             if (action === 'admin-reply-desk') return j({ ...(await replyDeskOptions(runtime())), links: await publicCoaLinks(), team: await teamMembers(runtime()) });
             if (action === 'admin-request-replies') {
                 const ids = z.object({ ids: z.array(z.string().uuid()).max(200) }).parse(b).ids;
-                return j({ replies: await summarizeRequestReplies(runtime(), ids), forwards: await forwardsFor(runtime(), ids), activity: await activityFor(runtime(), ids) });
+                return j({ replies: await summarizeRequestReplies(runtime(), ids), forwards: await forwardsFor(runtime(), ids), activity: await activityFor(runtime(), ids), issues: await issuesFor(runtime(), ids) });
             }
+            if (action === 'admin-order-conversation') {
+                const input = z.object({ orderId: z.string().min(6).max(80) }).parse(b);
+                try { const result = await startOrderConversation(runtime(), input.orderId, actor); return j({ ...result, message: result.created ? 'Conversation started. Nothing was sent.' : 'Opened the existing conversation for this order.' }); }
+                catch (error) { const status = (error as Error & { status?: number }).status; return j({ error: status ? (error as Error).message : 'Could not open a conversation for this order.' }, status || 500); }
+            }
+            if (action === 'admin-request-issue') {
+                const input = z.object({ id: z.string().uuid(), issue: z.string().max(40), resolutions: z.array(z.string().max(40)).max(10).optional(), note: z.string().max(1000).optional() }).parse(b);
+                try { return j({ issue: await saveRequestIssue(runtime(), { requestId: input.id, issue: input.issue, resolutions: input.resolutions, note: input.note }, actor) }); }
+                catch (error) { const status = (error as Error & { status?: number }).status; return j({ error: status ? (error as Error).message : 'Could not save the issue.' }, status || 500); }
+            }
+            if (action === 'admin-case-log') return j({ cases: await caseLog(runtime()) });
             if (action === 'admin-request-forward') {
                 const input = z.object({ id: z.string().uuid(), to: z.string().email().max(254), note: z.string().max(2000).optional() }).parse(b);
                 try { const forward = await forwardRequest(runtime(), { requestId: input.id, to: input.to, note: input.note }, actor); return j({ forward, message: 'Forwarded to ' + forward.to + '.' }); }
                 catch (error) { const status = (error as Error & { status?: number }).status; return j({ error: status ? (error as Error).message : 'Email status unconfirmed. Check the mail provider before retrying.' }, status || 500); }
             }
             if (action === 'admin-reply-rule') {
-                const input = z.object({ rule: z.string().max(500).optional(), removeId: z.string().uuid().optional() }).parse(b);
+                const input = z.object({ rule: z.string().max(500).optional(), removeId: z.string().uuid().optional(), issue: z.string().max(40).nullable().optional() }).parse(b);
                 try { await saveReplyRule(runtime(), input, actor); return j({ ...(await replyDeskOptions(runtime())), links: await publicCoaLinks(), team: await teamMembers(runtime()), message: input.removeId ? 'Rule removed.' : 'Rule saved. The next drafts will follow it.' }); }
                 catch (error) { const status = (error as Error & { status?: number }).status; return j({ error: status ? (error as Error).message : 'The rule could not be saved.' }, status || 500); }
             }

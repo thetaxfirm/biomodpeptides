@@ -24,6 +24,8 @@ type Props = {
     submit: (e: FormEvent<HTMLFormElement>, action: string, transform: (d: any) => any, draftKey: string) => Promise<void>;
     markDraft: (key: string) => void;
     reload: () => void;
+    /** Opens (or reuses) a reply-desk conversation with this order's customer. Never sends by itself. */
+    onEmailCustomer?: (order: QueueRow) => void;
 };
 
 export function StatusBadge({ bucket }: { bucket: OrderBucket }) {
@@ -40,7 +42,7 @@ function query(params: Record<string, string | number>) {
     return api('admin-orders?' + search.toString()) as Promise<QueueResult>;
 }
 
-export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, formGeneration, change, submit, markDraft, reload }: Props) {
+export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, formGeneration, change, submit, markDraft, reload, onEmailCustomer }: Props) {
     const [tab, setTab] = useState<QueueTab>('to_ship');
     const [input, setInput] = useState('');
     const [q, setQ] = useState('');
@@ -144,6 +146,7 @@ export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, form
                     {recoveryJobs(selected.id).map((j: any) => <p key={j.order_id}>Recovery email: {j.status === 'accepted' ? 'Accepted by mail provider' : j.status === 'review' ? 'Needs manual review' : j.status}. {String(j.reason || '').replaceAll('_', ' ')}{j.accepted_at ? ' · ' + new Date(j.accepted_at).toLocaleString() : ''}</p>)}
                     <div className={styles.actions}>
                         <h3>Actions</h3>
+                        {onEmailCustomer && selected.data?.email && <button type="button" className="button button-dark" disabled={busy} onClick={() => { const order = selected; setSelected(null); onEmailCustomer(order); }}>Email customer</button>}
                         {canReconcile(selected) && <button type="button" className="button button-dark" disabled={busy} onClick={() => reconcile(selected)}>Check payment status</button>}
                         {allowed('orders:fulfill') && <ShippingLabel order={selected} onDone={reload}/>}
                         {allowed('orders:fulfill') && ['paid', 'shipped'].includes(selected.status) && (selected.data?.shipment

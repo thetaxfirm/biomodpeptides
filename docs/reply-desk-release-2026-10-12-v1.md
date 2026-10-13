@@ -41,3 +41,10 @@ Owner instruction after a HEAT-R 20mg reply was staged saying "Attached" with no
 - A reply accepted by the mail provider archives its request (status `resolved`, attributed to the Jarvis reply bridge). A customer follow-up returns it to To reply; drafting or sending on an archived request takes it out of the archive.
 - Views are now To reply, Archive (archived plus replied), Spam, Deleted and All. "Mark done" is now "Archive".
 - Each conversation shows an Activity record built from existing private data: received, every archive/spam/delete/restore with who did it (change history), each reply sent with the PDF attached, customer follow-ups, and forwards with notes. No new table.
+
+## Follow-up (Oct 13): email order customers, issue tracking, rules per issue
+
+- Orders → order panel → **Email customer** opens (or reuses) one desk conversation per order. Order context (number, date, items, preorder flag, status) is staff/AI-only: shown as an internal note, never quoted to the customer (Jarvis omits the quoted-inquiry block for order conversations). The subject is "Your BioMod order #…".
+- Each conversation can be tagged with what it is about (out of stock, website problem, COA, shipping, refund, wrong/damaged, product question, partner, vendor, other), how it was handled (wait, refund, store credit, substitute, discount, replacement, answered, other) and a case note. Migration `0027_request_issues.sql`.
+- **Issues & rules** groups every tagged case by issue with a tally of how each was handled, and holds rules per issue plus general rules. AI drafts get the general rules, that issue's rules and the owner's decision for the case.
+- Tests: `tests/request-cases-v1.cjs`; desk cases for order notes and tagging; Jarvis test that order notes never reach the customer email (27 Jarvis tests).
