@@ -80,7 +80,8 @@ const pendingHTML = renderToStaticMarkup(React.createElement(BatchDetails, { rec
 assert(pendingHTML.includes('not available in the published documents yet'));
 assert(!pendingHTML.includes('Open original PDF') && !pendingHTML.includes(certificateFor(ss10).url));
 const mismatchHTML = renderToStaticMarkup(React.createElement(BatchDetails, { record: rows('Selank 10mg')[0] }));
-assert(mismatchHTML.includes('The available certificate identifies a different lot.') && mismatchHTML.includes('Not verified for this lot'));
+assert(!mismatchHTML.includes('The available certificate identifies a different lot.') && mismatchHTML.includes('Not verified for this lot'));
+assert(mismatchHTML.includes(mismatch.product_lot) && mismatchHTML.includes(mismatch.certificate_lot));
 
 // The new path inherits publication holds for contextual peptide terms and aliases.
 for (const r of batchRecords.filter(r => !eligibleDiscovery(product(r)))) {

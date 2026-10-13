@@ -216,7 +216,7 @@ export function ProductResearchDetails({ product }: { product: Product }) {
   const documentation = status === 'on-request' ? coaRequestNoticeFor(record) : status === 'matched'
     ? 'A certificate is published with a lot number matching this listing. Confirm the lot supplied with your order and read the original report for its methods and results.'
     : status === 'mismatch'
-      ? 'The available certificate identifies a different lot. Its results do not verify the listed product lot. Ask Biomod for the matching document.'
+      ? 'Contact BIOMOD to request the COA for the listed lot.'
       : 'An original certificate for this listed lot is not available in the published documents yet. Pending documentation is not a completed test result.';
   return <><section className={styles.questions} aria-labelledby="product-questions-heading">
     <h2 id="product-questions-heading">Product questions</h2>

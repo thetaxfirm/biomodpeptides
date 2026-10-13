@@ -63,7 +63,8 @@ for (const record of batchRecords) {
   assert(direct.includes('href="' + escaped(certificate.url) + '"'), record.product_slug + ': actual original PDF URL is available without opening a dialog');
   assert(direct.includes('Open original PDF') && direct.includes('Read original certificate'), record.product_slug + ': direct link and preview coexist');
   if (status === 'mismatch') {
-    assert(html.includes('The available certificate identifies a different lot.'), record.product_slug + ': lot mismatch warning remains visible');
+    assert(!html.includes('The available certificate identifies a different lot.'), record.product_slug + ': redundant mismatch paragraph removed');
+    assert(html.includes('<dt>Listed product lot</dt><dd>' + escaped(record.product_lot) + '</dd>') && html.includes('<dt>Certificate lot</dt><dd>' + escaped(record.certificate_lot) + '</dd>'), record.product_slug + ': both lot numbers remain visible');
     for (const field of ['Purity', 'Measured content']) assert(html.includes('<dt>' + field + '</dt><dd>Not verified for this lot</dd>'), record.product_slug + ': mismatched results are not attributed');
   } else {
     for (const [field, kind] of [['Purity', 'purity'], ['Measured content', 'assay']]) assert(html.includes('<dt>' + field + '</dt><dd>' + escaped(reportedResult(certificate, kind)) + '</dd>'), record.product_slug + ': matched results and qualifiers preserved');

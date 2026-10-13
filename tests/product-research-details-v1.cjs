@@ -70,7 +70,7 @@ for (const product of products) {
   assert(!/<(?:button|details|script)\b|\bhidden=|aria-hidden=/.test(html), 'answers remain readable in initial HTML');
   const status = batchStatus(batchFor(product.id));
   if (status === 'matched') assert(html.includes('lot number matching this listing'));
-  else if (status === 'mismatch') assert(html.includes('results do not verify the listed product lot'));
+  else if (status === 'mismatch') assert(html.includes('Contact BIOMOD to request the COA for the listed lot.'));
   else assert(html.includes('Pending documentation is not a completed test result.') && !html.includes('lot number matching this listing'));
 }
 assert.equal(eligibleCount, 17);

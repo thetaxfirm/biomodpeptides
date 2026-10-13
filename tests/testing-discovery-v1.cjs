@@ -22,13 +22,15 @@ const { batchRecords, batchStatus, certificateFor, coaOnRequest, coaRequestNotic
 const { Testing } = require('../components/store/testing.tsx');
 const { StoreProvider } = require('../components/store/provider.tsx');
 const escape = value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#x27;');
-const render = (props = {}) => renderToStaticMarkup(React.createElement(StoreProvider, { initialCatalog: products }, React.createElement(Testing, props)));
+// Model the resolved catalog supplied by the current server route.
+const initialCatalog = products.map(product => ({ ...product, resolvedBatch: batchRecords.find(record => record.product_id === product.id) || null }));
+const render = (props = {}) => renderToStaticMarkup(React.createElement(StoreProvider, { initialCatalog }, React.createElement(Testing, props)));
 const html = render();
 const records = [...html.matchAll(/<details\b([^>]*)>([\s\S]*?)<\/details>/g)];
 assert.equal(records.length, batchRecords.length, 'all original records have native disclosures in initial HTML');
 const counts = { publicPDF: 0, pending: 0, mismatch: 0, restricted: 0 };
 for (let i = 0; i < records.length; i++) {
-  const [, attributes, body] = records[i], record = batchRecords[i];
+  const [, attributes, body] = records[i], record = initialCatalog.map(product => product.resolvedBatch).filter(Boolean)[i];
   assert(!/\bopen=/.test(attributes), 'unfiltered records start collapsed');
   assert(body.includes('<summary') && body.includes(escape(record.product_name)), 'the native summary names the product');
   assert(body.includes('href="/product/' + record.product_slug + '"'), 'product links exist before hydration');
@@ -44,7 +46,7 @@ for (let i = 0; i < records.length; i++) {
     assert(body.includes('href="' + escape(certificate.url) + '"'), 'the original source URL is in the initial response');
     if (batchStatus(record) === 'mismatch') {
       counts.mismatch++;
-      assert(body.includes('The available certificate identifies a different lot.') && body.includes('Not verified for this lot'), 'mismatch remains explicit');
+      assert(!body.includes('The available certificate identifies a different lot.') && body.includes('Lot needs confirmation') && body.includes('Not verified for this lot'), 'concise status remains and mismatched results are not attributed');
     }
   }
 }
