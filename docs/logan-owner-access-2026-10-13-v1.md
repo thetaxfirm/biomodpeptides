@@ -23,3 +23,8 @@ ae7e552e-54e2-4103-a504-527b0119580c deployed 2026-10-13T23:04:54Z. trybiomod.co
 
 ## Rollback
 Set `STORE_ADMIN_EMAILS` back to the prior value above, or roll back to version eeedadc3-ee1a-4a7b-8db0-0ae6ec4153ab.
+
+## Follow-up, same day: owner order emails
+Owner request: Ash receives the paid-order email too. `ORDER_NOTIFY_EMAILS` changed from
+`chris@biomodcompounds.com` to `chris@biomodcompounds.com,ash@biomodcompounds.com`. Readback: 28 bindings,
+only `ORDER_NOTIFY_EMAILS` differs; `/` and `/admin/login` 200. Rollback: restore the prior value.
