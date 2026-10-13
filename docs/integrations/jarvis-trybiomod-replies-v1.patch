@@ -1,109 +1,38 @@
 --- a/server/index.ts
 +++ b/server/index.ts
-@@ -326,6 +326,7 @@
-   import("./services/gmailStore.ts").then((s) => s.scheduleGmailStoreSync()).catch((e) => console.error("[gmail-store] failed to start:", e?.message));
-   import("./services/outbox.ts").then((o) => o.scheduleOutbox()).catch(() => {});
-   import("./services/mailReplyWatch.ts").then((w) => w.scheduleReplyWatches()).catch((e) => console.error("[reply-watch] failed to start:", e?.message));
+@@ -328,0 +329 @@
 +  import("./services/trybiomodReplies.ts").then((w) => w.scheduleTryBiomodReplies()).catch(() => console.error("[website-replies] bridge startup needs review"));
-   import("./services/docArchive.ts").then((d) => d.scheduleDocArchive()).catch(() => {});
-   import("./services/skillScout.ts").then((s) => s.scheduleSkillScout()).catch(() => {});
-   // push notifications: due reminders + 7am morning briefing
 --- a/server/routes/readyToSend.ts
 +++ b/server/routes/readyToSend.ts
-@@ -6,6 +6,7 @@
- import * as cache from "../services/mailListCache.ts";
- import * as im from "../services/imapMail.ts";
- import { recordMailThreadAction } from "../services/mailThreadActions.ts";
+@@ -8,0 +9 @@
 +import * as websiteReplies from "../services/trybiomodReplies.ts";
- 
- /* Routes for the Ready-to-send box. The only path that actually transmits is
-  * POST /:id/send. Ash reaches it by clicking an individual Send button or the
-@@ -19,6 +20,8 @@
-     try { res.json(await fn(req as AuthedRequest)); }
-     catch (e: any) { res.status(400).json({ error: e?.message || "failed" }); }
-   };
+@@ -21,0 +23,2 @@
 +
 +r.get("/mail/trybiomod/status", handle(async () => websiteReplies.tryBiomodReplyStatus()));
- 
- // Put a prepared email in the box. Never sends — Ash reviews and presses send.
- r.post("/mail/ready", handle(async (req) => {
-@@ -41,10 +44,11 @@
- r.get("/mail/ready/:id", handle(async (req) => {
-   const item = rts.getReady(req.params.id);
-   if (!item) throw new Error("not found");
+@@ -44 +47 @@
 -  return item;
 +  return { ...item, websiteReply: await websiteReplies.isTryBiomodReply(item.id) };
- }));
- 
- r.patch("/mail/ready/:id", handle(async (req) => {
+@@ -47,0 +51 @@
 +  if (req.body?.attachments !== undefined) await websiteReplies.assertTryBiomodAttachmentMutable(req.params.id);
-   if (!rts.updateReady(req.params.id, req.body || {})) throw new Error("nothing to update");
-   return rts.getReady(req.params.id);
- }));
-@@ -60,6 +64,7 @@
- }));
- 
- r.post("/mail/ready/:id/attachments", attachmentUpload.array("files", 12), handle(async (req) => {
+@@ -62,0 +67 @@
 +  await websiteReplies.assertTryBiomodAttachmentMutable(req.params.id);
-   const files = ((req as any).files || []) as Express.Multer.File[];
-   return rts.addReadyAttachments(req.params.id, files.map((file) => ({
-     originalname: file.originalname,
-@@ -68,6 +73,7 @@
- }));
- 
- r.delete("/mail/ready/:id/attachment/:idx", handle(async (req) => {
+@@ -70,0 +76 @@
 +  await websiteReplies.assertTryBiomodAttachmentMutable(req.params.id);
-   if (!rts.removeReadyAttachment(req.params.id, Number(req.params.idx))) throw new Error("attachment not found");
-   return rts.getReady(req.params.id);
- }));
-@@ -78,8 +84,9 @@
-   if (!item) throw new Error("not found");
-   const instruction = String(req.body?.instruction || "").trim();
-   if (!instruction) throw new Error("tell me what to change");
+@@ -81,2 +87,3 @@
 -  const { writeEmail } = await import("../services/emailWriter.ts");
 -  const { text } = await writeEmail(item.body, instruction);
 +  const { writeEmail, writeOpusEmail } = await import("../services/emailWriter.ts");
 +  const linked = await websiteReplies.isTryBiomodReply(item.id);
 +  const { text } = await (linked ? writeOpusEmail : writeEmail)(item.body, instruction);
-   rts.updateReady(req.params.id, { body: text });
-   return rts.getReady(req.params.id);
- }));
-@@ -88,6 +95,7 @@
-  *  Ash: "I need to be able to view the attachments in ready to send." */
- r.get("/mail/ready/:id/attachment/:idx", async (req: any, res: any) => {
-   try {
+@@ -90,0 +98 @@
 +    await websiteReplies.validateTryBiomodPreview(req.params.id);
-     const item = rts.getReady(req.params.id);
-     if (!item) return res.status(404).end();
-     const a = item.attachments[Number(req.params.idx)];
-@@ -104,6 +112,7 @@
-  *  PDF and Word file are built from, re-exports both, and mirrors to the Desktop.
-  *  Still does not send anything. */
- r.post("/mail/ready/:id/attachment/:idx/fix", handle(async (req) => {
+@@ -106,0 +115 @@
 +  await websiteReplies.assertTryBiomodAttachmentMutable(req.params.id);
-   const item = rts.getReady(req.params.id);
-   if (!item) throw new Error("not found");
-   const a = item.attachments[Number(req.params.idx)];
-@@ -117,6 +126,7 @@
- 
- /** The document's own text, for editing in place. */
- r.get("/mail/ready/:id/attachment/:idx/source", handle(async (req) => {
+@@ -119,0 +129 @@
 +  await websiteReplies.assertTryBiomodAttachmentMutable(req.params.id);
-   const item = rts.getReady(req.params.id);
-   if (!item) throw new Error("not found");
-   const a = item.attachments[Number(req.params.idx)];
-@@ -131,6 +141,7 @@
- /** Save his own edit, then re-export the PDF and Word file and mirror to the
-  *  Desktop — so the email, the chart and the working copy can never disagree. */
- r.put("/mail/ready/:id/attachment/:idx/source", handle(async (req) => {
+@@ -133,0 +144 @@
 +  await websiteReplies.assertTryBiomodAttachmentMutable(req.params.id);
-   const item = rts.getReady(req.params.id);
-   if (!item) throw new Error("not found");
-   const a = item.attachments[Number(req.params.idx)];
-@@ -183,10 +194,21 @@
-     includeBooking: item.includeBooking,
-     signatureAccount: b.signatureAccount || undefined,
-   } as any;
+@@ -186,4 +197,15 @@
 -  const sent = item.account && g.isImapAccount(req.userId, item.account)
 -    ? await im.imapSend(req.userId, item.account, payload)
 -    : await g.gmailSend(req.userId, payload);
@@ -123,31 +52,15 @@
 +  }
 +  const websiteResult = await websiteReplies.finishTryBiomodSend(websiteAttempt, sent, body);
 +  if (!websiteAttempt) rts.markSent(item.id);
-   cache.warmSentCaches(req.userId, (sent as any).from || item.account);
-   const actionKind = b.quoteMode === "forward" ? "forward" : b.quoteMode === "reply" ? "reply" : null;
-   const actionSourceThread = String(b.sourceThreadId || (actionKind === "reply" ? item.threadId : "") || "").trim();
-@@ -210,7 +232,7 @@
-     subject: item.subject,
-     prepared: preparedWatch,
-   }) : { watch: null, error: null };
+@@ -213 +235 @@
 -  return { ok: true, sent, reply_watch_id: watchResult.watch?.id || null, reply_watch_error: watchResult.error };
 +  return { ok: true, sent, website_reply_ack_pending: websiteResult.ackPending, reply_watch_id: watchResult.watch?.id || null, reply_watch_error: watchResult.error };
- }));
- 
- export default r;
 --- a/server/services/emailWriter.ts
 +++ b/server/services/emailWriter.ts
-@@ -1,5 +1,5 @@
- import { codexSub } from "./codexLLM.ts";
+@@ -2 +2 @@
 -import { claudeSub, subscriptionAuthStatus } from "./subscriptionLLM.ts";
 +import { claudeSub, claudeStructured, subscriptionAuthStatus } from "./subscriptionLLM.ts";
- 
- /* EMAIL WRITER — prefer Opus through Ash's Claude Max subscription, then use
-  * Sol through his ChatGPT subscription when Claude is signed out or unavailable.
-@@ -75,3 +75,17 @@
-       : `${EMAIL_MODEL} via Claude Max subscription`,
-   };
- }
+@@ -77,0 +78,14 @@
 +
 +/** Website customer drafts require Opus, with tools and every fallback disabled.
 + * A provider failure leaves the request for review; it never changes author. */
@@ -162,7 +75,7 @@
 +  if (!text || text.length > 12000) throw new Error("The Opus draft needs review.");
 +  return { text, model: `${EMAIL_MODEL} via Claude Max subscription` };
 +}
---- a/server/services/trybiomodReplies.ts
+--- /dev/null
 +++ b/server/services/trybiomodReplies.ts
 @@ -0,0 +1,279 @@
 +import fs from 'node:fs';
@@ -444,7 +357,7 @@
 +  const {env}=await import('../env.ts');if(scheduled||env.isIsolatedTest||!env.isProd||!env.backgroundJobsEnabled||!env.externalIntegrationsEnabled||!process.env.TRYBIOMOD_REPLY_BRIDGE_TOKEN?.trim())return;
 +  scheduled=true;const service=await bridge();setTimeout(()=>void service.poll(),5000);setInterval(()=>void service.poll(),30000);
 +}
---- a/server/services/trybiomodReplies.test.ts
+--- /dev/null
 +++ b/server/services/trybiomodReplies.test.ts
 @@ -0,0 +1,86 @@
 +import test from 'node:test';
@@ -535,60 +448,21 @@
 +});
 --- a/server/routes/google.ts
 +++ b/server/routes/google.ts
-@@ -10,6 +10,7 @@
- import * as im from "../services/imapMail.ts";
- import * as rules from "../services/mailRules.ts";
- import * as cache from "../services/mailListCache.ts";
+@@ -12,0 +13 @@
 +import { assertTryBiomodGenericAllowed } from "../services/trybiomodReplies.ts";
- import { inboxMessageSuppressedBySpamRule } from "../services/mailSearch.ts";
- import { PHOTO_DIR } from "../services/maccontacts.ts";
- import { saveMailContactNote } from "../services/mailContactNotes.ts";
-@@ -413,6 +414,7 @@
- }));
- 
- r.post("/gmail/send", handle(async (req) => {
+@@ -415,0 +417 @@
 +  await assertTryBiomodGenericAllowed(req.body);
-   const { to, subject, body, cc, bcc, threadId, inReplyTo, account, attachments, includeSignature, includeBooking, signatureAccount,
-     quotedHtml, quotedText, quoteHeader, quoteMode, sourceThreadId, sourceMessageId, replyWatch } = req.body;
-   if (!to || !subject) throw new Error("to and subject required");
-@@ -477,6 +479,7 @@
- 
- // Save as draft (Gmail accounts: lands in Gmail's Drafts)
- r.post("/gmail/drafts", handle(async (req) => {
+@@ -479,0 +482 @@
 +  await assertTryBiomodGenericAllowed(req.body);
-   const { to, subject, body, cc, bcc, threadId, inReplyTo, account, attachments, includeSignature, includeBooking, signatureAccount,
-     quotedHtml, quotedText, quoteHeader, quoteMode } = req.body;
-   // Ash, 7/28: "record the email addresses so I don't need to type them every
-@@ -503,6 +506,7 @@
-   g.gmailDraftGet(req.userId, req.params.draftId, req.query.account as string | undefined)));
- 
- r.put("/gmail/drafts/:draftId", handle(async (req) => {
+@@ -505,0 +509 @@
 +  await assertTryBiomodGenericAllowed(req.body);
-   const { to, subject, body, cc, bcc, threadId, inReplyTo, account, attachments, includeSignature, includeBooking, signatureAccount,
-     quotedHtml, quotedText, quoteHeader, quoteMode } = req.body;
-   return g.gmailDraftUpdate(req.userId, req.params.draftId, {
-@@ -513,6 +517,7 @@
- }));
- 
- r.post("/gmail/drafts/:draftId/send", handle(async (req) => {
+@@ -515,0 +520 @@
 +  await assertTryBiomodGenericAllowed(req.body);
-   const watches = await import("../services/mailReplyWatch.ts");
-   const preparedWatch = watches.prepareReplyWatch(req.userId, req.body?.replyWatch);
-   // save his latest edits first, then send that exact draft
-@@ -675,6 +680,7 @@
- // ---- Schedule send: an email that leaves at a time you pick ----
- r.post("/mail/schedule", async (req, res) => {
-   try {
+@@ -677,0 +683 @@
 +    await assertTryBiomodGenericAllowed(req.body);
-     const o = await import("../services/outbox.ts");
-     const b = req.body || {};
-     if (!b.to || !b.send_at) return res.status(400).json({ error: "to and send_at required" });
 --- a/client/src/mail/ComposeWindow.tsx
 +++ b/client/src/mail/ComposeWindow.tsx
-@@ -191,6 +191,19 @@
-   const [showCc, setShowCc] = useState(!!compose.cc);
-   const [showBcc, setShowBcc] = useState(!!compose.bcc);
-   const [sendBusy, setSendBusy] = useState(false);
+@@ -193,0 +194,13 @@
 +  const [websiteReply, setWebsiteReply] = useState(false);
 +  const [readyPolicyLoading, setReadyPolicyLoading] = useState(Boolean(compose.readyId));
 +  useEffect(() => {
@@ -602,13 +476,7 @@
 +    }
 +    return () => { active = false; };
 +  }, [compose.readyId]);
-   const [sendRecovery, setSendRecovery] = useState<"microsoft" | null>(null);
-   const [schedOpen, setSchedOpen] = useState(false);
-   const [schedWhen, setSchedWhen] = useState("");
-@@ -354,7 +367,15 @@
-     const has = compose.body?.trim();
-     try {
-       // Dedicated writer on the smartest model (Fable 5) — not the agentic chat loop.
+@@ -357 +370,9 @@
 -      const r = await api.post("/mail/rewrite", { body: compose.body || "", instruction: jarvisPrompt });
 +      let r;
 +      if (websiteReply && compose.readyId) {
@@ -619,50 +487,20 @@
 +        if (readyPolicyLoading) throw new Error("Wait for this draft's review policy to load.");
 +        r = await api.post("/mail/rewrite", { body: compose.body || "", instruction: jarvisPrompt });
 +      }
-       const text = String(r.text || "").trim().replace(/^["']|["']$/g, "");
-       if (text) set({ body: normalizeComposerHtml(text) });
-       setJarvisPrompt("");
-@@ -466,6 +487,7 @@
-   // Schedule send: same email, it just leaves later. Cancellable until it fires.
-   async function scheduleSend(whenIso: string) {
-     if (sendBusy) return;
+@@ -468,0 +490 @@
 +    if (websiteReply || readyPolicyLoading) { toast("This website reply must be reviewed and sent from Ready to Send.", "error"); return; }
-     setSendBusy(true);
-     try {
-       const checked = checkedCompose();
-@@ -483,6 +505,7 @@
- 
-   async function saveDraft() {
-     if (sendBusy) return;
+@@ -485,0 +508 @@
 +    if (websiteReply || readyPolicyLoading) { toast("This website reply stays in Ready to Send; Gmail draft export is unavailable.", "error"); return; }
-     setSendBusy(true);
-     try {
-       const checked = checkedCompose();
-@@ -715,22 +738,23 @@
-       )}
- 
-       <div className="mail-compose-command-area shrink-0">
+@@ -717,0 +741 @@
 +        {websiteReply && <p className="px-4 py-2 text-xs">Website reply: review and send here or in Ready to Send. Scheduling and Gmail draft export are unavailable so the request and original COA stay verified.</p>}
-         <div className="mail-compose-command-bar" role="toolbar" aria-label="Email actions">
-           <button onClick={send} disabled={sendBusy || attaching}
-             title={!compose.to?.trim() ? "Add a recipient" : !compose.subject?.trim() ? "Add a subject" : "Send this email"}
-             className="mail-compose-command-action mail-compose-send disabled:opacity-40">
-             <SendIcon size={14} />{attaching ? `Attaching ${compose.pendingAttachments} file${(compose.pendingAttachments || 0) > 1 ? "s" : ""}…` : sendBusy ? "Sending…" : "Send"}
-           </button>
+@@ -724 +748 @@
 -          <button onClick={saveDraft} disabled={sendBusy} title="Save this draft to Gmail"
 +          <button onClick={saveDraft} disabled={sendBusy || websiteReply || readyPolicyLoading} title={websiteReply ? "Website replies stay in Ready to Send for verification" : "Save this draft to Gmail"}
-             className="mail-compose-command-action" aria-label="Save draft">
-             <FileText size={14} /> Save
-           </button>
-           <div className="mail-compose-schedule-wrap">
+@@ -729,2 +753,2 @@
 -            <button onClick={() => setSchedOpen((open) => !open)} disabled={sendBusy || !compose.to || !compose.subject}
 -              title="Send this later" aria-expanded={schedOpen} className="mail-compose-command-action">
 +            <button onClick={() => setSchedOpen((open) => !open)} disabled={sendBusy || websiteReply || readyPolicyLoading || !compose.to || !compose.subject}
 +              title={websiteReply ? "Website replies require a fresh review when sent" : "Send this later"} aria-expanded={schedOpen} className="mail-compose-command-action">
-               <Clock size={14} /> Schedule
-             </button>
+@@ -733 +757 @@
 -            {schedOpen && (
 +            {schedOpen && !websiteReply && !readyPolicyLoading && (
-               <div className="mail-compose-schedule-popover">
-                 <div className="text-xs font-medium text-slate-700 mb-2">Send this later</div>
-                 {[["Tomorrow 8:00 AM", 1, 8], ["Tomorrow 1:00 PM", 1, 13], ["Monday 8:00 AM", -1, 8]].map(([label, days, hour]) => (

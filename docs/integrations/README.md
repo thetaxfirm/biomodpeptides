@@ -5,3 +5,5 @@
 Earlier contributor changes remain in the canonical working tree. Do not blindly apply this patch to another revision or commit the whole shared working tree. Reconcile against the listed baselines first. No credentials, customer records, mailbox contents, original reports, databases, or runtime data belong in this archive.
 
 The owner explicitly approved deployment of the current shared Jarvis checkout and restart on October 12, 2026. Live handoff evidence and remaining verification limits are recorded in the release receipt.
+
+The archive uses a zero-context unified diff to preserve exact source changes without whitespace-only context lines. Use `git apply --unidiff-zero` only after verifying all baseline hashes. An isolated application to those exact baselines reproduced all seven final source hashes.

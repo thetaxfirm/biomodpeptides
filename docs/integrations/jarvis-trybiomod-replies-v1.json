@@ -1,7 +1,8 @@
 {
   "scope": "Exact seven-file contribution only; not a Jarvis checkout or full repository sync",
   "canonicalProject": "~/Projects/Jarvis",
-  "patchSha256": "e693878c97e7e4f82697986ae2b076e1cac245ba3600d46ec6f0d27237e00ea1",
+  "patchSha256": "4323cc35107a43b1842e282038eba3a645fb50686cc18ddc2c84e9494b7433e5",
+  "patchFormat": "zero-context unified diff; apply only after verifying exact baseline hashes, using --unidiff-zero",
   "files": [
     {
       "file": "server/index.ts",
@@ -43,5 +44,6 @@
     "isolated": 24,
     "passed": 24,
     "tsc": "passed"
-  }
+  },
+  "isolatedPatchApplication": "All seven final hashes verified"
 }
