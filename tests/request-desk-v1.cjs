@@ -35,7 +35,7 @@ const type=(host,name,value)=>{field(host,name).props.onChange({target:{value}})
 const flush=async host=>{for(let i=0;i<4;i++)await Promise.resolve();host.render();};
 const openRow=(host,id)=>{nodes(host.tree).find(n=>n.type==='button'&&n.props['aria-controls']==='request-reply-'+id).props.onClick();host.render();};
 const select=(host,label)=>nodes(host.tree).find(n=>n.type==='label'&&text(n).startsWith(label)).props.children[1];
-const options={links:[{label:'Fixture material 10 mg · lot QA-LOT',url:'https://trybiomod.com/testing/QA-LOT?product=1'}],coas:[{sha256:'a'.repeat(64),productName:'Fixture material',strength:'10 mg',form:'vial',lot:'QA-LOT',reportId:'QA-ORIGINAL',current:true}],codes:[{code:'BM10',percentOff:10}],rules:[{id:'00000000-0000-4000-8000-000000000001',rule:'Sign off as Ash'}],learning:{recent:4,unchanged:3},bridgeSeen:null};
+const options={team:[{email:'logan@example.invalid',name:'Logan',role:'manager'}],links:[{label:'Fixture material 10 mg · lot QA-LOT',url:'https://trybiomod.com/testing/QA-LOT?product=1'}],coas:[{sha256:'a'.repeat(64),productName:'Fixture material',strength:'10 mg',form:'vial',lot:'QA-LOT',reportId:'QA-ORIGINAL',current:true}],codes:[{code:'BM10',percentOff:10}],rules:[{id:'00000000-0000-4000-8000-000000000001',rule:'Sign off as Ash'}],learning:{recent:4,unchanged:3},bridgeSeen:null};
 async function main(){
  const day=86400000,now=Date.now();
  const reqs=[request('new-old','new'),request('new-young','new'),request('answered','in_progress'),request('closed','resolved'),request('junk','spam'),request('came-back','resolved')];
@@ -91,6 +91,21 @@ async function main(){
  assert(text(host.tree).includes('The AI could not finish this draft. Nothing was sent.'));assert(!text(host.tree).includes('bridge_preparation_failed'));
  // Status actions, and no live I/O anywhere.
  nodes(host.tree).find(n=>n.type==='button'&&text(n)==='Mark done').props.onClick();assert.deepEqual(changes.at(-1),['new-young','resolved']);
+ // Delete asks first, moves to Deleted (not All), and Restore brings it back. Forward goes only to a chosen team member.
+ const fwd=[];host=mount({...props,requests:[...reqs,request('gone','deleted')],requestReplies:{},onForward:async input=>{fwd.push(input);return {id:'f1',to:input.to,by:'owner@example.invalid',note:input.note,status:'accepted',created:now};}});
+ await flush(host);
+ filter(host,'All');assert(!rowIds().includes('gone'),'Deleted requests leave All');filter(host,'Deleted');assert.deepEqual(rowIds(),['gone']);
+ openRow(host,'gone');nodes(host.tree).find(n=>n.type==='button'&&text(n)==='Restore').props.onClick();assert.deepEqual(changes.at(-1),['gone','new']);
+ filter(host,'To reply');openRow(host,'new-old');
+ nodes(host.tree).find(n=>n.type==='button'&&text(n)==='Delete').props.onClick();host.render();
+ const before=changes.length;assert(text(host.tree).includes('It moves to Deleted'));assert.equal(changes.length,before,'Delete asks before acting');
+ nodes(host.tree).filter(n=>n.type==='button'&&text(n)==='Delete').at(-1).props.onClick();assert.deepEqual(changes.at(-1),['new-old','deleted']);
+ nodes(host.tree).find(n=>n.type==='button'&&text(n)==='Forward').props.onClick();host.render();
+ const sel=nodes(host.tree).find(n=>n.type==='select'&&nodes(n).some(o=>o.type==='option'&&text(o).includes('team member')));
+ assert(text(sel).includes('logan@example.invalid'));sel.props.onChange({target:{value:'logan@example.invalid'}});host.render();
+ field(host,'forwardNote').props.onChange({target:{value:'Please check the order'}});host.render();
+ nodes(host.tree).filter(n=>n.type==='button'&&text(n)==='Forward').at(-1).props.onClick();await flush(host);
+ assert.deepEqual(fwd,[{id:'new-old',to:'logan@example.invalid',note:'Please check the order'}]);assert(text(host.tree).includes('Forwarded to logan@example.invalid'));
  for(const email of ['a@example.invalid\r\nBcc:x@example.invalid','a@example.invalid,b@example.invalid']){const h=mount({...props,requests:[request('bad','new','contact',{email})],requestReplies:{}});openRow(h,'bad');assert(text(h.tree).includes('no way to reply'));assert(!nodes(h.tree).some(n=>n.type==='textarea'));}
  const escaped=render({...props,requests:[request('escape','new','contact',{name:'<script>Fixture</script>',message:'<b>x</b>'})],requestReplies:{}});assert(!escaped.includes('<script>'));assert(!escaped.includes('<b>x'));
  console.log('PASS: reply desk queue order (oldest unanswered first, customer replies resurface), waiting/done/spam views, learning progress, code insert, COA pick, AI rewrite with draft+instruction+remembered rule, undo, single owner Send, staff draft-only, plain failure text, unsafe addresses blocked. Isolated fixtures, no I/O.');

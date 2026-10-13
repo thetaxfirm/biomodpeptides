@@ -19,7 +19,9 @@ export type ReplySummary = {
 };
 export type PrepareReplyInput = { id: string; mode: 'ai' | 'staff'; body?: string; instruction?: string; expectedRevision: number | null; coaSha256?: string | null; send?: boolean };
 export type DeskCoa = { sha256: string; productName: string; strength: string; form: string; lot: string; reportId: string; current: boolean };
-export type DeskOptions = { links?: { label: string; url: string }[]; coas: DeskCoa[]; codes: { code: string; percentOff: number }[]; rules: { id: string; rule: string }[]; learning: { recent: number; unchanged: number }; bridgeSeen: number | null };
+export type RequestForward = { id: string; to: string; by: string; note: string; status: 'sending' | 'accepted' | 'failed'; created: number };
+export type TeamMember = { email: string; name: string; role: string };
+export type DeskOptions = { team?: TeamMember[]; links?: { label: string; url: string }[]; coas: DeskCoa[]; codes: { code: string; percentOff: number }[]; rules: { id: string; rule: string }[]; learning: { recent: number; unchanged: number }; bridgeSeen: number | null };
 type Props = {
   requests: readonly CustomerRequest[];
   automation?: CoaAutomationReport | null;
@@ -30,13 +32,14 @@ type Props = {
   canSend?: boolean;
   onStatus: (request: CustomerRequest, status: string) => void | Promise<void>;
   onPrepareReply: (input: PrepareReplyInput) => Promise<ReplySummary>;
-  onRefreshReplies?: (ids: string[]) => Promise<Record<string, ReplySummary>>;
+  onRefreshReplies?: (ids: string[]) => Promise<{ replies: Record<string, ReplySummary>; forwards?: Record<string, RequestForward[]> }>;
+  onForward?: (input: { id: string; to: string; note: string }) => Promise<RequestForward>;
   onLoadOptions?: () => Promise<DeskOptions>;
   onSaveRule?: (input: { rule?: string; removeId?: string }) => Promise<DeskOptions>;
 };
 // coa: undefined = keep what the saved reply uses; null = auto-match the request; '' = none; sha = chosen report.
 type Draft = { body: string; instruction: string; revision: number | null; edited: boolean; error: string; message: string; coa?: string | null; undo?: string; remember: boolean };
-type Stage = 'todo' | 'sending' | 'waiting' | 'done' | 'spam';
+type Stage = 'todo' | 'sending' | 'waiting' | 'done' | 'spam' | 'deleted';
 const noReplies: Record<string, ReplySummary> = {};
 const sender = 'research@biomodpeptides.com';
 const DAY = 86400000;
@@ -78,6 +81,7 @@ function stageOf(request: CustomerRequest, reply?: ReplySummary): { stage: Stage
   const lastOut = outgoing.length ? Math.max(...outgoing) : 0;
   const lastIn = Math.max(request.created, ...incoming);
   const customerReplied = lastOut > 0 && lastIn > lastOut;
+  if (request.status === 'deleted') return { stage: 'deleted', label: 'Deleted', since: request.created };
   if (request.status === 'spam') return { stage: 'spam', label: 'Spam', since: request.created };
   if (sendPending(reply)) return { stage: 'sending', label: 'Sending', since: reply!.approvedAt || reply!.updated };
   if (request.status === 'resolved' && !customerReplied) return { stage: 'done', label: 'Done', since: lastOut || request.created };
@@ -98,14 +102,16 @@ function speechRecognition(): (new () => Speech) | null {
   return w.SpeechRecognition || w.webkitSpeechRecognition || null;
 }
 
-export function RequestInbox({ requests, automation, requestReplies = noReplies, busy, dirty, refreshing, canSend = false, onStatus, onPrepareReply, onRefreshReplies, onLoadOptions, onSaveRule }: Props) {
+export function RequestInbox({ requests, automation, requestReplies = noReplies, busy, dirty, refreshing, canSend = false, onStatus, onPrepareReply, onRefreshReplies, onLoadOptions, onSaveRule, onForward }: Props) {
   const [selected, setSelected] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [preparedReplies, setPreparedReplies] = useState<Record<string, ReplySummary>>({});
   const [liveReplies, setLiveReplies] = useState<Record<string, ReplySummary>>({});
+  const [forwards, setForwards] = useState<Record<string, RequestForward[]>>({});
+  const [panel, setPanel] = useState<{ id: string; kind: 'forward' | 'delete'; to: string; note: string; busy: boolean; error: string } | null>(null);
   const [pending, setPending] = useState<Record<string, boolean>>({});
   const [options, setOptions] = useState<DeskOptions | null>(null);
-  const [filter, setFilter] = useState<'todo' | 'waiting' | 'done' | 'spam' | 'all'>('todo');
+  const [filter, setFilter] = useState<'todo' | 'waiting' | 'done' | 'spam' | 'deleted' | 'all'>('todo');
   const [query, setQuery] = useState('');
   const [listening, setListening] = useState<string | null>(null);
   const [rulesOpen, setRulesOpen] = useState(false);
@@ -134,7 +140,7 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
       if (stopped) return;
       const ids = requestIds ? requestIds.split(',') : [];
       if (ids.length && typeof document !== 'undefined' && document.visibilityState !== 'hidden') {
-        try { const fresh = await onRefreshReplies(ids); if (!stopped && mounted.current) setLiveReplies(fresh); } catch { /* keep the last loaded status */ }
+        try { const fresh = await onRefreshReplies(ids); if (!stopped && mounted.current) { setLiveReplies(fresh?.replies || {}); if (fresh?.forwards) setForwards(fresh.forwards); } } catch { /* keep the last loaded status */ }
       }
       if (stopped) return;
       if (mounted.current) setNow(Date.now());
@@ -163,14 +169,14 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
   const disabled = busy || dirty || refreshing;
 
   const rows = requests.map(request => ({ request, reply: replyOf(request.id), ...stageOf(request, replyOf(request.id)) }));
-  const counts = { todo: 0, waiting: 0, done: 0, spam: 0, all: rows.length };
+  const counts = { todo: 0, waiting: 0, done: 0, spam: 0, deleted: 0, all: rows.filter(row => row.stage !== 'deleted').length };
   for (const row of rows) { if (row.stage === 'sending' || row.stage === 'todo') counts.todo++; else counts[row.stage]++; }
   const needle = query.trim().toLowerCase();
-  const shown = rows.filter(row => (filter === 'all' || (filter === 'todo' ? row.stage === 'todo' || row.stage === 'sending' : row.stage === filter))
+  const shown = rows.filter(row => ((filter === 'all' && row.stage !== 'deleted') || (filter === 'todo' ? row.stage === 'todo' || row.stage === 'sending' : row.stage === filter))
     && (!needle || [row.request.id, row.request.kind, ...Object.values(row.request.data).filter(value => typeof value === 'string')].join(' ').toLowerCase().includes(needle)))
     // To reply: oldest first, so nothing waits behind newer mail. Everything else: newest first.
     .sort((a, b) => filter === 'todo' ? a.since - b.since : b.since - a.since);
-  const views = [['todo', 'To reply'], ['waiting', 'Waiting on customer'], ['done', 'Done'], ['spam', 'Spam'], ['all', 'All']] as const;
+  const views = [['todo', 'To reply'], ['waiting', 'Waiting on customer'], ['done', 'Done'], ['spam', 'Spam'], ['all', 'All'], ['deleted', 'Deleted']] as const;
 
   function open(id: string) {
     const reply = replyOf(id);
@@ -241,6 +247,16 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
     speech.current = recognition; setListening(id);
     try { recognition.start(); } catch { setListening(null); speech.current = null; }
   }
+  async function forward(id: string) {
+    if (!panel || panel.kind !== 'forward' || panel.busy || !onForward || !panel.to) return;
+    setPanel({ ...panel, busy: true, error: '' });
+    try {
+      const sent = await onForward({ id, to: panel.to, note: panel.note.trim() });
+      if (!mounted.current) return;
+      setForwards(previous => ({ ...previous, [id]: [...(previous[id] || []), sent] }));
+      setPanel(null);
+    } catch (error) { if (mounted.current) setPanel(current => current && { ...current, busy: false, error: error instanceof Error ? error.message : 'The forward did not go out.' }); }
+  }
   async function saveRule(input: { rule?: string; removeId?: string }) {
     if (!onSaveRule) return;
     try { const next = await onSaveRule(input); if (mounted.current) { setOptions(next); setNewRule(''); } } catch { /* the rules list stays as loaded */ }
@@ -295,7 +311,11 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
         onInsert: snippet => insertAtCursor(active.request.id, snippet),
         onSubmit: (mode, send) => void submit(active.request, mode, send),
         onDictate: () => dictate(active.request),
-        onStatus: status => { if (!disabled) void onStatus(active.request, status); } })
+        onStatus: status => { if (!disabled) { setPanel(null); void onStatus(active.request, status); } },
+        forwards: forwards[active.request.id] || [], team: options?.team || [], canForward: Boolean(onForward),
+        panel: panel?.id === active.request.id ? panel : null,
+        onPanel: next => setPanel(next ? { id: active.request.id, to: '', note: '', busy: false, error: '', ...(panel?.id === active.request.id ? panel : {}), ...next } as any : null),
+        onForward: () => void forward(active.request.id) })
         : <div className={styles.placeholder}><p>Pick a request on the left. The AI has usually written a draft already.</p></div>}
     </div>
   </section>;
@@ -307,8 +327,11 @@ type ConversationProps = {
   bodyField: { current: HTMLTextAreaElement | null };
   onClose: () => void; onEdit: (field: 'body' | 'instruction', value: string) => void; onDraft: (patch: Partial<Draft>) => void; onInsert: (snippet: string) => void;
   onSubmit: (mode: 'ai' | 'staff', send?: boolean) => void; onDictate: () => void; onStatus: (status: string) => void;
+  forwards: RequestForward[]; team: TeamMember[]; canForward: boolean;
+  panel: { kind: 'forward' | 'delete'; to: string; note: string; busy: boolean; error: string } | null;
+  onPanel: (next: Partial<{ kind: 'forward' | 'delete'; to: string; note: string; busy: boolean; error: string }> | null) => void; onForward: () => void;
 };
-function conversation({ row, draft, automation, options, canSend, disabled, listening, preparing, bodyField, now, onClose, onEdit, onDraft, onInsert, onSubmit, onDictate, onStatus }: ConversationProps) {
+function conversation({ row, draft, automation, options, canSend, disabled, listening, preparing, bodyField, now, onClose, onEdit, onDraft, onInsert, onSubmit, onDictate, onStatus, forwards, team, canForward, panel, onPanel, onForward }: ConversationProps) {
   const { request, reply } = row;
   const email = text(request.data.email), canReply = usableEmail(request.data.email);
   const name = text(request.data.name) || email || 'Customer';
@@ -336,11 +359,29 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
       <button type="button" className={styles.back} onClick={onClose}>Back to list</button>
       <div className={styles.who}><h3>{name}</h3><p>{email || 'No email address saved'}{website && <> · <a href={website} target="_blank" rel="noopener noreferrer">Website</a></>}</p></div>
       <div className={styles.paneActions}>
-        {request.status === 'spam' || request.status === 'resolved'
+        {canForward && request.status !== 'deleted' && <button type="button" className={styles.action} aria-expanded={panel?.kind === 'forward'} disabled={disabled} onClick={() => onPanel(panel?.kind === 'forward' ? null : { kind: 'forward', error: '' })}>Forward</button>}
+        {request.status === 'deleted'
+          ? <button type="button" className={styles.action} disabled={disabled} onClick={() => onStatus('new')}>Restore</button>
+          : request.status === 'spam' || request.status === 'resolved'
           ? <button type="button" className={styles.link} disabled={disabled} onClick={() => onStatus('new')}>Reopen</button>
           : <><button type="button" className={styles.action} disabled={disabled} onClick={() => onStatus('resolved')}>Mark done</button><button type="button" className={styles.link} disabled={disabled} onClick={() => onStatus('spam')}>Spam</button></>}
+        {request.status !== 'deleted' && <button type="button" className={styles.link} disabled={disabled} onClick={() => onPanel(panel?.kind === 'delete' ? null : { kind: 'delete', error: '' })}>Delete</button>}
       </div>
     </header>
+    {panel?.kind === 'delete' && <div className={styles.confirm} role="alertdialog" aria-label="Delete this request">
+      <p>Delete this request from the inbox? It moves to Deleted, where you can restore it. Nothing is sent to the customer.</p>
+      <button type="button" className={styles.danger} disabled={disabled} onClick={() => onStatus('deleted')}>Delete</button>
+      <button type="button" className={styles.link} onClick={() => onPanel(null)}>Cancel</button>
+    </div>}
+    {panel?.kind === 'forward' && <div className={styles.forward}>
+      <label><span>Forward to</span><select value={panel.to} disabled={panel.busy} onChange={event => onPanel({ to: event.target.value, error: '' })}>
+        <option value="">{team.length ? 'Choose a team member' : 'No team members yet (add them under Team)'}</option>
+        {team.map(member => <option key={member.email} value={member.email}>{member.name ? member.name + ' · ' : ''}{member.email}{member.role === 'owner' ? ' (owner)' : ''}</option>)}
+      </select></label>
+      <label><span>Note (optional)</span><textarea name="forwardNote" rows={2} maxLength={2000} value={panel.note} disabled={panel.busy} onChange={event => onPanel({ note: event.target.value })} placeholder="e.g. Can you check this order and reply to the customer?"/></label>
+      {panel.error && <p className={styles.error} role="alert">{panel.error}</p>}
+      <div className={styles.sendRow}><button type="button" className={styles.send} disabled={panel.busy || !panel.to} onClick={onForward}>{panel.busy ? 'Forwarding…' : 'Forward'}</button><button type="button" className={styles.link} onClick={() => onPanel(null)}>Cancel</button><span className={styles.note}>The customer is not emailed. Replies to the forward come back to you.</span></div>
+    </div>}
     <p className={styles.subjectLine}><strong>{subject}</strong> <span className={styles.note}>· Ref {request.id.slice(0, 8)}</span></p>
     <ol className={styles.thread} aria-label="Conversation">
       {history.map(message => <li key={message.id} data-direction={message.direction}>
@@ -348,10 +389,12 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
         <p className={styles.message}>{message.body || 'No message text was included.'}</p>
       </li>)}
     </ol>
+    {forwards.length > 0 && <p className={styles.note}>{forwards.map(f => `${f.status === 'failed' ? 'Forward failed to' : 'Forwarded to'} ${f.to} by ${f.by} · ${when(f.created)}`).join(' · ')}</p>}
+    {request.status === 'deleted' && <p className={styles.warning}>This request is deleted. Restore it to reply.</p>}
     {request.kind === 'affiliate' && <p className={styles.note}>Partner application. Agree terms and create the code under Affiliate &amp; promo codes before promising one.</p>}
     {request.kind === 'stock' && <p className={styles.note}>Check stock under Products before promising a date.</p>}
     {previousCoa?.status === 'accepted' && <p className={styles.note}>An earlier automatic COA email to this customer was accepted by the mail provider.</p>}
-    {!canReply ? <p className={styles.warning}>No usable email address was saved, so there is no way to reply.</p> : !draft ? null : <div className={styles.composer}>
+    {request.status === 'deleted' ? null : !canReply ? <p className={styles.warning}>No usable email address was saved, so there is no way to reply.</p> : !draft ? null : <div className={styles.composer}>
       <div className={styles.composeHead}><span>To {reply?.recipient || email}</span><span className={styles.note}>From {sender}</span></div>
       <label className={styles.hidden} htmlFor={`reply-body-${request.id}`}>Reply</label>
       <textarea id={`reply-body-${request.id}`} ref={bodyField} name="replyBody" rows={11} maxLength={12000} value={draft.body} readOnly={writing} disabled={locked}

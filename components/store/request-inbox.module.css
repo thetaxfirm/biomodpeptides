@@ -97,3 +97,10 @@
   .ask textarea { grid-column: 1 / -1; }
   .search { flex-basis: 100%; }
 }
+
+.confirm, .forward { margin: 0 0 14px; padding: 12px 14px; border-radius: 8px; background: var(--soft); display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.confirm p { margin: 0; flex: 1 1 100%; font-size: 14px; }
+.danger { font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; min-height: 40px; padding: 8px 18px; border-radius: 6px; border: 1px solid #8b261e; background: #8b261e; color: white; }
+.forward { display: grid; gap: 10px; }
+.forward label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+.forward select, .forward textarea { font: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: white; color: var(--ink); width: 100%; }

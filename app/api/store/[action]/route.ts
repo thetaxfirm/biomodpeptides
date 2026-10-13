@@ -2,6 +2,7 @@ import { replyBridgeRoute } from '@/lib/request-reply-route';
 import { queryOrders, scanLimit } from '@/lib/order-queue';
 import { publicCatalog } from '@/lib/public-catalog';
 import { batchRecordsFor, batchStatus, batchPath } from '@/lib/testing';
+import { forwardRequest, forwardsFor, teamMembers } from '@/lib/request-forward';
 import { summarizeRequestReplies, prepareRequestReply, replyDeskOptions, saveReplyRule } from '@/lib/request-replies';
 import { adminBatchRecords, validateBatchEdit } from '@/lib/product-batch';
 import { coaHash, loadCoaReports, readCoaOriginal, verifiedCoaAttachment } from '@/lib/coa-delivery';
@@ -35,7 +36,7 @@ export const dynamic = 'force-dynamic';
 // What each admin write needs. An admin action missing here requires the owner.
 const adminActionPermission: Record<string, StaffPermission> = {
     'admin-order': 'orders:fulfill', 'admin-reconcile': 'orders:reconcile',
-    'admin-request': 'requests:write', 'admin-request-reply': 'requests:write', 'admin-reply-desk': 'requests:write', 'admin-request-replies': 'requests:write', 'admin-reply-rule': 'requests:write', 'admin-coa-process': 'requests:write',
+    'admin-request': 'requests:write', 'admin-request-reply': 'requests:write', 'admin-reply-desk': 'requests:write', 'admin-request-replies': 'requests:write', 'admin-reply-rule': 'requests:write', 'admin-request-forward': 'requests:write', 'admin-coa-process': 'requests:write',
     'admin-config': 'store:write', 'admin-product': 'store:write', 'admin-campaign': 'store:write', 'admin-reward': 'store:write', 'admin-coa-config': 'store:write',
     'admin-staff': 'team:manage',
 };
@@ -492,14 +493,19 @@ export async function POST(req: NextRequest, { params }: {
                     return j({ error: status ? (error as Error).message : 'The reply could not be prepared. Refresh and try again.' }, status || 500);
                 }
             }
-            if (action === 'admin-reply-desk') return j({ ...(await replyDeskOptions(runtime())), links: await publicCoaLinks() });
+            if (action === 'admin-reply-desk') return j({ ...(await replyDeskOptions(runtime())), links: await publicCoaLinks(), team: await teamMembers(runtime()) });
             if (action === 'admin-request-replies') {
                 const ids = z.object({ ids: z.array(z.string().uuid()).max(200) }).parse(b).ids;
-                return j({ replies: await summarizeRequestReplies(runtime(), ids) });
+                return j({ replies: await summarizeRequestReplies(runtime(), ids), forwards: await forwardsFor(runtime(), ids) });
+            }
+            if (action === 'admin-request-forward') {
+                const input = z.object({ id: z.string().uuid(), to: z.string().email().max(254), note: z.string().max(2000).optional() }).parse(b);
+                try { const forward = await forwardRequest(runtime(), { requestId: input.id, to: input.to, note: input.note }, actor); return j({ forward, message: 'Forwarded to ' + forward.to + '.' }); }
+                catch (error) { const status = (error as Error & { status?: number }).status; return j({ error: status ? (error as Error).message : 'The forward did not go out.' }, status || 500); }
             }
             if (action === 'admin-reply-rule') {
                 const input = z.object({ rule: z.string().max(500).optional(), removeId: z.string().uuid().optional() }).parse(b);
-                try { await saveReplyRule(runtime(), input, actor); return j({ ...(await replyDeskOptions(runtime())), links: await publicCoaLinks(), message: input.removeId ? 'Rule removed.' : 'Rule saved. The next drafts will follow it.' }); }
+                try { await saveReplyRule(runtime(), input, actor); return j({ ...(await replyDeskOptions(runtime())), links: await publicCoaLinks(), team: await teamMembers(runtime()), message: input.removeId ? 'Rule removed.' : 'Rule saved. The next drafts will follow it.' }); }
                 catch (error) { const status = (error as Error & { status?: number }).status; return j({ error: status ? (error as Error).message : 'The rule could not be saved.' }, status || 500); }
             }
             if (action === 'admin-coa-process') {
@@ -585,7 +591,7 @@ export async function POST(req: NextRequest, { params }: {
             }
             if (action === 'admin-request') {
                 const id = z.string().uuid().parse(b.id);
-                const status = z.enum(['new', 'in_progress', 'resolved', 'spam', 'reviewed']).parse(b.status);
+                const status = z.enum(['new', 'in_progress', 'resolved', 'spam', 'reviewed', 'deleted']).parse(b.status);
                 if (b.expectedStatus === undefined)
                     return j({ error: 'Refresh the request list before changing its status.', code: 'request_refresh_required' }, 400);
                 // Compare the saved value exactly, including legacy statuses. This
