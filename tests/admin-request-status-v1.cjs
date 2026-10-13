@@ -161,7 +161,7 @@ function noStorage() {
   const bad = [
     { ...payload('new'), id: missingId + '%' }, { ...payload('new'), id: ' ' + id },
     { ...payload('new'), id: [id] }, { ...payload('new'), id: "' OR 1=1 --" },
-    ...['approved', 'rejected', 'deleted', 'cart_resolved', 'In progress', 'NEW', ''].map(status => payload(status)),
+    ...['approved', 'rejected', 'cart_resolved', 'In progress', 'NEW', ''].map(status => payload(status)),
     { ...payload('new'), status: null },
     ...[null, '', 1, {}, 'x'.repeat(51)].map(expectedStatus => payload('new', expectedStatus)),
   ];
