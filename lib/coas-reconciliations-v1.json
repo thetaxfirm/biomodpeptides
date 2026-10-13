@@ -11,7 +11,60 @@
       "document_id": "coa-74b222968092",
       "recorded_on": "October 10, 2026 (Pacific)",
       "source_url": "https://alphagradepeptides.com/research-peptide-coa-library/",
-      "source_note": "Supplier-hosted report matching the listed lot. Results apply to the submitted sample. Confirm the lot supplied with your order."
+      "source_note": "Supplier-hosted report matching the listed lot. Results apply to the submitted sample. Confirm the lot supplied with your order.",
+      "reported_compound": "Tesamorelin"
+    },
+    {
+      "product_id": 763,
+      "product_slug": "run-gun-10mg",
+      "product_lot": "501-10-0001",
+      "expected_identity": "Ipamorelin + CJC-1295 No DAC",
+      "reported_compound": "CJC-1295 no DAC/Ipamorelin",
+      "expected_size": "10mg",
+      "previous_document_id": "coa-d7dd5ee0c29d",
+      "document_id": "coa-3c58e1339093",
+      "recorded_on": "October 12, 2026 (Pacific)",
+      "source_url": "https://trybiomod.com/certificates/run-and-gun-10mg-lot-501-10-0001-vanguard-v260304-6-020.pdf",
+      "source_note": "Original laboratory report for the lot printed on the vial label (501-10-0001). Results apply to the submitted sample. Confirm the lot supplied with your order."
+    },
+    {
+      "product_id": 765,
+      "product_slug": "klow-80mg",
+      "product_lot": "503-80-0001",
+      "expected_identity": "BPC-157 + GHK-Cu + TB-500 + KPV",
+      "reported_compound": "KLOW",
+      "expected_size": "80mg",
+      "previous_document_id": "coa-89292ae50f52",
+      "document_id": "coa-19fedb5d7943",
+      "recorded_on": "October 12, 2026 (Pacific)",
+      "source_url": "https://trybiomod.com/certificates/klow-80mg-lot-503-80-0001-vanguard-v260304-6-022.pdf",
+      "source_note": "Original laboratory report for the lot printed on the vial label (503-80-0001), reissued May 10, 2026 after retest. Results apply to the submitted sample. Confirm the lot supplied with your order."
+    },
+    {
+      "product_id": 752,
+      "product_slug": "nad-500mg",
+      "product_lot": "405-500-0001",
+      "expected_identity": "Nicotinamide Adenine Dinucleotide",
+      "reported_compound": "NAD+",
+      "expected_size": "500mg",
+      "previous_document_id": "coa-35a7c1dbe293",
+      "document_id": "coa-7cea36d67eb4",
+      "recorded_on": "October 12, 2026 (Pacific)",
+      "source_url": "https://trybiomod.com/certificates/nad-500mg-lot-405-500-0001-vanguard-v260812-35-007.pdf",
+      "source_note": "Most recent original laboratory report for the lot printed on the vial label (405-500-0001), released August 27, 2026. Results apply to the submitted sample. Confirm the lot supplied with your order."
+    },
+    {
+      "product_id": 759,
+      "product_slug": "epitalon-50mg",
+      "product_lot": "407-50-0001",
+      "expected_identity": "Epitalon Tetrapeptide",
+      "reported_compound": "Epithalon",
+      "expected_size": "50mg",
+      "previous_document_id": "coa-0f1d3daa8cb0",
+      "document_id": "coa-433474a2360e",
+      "recorded_on": "October 12, 2026 (Pacific)",
+      "source_url": "https://trybiomod.com/certificates/epitalon-50mg-lot-407-50-0001-vanguard-v260304-6-016.pdf",
+      "source_note": "Complete original laboratory report for the lot printed on the vial label (407-50-0001), reissued May 10, 2026 after retest; replaces the earlier one-page partial. Results apply to the submitted sample. Confirm the lot supplied with your order."
     }
   ],
   "documents": [
@@ -127,6 +180,528 @@
         "These results apply to the tested portion of the submitted sample. The laboratory did not select the sample and does not establish its authenticity or representativeness of the associated lot/batch.",
         "The report records samples received in acceptable condition and analyses performed under the Vanguard Laboratory Quality Management System. It directs readers to A2LA certificate #6377.01.01 for the scope of accredited tests; no independent accreditation or report-authenticity verification is asserted here.",
         "The chromatographic-purity result is printed as 96.28% + 0.18%. The plus sign is retained as printed; it has not been interpreted as a plus/minus uncertainty.",
+        "Page 2 identifies run 260402. ND means Non-Detect. The table headings use LOQ (ppm); the report separately defines LOD as Limit of Quantification. Original notation is retained.",
+        "The endotoxin asterisk refers to the report's stated pass/fail basis: 5 EU/kg, described there as a USP/FDA threshold, with 350 EU total for a 70 kg adult. This is the laboratory's report-specific footnote, not a recommended human-use limit or a suitability determination.",
+        "The report's Pass labels apply only to its listed sample tests. They do not establish product approval, clinical safety or suitability for human or animal use."
+      ]
+    },
+    {
+      "document_id": "coa-3c58e1339093",
+      "url": "https://trybiomod.com/certificates/run-and-gun-10mg-lot-501-10-0001-vanguard-v260304-6-020.pdf",
+      "filename": "run-and-gun-10mg-lot-501-10-0001-vanguard-v260304-6-020.pdf",
+      "sha256": "3c58e1339093874c2f3ebb24d2962782d415f50aec07dbf6fbda99960a1536e8",
+      "pages": 2,
+      "content_type": "application/pdf",
+      "kind": "certificate_of_analysis",
+      "is_certificate": true,
+      "laboratory_name": "Vanguard Laboratory",
+      "report_to": "BIOMOD PEPTIDES",
+      "sample_name": "CJC-1295 no DAC/Ipamorelin 5 mg/5 mg",
+      "compound": "CJC-1295 no DAC/Ipamorelin",
+      "nominal_amount": "5 mg/5 mg",
+      "batch_number": "501-10-0001",
+      "report_id": "V260304-6 020",
+      "report_date": "4/8/2026",
+      "test_date": null,
+      "issue_date": null,
+      "release_date": null,
+      "sample_received_date": null,
+      "verification_urls": [],
+      "verification_checked": false,
+      "source_hosting": "trybiomod",
+      "source_library_url": null,
+      "extraction_method": "Original PDF text layer and both rendered pages reviewed October 12, 2026 PT; unchanged source bytes retained.",
+      "visual_check_pages": [
+        1,
+        2
+      ],
+      "results": [
+        {
+          "kind": "purity",
+          "analyte": "Chromatographic Purity",
+          "result": ">99.80% + 0.18%",
+          "method": "HPLC-UV/VIS",
+          "unit": "%",
+          "page": 1,
+          "source_url": "https://trybiomod.com/certificates/run-and-gun-10mg-lot-501-10-0001-vanguard-v260304-6-020.pdf"
+        },
+        {
+          "kind": "assay",
+          "analyte": "Assay: CJC-1295",
+          "result": "4.94 mg",
+          "method": "HPLC-UV/VIS",
+          "unit": "mg",
+          "page": 1,
+          "source_url": "https://trybiomod.com/certificates/run-and-gun-10mg-lot-501-10-0001-vanguard-v260304-6-020.pdf"
+        },
+        {
+          "kind": "assay",
+          "analyte": "Assay: Ipamorelin",
+          "result": "5.08 mg",
+          "method": "HPLC-UV/VIS",
+          "unit": "mg",
+          "page": 1,
+          "source_url": "https://trybiomod.com/certificates/run-and-gun-10mg-lot-501-10-0001-vanguard-v260304-6-020.pdf"
+        },
+        {
+          "kind": "heavy_metals",
+          "analyte": "Arsenic (As)",
+          "result": "0.01",
+          "method": "ICP-MS",
+          "unit": "ppm",
+          "page": 2,
+          "loq": "0.01",
+          "source_url": "https://trybiomod.com/certificates/run-and-gun-10mg-lot-501-10-0001-vanguard-v260304-6-020.pdf"
+        },
+        {
+          "kind": "heavy_metals",
+          "analyte": "Cadmium (Cd)",
+          "result": "ND",
+          "method": "ICP-MS",
+          "unit": "ppm",
+          "page": 2,
+          "loq": "0.01",
+          "source_url": "https://trybiomod.com/certificates/run-and-gun-10mg-lot-501-10-0001-vanguard-v260304-6-020.pdf"
+        },
+        {
+          "kind": "heavy_metals",
+          "analyte": "Lead (Pb)",
+          "result": "0.03",
+          "method": "ICP-MS",
+          "unit": "ppm",
+          "page": 2,
+          "loq": "0.02",
+          "source_url": "https://trybiomod.com/certificates/run-and-gun-10mg-lot-501-10-0001-vanguard-v260304-6-020.pdf"
+        },
+        {
+          "kind": "heavy_metals",
+          "analyte": "Mercury (Hg)",
+          "result": "ND",
+          "method": "ICP-MS",
+          "unit": "ppm",
+          "page": 2,
+          "loq": "0.005",
+          "source_url": "https://trybiomod.com/certificates/run-and-gun-10mg-lot-501-10-0001-vanguard-v260304-6-020.pdf"
+        },
+        {
+          "kind": "endotoxins",
+          "analyte": "Endotoxins",
+          "result": "Pass - <5.00 EU/mg*",
+          "method": "LAL",
+          "unit": "EU/mg",
+          "page": 2,
+          "source_url": "https://trybiomod.com/certificates/run-and-gun-10mg-lot-501-10-0001-vanguard-v260304-6-020.pdf"
+        },
+        {
+          "kind": "sterility",
+          "analyte": "Sterility",
+          "result": "Pass - No Growth Detected",
+          "method": "USP <71>",
+          "unit": null,
+          "page": 2,
+          "source_url": "https://trybiomod.com/certificates/run-and-gun-10mg-lot-501-10-0001-vanguard-v260304-6-020.pdf"
+        }
+      ],
+      "report_scope_notes": [
+        "These results apply to the tested portion of the submitted sample. The laboratory did not select the sample and does not establish its authenticity or representativeness of the associated lot/batch.",
+        "The report records samples received in acceptable condition and analyses performed under the Vanguard Laboratory Quality Management System. It directs readers to A2LA certificate #6377.01.01 for the scope of accredited tests; no independent accreditation or report-authenticity verification is asserted here.",
+        "Chromatographic purity is printed with a trailing \"+ 0.18%\". The plus sign is retained as printed; it has not been interpreted as a plus/minus uncertainty.",
+        "Page 2 identifies run 260402. ND means Non-Detect. The table headings use LOQ (ppm); the report separately defines LOD as Limit of Quantification. Original notation is retained.",
+        "The endotoxin asterisk refers to the report's stated pass/fail basis: 5 EU/kg, described there as a USP/FDA threshold, with 350 EU total for a 70 kg adult. This is the laboratory's report-specific footnote, not a recommended human-use limit or a suitability determination.",
+        "The report's Pass labels apply only to its listed sample tests. They do not establish product approval, clinical safety or suitability for human or animal use."
+      ]
+    },
+    {
+      "document_id": "coa-19fedb5d7943",
+      "url": "https://trybiomod.com/certificates/klow-80mg-lot-503-80-0001-vanguard-v260304-6-022.pdf",
+      "filename": "klow-80mg-lot-503-80-0001-vanguard-v260304-6-022.pdf",
+      "sha256": "19fedb5d79430bd1c327a8b3070b8f01eade4403fbe30358478a952b98d07e73",
+      "pages": 2,
+      "content_type": "application/pdf",
+      "kind": "certificate_of_analysis",
+      "is_certificate": true,
+      "laboratory_name": "Vanguard Laboratory",
+      "report_to": "BIOMOD PEPTIDES",
+      "sample_name": "KLOW 80 mg",
+      "compound": "KLOW",
+      "nominal_amount": "80 mg",
+      "batch_number": "503-80-0001",
+      "report_id": "V260304-6 022",
+      "report_date": "5/10/2026",
+      "test_date": null,
+      "issue_date": null,
+      "release_date": null,
+      "sample_received_date": null,
+      "verification_urls": [],
+      "verification_checked": false,
+      "source_hosting": "trybiomod",
+      "source_library_url": null,
+      "extraction_method": "Original PDF text layer and both rendered pages reviewed October 12, 2026 PT; unchanged source bytes retained.",
+      "visual_check_pages": [
+        1,
+        2
+      ],
+      "results": [
+        {
+          "kind": "purity",
+          "analyte": "Chromatographic Purity",
+          "result": ">99.50% + 0.18%",
+          "method": "HPLC-UV/VIS",
+          "unit": "%",
+          "page": 1,
+          "source_url": "https://trybiomod.com/certificates/klow-80mg-lot-503-80-0001-vanguard-v260304-6-022.pdf"
+        },
+        {
+          "kind": "assay",
+          "analyte": "Assay: GHK-Cu",
+          "result": "47.55 mg",
+          "method": "HPLC-UV/VIS",
+          "unit": "mg",
+          "page": 1,
+          "source_url": "https://trybiomod.com/certificates/klow-80mg-lot-503-80-0001-vanguard-v260304-6-022.pdf"
+        },
+        {
+          "kind": "assay",
+          "analyte": "Assay: BPC-157",
+          "result": "11.48 mg",
+          "method": "HPLC-UV/VIS",
+          "unit": "mg",
+          "page": 1,
+          "source_url": "https://trybiomod.com/certificates/klow-80mg-lot-503-80-0001-vanguard-v260304-6-022.pdf"
+        },
+        {
+          "kind": "assay",
+          "analyte": "Assay: TB-500",
+          "result": "10.45 mg",
+          "method": "HPLC-UV/VIS",
+          "unit": "mg",
+          "page": 1,
+          "source_url": "https://trybiomod.com/certificates/klow-80mg-lot-503-80-0001-vanguard-v260304-6-022.pdf"
+        },
+        {
+          "kind": "assay",
+          "analyte": "Assay: KPV",
+          "result": "10.99 mg",
+          "method": "HPLC-UV/VIS",
+          "unit": "mg",
+          "page": 1,
+          "source_url": "https://trybiomod.com/certificates/klow-80mg-lot-503-80-0001-vanguard-v260304-6-022.pdf"
+        },
+        {
+          "kind": "heavy_metals",
+          "analyte": "Arsenic (As)",
+          "result": "0.28",
+          "method": "ICP-MS",
+          "unit": "ppm",
+          "page": 2,
+          "loq": "0.01",
+          "source_url": "https://trybiomod.com/certificates/klow-80mg-lot-503-80-0001-vanguard-v260304-6-022.pdf"
+        },
+        {
+          "kind": "heavy_metals",
+          "analyte": "Cadmium (Cd)",
+          "result": "ND",
+          "method": "ICP-MS",
+          "unit": "ppm",
+          "page": 2,
+          "loq": "0.01",
+          "source_url": "https://trybiomod.com/certificates/klow-80mg-lot-503-80-0001-vanguard-v260304-6-022.pdf"
+        },
+        {
+          "kind": "heavy_metals",
+          "analyte": "Lead (Pb)",
+          "result": "0.05",
+          "method": "ICP-MS",
+          "unit": "ppm",
+          "page": 2,
+          "loq": "0.02",
+          "source_url": "https://trybiomod.com/certificates/klow-80mg-lot-503-80-0001-vanguard-v260304-6-022.pdf"
+        },
+        {
+          "kind": "heavy_metals",
+          "analyte": "Mercury (Hg)",
+          "result": "ND",
+          "method": "ICP-MS",
+          "unit": "ppm",
+          "page": 2,
+          "loq": "0.005",
+          "source_url": "https://trybiomod.com/certificates/klow-80mg-lot-503-80-0001-vanguard-v260304-6-022.pdf"
+        },
+        {
+          "kind": "endotoxins",
+          "analyte": "Endotoxins",
+          "result": "Pass - <5.00 EU/mg*",
+          "method": "LAL",
+          "unit": "EU/mg",
+          "page": 2,
+          "source_url": "https://trybiomod.com/certificates/klow-80mg-lot-503-80-0001-vanguard-v260304-6-022.pdf"
+        },
+        {
+          "kind": "sterility",
+          "analyte": "Sterility",
+          "result": "Pass - No Growth Detected",
+          "method": "USP <71>",
+          "unit": null,
+          "page": 2,
+          "source_url": "https://trybiomod.com/certificates/klow-80mg-lot-503-80-0001-vanguard-v260304-6-022.pdf"
+        }
+      ],
+      "report_scope_notes": [
+        "These results apply to the tested portion of the submitted sample. The laboratory did not select the sample and does not establish its authenticity or representativeness of the associated lot/batch.",
+        "The report records samples received in acceptable condition and analyses performed under the Vanguard Laboratory Quality Management System. It directs readers to A2LA certificate #6377.01.01 for the scope of accredited tests; no independent accreditation or report-authenticity verification is asserted here.",
+        "Chromatographic purity is printed with a trailing \"+ 0.18%\". The plus sign is retained as printed; it has not been interpreted as a plus/minus uncertainty.",
+        "Page 2 identifies run 260402. ND means Non-Detect. The table headings use LOQ (ppm); the report separately defines LOD as Limit of Quantification. Original notation is retained.",
+        "The endotoxin asterisk refers to the report's stated pass/fail basis: 5 EU/kg, described there as a USP/FDA threshold, with 350 EU total for a 70 kg adult. This is the laboratory's report-specific footnote, not a recommended human-use limit or a suitability determination.",
+        "The report's Pass labels apply only to its listed sample tests. They do not establish product approval, clinical safety or suitability for human or animal use."
+      ]
+    },
+    {
+      "document_id": "coa-7cea36d67eb4",
+      "url": "https://trybiomod.com/certificates/nad-500mg-lot-405-500-0001-vanguard-v260812-35-007.pdf",
+      "filename": "nad-500mg-lot-405-500-0001-vanguard-v260812-35-007.pdf",
+      "sha256": "7cea36d67eb49be0764562b399709f18afefe7cef50c232c54605d416803e723",
+      "pages": 2,
+      "content_type": "application/pdf",
+      "kind": "certificate_of_analysis",
+      "is_certificate": true,
+      "laboratory_name": "Vanguard Laboratory",
+      "report_to": "BioMod Peptides",
+      "sample_name": "NAD+ 500 mg",
+      "compound": "NAD+",
+      "nominal_amount": "500 mg",
+      "batch_number": "405-500-0001",
+      "report_id": "V260812-35 007",
+      "report_date": null,
+      "test_date": null,
+      "issue_date": null,
+      "release_date": "8/27/2026",
+      "sample_received_date": null,
+      "verification_urls": [],
+      "verification_checked": false,
+      "source_hosting": "trybiomod",
+      "source_library_url": null,
+      "extraction_method": "Original PDF text layer and both rendered pages reviewed October 12, 2026 PT; unchanged source bytes retained.",
+      "visual_check_pages": [
+        1,
+        2
+      ],
+      "results": [
+        {
+          "kind": "purity",
+          "analyte": "Chromatographic Purity (Total)",
+          "result": ">99.80% + 0.18%",
+          "method": "HPLC-UV/VIS",
+          "unit": "%",
+          "page": 1,
+          "source_url": "https://trybiomod.com/certificates/nad-500mg-lot-405-500-0001-vanguard-v260812-35-007.pdf"
+        },
+        {
+          "kind": "purity",
+          "analyte": "Chromatographic Purity (NAD+)",
+          "result": "94.59% + 0.18%",
+          "method": "HPLC-UV/VIS",
+          "unit": "%",
+          "page": 1,
+          "source_url": "https://trybiomod.com/certificates/nad-500mg-lot-405-500-0001-vanguard-v260812-35-007.pdf"
+        },
+        {
+          "kind": "other",
+          "analyte": "Chromatographic Purity (Nicotinamide)",
+          "result": "5.41% + 0.18%",
+          "method": "HPLC-UV/VIS",
+          "unit": "%",
+          "page": 1,
+          "source_url": "https://trybiomod.com/certificates/nad-500mg-lot-405-500-0001-vanguard-v260812-35-007.pdf"
+        },
+        {
+          "kind": "assay",
+          "analyte": "Quantity: NAD+",
+          "result": "552 mg",
+          "method": "HPLC-UV/VIS",
+          "unit": "mg",
+          "page": 1,
+          "source_url": "https://trybiomod.com/certificates/nad-500mg-lot-405-500-0001-vanguard-v260812-35-007.pdf"
+        },
+        {
+          "kind": "heavy_metals",
+          "analyte": "Arsenic (As)",
+          "result": "0.02",
+          "method": "ICP-MS",
+          "unit": "ppm",
+          "page": 2,
+          "loq": "0.01",
+          "source_url": "https://trybiomod.com/certificates/nad-500mg-lot-405-500-0001-vanguard-v260812-35-007.pdf"
+        },
+        {
+          "kind": "heavy_metals",
+          "analyte": "Cadmium (Cd)",
+          "result": "ND",
+          "method": "ICP-MS",
+          "unit": "ppm",
+          "page": 2,
+          "loq": "0.01",
+          "source_url": "https://trybiomod.com/certificates/nad-500mg-lot-405-500-0001-vanguard-v260812-35-007.pdf"
+        },
+        {
+          "kind": "heavy_metals",
+          "analyte": "Lead (Pb)",
+          "result": "0.11",
+          "method": "ICP-MS",
+          "unit": "ppm",
+          "page": 2,
+          "loq": "0.01",
+          "source_url": "https://trybiomod.com/certificates/nad-500mg-lot-405-500-0001-vanguard-v260812-35-007.pdf"
+        },
+        {
+          "kind": "heavy_metals",
+          "analyte": "Mercury (Hg)",
+          "result": "ND",
+          "method": "ICP-MS",
+          "unit": "ppm",
+          "page": 2,
+          "loq": "0.005",
+          "source_url": "https://trybiomod.com/certificates/nad-500mg-lot-405-500-0001-vanguard-v260812-35-007.pdf"
+        },
+        {
+          "kind": "endotoxins",
+          "analyte": "Endotoxins",
+          "result": "Pass - <5.00 EU/mg*",
+          "method": "LAL",
+          "unit": "EU/mg",
+          "page": 2,
+          "source_url": "https://trybiomod.com/certificates/nad-500mg-lot-405-500-0001-vanguard-v260812-35-007.pdf"
+        },
+        {
+          "kind": "sterility",
+          "analyte": "Sterility",
+          "result": "Pass - No Growth Detected",
+          "method": "USP <71>",
+          "unit": null,
+          "page": 2,
+          "source_url": "https://trybiomod.com/certificates/nad-500mg-lot-405-500-0001-vanguard-v260812-35-007.pdf"
+        }
+      ],
+      "report_scope_notes": [
+        "These results apply to the tested portion of the submitted sample. The laboratory did not select the sample and does not establish its authenticity or representativeness of the associated lot/batch.",
+        "The report records samples received in acceptable condition and analyses performed under the Vanguard Laboratory Quality Management System. It directs readers to A2LA certificate #6377.01.01 for the scope of accredited tests; no independent accreditation or report-authenticity verification is asserted here.",
+        "Chromatographic purity is printed with a trailing \"+ 0.18%\". The plus sign is retained as printed; it has not been interpreted as a plus/minus uncertainty.",
+        "Page 2 identifies run 260825b. ND means Non-Detect. The table headings use LOQ (ppm); the report separately defines LOD as Limit of Quantification. Original notation is retained.",
+        "The endotoxin asterisk refers to the report's stated pass/fail basis: 5 EU/kg, described there as a USP/FDA threshold, with 350 EU total for a 70 kg adult. This is the laboratory's report-specific footnote, not a recommended human-use limit or a suitability determination.",
+        "The report's Pass labels apply only to its listed sample tests. They do not establish product approval, clinical safety or suitability for human or animal use."
+      ]
+    },
+    {
+      "document_id": "coa-433474a2360e",
+      "url": "https://trybiomod.com/certificates/epitalon-50mg-lot-407-50-0001-vanguard-v260304-6-016.pdf",
+      "filename": "epitalon-50mg-lot-407-50-0001-vanguard-v260304-6-016.pdf",
+      "sha256": "433474a2360ee2c14116138cc206507660dd1785eaf0d8fad82e628398406d74",
+      "pages": 2,
+      "content_type": "application/pdf",
+      "kind": "certificate_of_analysis",
+      "is_certificate": true,
+      "laboratory_name": "Vanguard Laboratory",
+      "report_to": "BIOMOD PEPTIDES",
+      "sample_name": "Epithalon 50 mg",
+      "compound": "Epithalon",
+      "nominal_amount": "50 mg",
+      "batch_number": "407-50-0001",
+      "report_id": "V260304-6 016",
+      "report_date": "5/10/2026",
+      "test_date": null,
+      "issue_date": null,
+      "release_date": null,
+      "sample_received_date": null,
+      "verification_urls": [],
+      "verification_checked": false,
+      "source_hosting": "trybiomod",
+      "source_library_url": null,
+      "extraction_method": "Original PDF text layer and both rendered pages reviewed October 12, 2026 PT; unchanged source bytes retained.",
+      "visual_check_pages": [
+        1,
+        2
+      ],
+      "results": [
+        {
+          "kind": "purity",
+          "analyte": "Chromatographic Purity",
+          "result": "97.05% + 0.18%",
+          "method": "HPLC-UV/VIS",
+          "unit": "%",
+          "page": 1,
+          "source_url": "https://trybiomod.com/certificates/epitalon-50mg-lot-407-50-0001-vanguard-v260304-6-016.pdf"
+        },
+        {
+          "kind": "assay",
+          "analyte": "Assay",
+          "result": "54.27 mg",
+          "method": "HPLC-UV/VIS",
+          "unit": "mg",
+          "page": 1,
+          "source_url": "https://trybiomod.com/certificates/epitalon-50mg-lot-407-50-0001-vanguard-v260304-6-016.pdf"
+        },
+        {
+          "kind": "heavy_metals",
+          "analyte": "Arsenic (As)",
+          "result": "ND",
+          "method": "ICP-MS",
+          "unit": "ppm",
+          "page": 2,
+          "loq": "0.01",
+          "source_url": "https://trybiomod.com/certificates/epitalon-50mg-lot-407-50-0001-vanguard-v260304-6-016.pdf"
+        },
+        {
+          "kind": "heavy_metals",
+          "analyte": "Cadmium (Cd)",
+          "result": "ND",
+          "method": "ICP-MS",
+          "unit": "ppm",
+          "page": 2,
+          "loq": "0.01",
+          "source_url": "https://trybiomod.com/certificates/epitalon-50mg-lot-407-50-0001-vanguard-v260304-6-016.pdf"
+        },
+        {
+          "kind": "heavy_metals",
+          "analyte": "Lead (Pb)",
+          "result": "0.04",
+          "method": "ICP-MS",
+          "unit": "ppm",
+          "page": 2,
+          "loq": "0.02",
+          "source_url": "https://trybiomod.com/certificates/epitalon-50mg-lot-407-50-0001-vanguard-v260304-6-016.pdf"
+        },
+        {
+          "kind": "heavy_metals",
+          "analyte": "Mercury (Hg)",
+          "result": "ND",
+          "method": "ICP-MS",
+          "unit": "ppm",
+          "page": 2,
+          "loq": "0.005",
+          "source_url": "https://trybiomod.com/certificates/epitalon-50mg-lot-407-50-0001-vanguard-v260304-6-016.pdf"
+        },
+        {
+          "kind": "endotoxins",
+          "analyte": "Endotoxins",
+          "result": "Pass - <5.00 EU/mg*",
+          "method": "LAL",
+          "unit": "EU/mg",
+          "page": 2,
+          "source_url": "https://trybiomod.com/certificates/epitalon-50mg-lot-407-50-0001-vanguard-v260304-6-016.pdf"
+        },
+        {
+          "kind": "sterility",
+          "analyte": "Sterility",
+          "result": "Pass - No Growth Detected",
+          "method": "USP <71>",
+          "unit": null,
+          "page": 2,
+          "source_url": "https://trybiomod.com/certificates/epitalon-50mg-lot-407-50-0001-vanguard-v260304-6-016.pdf"
+        }
+      ],
+      "report_scope_notes": [
+        "These results apply to the tested portion of the submitted sample. The laboratory did not select the sample and does not establish its authenticity or representativeness of the associated lot/batch.",
+        "The report records samples received in acceptable condition and analyses performed under the Vanguard Laboratory Quality Management System. It directs readers to A2LA certificate #6377.01.01 for the scope of accredited tests; no independent accreditation or report-authenticity verification is asserted here.",
+        "Chromatographic purity is printed with a trailing \"+ 0.18%\". The plus sign is retained as printed; it has not been interpreted as a plus/minus uncertainty.",
         "Page 2 identifies run 260402. ND means Non-Detect. The table headings use LOQ (ppm); the report separately defines LOD as Limit of Quantification. Original notation is retained.",
         "The endotoxin asterisk refers to the report's stated pass/fail basis: 5 EU/kg, described there as a USP/FDA threshold, with 350 EU total for a 70 kg adult. This is the laboratory's report-specific footnote, not a recommended human-use limit or a suitability determination.",
         "The report's Pass labels apply only to its listed sample tests. They do not establish product approval, clinical safety or suitability for human or animal use."

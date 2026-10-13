@@ -1,6 +1,6 @@
 // Server only: resolve approved report associations without moving private originals into public data.
 import { products as sourceProducts, productFormat, type Product } from './catalog';
-import { batchFor, certificateFor, laboratoryDocuments } from './testing';
+import { batchFor, certificateFor, laboratoryDocuments, normalizedStrength } from './testing';
 import { loadCoaReports, type OriginalCoaMetadata, type CoaBatchAssociation } from './coa-delivery';
 
 export type ProductBatch = { lot: string | null; reportRef: string | null; coaAvailable: boolean };
@@ -32,7 +32,6 @@ function publicDocuments(product: Product) {
     return laboratoryDocuments.filter(d => ids.has(d.document_id) && d.is_certificate === true && typeof d.sha256 === 'string' && /^[a-f0-9]{64}$/.test(d.sha256) && cleanLot(d.batch_number) && typeof d.report_id === 'string' && d.report_id && typeof d.filename === 'string' && /\.pdf$/i.test(d.filename) && typeof d.url === 'string' && /^https:\/\//.test(d.url));
 }
 const normalizedName = (value: unknown) => typeof value === 'string' ? value.toLowerCase().replace(/[\s_-]/g, '') : '';
-const normalizedStrength = (value: unknown) => typeof value === 'string' ? value.toLowerCase().replace(/\s/g, '').replace(/\/vial$/, '') : '';
 function publicIdentityEligible(product: Product, document: any) {
     if (productFormat(product) !== 'Vial' || product.categories.some(c => c.slug !== 'research-compounds') || product.sizes.length !== 1) return false;
     const record = batchFor(product.id), names = [product.name, product.identity];

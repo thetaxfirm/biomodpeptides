@@ -3,6 +3,12 @@ import additions from './coas-additions-v1.json';
 import reconciliations from './coas-reconciliations-v1.json';
 import { products, type Product } from './catalog';
 export const laboratoryDocuments = [...source.documents, ...reconciliations.documents] as any[];
+// Nominal strength as printed: "50mg / vial" is 50mg, and a blend printed "5 mg/5 mg" is its 10mg total.
+export const normalizedStrength = (value: unknown) => {
+  if (typeof value !== 'string') return '';
+  const compact = value.toLowerCase().replace(/\s/g, '').replace(/\/vial$/, ''), parts = compact.split('/');
+  return parts.length > 1 && parts.every(part => /^\d+(?:\.\d+)?mg$/.test(part)) ? parts.reduce((sum, part) => sum + Number(part.slice(0, -2)), 0) + 'mg' : compact;
+};
 export const batchRecords = [...source.records, ...additions].filter(record => products.some(product => product.id === record.product_id)).map(record => {
   // A reviewed certificate association is specific to the source record, product
   // identity, size and listed lot. Future catalog or source changes fail closed.
@@ -11,7 +17,7 @@ export const batchRecords = [...source.records, ...additions].filter(record => p
   const product = products.find(item => item.id === review.product_id);
   const document = reconciliations.documents.find(item => item.document_id === review.document_id);
   if (!product || record.public_identity !== review.expected_identity || product.slug !== review.product_slug || product.identity !== review.expected_identity || product.sizes.length !== 1 || product.sizes[0] !== review.expected_size ||
-      !document?.is_certificate || document.report_to !== 'BIOMOD PEPTIDES' || document.compound !== review.expected_identity || document.nominal_amount.replace(/\s/g, '') !== review.expected_size || document.batch_number !== review.product_lot) return record;
+      !document?.is_certificate || document.report_to.toUpperCase() !== 'BIOMOD PEPTIDES' || document.compound !== review.reported_compound || normalizedStrength(document.nominal_amount) !== normalizedStrength(review.expected_size) || document.batch_number !== review.product_lot) return record;
   return { ...record, document_id: document.document_id, coa_pdf_url: document.url, hub_coa_link_url: document.url,
     has_certificate_pdf: true, certificate_lot: document.batch_number, lot_match: 'matches', coa_status: 'Matching-lot certificate',
     source_url: review.source_url, verification_urls: document.verification_urls, review_issues: document.report_scope_notes,

@@ -30,7 +30,8 @@ const row=async product=>(await batch.adminBatchRecords(db,[product]))[0];
    const a=initialAdmin.find(a=>a.productId===item.id);assert.equal(a.reportRef,null);assert.equal(a.attached,null);assert(a.choices.every(c=>!c.eligible));
   }
  }
- assert(withheld>=5&&available>0,'Both matched and legacy mismatched source records are exercised');
+ // KLOW, NAD+ and Run & Gun now carry label-lot reconciliations; Selank and Semax remain legacy mismatches.
+ assert(withheld>=2&&available>0,'Both matched and legacy mismatched source records are exercised');
  const old=products.find(item=>item.slug==='selank'), oldRecord=testing.batchFor(old.id), oldDoc=testing.certificateFor(oldRecord);
  // Even a forged or stale persisted available flag cannot publish the wrong lot.
  save(old,{lot:oldRecord.product_lot,reportRef:'public:'+oldDoc.document_id,coaAvailable:true});

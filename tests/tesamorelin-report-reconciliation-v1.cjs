@@ -44,9 +44,11 @@ assert.equal(oldDoc.report_id, 'COA-2026-956704');
 assert.equal(reportedResult(oldDoc, 'purity'), '99.76%');
 assert.equal(reportedResult(oldDoc, 'assay'), '10.43 mg');
 assert.deepEqual(laboratoryDocuments.slice(0, source.documents.length), source.documents, 'Every historical laboratory document is retained without rewriting');
-assert.equal(laboratoryDocuments.length, source.documents.length + 1);
+assert.equal(laboratoryDocuments.length, source.documents.length + reconciliations.documents.length);
 assert.equal(batchRecords.length, [...source.records, ...additions].filter(r => products.some(p => p.id === r.product_id)).length, 'No extra product record or duplicate current row');
-for (const r of batchRecords.filter(r => r.product_id !== 755)) {
+// Other reviewed label-lot reconciliations have their own regression; every other record stays as sourced.
+const reconciledIds = new Set(reconciliations.reconciliations.map(item => item.product_id));
+for (const r of batchRecords.filter(r => !reconciledIds.has(r.product_id))) {
   assert.deepEqual(r, [...source.records, ...additions].find(s => s.product_id === r.product_id), 'Unrelated batch record unchanged: ' + r.product_id);
 }
 for (const key of ['product_id', 'product_slug', 'public_identity', 'sku', 'cas', 'product_lot', 'manufactured_date', 'expiration_date', 'product_facts']) {
@@ -82,7 +84,7 @@ for (const [name, value] of [['Certificate lot', '301-10-0001'], ['Purity (repor
   assert.equal(properties.find(p => p.name === name).value, value);
 }
 assert.equal(properties.find(p => p.name === 'Certificate of analysis').url, url);
-for (const slug of ['nad-500mg', 'selank', 'semax', 'kpv-10mg', 'mots-c-40mg', 'ss-31-50mg']) assert.deepEqual(certificateProperties(products.find(p => p.slug === slug).id), [], slug + ': unresolved evidence still publishes no certificate results');
+for (const slug of ['selank', 'semax', 'kpv-10mg', 'mots-c-40mg', 'ss-31-50mg']) assert.deepEqual(certificateProperties(products.find(p => p.slug === slug).id), [], slug + ': unresolved evidence still publishes no certificate results');
 const findRows = q => batchRecords.filter(r => batchMatchesSearch(r, products.find(p => p.id === r.product_id), q));
 for (const q of ['V260304-6 012', 'Tesamorelin 10mg V260304-6 012', '301-10-0001', 'BM-LYO-012']) assert.deepEqual(findRows(q).map(r => r.product_id), [755], q);
 assert(!findRows('COA-2026-956704').includes(current), 'Historical report ID does not masquerade as the current certificate');
