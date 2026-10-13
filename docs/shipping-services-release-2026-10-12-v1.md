@@ -18,8 +18,8 @@ Until the owner saves the panel once, the previous tier behavior stays live unch
 
 ## Verification
 
-- `npm run check:release`: TypeScript and 65 isolated suites. New: `admin-shipping-services-ui-v1.cjs` (actual component, save payload, verdict states) and `shipping-services-v1.cjs` (quote, selection, payment handoff, saved order, label match, stale price/off-service refusal, free minimum, live check, policy copy). Replaced `admin-shipping-settings-ui-v1.cjs`, whose tier UI no longer exists.
-- `BIOMOD_DEPLOY=true npm run build` passed.
+- `npm run check:release`: TypeScript and 64 isolated suites. New: `admin-shipping-services-ui-v1.cjs` (actual component, save payload, verdict states) and `shipping-services-v1.cjs` (quote, selection, payment handoff, saved order, label match, stale price/off-service refusal, free minimum, live check, policy copy). Replaced `admin-shipping-settings-ui-v1.cjs`, whose tier UI no longer exists.
+- `BIOMOD_DEPLOY=true npm run build` passed. Built-Worker tests `shipping-options-worker-v1.mjs` and new `shipping-services-worker-v1.mjs` (save, read-back, live check, checkout, store-settings preservation, change history) passed on local D1 with synthetic providers.
 - Component exercised in a local browser with synthetic rates: desktop and 375px, edit extra and name, save, green result. Synthetic prices only.
 
 Deployment version and live checks are recorded below after release.
