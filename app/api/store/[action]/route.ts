@@ -501,7 +501,7 @@ export async function POST(req: NextRequest, { params }: {
             if (action === 'admin-request-forward') {
                 const input = z.object({ id: z.string().uuid(), to: z.string().email().max(254), note: z.string().max(2000).optional() }).parse(b);
                 try { const forward = await forwardRequest(runtime(), { requestId: input.id, to: input.to, note: input.note }, actor); return j({ forward, message: 'Forwarded to ' + forward.to + '.' }); }
-                catch (error) { const status = (error as Error & { status?: number }).status; return j({ error: status ? (error as Error).message : 'The forward did not go out.' }, status || 500); }
+                catch (error) { const status = (error as Error & { status?: number }).status; return j({ error: status ? (error as Error).message : 'Email status unconfirmed. Check the mail provider before retrying.' }, status || 500); }
             }
             if (action === 'admin-reply-rule') {
                 const input = z.object({ rule: z.string().max(500).optional(), removeId: z.string().uuid().optional() }).parse(b);

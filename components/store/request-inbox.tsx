@@ -19,7 +19,7 @@ export type ReplySummary = {
 };
 export type PrepareReplyInput = { id: string; mode: 'ai' | 'staff'; body?: string; instruction?: string; expectedRevision: number | null; coaSha256?: string | null; send?: boolean };
 export type DeskCoa = { sha256: string; productName: string; strength: string; form: string; lot: string; reportId: string; current: boolean };
-export type RequestForward = { id: string; to: string; by: string; note: string; status: 'sending' | 'accepted' | 'failed'; created: number };
+export type RequestForward = { id: string; to: string; by: string; note: string; status: 'sending' | 'unknown' | 'accepted' | 'failed'; created: number };
 export type TeamMember = { email: string; name: string; role: string };
 export type DeskOptions = { team?: TeamMember[]; links?: { label: string; url: string }[]; coas: DeskCoa[]; codes: { code: string; percentOff: number }[]; rules: { id: string; rule: string }[]; learning: { recent: number; unchanged: number }; bridgeSeen: number | null };
 type Props = {
@@ -256,7 +256,7 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
       if (!mounted.current) return;
       setForwards(previous => ({ ...previous, [id]: [...(previous[id] || []), sent] }));
       setPanel(null);
-    } catch (error) { if (mounted.current) setPanel(current => current && { ...current, busy: false, error: error instanceof Error ? error.message : 'The forward did not go out.' }); }
+    } catch (error) { if (mounted.current) setPanel(current => current && { ...current, busy: false, error: error instanceof Error ? error.message : 'Email status unconfirmed. Check the mail provider before retrying.' }); }
   }
   async function saveRule(input: { rule?: string; removeId?: string }) {
     if (!onSaveRule) return;
@@ -392,7 +392,7 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
     </ol>
     {(() => {
       // The full record of this request: received, replies (and PDFs) sent, forwards, archive/spam/delete/restore.
-      const local = forwards.filter(f => !activity.some(a => a.at === f.created)).map(f => ({ at: f.created, text: `${f.status === 'failed' ? 'Forward failed to' : 'Forwarded to'} ${f.to} by ${f.by}` }));
+      const local = forwards.filter(f => !activity.some(a => a.at === f.created)).map(f => ({ at: f.created, text: `${f.status === 'failed' ? 'Forward failed to' : f.status === 'accepted' ? 'Forwarded to' : 'Forward status unconfirmed to'} ${f.to} by ${f.by}` }));
       const items = [{ at: request.created, text: 'Received from the website' }, ...activity, ...local].sort((a, b) => a.at - b.at);
       return <details className={styles.activity} open={row.stage === 'done' || row.stage === 'waiting' || row.stage === 'deleted'}><summary>Activity ({items.length})</summary><ol>{items.map((item, index) => <li key={index}><span className={styles.meta}>{when(item.at)}</span> {item.text}</li>)}</ol></details>;
     })()}

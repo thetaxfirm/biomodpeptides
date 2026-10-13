@@ -106,6 +106,18 @@ async function main(){
  field(host,'forwardNote').props.onChange({target:{value:'Please check the order'}});host.render();
  nodes(host.tree).filter(n=>n.type==='button'&&text(n)==='Forward').at(-1).props.onClick();await flush(host);
  assert.deepEqual(fwd,[{id:'new-old',to:'logan@example.invalid',note:'Please check the order'}]);assert(text(host.tree).includes('Forwarded to logan@example.invalid'));
+
+ // A refreshed unresolved forward is not described as forwarded in the actual component.
+ const savedDocument=global.document,savedSetTimeout=global.setTimeout,savedClearTimeout=global.clearTimeout,ticks=[];
+ global.document={visibilityState:'visible'};global.setTimeout=fn=>{ticks.push(fn);return{unref(){}}};global.clearTimeout=()=>{};
+ try {
+  host=mount({...props,requests:[reqs[0]],requestReplies:{},onRefreshReplies:async()=>({replies:{},forwards:{'new-old':[{id:'unknown-forward',to:'logan@example.invalid',by:'owner@example.invalid',note:'',status:'unknown',created:now+1}]}})});
+  await ticks.shift()();await flush(host);openRow(host,'new-old');await flush(host);
+  assert(text(host.tree).includes('Forward status unconfirmed to logan@example.invalid'));
+  assert(!text(host.tree).includes('Forwarded to logan@example.invalid'),'An unknown send is never shown as a successful forward');
+  host.unmount();
+ } finally {global.document=savedDocument;global.setTimeout=savedSetTimeout;global.clearTimeout=savedClearTimeout;}
+
  for(const email of ['a@example.invalid\r\nBcc:x@example.invalid','a@example.invalid,b@example.invalid']){const h=mount({...props,requests:[request('bad','new','contact',{email})],requestReplies:{}});openRow(h,'bad');assert(text(h.tree).includes('no way to reply'));assert(!nodes(h.tree).some(n=>n.type==='textarea'));}
  const escaped=render({...props,requests:[request('escape','new','contact',{name:'<script>Fixture</script>',message:'<b>x</b>'})],requestReplies:{}});assert(!escaped.includes('<script>'));assert(!escaped.includes('<b>x'));
  console.log('PASS: reply desk queue order (oldest unanswered first, customer replies resurface), waiting/done/spam views, learning progress, code insert, COA pick, AI rewrite with draft+instruction+remembered rule, undo, single owner Send, staff draft-only, plain failure text, unsafe addresses blocked. Isolated fixtures, no I/O.');

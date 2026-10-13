@@ -3,7 +3,7 @@
 import { coaEmail, coaSender } from './coa-delivery';
 type Env = Record<string, string | undefined> & { DB: D1Database };
 type Actor = { email: string; role: string };
-export type RequestForward = { id: string; to: string; by: string; note: string; status: 'sending' | 'accepted' | 'failed'; created: number };
+export type RequestForward = { id: string; to: string; by: string; note: string; status: 'sending' | 'unknown' | 'accepted' | 'failed'; created: number };
 const DAILY_CAP = 100;
 const fail = (message: string, status = 409): never => { throw Object.assign(new Error(message), { status }); };
 const owners = (env: Env) => (env.STORE_ADMIN_EMAILS || '').split(',').map(v => v.trim().toLowerCase()).filter(Boolean);
@@ -20,11 +20,12 @@ export async function forwardsFor(env: Env, ids: string[]): Promise<Record<strin
     const chunk = unique.slice(i, i + 60);
     try {
       const rows = (await env.DB.prepare(`SELECT id,request_id,to_email,by_email,note,status,created FROM request_forwards WHERE request_id IN (${chunk.map(() => '?').join(',')}) ORDER BY created`).bind(...chunk).all<any>()).results;
-      for (const r of rows) (out[r.request_id] ||= []).push({ id: r.id, to: r.to_email, by: r.by_email, note: r.note, status: r.status, created: r.created });
+      for (const r of rows) (out[r.request_id] ||= []).push({ id: r.id, to: r.to_email, by: r.by_email, note: r.note, status: r.status === 'sending' ? 'unknown' : r.status, created: r.created });
     } catch { /* table not migrated yet */ }
   }
   return out;
 }
+const unconfirmed = 'Email status unconfirmed. Check the mail provider before retrying.';
 const text = (v: unknown) => typeof v === 'string' ? v : '';
 export async function forwardRequest(env: Env, input: { requestId: string; to: string; note?: string }, actor: Actor, deps: { fetch?: typeof fetch; now?: () => number } = {}): Promise<RequestForward> {
   if (!['owner', 'manager', 'support'].includes(actor.role)) fail('Forwarding is not permitted.', 403);
@@ -56,14 +57,23 @@ export async function forwardRequest(env: Env, input: { requestId: string; to: s
     'Replying to this email reaches ' + actor.email + ', not the customer.',
   ].join('\n');
   const id = crypto.randomUUID();
-  await env.DB.prepare("INSERT INTO request_forwards(id,request_id,to_email,by_email,note,status,created) VALUES(?,?,?,?,?,'sending',?)").bind(id, input.requestId, to, actor.email, note, now).run();
-  let status: RequestForward['status'] = 'failed', providerId: string | null = null;
+  // Keep an unresolved attempt locked until its provider outcome is known. The
+  // conditional insert is atomic, including simultaneous clicks by different staff.
+  // Existing 'sending' rows also fail closed after a crash or an older uncertain send.
+  const claimed = await env.DB.prepare("INSERT INTO request_forwards(id,request_id,to_email,by_email,note,status,created) SELECT ?,?,?,?,?,'sending',? WHERE NOT EXISTS (SELECT 1 FROM request_forwards WHERE request_id=? AND to_email=? AND status='sending')").bind(id, input.requestId, to, actor.email, note, now, input.requestId, to).run();
+  if (!claimed.meta.changes) fail(unconfirmed);
+  let status: 'sending' | 'accepted' | 'failed' = 'sending', providerId: string | null = null;
   try {
     const response = await (deps.fetch || fetch)('https://api.resend.com/emails', { method: 'POST', headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json', 'Idempotency-Key': 'request-forward-' + id }, body: JSON.stringify({ from: sender, to: [to], reply_to: actor.email, subject, text: body }), redirect: 'manual', signal: AbortSignal.timeout(10000) });
-    if (response.ok) { const out = await response.json() as { id?: unknown }; if (typeof out.id === 'string') { status = 'accepted'; providerId = out.id.slice(0, 100); } }
-  } catch { status = 'failed'; }
-  await env.DB.prepare('UPDATE request_forwards SET status=?,provider_id=? WHERE id=?').bind(status, providerId, id).run();
-  if (status === 'failed') fail('The forward did not go out. Try again in a minute.', 502);
+    if (response.ok) { const out = await response.json() as { id?: unknown }; if (typeof out.id === 'string' && /^[a-f0-9-]{36}$/i.test(out.id)) { status = 'accepted'; providerId = out.id; } }
+    // Only explicit client rejections establish that this attempt was not accepted.
+    // Timeouts, conflicting idempotency results, 5xx, and unreadable responses are unknown.
+    else if (response.status >= 400 && response.status < 500 && ![408, 409].includes(response.status)) status = 'failed';
+  } catch { /* A lost acknowledgement cannot establish whether the email was accepted. */ }
+  try { await env.DB.prepare('UPDATE request_forwards SET status=?,provider_id=? WHERE id=?').bind(status, providerId, id).run(); }
+  catch { fail(unconfirmed, 502); } // Provider may have accepted; the durable lock remains unresolved.
+  if (status === 'sending') fail(unconfirmed, 502);
+  if (status === 'failed') fail('The email provider rejected the forward. Correct the issue and try again.', 502);
   return { id, to: to!, by: actor.email, note, status, created: now };
 }
 
@@ -95,7 +105,7 @@ export async function activityFor(env: Env, ids: string[]): Promise<Record<strin
         add(m.request_id, m.created, `Reply sent${by ? ' by ' + by : ''}${m.attachment_hash ? ' with PDF ' + (file || 'report') : ''}`);
       }
     } catch { /* no replies yet */ }
-    for (const [id, list] of Object.entries(await forwardsFor(env, chunk))) for (const f of list) add(id, f.created, `${f.status === 'failed' ? 'Forward failed to' : 'Forwarded to'} ${f.to} by ${f.by}${f.note ? ': "' + f.note.slice(0, 140) + '"' : ''}`);
+    for (const [id, list] of Object.entries(await forwardsFor(env, chunk))) for (const f of list) add(id, f.created, `${f.status === 'failed' ? 'Forward failed to' : f.status === 'accepted' ? 'Forwarded to' : 'Forward status unconfirmed to'} ${f.to} by ${f.by}${f.note ? ': "' + f.note.slice(0, 140) + '"' : ''}`);
   }
   for (const list of Object.values(out)) list.sort((a, b) => a.at - b.at);
   return out;
