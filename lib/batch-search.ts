@@ -1,6 +1,6 @@
 import type { Product } from './catalog';
 import { productSearchScore, searchWords } from './product-search';
-import { certificateFor, coaOnRequest } from './testing';
+import { matchingCertificateFor, coaOnRequest } from './testing';
 
 type SearchableBatch = {
   product_id: number;
@@ -36,9 +36,9 @@ export function batchMatchesSearch(record: SearchableBatch, product: Product | u
 
   // Only public storefront fields and this record's displayed metadata qualify.
   // Restricted records must never match an unpublished certificate's metadata.
-  const document = coaOnRequest(record) ? undefined : certificateFor(record);
+  const document = coaOnRequest(record) ? undefined : matchingCertificateFor(record);
   const identifiers = [product.sku, record.product_lot,
-    ...(!coaOnRequest(record) ? [record.certificate_lot, document?.report_id] : []),
+    ...(document ? [document.batch_number, document.report_id] : []),
   ].filter((value): value is string => typeof value === 'string' && Boolean(value.trim()));
   const remaining = withoutIdentifiers(words, identifiers);
   if (!remaining.length) return true;

@@ -1,6 +1,6 @@
 'use client';
 import { useStore } from './provider';
-import { batchFor, batchPath, certificateFor } from '@/lib/testing';
+import { batchFor, batchPath, matchingCertificateFor } from '@/lib/testing';
 import styles from './quality-guide.module.css';
 
 const checks = [
@@ -15,7 +15,7 @@ export function QualityGuide() {
   const candidate = store.products.find(p => p.id === 753);
   const product = !loadError && (ready || candidate?.resolvedBatch) ? candidate : undefined;
   const example = product ? batchFor(product.id, product) : undefined;
-  const certificate = certificateFor(example);
+  const certificate = matchingCertificateFor(example);
   return <article className={styles.guide}>
     <header className="page-heading">
       <h1>How to read a peptide COA</h1>
@@ -49,7 +49,6 @@ export function QualityGuide() {
       <h2 id="document-status">What the library status means</h2>
       <dl className={styles.checks}>
         <div><dt>Matching-lot certificate</dt><dd>The certificate lot matches the listed product lot. This describes the document match; read the report for test scope and results.</dd></div>
-        <div><dt>Lot needs confirmation</dt><dd>A certificate is available, but its lot has not been matched to the listed product. Ask for the relevant report before relying on it.</dd></div>
         <div><dt>Documentation pending</dt><dd>No original certificate is available in the published record. This is not a completed test result.</dd></div>
       </dl>
     </section>

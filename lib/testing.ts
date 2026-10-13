@@ -25,7 +25,15 @@ export const coaOnRequest = (r:any) => typeof r?.coa_on_request === 'boolean' ? 
 const printedCoaProductIds = new Set([744, 745, 746, 747, 1389]);
 export const coaRequestNotice = 'A printed Certificate of Analysis (COA) is included in the box with your order.';
 export const coaRequestNoticeFor = (r:any) => printedCoaProductIds.has(Number(r?.product_id)) ? coaRequestNotice : 'The original Certificate of Analysis (COA) is available on request.';
-export const batchStatus = (r:any) => coaOnRequest(r)?'on-request':!certificateFor(r)?'pending':r.lot_match==='matches'?'matched':'mismatch';
-export const batchStatusLabel = (r:any) => coaOnRequest(r)?(printedCoaProductIds.has(Number(r?.product_id))?'Printed COA included with order':'Original COA available on request'):batchStatus(r)==='matched'?'Matching-lot certificate':batchStatus(r)==='mismatch'?'Lot needs confirmation':'Documentation pending';
+// Public consumers require the current inventory lot, not merely a saved document reference.
+// The server resolver separately checks exact product identity, strength and form.
+export const matchingCertificateFor = (r:any) => {
+  const lot = r?.product_lot;
+  if (coaOnRequest(r) || r?.coa_available === false || r?.lot_match !== 'matches' || typeof lot !== 'string' || !lot.trim() || /^(?:pending|not listed)$/i.test(lot.trim())) return undefined;
+  const document = certificateFor(r);
+  return document && r.certificate_lot === lot && document.batch_number === lot ? document : undefined;
+};
+export const batchStatus = (r:any) => coaOnRequest(r)?'on-request':matchingCertificateFor(r)?'matched':'pending';
+export const batchStatusLabel = (r:any) => coaOnRequest(r)?(printedCoaProductIds.has(Number(r?.product_id))?'Printed COA included with order':'Original COA available on request'):batchStatus(r)==='matched'?'Matching-lot certificate':'Documentation pending';
 export const reportedResult = (d:any,kind:string) => d?.results?.filter((r:any)=>r.kind===kind).map((r:any)=>r.result+(r.unit&&!r.result.includes(r.unit)?' '+r.unit:'')).join('; ') || 'Not reported';
 export const batchPath = (r:any) => '/testing/'+encodeURIComponent(r.product_lot && !/^pending|not listed$/i.test(r.product_lot)?r.product_lot:r.record_id)+'?product='+r.product_id;

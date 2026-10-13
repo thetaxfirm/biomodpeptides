@@ -24,8 +24,9 @@ for(const extension of ['.ts','.tsx'])require.extensions[extension]=(module,file
 require.extensions['.css']=module=>{module.exports=new Proxy({__esModule:true},{get:(target,key)=>key==='__esModule'?true:key==='default'?new Proxy({},{get:(_,name)=>String(name)}):String(key)});};
 global.fetch=()=>{throw Error('Network forbidden in public batch tests');};
 const { products }=require('../lib/catalog.ts');
-const { batchFor }=require('../lib/testing.ts');
-const { BatchPassport }=require('../components/store/batch-record.tsx');
+const { batchFor, matchingCertificateFor, batchStatus }=require('../lib/testing.ts');
+const { batchMatchesSearch }=require('../lib/batch-search.ts');
+const { BatchPassport, CertificateButton }=require('../components/store/batch-record.tsx');
 const { Testing }=require('../components/store/testing.tsx');
 const { QualityGuide }=require('../components/store/quality-guide.tsx');
 const { ProductComparison }=require('../components/store/comparison.tsx');
@@ -41,7 +42,7 @@ for(const [Component,props] of [[BatchPassport,{product:changed}],[Testing,{}],[
  const html=render(Component,props);
  assert(!html.includes(original.product_lot),'Old lot never leaks into '+Component.name);
  assert(!html.includes('Read original certificate'),'Detached original is absent from '+Component.name);
- if(Component!==QualityGuide)assert(html.includes('Documentation pending')||html.includes('Pending documentation'),'Current pending state is visible in '+Component.name);
+ if(Component!==QualityGuide)assert(html.includes('Documentation pending')||html.includes('Contact BIOMOD to request the COA for the listed lot.'),'Current unmatched state is visible in '+Component.name);
 }
 assert(render(Testing).includes('SYNTHETIC-NEW-LOT'));
 assert.equal(certificateProperties(product.id,changed).length,0);
@@ -56,6 +57,31 @@ for(const [Component,props] of [[BatchPassport,{product:changed}],[Testing,{}],[
 }
 const props=certificateProperties(product.id,changed);assert(props.some(p=>p.name==='Certificate lot'&&p.value==='SYNTHETIC-NEW-LOT'));assert(props.some(p=>p.name==='Certificate of analysis'&&p.url===doc.url));
 assert(llmsText('https://trybiomod.com',paths,[changed]).includes('Matching-lot COA: lot SYNTHETIC-NEW-LOT'));
+// Public consumers distrust stale/forged matched flags and disabled associations.
+const hiddenDoc={...doc,report_id:'HIDDEN-REPORT-52779',url:'https://example.invalid/hidden-report-52779.pdf',report_date:'HIDDEN-DATE-52779',results:[{kind:'purity',analyte:'Purity',result:'98.7654%',method:'Hidden fixture method'}]};
+const stale={...matched,certificate:hiddenDoc,certificate_source_note:'HIDDEN-SOURCE-NOTE-52779',recorded_on:'HIDDEN-UPDATE-52779'};
+for(const invalid of [
+ {...stale,certificate:{...hiddenDoc,batch_number:'HIDDEN-OTHER-LOT-52779'}},
+ {...stale,certificate_lot:'HIDDEN-OTHER-LOT-52779'},
+ {...stale,coa_available:false},
+ {...stale,lot_match:'mismatch'},
+ {...stale,certificate_lot:null},
+ {...stale,product_lot:'',certificate_lot:'',certificate:{...hiddenDoc,batch_number:''}},
+ {...stale,product_lot:'pending',certificate_lot:'pending',certificate:{...hiddenDoc,batch_number:'pending'}},
+]) {
+ changed={...product,resolvedBatch:invalid};currentProducts=[changed];
+ assert.equal(matchingCertificateFor(invalid),undefined);
+ assert.equal(batchStatus(invalid),'pending');
+ for(const [Component,props] of [[BatchPassport,{product:changed}],[CertificateButton,{record:invalid}],[Testing,{}],[QualityGuide,{}],[ProductResearchDetails,{product:changed}]]){
+  const html=render(Component,props);
+  for(const hidden of [hiddenDoc.report_id,hiddenDoc.url,hiddenDoc.report_date,'98.7654%','HIDDEN-OTHER-LOT-52779',stale.certificate_source_note,stale.recorded_on])assert(!html.includes(hidden),Component.name+': ineligible report data stays hidden');
+  assert(!html.includes('Read original certificate')&&!html.includes('Open original PDF'),Component.name+': ineligible report cannot be opened');
+ }
+ assert.equal(certificateProperties(product.id,changed).length,0);
+ assert(!llmsText('https://trybiomod.com',paths,[changed]).includes('Matching-lot COA'));
+ assert.equal(batchMatchesSearch(invalid,product,hiddenDoc.report_id),false);
+ assert.equal(batchMatchesSearch(invalid,product,'HIDDEN-OTHER-LOT-52779'),false);
+}
 // Private originals retain availability without inventing a printed-copy policy.
 changed={...product,resolvedBatch:{...pending,coa_available:true,coa_on_request:true}};currentProducts=[changed];
 const privateHtml=render(BatchPassport,{product:changed})+render(ProductResearchDetails,{product:changed});assert(privateHtml.includes('available on request'));assert(!privateHtml.includes('included in the box'));assert(!privateHtml.includes('.pdf'));assert.equal(certificateProperties(product.id,changed).length,0);

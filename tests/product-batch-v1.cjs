@@ -19,6 +19,27 @@ const row=async product=>(await batch.adminBatchRecords(db,[product]))[0];
 (async()=>{try{
  let admin=await row(p),publicProduct=await one(p);assert.equal(admin.lot,initial.product_lot);assert.equal(publicProduct.resolvedBatch.product_lot,initial.product_lot);assert.equal(publicProduct.resolvedBatch.coa_available,initial.lot_match==='matches');assert.equal(testing.batchFor(p.id,publicProduct),publicProduct.resolvedBatch);assert(testing.batchRecordsFor([publicProduct]).includes(publicProduct.resolvedBatch));
  if(initial.lot_match==='matches'){assert.equal(testing.certificateFor(publicProduct.resolvedBatch).document_id,sourceDocument.document_id);assert.equal(admin.coaAvailable,true);}
+ // Every public source association is exact; legacy report links remain staff-only.
+ const initialProducts=await batch.resolveProductBatches(db,products), initialAdmin=await batch.adminBatchRecords(db,products);
+ let withheld=0, available=0;
+ for(const item of initialProducts){
+  const r=item.resolvedBatch, source=testing.batchFor(item.id), sourceDoc=testing.certificateFor(source);
+  if(r.certificate){available++;assert.equal(r.coa_available,true);assert.equal(r.lot_match,'matches');assert.equal(r.certificate.batch_number,r.product_lot);assert.equal(r.certificate_lot,r.product_lot);}
+  if(sourceDoc && sourceDoc.batch_number!==source.product_lot){
+   withheld++;assert.equal(r.certificate,undefined);assert.equal(r.document_id,null);assert.equal(r.certificate_lot,null);assert.equal(r.coa_pdf_url,undefined);assert.equal(r.hub_coa_link_url,undefined);assert.equal(r.has_certificate_pdf,false);assert.equal(r.coa_available,false);assert.equal(r.certificate_source_note,undefined);
+   const a=initialAdmin.find(a=>a.productId===item.id);assert.equal(a.reportRef,null);assert.equal(a.attached,null);assert(a.choices.every(c=>!c.eligible));
+  }
+ }
+ assert(withheld>=5&&available>0,'Both matched and legacy mismatched source records are exercised');
+ const old=products.find(item=>item.slug==='selank'), oldRecord=testing.batchFor(old.id), oldDoc=testing.certificateFor(oldRecord);
+ // Even a forged or stale persisted available flag cannot publish the wrong lot.
+ save(old,{lot:oldRecord.product_lot,reportRef:'public:'+oldDoc.document_id,coaAvailable:true});
+ const stale=(await one(old)).resolvedBatch;assert.equal(stale.document_id,null);assert.equal(stale.certificate,undefined);assert.equal(stale.coa_available,false);
+ await assert.rejects(()=>batch.validateBatchEdit(db,old,{lot:oldRecord.product_lot,reportRef:'public:'+oldDoc.document_id,coaAvailable:true}),/exact product/);
+ sql.prepare('DELETE FROM product_overrides WHERE id=?').run(old.id);
+ for(const changedProduct of [{...p,sizes:['999mg']},{...p,identity:'Synthetic different identity'},{...p,name:'Synthetic different product'},{...p,categories:[{slug:'spray-products',name:'Spray products'}]}]){
+  const r=(await one(changedProduct)).resolvedBatch;assert.equal(r.coa_available,false);assert.equal(r.document_id,null);assert.equal(r.certificate,undefined,'Identity, strength and format mismatches cannot inherit source certificates');
+ }
  putOriginal(original);admin=await row(p);const candidate=admin.choices.find(c=>c.ref==='private:'+original.sha256);assert(candidate&&!candidate.eligible,'Different-lot report is visible to staff with a reason but cannot be marked available');assert.equal(candidate.url,'/api/store/admin-coa-original?ref='+encodeURIComponent(candidate.ref));
  const selected={lot:original.lot,reportRef:'private:'+original.sha256,coaAvailable:true};
  assert.deepEqual(await batch.validateBatchEdit(db,p,selected),selected);

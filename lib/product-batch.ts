@@ -58,7 +58,8 @@ function defaults(product: Product, originals: OriginalCoaMetadata[]): ProductBa
     const reports = originals.filter(r => privateMatches(product, r) && r.lot === lot);
     if (reports.length === 1) return { lot, reportRef: 'private:' + reports[0].sha256, coaAvailable: true };
     const sourceDocument = document && publicDocuments(product).find(d => d.document_id === document.document_id);
-    return { lot, reportRef: sourceDocument ? 'public:' + sourceDocument.document_id : null, coaAvailable: Boolean(sourceDocument && lot && sourceDocument.batch_number === lot && record.lot_match === 'matches' && publicIdentityEligible(product, sourceDocument)) };
+    const eligible = Boolean(sourceDocument && lot && sourceDocument.batch_number === lot && record.lot_match === 'matches' && publicIdentityEligible(product, sourceDocument));
+    return { lot, reportRef: eligible ? 'public:' + sourceDocument.document_id : null, coaAvailable: eligible };
 }
 async function overrides(db: D1Database) {
     const rows = (await db.prepare("SELECT id,json_extract(CASE WHEN json_valid(data) THEN data ELSE '{}' END,'$.batch') AS batch FROM product_overrides WHERE json_type(CASE WHEN json_valid(data) THEN data ELSE '{}' END,'$.batch') IS NOT NULL").all<{ id: number; batch: string | null }>()).results;
@@ -107,19 +108,21 @@ function publicCertificate(document: any) {
 function resolved(product: Product, batch: ProductBatch, originals: OriginalCoaMetadata[], preserveSource = true) {
     const source = batchFor(product.id), choice = choicesFor(product, batch.lot, originals).find(c => c.ref === batch.reportRef);
     const isPrivate = Boolean(choice?.eligible && batch.coaAvailable && choice.ref.startsWith('private:'));
-    const legacy = defaults(product, originals), preserveMismatch = preserveSource && equalBatch(batch, legacy) && !batch.coaAvailable && Boolean(choice) && !choice!.eligible;
-    const document = choice && choice.ref.startsWith('public:') && ((choice.eligible && batch.coaAvailable) || preserveMismatch) ? publicDocuments(product).find(d => 'public:' + d.document_id === choice.ref) : null;
+    const legacy = defaults(product, originals);
+    // Inventory's current lot and selected report must agree before any report
+    // metadata or link can leave the server. Legacy mismatches remain staff-only.
+    const document = choice?.eligible && batch.coaAvailable && choice.ref.startsWith('public:') ? publicDocuments(product).find(d => 'public:' + d.document_id === choice.ref) : null;
     const matched = Boolean(document && document.batch_number === batch.lot && batch.coaAvailable);
     return {
         record_id: source?.record_id || 'biomod-product-' + product.id, product_id: product.id, product_name: product.name, product_slug: product.slug,
         product_url: 'https://trybiomod.com/product/' + product.slug, public_identity: product.identity, sku: product.sku,
         product_lot: batch.lot, certificate_lot: document?.batch_number || null, document_id: document?.document_id || null,
-        has_certificate_pdf: Boolean(document), lot_match: matched ? 'matches' : document ? 'mismatch' : 'not_verifiable',
-        coa_status: isPrivate ? 'Original COA available on request' : matched ? 'Matching-lot certificate' : document ? 'Lot needs confirmation' : 'Documentation pending',
+        has_certificate_pdf: Boolean(document), lot_match: matched ? 'matches' : 'not_verifiable',
+        coa_status: isPrivate ? 'Original COA available on request' : matched ? 'Matching-lot certificate' : 'Documentation pending',
         coa_available: Boolean(isPrivate || matched), coa_on_request: isPrivate, ...(document ? { certificate: publicCertificate(document), coa_pdf_url: document.url, hub_coa_link_url: document.url } : {}),
         ...(isPrivate ? { report_id: choice!.reportId } : {}),
-        review_issues: document && !matched ? ['The selected original certificate identifies a different lot. Confirm the current lot and its matching report.'] : [],
-        ...(preserveSource && equalBatch(batch, legacy) && batch.reportRef === 'public:' + source?.document_id ? { certificate_source_note: source?.certificate_source_note || undefined, recorded_on: source?.recorded_on || undefined } : {}),
+        review_issues: [],
+        ...(matched && preserveSource && equalBatch(batch, legacy) && batch.reportRef === 'public:' + source?.document_id ? { certificate_source_note: source?.certificate_source_note || undefined, recorded_on: source?.recorded_on || undefined } : {}),
     };
 }
 export async function resolveProductBatches(db: D1Database, products: Product[]): Promise<Product[]> {

@@ -16,7 +16,7 @@ for (const extension of ['.ts', '.tsx']) require.extensions[extension] = (m, fil
 }).outputText, filename);
 require.extensions['.css'] = module => { module.exports = new Proxy({ __esModule: true }, { get: (_, key) => key === '__esModule' ? true : key === 'default' ? new Proxy({}, { get: (_, name) => String(name) }) : String(key) }); };
 const { products } = require('../lib/catalog.ts');
-const { batchRecords, laboratoryDocuments, certificateFor, batchStatus, coaOnRequest } = require('../lib/testing.ts');
+const { batchRecords, laboratoryDocuments, certificateFor, matchingCertificateFor, batchStatus, coaOnRequest } = require('../lib/testing.ts');
 const { batchMatchesSearch } = require('../lib/batch-search.ts');
 const { eligibleDiscovery } = require('../lib/product-discovery.ts');
 const { productReviewBlocks } = require('../lib/seo-policy.ts');
@@ -56,18 +56,19 @@ for (const query of ['BPC157 20mg ' + bpcReport, 'SS31 50mg ' + ss10Report,
   assert.deepEqual(matches(query), [], query);
 }
 
-// Identifier queries stay attached to their own records, including mismatches.
+// Current inventory lots stay searchable; only matching report identifiers qualify.
 for (const r of batchRecords) {
   assert(batchMatchesSearch(r, product(r), ''), r.product_slug);
   if (r.product_lot) assert(rows(r.product_lot).includes(r), 'listed lot: ' + r.product_slug);
-  const document = certificateFor(r);
+  const document = matchingCertificateFor(r);
   if (!coaOnRequest(r) && document?.report_id) {
     assert(rows(document.report_id).includes(r), 'public report: ' + r.product_slug);
   }
 }
 const mismatch = record('selank');
-assert.equal(batchStatus(mismatch), 'mismatch');
-assert(rows(certificateFor(mismatch).report_id, { status: 'mismatch' }).includes(mismatch));
+assert.equal(mismatch.lot_match, 'mismatch', 'Raw historical provenance is retained');
+assert.equal(batchStatus(mismatch), 'pending');
+assert(!rows(certificateFor(mismatch).report_id).includes(mismatch), 'Historical report identifier is not advertised for current inventory');
 assert(!rows(certificateFor(mismatch).report_id, { status: 'matched' }).includes(mismatch));
 assert.equal(rows(bpcReport, { selected: String(ss10.product_id) }).length, 0);
 assert.equal(rows(bpcReport, { lot: ss10.product_lot }).length, 0);
@@ -81,7 +82,8 @@ assert(pendingHTML.includes('not available in the published documents yet'));
 assert(!pendingHTML.includes('Open original PDF') && !pendingHTML.includes(certificateFor(ss10).url));
 const mismatchHTML = renderToStaticMarkup(React.createElement(BatchDetails, { record: rows('Selank 10mg')[0] }));
 assert(!mismatchHTML.includes('The available certificate identifies a different lot.') && mismatchHTML.includes('Not verified for this lot'));
-assert(mismatchHTML.includes(mismatch.product_lot) && mismatchHTML.includes(mismatch.certificate_lot));
+assert(mismatchHTML.includes(mismatch.product_lot) && !mismatchHTML.includes(mismatch.certificate_lot));
+assert(!mismatchHTML.includes(certificateFor(mismatch).url) && !mismatchHTML.includes(certificateFor(mismatch).report_id));
 
 // The new path inherits publication holds for contextual peptide terms and aliases.
 for (const r of batchRecords.filter(r => !eligibleDiscovery(product(r)))) {

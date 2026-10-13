@@ -19,7 +19,7 @@ for (const extension of ['.ts', '.tsx']) {
 require.extensions['.css'] = module => { module.exports = new Proxy({ __esModule: true }, { get: (target, key) => key === '__esModule' ? true : key === 'default' ? new Proxy({}, { get: (_, name) => String(name) }) : String(key) }); };
 const { products, compound, productFormat, cas, specificationNote } = require('../lib/catalog.ts');
 const { packContents } = require('../lib/packs.ts');
-const { batchRecords, batchStatus, certificateFor, reportedResult, coaOnRequest, coaRequestNotice } = require('../lib/testing.ts');
+const { batchRecords, batchStatus, certificateFor, matchingCertificateFor, reportedResult, coaOnRequest, coaRequestNotice } = require('../lib/testing.ts');
 const { ProductPage } = require('../components/store/catalog.tsx');
 const { BatchDetails, CertificateButton } = require('../components/store/batch-record.tsx');
 const { StoreProvider } = require('../components/store/provider.tsx');
@@ -45,7 +45,7 @@ assert.equal(JSON.stringify(products), before, 'Rendering preserves product iden
 
 const counts = { matched: 0, mismatch: 0, pending: 0, 'on-request': 0 };
 for (const record of batchRecords) {
-  const status = batchStatus(record), certificate = certificateFor(record);
+  const status = batchStatus(record), certificate = matchingCertificateFor(record);
   counts[status]++;
   const html = renderToStaticMarkup(React.createElement(BatchDetails, { record }));
   const direct = renderToStaticMarkup(React.createElement(CertificateButton, { record }));
@@ -56,19 +56,19 @@ for (const record of batchRecords) {
     continue;
   }
   if (!certificate) {
+    if (record.lot_match === 'mismatch') {
+      counts.mismatch++;
+      const historical = certificateFor(record);
+      assert(!html.includes(historical.url) && !html.includes(historical.report_id) && !html.includes(record.certificate_lot), record.product_slug + ': no wrong-lot report metadata');
+      assert(!html.includes('The available certificate identifies a different lot.'), 'No removed mismatch paragraph');
+    }
     assert(!direct.includes('Open original PDF'), record.product_slug + ': missing document has no PDF link');
     assert(html.includes('An original certificate for this listed lot is not available'), record.product_slug + ': missing document remains explicit');
     continue;
   }
   assert(direct.includes('href="' + escaped(certificate.url) + '"'), record.product_slug + ': actual original PDF URL is available without opening a dialog');
   assert(direct.includes('Open original PDF') && direct.includes('Read original certificate'), record.product_slug + ': direct link and preview coexist');
-  if (status === 'mismatch') {
-    assert(!html.includes('The available certificate identifies a different lot.'), record.product_slug + ': redundant mismatch paragraph removed');
-    assert(html.includes('<dt>Listed product lot</dt><dd>' + escaped(record.product_lot) + '</dd>') && html.includes('<dt>Certificate lot</dt><dd>' + escaped(record.certificate_lot) + '</dd>'), record.product_slug + ': both lot numbers remain visible');
-    for (const field of ['Purity', 'Measured content']) assert(html.includes('<dt>' + field + '</dt><dd>Not verified for this lot</dd>'), record.product_slug + ': mismatched results are not attributed');
-  } else {
-    for (const [field, kind] of [['Purity', 'purity'], ['Measured content', 'assay']]) assert(html.includes('<dt>' + field + '</dt><dd>' + escaped(reportedResult(certificate, kind)) + '</dd>'), record.product_slug + ': matched results and qualifiers preserved');
-  }
+  for (const [field, kind] of [['Purity', 'purity'], ['Measured content', 'assay']]) assert(html.includes('<dt>' + field + '</dt><dd>' + escaped(reportedResult(certificate, kind)) + '</dd>'), record.product_slug + ': matched results and qualifiers preserved');
 }
 for (const [status, count] of Object.entries(counts)) assert(count > 0, 'Real records cover ' + status);
 // An old document reference must not override the existing on-request restriction.

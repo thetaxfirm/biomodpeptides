@@ -20,7 +20,7 @@ const { products, money } = require('../lib/catalog.ts');
 const { packContents, packSizes } = require('../lib/packs.ts');
 const { eligibleDiscovery } = require('../lib/product-discovery.ts');
 const { productReviewBlocks } = require('../lib/seo-policy.ts');
-const { batchFor, batchPath, batchRecords, batchStatus, batchStatusLabel, certificateFor, laboratoryDocuments } = require('../lib/testing.ts');
+const { batchFor, batchPath, batchRecords, batchStatus, batchStatusLabel, certificateFor, matchingCertificateFor, laboratoryDocuments } = require('../lib/testing.ts');
 const { VialSizeLinks, ProductResearchDetails } = require('../components/store/product-research-details.tsx');
 const { ProductPage, ProductCard } = require('../components/store/catalog.tsx');
 const { Experience } = require('../components/store/experience.tsx');
@@ -70,8 +70,7 @@ for (const product of products) {
   assert(!/<(?:button|details|script)\b|\bhidden=|aria-hidden=/.test(html), 'answers remain readable in initial HTML');
   const status = batchStatus(batchFor(product.id));
   if (status === 'matched') assert(html.includes('lot number matching this listing'));
-  else if (status === 'mismatch') assert(html.includes('Contact BIOMOD to request the COA for the listed lot.'));
-  else assert(html.includes('Pending documentation is not a completed test result.') && !html.includes('lot number matching this listing'));
+  else assert(html.includes('Contact BIOMOD to request the COA for the listed lot.') && !html.includes('lot number matching this listing'));
 }
 assert.equal(eligibleCount, 17);
 
@@ -216,11 +215,11 @@ for (const slug of Object.keys(expectedStudies)) {
 const renderPage = (slug, catalog = products) => renderToStaticMarkup(React.createElement(StoreProvider, { initialCatalog: catalog }, React.createElement(ProductPage, { slug })));
 // Literature does not reconcile lots. Tesamorelin separately has a reviewed original matching-lot report; other gaps remain unchanged.
 const remainingBatchEvidence = {
-  'semax': [788, 'mismatch', 'LYO-029-2608-01', '001-R'],
-  'selank': [785, 'mismatch', 'LYO-028-2608-02', '001-b'],
+  'semax': [788, 'pending', 'LYO-029-2608-01', '001-R'],
+  'selank': [785, 'pending', 'LYO-028-2608-02', '001-b'],
   'aod-9604-10mg': [758, 'matched', '406-10-0001', '406-10-0001'],
   'tesamorelin-10mg': [755, 'matched', '301-10-0001', '301-10-0001'],
-  'nad-500mg': [752, 'mismatch', '405-500-0001', '001-B'],
+  'nad-500mg': [752, 'pending', '405-500-0001', '001-B'],
   'kisspeptin-10mg': [751, 'matched', '404-10-0001', '404-10-0001'],
   'pt-141-10mg': [750, 'matched', '403-10-0001', '403-10-0001'],
   'kpv-10mg': [749, 'pending', '402-10-0001', null],
@@ -241,8 +240,8 @@ for (const [slug, [heading, source]] of Object.entries(expectedStudies)) {
   if (evidence) {
     assert.deepEqual([current.id, batchStatus(currentRecord), currentRecord.product_lot, currentRecord.certificate_lot], evidence, slug + ': existing lot evidence is unchanged');
     assert(currentPassport.includes('<dt>Listed product lot</dt><dd>' + escape(evidence[2]) + '</dd>'));
-    assert(currentPassport.includes('<dt>Certificate lot</dt><dd>' + escape(evidence[3] || 'Not listed') + '</dd>'));
-    const certificate = certificateFor(currentRecord);
+    const certificate = matchingCertificateFor(currentRecord);
+    assert(currentPassport.includes('<dt>Certificate lot</dt><dd>' + escape(certificate?.batch_number || 'Not listed') + '</dd>'));
     if (certificate) assert(currentPassport.includes('href="' + escape(certificate.url) + '"'), slug + ': original PDF remains attached only to its own record');
     else assert(!currentPassport.includes('.pdf'), slug + ': pending evidence never borrows a certificate');
     if (evidence[1] !== 'matched') {

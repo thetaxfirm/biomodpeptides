@@ -11,6 +11,21 @@ const post=async(action,payload,custom=headers)=>{const r=await f.mf.dispatchFet
 const raw=async id=>(await f.db.prepare('SELECT data FROM product_overrides WHERE id=?').bind(id).first())?.data||'';
 const edit=async(id,changes={},custom=headers)=>{const admin=await json('admin'),p=admin.products.find(p=>p.id===id),b=admin.batchRecords.find(b=>b.productId===id);assert(p&&b);const before=JSON.parse(await raw(id)||'{}');return post('admin-product',{id,price:p.price,packPrices:p.packPrices,inStock:p.inStock,purchasable:p.purchasable,stockQuantity:p.stockQuantity,maxQuantity:p.maxQuantity||100,expectedStock:before.stockQuantity??null,expectedVersion:p.editVersion,availability:p.availability,sale:p.sale,preorder:p.preorder,...(changes.batch?{expectedBatch:{lot:b.lot,reportRef:b.reportRef,coaAvailable:b.coaAvailable}}:{}),...changes},custom);};
 try{
+ // Legacy source records must never publish a different lot's PDF in real responses.
+ const initialState=await json('state',guest);
+ for(const product of initialState.products){
+  const record=product.resolvedBatch;if(!record?.certificate)continue;
+  assert.equal(record.coa_available,true);assert.equal(record.lot_match,'matches');assert.equal(record.product_lot,record.certificate_lot);assert.equal(record.product_lot,record.certificate.batch_number);
+ }
+ for(const slug of ['klow-80mg','nad-500mg','run-gun-10mg','selank','semax']){
+  const product=initialState.products.find(p=>p.slug===slug);assert(product,slug);const record=product.resolvedBatch;
+  assert.equal(record.certificate,undefined,slug);assert.equal(record.document_id,null,slug);assert.equal(record.certificate_lot,null,slug);assert.equal(record.coa_pdf_url,undefined,slug);assert.equal(record.coa_available,false,slug);
+ }
+ const oldProduct=initialState.products.find(p=>p.slug==='selank'),oldData=await raw(oldProduct.id),oldAdmin=await json('admin');
+ const oldChoice=oldAdmin.batchRecords.find(b=>b.productId===oldProduct.id).choices[0];assert(oldChoice&&!oldChoice.eligible);
+ await f.db.prepare('UPDATE product_overrides SET data=? WHERE id=?').bind(JSON.stringify({...JSON.parse(oldData),batch:{lot:oldProduct.resolvedBatch.product_lot,reportRef:oldChoice.ref,coaAvailable:true}}),oldProduct.id).run();
+ const forged=(await json('state',guest)).products.find(p=>p.id===oldProduct.id).resolvedBatch;assert.equal(forged.certificate,undefined);assert.equal(forged.coa_available,false);assert.equal(forged.coa_pdf_url,undefined);
+ await f.db.prepare('UPDATE product_overrides SET data=? WHERE id=?').bind(oldData,oldProduct.id).run();
  const bytes=Buffer.from('%PDF-1.4\n% SYNTHETIC WORKER FIXTURE ONLY\n%%EOF'),hash=createHash('sha256').update(bytes).digest('hex');
  const report={productId:f.product.id,productName:f.product.name,strength:f.product.sizes[0],form:'lyophilized powder',lot:'SYNTHETIC-WORKER-LOT-A',reportId:'SYNTHETIC-REPORT-A',filename:'synthetic-private-fixture.pdf',sha256:hash,base64:bytes.toString('base64'),chemicalIdentity:'SYNTHETIC FIXTURE ONLY',sourceBasename:'PRIVATE_INTERNAL_FIXTURE'};
  await f.db.prepare('INSERT INTO coa_original_reports(sha256,data,enabled) VALUES(?,?,1)').bind(hash,JSON.stringify(report)).run();
