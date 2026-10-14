@@ -12,10 +12,11 @@ const order=(id,status,extra={})=>({id,status,created:extra.created||17600000000
   items:extra.items||[{id:1,quantity:2,lineTotal:9000,product:{name:'AZURE 10 mg',price:4500}}],
   ...(extra.data||{})}});
 
-// Only orders a picker can act on.
+// Everything still to be packed, and nothing else.
 assert.equal(p.needsPicking(order('a','paid')),true,'paid and waiting');
-assert.equal(p.needsPicking(order('b','paid',{data:{shipment:{tracking:'X'}}})),false,'the combined sheet skips orders already labelled');
-assert.equal(p.canPick(order('b','paid',{data:{shipment:{tracking:'X'}}})),true,'a labelled order can still be printed on its own');
+assert.equal(p.needsPicking(order('b','paid',{data:{shipment:{tracking:'X'}}})),true,'labelled but not handed over still needs picking');
+assert.equal(p.canPick(order('b','paid',{data:{shipment:{tracking:'X'}}})),true,'a single labelled order prints on the same terms');
+assert.equal(p.needsPicking(order('b2','paid',{data:{shipment:{tracking:'X',status:'in_transit'}}})),false,'already moving is done');
 assert.equal(p.needsPicking(order('c','pending')),false,'unpaid is never picked');
 assert.equal(p.needsPicking(order('d','delivered')),false);
 assert.equal(p.needsPicking(order('e','paid',{data:{hold:{issue:'stock',by:'x',at:1}}})),false,'a hold stops picking');
@@ -25,6 +26,12 @@ assert.equal(p.needsPicking(order('f','paid',{data:{internalTest:true}})),false,
 const entries=p.pickEntries([order('11111111-1111-1111-1111-111111111111','paid',{created:300}),order('22222222-2222-2222-2222-222222222222','pending',{created:100}),order('33333333-3333-3333-3333-333333333333','paid',{created:200})]);
 assert.deepEqual(entries.map(e=>e.number),['#33333333','#11111111'],'unpaid dropped, oldest first');
 assert.equal(entries[0].units,2);
+
+// A bought label is flagged on the sheet, so the picker knows that parcel is ready to go.
+const labelled=p.pickEntry(order('ffffffff-1111-1111-1111-111111111111','paid',{data:{shipment:{tracking:'X',labelUrl:'https://labels.example.invalid/a.png'}}}));
+assert.equal(labelled.labelled,true);
+assert(p.renderPickList([labelled],1,true).includes('label bought'));
+assert.equal(p.pickEntry(order('99999999-1111-1111-1111-111111111111','paid')).labelled,false);
 
 // Merging: one row per product, quantities added, distinct notes kept beside it.
 const merged=p.mergeLines([
@@ -73,4 +80,4 @@ assert(p.renderPickList([],1760000000000).includes('Nothing is waiting'));
 // Order names are escaped, never injected.
 const nasty=p.renderPickList(p.pickEntries([order('dddddddd-1111-1111-1111-111111111111','paid',{name:'<script>alert(1)</script>'})]),1);
 assert(!nasty.includes('<script>alert(1)</script>')&&nasty.includes('&lt;script&gt;'),'markup in saved data is escaped');
-console.log('PASS: picking eligibility incl. holds and tests, oldest-first queue, one row per product with quantities summed and notes kept, combined pull totals, single-order sheet, empty sheet, contact details withheld, markup escaped.');
+console.log('PASS: picking covers to-ship and label-bought, excludes moving/held/test, oldest-first queue, one row per product with quantities summed and notes kept, combined pull totals, single-order sheet, empty sheet, contact details withheld, markup escaped.');

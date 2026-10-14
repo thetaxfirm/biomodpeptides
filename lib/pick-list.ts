@@ -5,12 +5,16 @@ import { orderBucket, type FulfillmentOrder } from './fulfillment';
 
 export type PickOrder = FulfillmentOrder & { id: string; created: number };
 export type PickLine = { name: string; detail: string; quantity: number };
-export type PickEntry = { id: string; number: string; placed: number; customer: string; place: string; service: string; lines: PickLine[]; units: number };
+export type PickEntry = { id: string; number: string; placed: number; customer: string; place: string; service: string; labelled: boolean; lines: PickLine[]; units: number };
 
-/** The combined sheet covers the To ship queue only: paid, nothing picked or labelled yet. Holds and tests are excluded by their bucket. */
-export const needsPicking = (order: PickOrder) => orderBucket(order) === 'to_ship';
-/** A single order can still be printed once its label is bought, for a recheck while packing. */
-export const canPick = (order: PickOrder) => ['to_ship', 'label'].includes(orderBucket(order));
+/**
+ * Everything still to be packed: paid and waiting, and labelled but not yet handed over, because a
+ * label is often bought before the items are picked. Holds, internal tests, and anything already
+ * moving or delivered are excluded by their bucket.
+ */
+export const needsPicking = (order: PickOrder) => ['to_ship', 'label'].includes(orderBucket(order));
+/** A single order is printable on exactly the same terms. */
+export const canPick = needsPicking;
 
 const text = (value: unknown, max = 120) => String(value ?? '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, max);
 export const orderNumber = (id: string) => '#' + id.slice(0, 8).toUpperCase();
@@ -27,6 +31,7 @@ export function pickEntry(order: PickOrder): PickEntry {
         customer: text(data.address?.name) || 'Name not recorded',
         place: [text(data.address?.city, 60), text(data.address?.state, 10)].filter(Boolean).join(', '),
         service: text(data.shipment?.service || data.shippingService, 80),
+        labelled: Boolean(data.shipment?.labelUrl),
         lines,
         units: lines.reduce((n, line) => n + line.quantity, 0),
     };
@@ -99,7 +104,7 @@ const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 
 function orderBlock(entry: PickEntry) {
     return '<section class="order"><h2><span>' + esc(entry.number) + ' · ' + esc(entry.customer) + '</span><span>' + entry.units + 'u</span></h2>'
-        + '<p class="sub">' + [entry.place, day(entry.placed), entry.service].filter(Boolean).map(esc).join(' · ') + '</p>'
+        + '<p class="sub">' + [entry.place, day(entry.placed), entry.service, entry.labelled ? 'label bought' : ''].filter(Boolean).map(esc).join(' · ') + '</p>'
         + (entry.lines.length ? table(mergeLines(entry.lines), 'Item') : '<p class="sub">No items recorded on this order.</p>')
         + '</section>';
 }
