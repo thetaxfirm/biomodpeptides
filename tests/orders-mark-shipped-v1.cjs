@@ -17,6 +17,7 @@ function load(file){const name=path.join(root,file),m=new Module(name,module);m.
   if(id==='@/lib/fulfillment')return{fulfillmentLabel:()=>''};
   if(id==='@/lib/order-queue')return{bucketStatus:{},queueTabs:[]};
   if(id==='@/lib/request-issues')return load('lib/request-issues.ts');
+  if(id==='@/lib/win-back')return load('lib/win-back.ts');
   return require(id);};
   m._compile(ts.transpileModule(fs.readFileSync(name,'utf8'),{compilerOptions:{module:1,target:9,jsx:4,esModuleInterop:true}}).outputText,name);return m.exports;}
 function mount(fn,props={}){const h={s:[],i:0,tree:null,render(){this.i=0;active=this;this.tree=fn(props);return this.tree;}};h.render();return h;}

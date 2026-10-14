@@ -37,6 +37,7 @@ type Props = {
   onRefreshReplies?: (ids: string[]) => Promise<{ replies: Record<string, ReplySummary>; forwards?: Record<string, RequestForward[]>; activity?: Record<string, { at: number; text: string }[]>; issues?: Record<string, RequestIssue> }>;
   onSaveIssue?: (input: { id: string; issue: string; resolutions: string[]; note: string }) => Promise<RequestIssue>;
   onLoadCases?: () => Promise<CaseEntry[]>;
+  onLoadTemplates?: (requestId: string) => Promise<{ id: string; label: string; why: string; body: string }[]>;
   focusId?: string | null;
   onForward?: (input: { id: string; to: string; note: string }) => Promise<RequestForward>;
   onLoadOptions?: () => Promise<DeskOptions>;
@@ -107,7 +108,7 @@ function speechRecognition(): (new () => Speech) | null {
   return w.SpeechRecognition || w.webkitSpeechRecognition || null;
 }
 
-export function RequestInbox({ requests, automation, requestReplies = noReplies, busy, dirty, refreshing, canSend = false, onStatus, onPrepareReply, onRefreshReplies, onLoadOptions, onSaveRule, onForward, onSaveIssue, onLoadCases, focusId }: Props) {
+export function RequestInbox({ requests, automation, requestReplies = noReplies, busy, dirty, refreshing, canSend = false, onStatus, onPrepareReply, onRefreshReplies, onLoadOptions, onSaveRule, onForward, onSaveIssue, onLoadCases, onLoadTemplates, focusId }: Props) {
   const [selected, setSelected] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [preparedReplies, setPreparedReplies] = useState<Record<string, ReplySummary>>({});
@@ -117,6 +118,7 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
   const [issues, setIssues] = useState<Record<string, RequestIssue>>({});
   const [issueDrafts, setIssueDrafts] = useState<Record<string, { note: string }>>({});
   const [cases, setCases] = useState<CaseEntry[] | null>(null);
+  const [templates, setTemplates] = useState<Record<string, { id: string; label: string; why: string; body: string }[]>>({});
   const [ruleIssue, setRuleIssue] = useState<string>('');
   const [panel, setPanel] = useState<{ id: string; kind: 'forward' | 'delete'; to: string; note: string; busy: boolean; error: string } | null>(null);
   const [pending, setPending] = useState<Record<string, boolean>>({});
@@ -170,6 +172,15 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
     setFilter('all'); setSelected(id);
     setDrafts(previous => previous[id] ? previous : { ...previous, [id]: newDraft(replyOf(id)) });
   }, [focusId, requestIds]);
+  // Order conversations get the win-back templates on the side.
+  useEffect(() => {
+    if (!selected || !onLoadTemplates || templates[selected]) return;
+    const request = requests.find(r => r.id === selected);
+    if (request?.data.origin !== 'order') return;
+    let alive = true;
+    onLoadTemplates(selected).then(list => { if (alive && mounted.current) setTemplates(previous => ({ ...previous, [selected]: list })); }, () => undefined);
+    return () => { alive = false; };
+  }, [selected, onLoadTemplates]);
   // A clean draft follows the newest saved/AI version; an edited one is never overwritten.
   useEffect(() => {
     setDrafts(previous => {
@@ -215,8 +226,8 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
     const glue = before && !/\s$/.test(before) ? ' ' : '';
     editDraft(id, 'body', before + glue + snippet + after);
   }
-  async function submit(request: CustomerRequest, mode: 'ai' | 'staff', send = false) {
-    const id = request.id, draft = drafts[id];
+  async function submit(request: CustomerRequest, mode: 'ai' | 'staff', send = false, instructionOverride?: string) {
+    const id = request.id, current = drafts[id], draft = current && instructionOverride ? { ...current, instruction: instructionOverride, remember: false } : current;
     if (disabled || pendingIds.current.has(id) || !draft || !usableEmail(request.data.email)) return;
     const latest = replyOf(id);
     if (sendPending(latest) || (latest?.revision ?? null) !== draft.revision) return;
@@ -353,9 +364,10 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
         onEdit: (field, value) => editDraft(active.request.id, field, value),
         onDraft: patch => setDraft(active.request.id, patch),
         onInsert: snippet => insertAtCursor(active.request.id, snippet),
-        onSubmit: (mode, send) => void submit(active.request, mode, send),
+        onSubmit: (mode, send, instruction) => void submit(active.request, mode, send, instruction),
         onDictate: () => dictate(active.request),
         onStatus: status => { if (!disabled) { setPanel(null); void onStatus(active.request, status); } },
+        templates: templates[active.request.id] || [],
         issue: issues[active.request.id] || null, canTag: Boolean(onSaveIssue), onIssue: patch => void saveIssue(active.request.id, patch),
         issueNote: issueDrafts[active.request.id]?.note ?? issues[active.request.id]?.note ?? '', onIssueNote: note => setIssueDrafts(previous => ({ ...previous, [active.request.id]: { note } })),
         forwards: forwards[active.request.id] || [], activity: activity[active.request.id] || [], team: options?.team || [], canForward: Boolean(onForward),
@@ -372,13 +384,14 @@ type ConversationProps = {
   draft?: Draft; automation?: CoaAutomationReport | null; options: DeskOptions | null; canSend: boolean; disabled: boolean; listening: boolean; preparing: boolean; now: number;
   bodyField: { current: HTMLTextAreaElement | null };
   onClose: () => void; onEdit: (field: 'body' | 'instruction', value: string) => void; onDraft: (patch: Partial<Draft>) => void; onInsert: (snippet: string) => void;
-  onSubmit: (mode: 'ai' | 'staff', send?: boolean) => void; onDictate: () => void; onStatus: (status: string) => void;
+  onSubmit: (mode: 'ai' | 'staff', send?: boolean, instruction?: string) => void; onDictate: () => void; onStatus: (status: string) => void;
   forwards: RequestForward[]; team: TeamMember[]; canForward: boolean; activity: { at: number; text: string }[];
+  templates: { id: string; label: string; why: string; body: string }[];
   issue: RequestIssue | null; canTag: boolean; onIssue: (patch: Partial<{ issue: string; resolutions: string[]; note: string }>) => void; issueNote: string; onIssueNote: (note: string) => void;
   panel: { kind: 'forward' | 'delete'; to: string; note: string; busy: boolean; error: string } | null;
   onPanel: (next: Partial<{ kind: 'forward' | 'delete'; to: string; note: string; busy: boolean; error: string }> | null) => void; onForward: () => void;
 };
-function conversation({ row, draft, automation, options, canSend, disabled, listening, preparing, bodyField, now, onClose, onEdit, onDraft, onInsert, onSubmit, onDictate, onStatus, forwards, team, canForward, panel, onPanel, onForward, activity, issue, canTag, onIssue, issueNote, onIssueNote }: ConversationProps) {
+function conversation({ row, draft, automation, options, canSend, disabled, listening, preparing, bodyField, now, onClose, onEdit, onDraft, onInsert, onSubmit, onDictate, onStatus, forwards, team, canForward, panel, onPanel, onForward, activity, templates, issue, canTag, onIssue, issueNote, onIssueNote }: ConversationProps) {
   const { request, reply } = row;
   const email = text(request.data.email), canReply = usableEmail(request.data.email);
   const name = text(request.data.name) || email || 'Customer';
@@ -460,6 +473,11 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
     {previousCoa?.status === 'accepted' && <p className={styles.note}>An earlier automatic COA email to this customer was accepted by the mail provider.</p>}
     {request.status === 'deleted' ? null : !canReply ? <p className={styles.warning}>No usable email address was saved, so there is no way to reply.</p> : !draft ? null : <div className={styles.composer}>
       <div className={styles.composeHead}><span>To {reply?.recipient || email}</span><span className={styles.note}>From {sender}</span></div>
+      {templates.length > 0 && !sending && <details className={styles.templates} open={!draft.body.trim()}>
+        <summary>Win-back emails ({templates.length})</summary>
+        <ul>{templates.map(t => <li key={t.id}><button type="button" className={styles.action} disabled={locked || writing} onClick={() => onDraft({ body: t.body, undo: draft.body || undefined, edited: true })}>Use</button> <strong>{t.label}</strong><span className={styles.note}>{t.why}</span></li>)}</ul>
+        <p className={styles.note}>Pick one, then press Tailor to have the AI fit it to this customer, or edit it yourself.</p>
+      </details>}
       <label className={styles.hidden} htmlFor={`reply-body-${request.id}`}>Reply</label>
       <textarea id={`reply-body-${request.id}`} ref={bodyField} name="replyBody" rows={11} maxLength={12000} value={draft.body} readOnly={writing} disabled={locked}
         onChange={event => onEdit('body', event.target.value)} placeholder={writing ? 'The AI is writing…' : 'Write the reply, or tell the AI below what you want to say.'} data-writing={writing ? 'true' : 'false'}/>
@@ -473,6 +491,7 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
           placeholder={listening ? 'Listening… say what the reply should say' : draft.body.trim() ? 'Tell the AI what to change: "shorter", "add the 10% code", "say the cart is fixed"' : 'Tell the AI what to write, or press the mic and say it'}/>
         <button type="button" className={styles.mic} aria-pressed={listening} disabled={locked && !listening} onClick={onDictate}>{listening ? 'Stop' : 'Dictate'}</button>
         <button type="button" className={styles.action} disabled={locked || conflict || writing} onClick={() => onSubmit('ai')}>{writing && reply?.mode === 'ai' ? 'Writing…' : draft.body.trim() ? 'Rewrite' : 'Write it'}</button>
+        {templates.length > 0 && draft.body.trim() && <button type="button" className={styles.action} disabled={locked || conflict || writing} onClick={() => onSubmit('ai', false, 'Tailor this email to this customer and their order. Keep it short and personal, keep every code and link exactly, and do not add new offers.')}>Tailor</button>}
       </div>
       <label className={styles.remember}><input type="checkbox" checked={draft.remember} disabled={locked} onChange={event => onDraft({ remember: event.target.checked })}/> Remember this instruction for future replies</label>
       <div className={styles.inserts}>

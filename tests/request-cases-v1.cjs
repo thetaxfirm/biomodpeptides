@@ -36,5 +36,20 @@ const cases=require('../lib/request-cases.ts'),replies=require('../lib/request-r
  await assert.rejects(()=>cases.setOrderHold(env,orderId,null,owner),e=>e.status===409);
  assert.equal(fulfillment.orderBucket({status:'paid',data:{}}),'to_ship');
  assert(require('../lib/request-issues.ts').resolutionTypes.some(([k,l])=>k==='free_item'&&/free item of their choice/i.test(l)));
+ // Win-back: unpaid orders only; the chosen template becomes a draft (never sent); templates render with real codes and no auto-recovery conflict.
+ const unpaid='ord_'+randomUUID().slice(0,12);const product=require('../lib/catalog.ts').products[0];
+ sql.prepare('INSERT INTO orders(id,owner,request_key,status,total,data,created,updated) VALUES(?,?,?,?,?,?,?,?)').run(unpaid,'synthetic-owner','rk-'+unpaid,'awaiting_payment',22759,JSON.stringify({email:'cart@example.invalid',address:{name:'Bruno Synthetic'},items:[{id:product.id,quantity:2,product:{name:product.name}}]}),Date.now(),Date.now());
+ await assert.rejects(()=>cases.startWinBack(env,orderId,'help',owner),e=>e.status===409,'Paid orders are not win-back targets');
+ await assert.rejects(()=>cases.startWinBack(env,unpaid,'made-up',owner),e=>e.status===400);
+ const wb=await cases.startWinBack(env,unpaid,'discount',owner);
+ const wbRow=sql.prepare('SELECT * FROM request_reply_drafts WHERE request_id=?').get(wb.requestId);assert.equal(wbRow.mode,'staff');assert.equal(wbRow.status,'queued');assert.equal(wbRow.approved_at,null,'A win-back draft is never approved to send');
+ assert.match(wbRow.proposed_body,/Hi Bruno,/);assert.match(wbRow.proposed_body,/code BM10/);assert(wbRow.proposed_body.includes('https://trybiomod.com/product/'+product.slug));
+ assert.match(wbRow.subject,new RegExp('^Bruno, your '+product.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+' order is saved$'));
+ assert.equal((await cases.issuesFor(env,[wb.requestId]))[wb.requestId].issue,'unfinished_checkout');
+ sql.prepare("INSERT INTO checkout_recovery(order_id,status,reason,recipient_hash,unsubscribe_token,payload,original_snapshot,savings,attempts,next_attempt_at,created,updated) VALUES(?,'accepted','accepted','h',?,'{}','{}',1234,1,0,0,0)").run(unpaid,randomUUID());
+ const previews=await cases.winBackPreview(env,wb.requestId);assert.deepEqual(previews.map(t=>t.id),['help','reminder','discount','founder','last']);
+ assert.match(previews.find(t=>t.id==='help').body,/\$12\.34 saving/,'Mentions the automatic recovery saving already applied');
+ assert(previews.every(t=>!/expires|only today|hurry|last chance/i.test(t.body)),'No invented urgency');
+ const againWb=await cases.startWinBack(env,unpaid,'last',owner);assert.equal(againWb.requestId,wb.requestId,'Same conversation reused');assert.match(sql.prepare('SELECT proposed_body FROM request_reply_drafts WHERE request_id=?').get(wb.requestId).proposed_body,/won't send another reminder/);
  console.log('PASS: one conversation per order with staff-only order context, order subject kept, issue + resolutions validated, issue-scoped rules and the decided case reach the AI, case log for rules. Isolated SQLite, no email.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

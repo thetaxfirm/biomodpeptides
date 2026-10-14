@@ -54,3 +54,5 @@
 .problem label { display:grid; gap:4px; font-size:13px; color:#655a68; }
 .problem select, .problem input { font:inherit; font-size:14px; padding:8px 10px; border:1px solid #d8cedd; border-radius:6px; background:white; color:#2d1235; }
 .problem button { justify-self:start; }
+
+.winBack { font:inherit; font-size:13px; font-weight:600; padding:4px 8px; border:1px solid #d8cedd; border-radius:6px; background:white; color:#2d1235; cursor:pointer; }

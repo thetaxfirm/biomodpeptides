@@ -55,3 +55,10 @@ Owner instruction after a HEAT-R 20mg reply was staged saying "Attached" with no
 - A held order shows "On hold: <issue>" with **Email customer**, sits in Needs review, and cannot have a label bought (`app/api/admin/shipping` claim refuses) or be marked shipped/delivered (`admin-order` refuses) until cleared.
 - New resolution: "Free item of their choice if they wait", so the AI can write that offer.
 - Tests: hold/clear, bucket, label-claim refusal in `tests/request-cases-v1.cjs`; `tests/orders-mark-shipped-v1.cjs` loader maps the shared issue list.
+
+## Follow-up (Oct 13): win-back emails for unpaid checkouts
+
+- Unpaid order rows get a **Win back…** menu with five templates. Choosing one opens (or reuses) the order's desk conversation, tags it "Did not finish checkout" and puts the template in as a staff draft. Nothing is sent until the owner presses Send. Order conversations show the same five templates on the side (Use, then Tailor asks the AI to fit it to the customer while keeping codes and links).
+- Templates (`lib/win-back.ts`): Need a hand? (service first), Your order is saved (reminder + lot-matched lab reports), 10% off to finish (code BM10, used on a fresh checkout because a code cannot be added to a started order), Personal note from Ash, Last reminder. No invented deadlines or scarcity.
+- The existing automatic recovery email (one email after 24 h, 7.5% off the saved order) is detected: the order note and the templates mention the saving already applied, so offers do not conflict.
+- Research basis: Klaviyo's abandoned-cart benchmarks (a short sequence: reminder, then incentive, then a final note) and Baymard's checkout-abandonment reasons (extra costs, payment trust, friction). Most "2026" subject-line statistics online are secondary and directional only.

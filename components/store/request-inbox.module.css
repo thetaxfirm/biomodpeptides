@@ -121,3 +121,9 @@
 .case fieldset { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 14px; }
 .case legend { font-size: 13px; color: var(--muted); margin-bottom: 4px; padding: 0; }
 .check { display: inline-flex; align-items: center; gap: 6px; }
+
+.templates { padding: 10px 12px; border-radius: 8px; background: var(--soft); font-size: 14px; }
+.templates summary { cursor: pointer; font-weight: 600; }
+.templates ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+.templates li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; align-items: start; }
+.templates li .note { grid-column: 2; margin: 0; }

@@ -1,6 +1,6 @@
 // Issue types and resolutions for customer cases. Shared by the server and the admin desk.
 export const issueTypes = [
-  ['out_of_stock', 'Item not in stock yet'], ['website', 'Website or cart problem'], ['coa', 'COA request'],
+  ['unfinished_checkout', 'Did not finish checkout'], ['out_of_stock', 'Item not in stock yet'], ['website', 'Website or cart problem'], ['coa', 'COA request'],
   ['shipping', 'Shipping or delivery'], ['refund', 'Refund or cancellation'], ['wrong_damaged', 'Wrong or damaged item'],
   ['product_question', 'Product question'], ['partner', 'Partner or affiliate'], ['vendor', 'Vendor pitch'], ['other', 'Other'],
 ] as const;

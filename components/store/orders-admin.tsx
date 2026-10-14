@@ -5,6 +5,7 @@ import { FormEvent, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { issueTypes, issueLabel } from '@/lib/request-issues';
+import { winBackTemplates } from '@/lib/win-back';
 import { api, report } from './provider';
 import { Field } from './primitives';
 import { money } from '@/lib/catalog';
@@ -30,6 +31,8 @@ type Props = {
     /** Puts the order on hold for a problem and opens the customer email. Nothing is sent by itself. */
     onReportProblem?: (order: QueueRow, problem: { issue: string; note: string }) => Promise<void>;
     onClearHold?: (order: QueueRow) => Promise<void>;
+    /** Unpaid checkouts: put the chosen win-back email in the reply desk as a draft. Never sends by itself. */
+    onWinBack?: (order: QueueRow, template: string) => void;
 };
 
 export function StatusBadge({ bucket }: { bucket: OrderBucket }) {
@@ -64,7 +67,7 @@ function query(params: Record<string, string | number>) {
     return api('admin-orders?' + search.toString()) as Promise<QueueResult>;
 }
 
-export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, formGeneration, change, submit, markDraft, reload, onEmailCustomer, onReportProblem, onClearHold }: Props) {
+export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, formGeneration, change, submit, markDraft, reload, onEmailCustomer, onReportProblem, onClearHold, onWinBack }: Props) {
     const [problem, setProblem] = useState<{ issue: string; note: string }>({ issue: 'out_of_stock', note: '' });
     const [tab, setTab] = useState<QueueTab>('to_ship');
     const [input, setInput] = useState('');
@@ -114,7 +117,10 @@ export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, form
         </span>;
         const report = onReportProblem && !['closed', 'delivered', 'test'].includes(o.bucket) ? <button type="button" className="text-button" onClick={() => { setProblem({ issue: 'out_of_stock', note: '' }); setSelected(o); }}>Report problem</button> : null;
         const step = mainStep(o, s);
-        return report ? <span className={styles.nextGroup}>{step}{report}</span> : step;
+        const winBack = onWinBack && o.bucket === 'unpaid' && o.data?.email ? <select className={styles.winBack} value="" disabled={busy} aria-label={'Send ' + (o.data?.address?.name || 'this customer') + ' a win-back email'} onChange={e => { if (e.target.value) onWinBack(o, e.target.value); }}>
+            <option value="">Win back…</option>{winBackTemplates.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+        </select> : null;
+        return report || winBack ? <span className={styles.nextGroup}>{step}{winBack}{report}</span> : step;
     }
     function mainStep(o: QueueRow, s: any) {
         if (o.bucket === 'to_ship' && allowed('orders:fulfill')) return <ShippingLabel order={o} onDone={reload} compact/>;

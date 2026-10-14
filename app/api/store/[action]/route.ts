@@ -2,7 +2,7 @@ import { replyBridgeRoute } from '@/lib/request-reply-route';
 import { queryOrders, scanLimit } from '@/lib/order-queue';
 import { publicCatalog } from '@/lib/public-catalog';
 import { batchRecordsFor, batchStatus, batchPath } from '@/lib/testing';
-import { startOrderConversation, saveRequestIssue, issuesFor, caseLog, setOrderHold } from '@/lib/request-cases';
+import { startOrderConversation, saveRequestIssue, issuesFor, caseLog, setOrderHold, startWinBack, winBackPreview } from '@/lib/request-cases';
 import { forwardRequest, forwardsFor, teamMembers, activityFor } from '@/lib/request-forward';
 import { summarizeRequestReplies, prepareRequestReply, replyDeskOptions, saveReplyRule } from '@/lib/request-replies';
 import { adminBatchRecords, validateBatchEdit } from '@/lib/product-batch';
@@ -37,7 +37,7 @@ export const dynamic = 'force-dynamic';
 // What each admin write needs. An admin action missing here requires the owner.
 const adminActionPermission: Record<string, StaffPermission> = {
     'admin-order': 'orders:fulfill', 'admin-reconcile': 'orders:reconcile',
-    'admin-request': 'requests:write', 'admin-request-reply': 'requests:write', 'admin-reply-desk': 'requests:write', 'admin-request-replies': 'requests:write', 'admin-reply-rule': 'requests:write', 'admin-request-forward': 'requests:write', 'admin-order-conversation': 'requests:write', 'admin-order-hold': 'requests:write', 'admin-request-issue': 'requests:write', 'admin-case-log': 'requests:write', 'admin-coa-process': 'requests:write',
+    'admin-request': 'requests:write', 'admin-request-reply': 'requests:write', 'admin-reply-desk': 'requests:write', 'admin-request-replies': 'requests:write', 'admin-reply-rule': 'requests:write', 'admin-request-forward': 'requests:write', 'admin-order-conversation': 'requests:write', 'admin-order-hold': 'requests:write', 'admin-win-back': 'requests:write', 'admin-win-back-preview': 'requests:write', 'admin-request-issue': 'requests:write', 'admin-case-log': 'requests:write', 'admin-coa-process': 'requests:write',
     'admin-config': 'store:write', 'admin-product': 'store:write', 'admin-campaign': 'store:write', 'admin-reward': 'store:write', 'admin-coa-config': 'store:write',
     'admin-staff': 'team:manage',
 };
@@ -514,6 +514,16 @@ export async function POST(req: NextRequest, { params }: {
                     await saveRequestIssue(runtime(), { requestId: conversation.requestId, issue: hold!.issue, resolutions: known?.resolutions || [], note: hold!.note || known?.note || '' }, actor);
                     return j({ hold, requestId: conversation.requestId, message: 'Order on hold. Nothing was sent to the customer.' });
                 } catch (error) { const status = (error as Error & { status?: number }).status; return j({ error: status ? (error as Error).message : 'Could not update the hold.' }, status || 500); }
+            }
+            if (action === 'admin-win-back') {
+                const input = z.object({ orderId: z.string().min(6).max(80), template: z.string().max(40) }).parse(b);
+                try { return j({ ...(await startWinBack(runtime(), input.orderId, input.template, actor)), message: 'Draft ready in Requests. Nothing was sent.' }); }
+                catch (error) { const status = (error as Error & { status?: number }).status; return j({ error: status ? (error as Error).message : 'Could not prepare the email.' }, status || 500); }
+            }
+            if (action === 'admin-win-back-preview') {
+                const input = z.object({ id: z.string().uuid() }).parse(b);
+                try { return j({ templates: await winBackPreview(runtime(), input.id) }); }
+                catch (error) { const status = (error as Error & { status?: number }).status; return j({ error: status ? (error as Error).message : 'Templates unavailable.' }, status || 500); }
             }
             if (action === 'admin-request-issue') {
                 const input = z.object({ id: z.string().uuid(), issue: z.string().max(40), resolutions: z.array(z.string().max(40)).max(10).optional(), note: z.string().max(1000).optional() }).parse(b);
