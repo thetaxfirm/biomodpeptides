@@ -24,12 +24,14 @@ In Admin > Orders the status cell now shows the carrier's own words under the bu
 - `change-history-system-v1.cjs` updated: the scheduled dispatch assertion now expects four jobs and asserts the sweep receives its own audit-wrapped environment rather than the raw one.
 - `lib/tracking-sweep.ts` deliberately does not import `./runtime`, so it loads outside the Worker and the suite exercises the real module rather than a copy.
 
-Deployment version and live checks are recorded below after release.
-
 ## Affected
 
 `/admin?tab=orders` status column; the `*/5 * * * *` scheduled handler in `worker.ts`. Read-only against EasyPost. No migration, no schema change, no new route, no customer-facing change, no product, price or credential change. The existing webhook is untouched and remains the fast path.
 
 ## Release
 
-Recorded after push.
+Source on main: 5bc0fcf (sweep, worker job, suites, gate) then 8e50bca (carrier status in the queue), fast-forward onto fb7469b with no collaborator commits to preserve. The gate was re-run against the exact pushed bytes: TypeScript and 77 suites passed. Cloudflare Workers Builds deploys every push to main.
+
+Live read-only checks after deploy: `/` and `/checkout` return 200, `/admin` redirects to sign-in (307), `/api/admin/shipping` returns 403 "Administrator sign-in required." when signed out. No order was modified by this verification.
+
+Gap: the sweep's first production pass has not been observed. It only acts on orders that already have a bought label and have been silent longer than the recheck window, so the first visible effect is a carrier status line appearing under the badge in Admin > Orders for parcels already in flight. `TRACKING_RECHECK_MINUTES` and `TRACKING_RECHECK_LIMIT` are unset in production and therefore at their defaults, 180 minutes and 15 orders per run.
