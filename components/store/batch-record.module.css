@@ -8,3 +8,12 @@
 .documentResults>[data-slot=table-container]{overflow:visible}
 .documentResults:focus-visible{outline:3px solid var(--ring);outline-offset:-3px}
 @media(max-width:640px){.certificateDialog [data-slot=dialog-title]{padding-inline-end:24px;line-height:1.3;overflow-wrap:anywhere}}
+
+.coaEmail { display:grid; gap:7px; max-width:460px; }
+.coaEmail label { font-weight:600; font-size:14px; }
+.coaEmail div { display:flex; gap:8px; flex-wrap:wrap; }
+.coaEmail input { flex:1 1 200px; min-width:0; }
+.coaEmail button { flex:0 0 auto; padding:11px 16px; font-size:14px; }
+.coaEmail small { font-size:12px; color:#64665e; }
+.coaSent { padding:12px 14px; background:#eef7f0; color:#1d5a2f; border-radius:4px; font-size:14px; font-weight:600; margin:0; }
+.coaError { color:#963725; font-size:13px; margin:0; }

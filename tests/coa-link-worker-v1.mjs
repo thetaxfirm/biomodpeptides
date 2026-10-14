@@ -1,0 +1,77 @@
+// "Request by email" on the production build with real local D1. Synthetic, non-laboratory PDF fixtures;
+// the mail provider is intercepted. Proves: instant email with a private link, the link serves the
+// verified original for the current lot only, bad/expired links fail, failed sends never leave a live link.
+import { migrationStatements } from './sql-migration-fixture.mjs';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
+import { Miniflare, Log, LogLevel } from 'miniflare';
+const require = createRequire(import.meta.url);
+const registry = require('./fixtures/coa-originals-v1.cjs');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'), built = path.join(root, 'dist/server');
+const config = JSON.parse(await fs.readFile(path.join(built, 'wrangler.json'), 'utf8'));
+const files = (await fs.readdir(built, { recursive: true })).filter(n => /\.(?:m?js)$/.test(n));
+const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'trybiomod-coa-link-'));
+const origin = 'https://trybiomod.com', key = 'isolated-provider-fixture-not-a-real-secret';
+const sent = []; let providerOk = true, forbidden = 0;
+const mf = new Miniflare({
+  name: 'isolated-coa-link', cf: false, modulesRoot: built,
+  modules: [config.main, ...files.filter(n => n !== config.main)].map(n => ({ type: 'ESModule', path: path.join(built, n) })),
+  compatibilityDate: config.compatibility_date, compatibilityFlags: config.compatibility_flags,
+  bindings: { RESEND_API_KEY: key, ORDER_EMAIL_FROM: 'BIOMOD Fixture <no-reply@example.invalid>', SUPABASE_URL: 'https://identity.example.invalid', SUPABASE_ANON_KEY: 'isolated' },
+  d1Databases: { DB: 'isolated-coa-link' }, d1Persist: path.join(temporary, 'd1'),
+  outboundService: async request => {
+    if (request.url !== 'https://api.resend.com/emails' || request.method !== 'POST') { forbidden++; throw Error('Unexpected outbound ' + request.url); }
+    assert.equal(request.headers.get('authorization'), 'Bearer ' + key);
+    sent.push({ key: request.headers.get('idempotency-key'), ...(await request.json()) });
+    return providerOk ? Response.json({ id: 'fixture' }) : new Response('{}', { status: 500 });
+  },
+  log: new Log(LogLevel.ERROR),
+});
+const post = async (body, headers = {}) => { const r = await mf.dispatchFetch(origin + '/api/coa-link', { method: 'POST', headers: { origin, 'content-type': 'application/json', 'cf-connecting-ip': '203.0.113.' + (headers.ip || 1), ...headers }, body: JSON.stringify(body) }); return { status: r.status, body: await r.json() }; };
+const linkIn = mail => /https:\/\/trybiomod\.com(\/api\/coa-file\/[a-f0-9-]{36}\.[a-f0-9]{64})/.exec(mail.text)[1];
+try {
+  await mf.ready; const DB = await mf.getD1Database('DB');
+  for (const name of (await fs.readdir(path.join(root, 'drizzle'))).filter(n => n.endsWith('.sql')).sort()) await DB.batch(migrationStatements(await fs.readFile(path.join(root, 'drizzle', name), 'utf8')).map(s => DB.prepare(s)));
+  await DB.batch(registry.reports.map(r => DB.prepare('INSERT INTO coa_original_reports VALUES(?,?,1)').bind(r.sha256, JSON.stringify(r))));
+  const heatR30 = registry.reports.find(r => r.productId === 745);
+  // Customer types an email for HEAT-R 30mg: the email goes out at once with a private link.
+  let r = await post({ productId: 745, email: '  Buyer@Example.invalid ' });
+  assert.equal(r.status, 200, JSON.stringify(r.body)); assert.match(r.body.message, /HEAT-R 30mg COA \(lot 102-30-0001\)/);
+  assert.equal(sent.length, 1); const mail = sent[0];
+  assert.deepEqual(mail.to, ['buyer@example.invalid']); assert.equal(mail.subject, 'Your COA: HEAT-R 30mg / lot 102-30-0001');
+  assert.equal(mail.attachments, undefined, 'A link, not an attachment'); assert.match(mail.html, /Open the COA/);
+  assert(!/retatrutide/i.test(JSON.stringify(mail)), 'Compound name never appears in the email');
+  // The link opens the exact verified original PDF.
+  const link = linkIn(mail);
+  let file = await mf.dispatchFetch(origin + link);
+  assert.equal(file.status, 200); assert.equal(file.headers.get('content-type'), 'application/pdf'); assert.match(file.headers.get('x-robots-tag'), /noindex/);
+  const bytes = Buffer.from(await file.arrayBuffer());
+  assert.equal(createHash('sha256').update(bytes).digest('hex'), heatR30.sha256, 'Served bytes are the original report');
+  // Tampered, unknown or expired links fail without saying why.
+  const [, id, secret] = /([a-f0-9-]{36})\.([a-f0-9]{64})/.exec(link);
+  for (const bad of [`/api/coa-file/${id}.${'0'.repeat(64)}`, `/api/coa-file/${crypto.randomUUID()}.${secret}`, '/api/coa-file/nonsense']) assert.equal((await mf.dispatchFetch(origin + bad)).status, 404);
+  const row = await DB.prepare('SELECT data,status FROM requests WHERE id=?').bind(id).first();
+  assert.equal(row.status, 'sent'); assert.equal(JSON.parse(row.data).opens, 1); assert(!row.data.includes(secret), 'Only a hash of the link secret is stored');
+  await DB.prepare("UPDATE requests SET data=json_set(data,'$.expires',1) WHERE id=?").bind(id).run();
+  assert.equal((await mf.dispatchFetch(origin + link)).status, 404, 'Expired link refused');
+  // HEAT-R 20mg works the same way.
+  r = await post({ productId: 1389, email: 'second@example.invalid' }, { ip: 2 }); assert.equal(r.status, 200); assert.match(sent.at(-1).subject, /HEAT-R 20mg \/ lot 102-20-0001/);
+  // A product with no COA on file for its lot sends nothing.
+  r = await post({ productId: 784, email: 'third@example.invalid' }, { ip: 3 }); assert.equal(r.status, 404); assert.match(r.body.error, /cannot be sent by email yet/); assert.equal(sent.length, 2);
+  // Validation and cross-site protection.
+  assert.equal((await post({ productId: 745, email: 'not-an-email' }, { ip: 4 })).status, 400);
+  assert.equal((await post({ productId: 745, email: 'x@example.invalid' }, { origin: 'https://evil.example', ip: 5 })).status, 403);
+  // Provider failure: customer told to retry, link never becomes usable.
+  providerOk = false; r = await post({ productId: 745, email: 'fail@example.invalid' }, { ip: 6 }); assert.equal(r.status, 502);
+  const failed = sent.at(-1); assert.equal((await mf.dispatchFetch(origin + linkIn(failed))).status, 404, 'Unsent link stays dead'); providerOk = true;
+  // Rate limit per email address.
+  let last; for (let i = 0; i < 5; i++) last = await post({ productId: 745, email: 'repeat@example.invalid' }, { ip: 10 + i });
+  assert.equal(last.status, 429);
+  assert.equal(forbidden, 0);
+  console.log('PASS: built Worker Request by email: instant email with a private link (no attachment, no compound name), link serves the verified original, tampered/unknown/expired/unsent links refused, no-COA product sends nothing, validation, origin guard, provider failure and per-email rate limit. Synthetic fixtures only.');
+} finally { await mf.dispose(); await fs.rm(temporary, { recursive: true, force: true }); }
