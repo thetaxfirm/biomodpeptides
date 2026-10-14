@@ -40,7 +40,8 @@ export async function sendCoaLink(env: CoaEnvironment, input: { productId: unkno
     const productId = Number(input.productId);
     if (!Number.isSafeInteger(productId) || productId <= 0) throw new CoaLinkError('Choose a product.');
     const report = await currentCoaFor(env.DB, productId);
-    if (!report) throw new CoaLinkError('This COA cannot be sent by email yet. Contact us and we will send it.', 404);
+    // Products whose current-lot report is already public: email the link to that public original.
+    if (!report) return sendPublicCoaLink(env, email, productId, deps);
     const sender = coaSender(env.COA_EMAIL_FROM || env.ORDER_EMAIL_FROM || 'BIOMOD <no-reply@trybiomod.com>');
     if (!env.RESEND_API_KEY?.trim() || !sender) throw new CoaLinkError('COA email is not available right now. Contact us and we will send it.', 503);
     const now = (deps.now || Date.now)();
@@ -85,4 +86,40 @@ export async function openCoaLink(env: CoaEnvironment, token: string, deps: Depe
     if (!pdf) return null;
     await env.DB.prepare("UPDATE requests SET data=json_set(data,'$.opens',coalesce(json_extract(data,'$.opens'),0)+1,'$.lastOpened',?) WHERE id=?").bind((deps.now || Date.now)(), match[1]).run().catch(() => undefined);
     return { filename: pdf.filename, bytes: Uint8Array.from(atob(pdf.content), c => c.charCodeAt(0)) };
+}
+
+/** Public matching-lot certificate for the product's current lot (same record /testing shows), or null. */
+export async function publicCoaFor(productId: number): Promise<{ productName: string; lot: string; url: string } | null> {
+    const { publicCatalog } = await import('./public-catalog');
+    const { batchFor, matchingCertificateFor, coaOnRequest } = await import('./testing');
+    const snapshot = await publicCatalog();
+    const product = snapshot.products.find(p => p.id === productId);
+    if (!snapshot.verified || !product) return null;
+    const record = batchFor(product.id, product);
+    if (!record || coaOnRequest(record)) return null;
+    const certificate = matchingCertificateFor(record);
+    if (!certificate?.url || typeof certificate.url !== 'string' || !/^https:\/\//.test(certificate.url) && !certificate.url.startsWith('/')) return null;
+    return { productName: product.name, lot: String(record.product_lot || certificate.batch_number || ''), url: certificate.url.startsWith('/') ? 'https://trybiomod.com' + certificate.url : certificate.url };
+}
+async function sendPublicCoaLink(env: CoaEnvironment, email: string, productId: number, deps: Dependencies) {
+    const found = await publicCoaFor(productId);
+    if (!found) throw new CoaLinkError('This COA cannot be sent by email yet. Contact us and we will send it.', 404);
+    const sender = coaSender(env.COA_EMAIL_FROM || env.ORDER_EMAIL_FROM || 'BIOMOD <no-reply@trybiomod.com>');
+    if (!env.RESEND_API_KEY?.trim() || !sender) throw new CoaLinkError('COA email is not available right now. Contact us and we will send it.', 503);
+    const now = (deps.now || Date.now)(), id = (deps.uuid || (() => crypto.randomUUID()))();
+    await env.DB.prepare('INSERT INTO requests(id,owner,kind,data,status,created) VALUES(?,?,?,?,?,?)').bind(id, null, 'coa_link', JSON.stringify({ email, productId, productName: found.productName, lot: found.lot, publicUrl: found.url }), 'sending', now).run();
+    const subject = `Your COA: ${found.productName}${found.lot ? ' / lot ' + found.lot : ''}`;
+    const text = `Here is the original Certificate of Analysis for ${found.productName}${found.lot ? ', lot ' + found.lot : ''}.\n\nOpen the COA: ${found.url}\n\nCompare the lot on the report with the lot on your vial.\n\nFor laboratory research use only. Questions? Reply to this email.`;
+    const html = '<div style="font-family:Arial,sans-serif;color:#141414;max-width:520px;margin:0 auto;padding:20px"><p style="font-size:20px;font-weight:bold;color:#2b1030;letter-spacing:2px;margin:0 0 16px">BIOMOD</p>'
+        + `<p>Here is the original Certificate of Analysis for <strong>${esc(found.productName)}</strong>${found.lot ? `, lot <strong>${esc(found.lot)}</strong>` : ''}.</p>`
+        + `<p><a href="${esc(found.url)}" style="display:inline-block;background:#2b1030;color:#fbf1ea;padding:11px 18px;border-radius:6px;text-decoration:none;font-weight:bold">Open the COA</a></p>`
+        + '<p style="font-size:13px;color:#5c5c5c">Compare the lot on the report with the lot on your vial.</p><p style="font-size:12px;color:#5c5c5c">For laboratory research use only. Questions? Reply to this email.</p></div>';
+    let accepted = false;
+    try {
+        const response = await (deps.fetch || fetch)('https://api.resend.com/emails', { method: 'POST', headers: { Authorization: 'Bearer ' + env.RESEND_API_KEY!.trim(), 'Content-Type': 'application/json', 'Idempotency-Key': 'coa-link-' + id }, body: JSON.stringify({ from: sender, to: [email], reply_to: (await readCoaConfig(env)).replyTo, subject, text, html }), redirect: 'manual', signal: AbortSignal.timeout(10000) });
+        accepted = response.ok;
+    } catch { /* reported below */ }
+    await env.DB.prepare('UPDATE requests SET status=? WHERE id=?').bind(accepted ? 'sent' : 'failed', id).run();
+    if (!accepted) throw new CoaLinkError('The email could not be sent. Try again, or contact us and we will send it.', 502);
+    return { productName: found.productName, lot: found.lot };
 }

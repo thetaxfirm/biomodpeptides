@@ -19,3 +19,11 @@ Affected: product and testing pages with on-request COAs; `/api/coa-link`, `/api
 ## Release
 
 Main 8639e2a. Cloudflare version 6ae0e964-9f4a-44a7-adc7-e00ac7ccb3f9 deployed 2026-10-14T03:34:56Z. Live: /product/heat-r-30mg shows "Request by email" for lot 102-30-0001; /api/coa-link refuses a foreign origin (403); an invalid /api/coa-file link returns 404. No live email was sent by Claude; first real send is untested live.
+
+## Follow-up, October 14, 2026: popup on the product page; email for every matched COA
+
+Owner: "this should be a popup and not take the person away from our page ... add email and we mail it right away. match the correct coa with each product."
+- The product page's "View testing documentation" link (and the research section's batch-record link) now open a popup on the product page with that product's lot, its matched original COA and the email box. Nobody is sent to /testing.
+- "Send me the COA" now also works for products whose current-lot report is public: the email links that public original (same certificate /testing shows for the current lot). On-request (private) reports keep the 30-day private link. Products with no matched report still send nothing.
+- Sending runs in the Cloudflare Worker through the store's mail provider. It does not use Jarvis or any computer.
+- Checks: release gate (73 suites), production build, built-Worker `coa-link-worker-v1.mjs` passed.

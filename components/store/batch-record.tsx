@@ -32,3 +32,17 @@ export function BatchDetails({record:r}:{record:any}){
  return <div className="batch-details"><div className="batch-facts">{facts}</div>{d&&r.certificate_source_note&&<p className="batch-explanation">{r.certificate_source_note}{r.recorded_on&&' Record updated '+r.recorded_on+'.'}</p>}{!d&&<p className="batch-explanation">The lab report for this lot is being updated. Ask us anytime for the latest documentation.</p>}<div className="batch-actions"><CertificateButton record={r}/><button className="text-button" onClick={()=>navigator.clipboard.writeText(url()).then(()=>toast.success('Batch record link copied.')).catch(report)}><Copy size={16}/>Copy record link</button><button className="text-button" disabled={qrBusy} onClick={makeQr}><QrCode size={16}/>{qrBusy?'Creating code…':'QR code'}</button><a href={'/contact?subject='+encodeURIComponent('Documentation: '+r.product_name+(r.product_lot?' / '+r.product_lot:''))}>Ask about this lot <ArrowUpRight size={16}/></a></div><Dialog open={qrOpen} onOpenChange={setQrOpen}><DialogContent className="qr-dialog"><DialogTitle>{r.product_name} · Batch record</DialogTitle><DialogDescription>Scan to open this record. Lot: {r.product_lot||statusLabels.pending}.</DialogDescription>{qr&&<img src={qr} alt={'QR code for '+r.product_name+' batch record'} width={280} height={280}/>}<a className="button button-dark" href={qr} download={'biomod-'+r.record_id+'-qr-v1.png'}><Download size={17}/>Download QR code</a></DialogContent></Dialog></div>;
 }
 export function BatchPassport({product:p}:{product:Product}){const r=batchFor(p.id,p);if(!r)return null;return <section className="batch-passport"><div className="batch-passport-heading"><div><h2>Product & batch record</h2><p>{compound(p)} · {productFormat(p)}</p></div><span className={'batch-status '+batchStatus(r)}>{batchStatusLabel(r)}</span></div><BatchDetails record={r}/>{r.product_lot&&<p className="batch-source-note">{matchingCertificateFor(r)&&r.recorded_on ? 'Record updated ' + r.recorded_on + '. ' : ''}Match this lot to the label on your vial.</p>}</section>}
+
+/** Product page: the lot, its COA and "email me the COA" in a popup, so the customer never leaves the product. */
+export function CoaPopup({product:p,label='View COA and testing',className='coa-link'}:{product:Product;label?:string;className?:string}){
+ const [open,setOpen]=useState(false);const r=batchFor(p.id,p);
+ if(!r)return null;
+ const emailable=!coaOnRequest(r)&&Boolean(matchingCertificateFor(r));
+ return <><button type="button" className={className+' '+styles.popupButton} onClick={()=>setOpen(true)}>{label} <ArrowUpRight size={17}/></button>
+  <Dialog open={open} onOpenChange={setOpen}><DialogContent className={'coa-dialog '+styles.coaPopup}>
+   <DialogTitle>{p.name} · COA and testing</DialogTitle>
+   <DialogDescription>{batchStatusLabel(r)}{r.product_lot?' · Lot '+r.product_lot:''}</DialogDescription>
+   <BatchDetails record={r}/>
+   {emailable&&<CoaEmailRequest record={r}/>}
+  </DialogContent></Dialog></>;
+}

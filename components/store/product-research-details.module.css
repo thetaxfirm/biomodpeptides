@@ -30,3 +30,4 @@
 .citation span{display:block;overflow-wrap:anywhere}
 .research .studyLimits{max-width:760px}
 @media(max-width:700px){.questions,.research{margin:34px 0}.questions h2,.research h2{font-size:24px}.answers,.studyFacts{grid-template-columns:1fr;gap:22px}}
+.inlineCoa { display: inline-flex; align-items: center; gap: 4px; font: inherit; color: inherit; background: none; border: 0; padding: 0; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }

@@ -3,6 +3,7 @@ import { type Product } from '@/lib/catalog';
 import { eligibleDiscovery, otherVialSizes } from '@/lib/product-discovery';
 import { packContents, packUnitLimit } from '@/lib/packs';
 import { batchFor, batchPath } from '@/lib/testing';
+import { CoaPopup } from './batch-record';
 import { productQuestions } from '@/lib/product-questions';
 import styles from './product-research-details.module.css';
 
@@ -219,7 +220,7 @@ export function ProductResearchDetails({ product }: { product: Product }) {
         <h3>{item.question}</h3>
         {item.answer.map(paragraph => <p key={paragraph}>{paragraph}</p>)}
         {item.id === 'buy' && <p><Link href="/shop">Browse all research peptides</Link>.</p>}
-        {item.id === 'documentation' && <p><a href={'/testing?product=' + product.id}>Read this product&apos;s batch record</a>. <Link href="/quality-standard#read-the-results">Understand purity and measured content</Link>.</p>}
+        {item.id === 'documentation' && <p><CoaPopup product={product} label="Read this product's batch record and COA" className={styles.inlineCoa}/>. <Link href="/quality-standard#read-the-results">Understand purity and measured content</Link>.</p>}
       </article>)}
     </div>
   </section>
