@@ -82,15 +82,81 @@ assert.equal(dynamicSizes[1], dynamic.find(product => product.id === forty.id));
 assert.equal(dynamicSizes[1].stockQuantity, 0);
 assert.equal(relatedResearchProducts(ten, dynamic)[0], dynamicSizes[1]);
 
-const render = child => renderToStaticMarkup(React.createElement(StoreProvider, { initialCatalog: products }, child));
+const render = (child, catalog = products) => renderToStaticMarkup(React.createElement(StoreProvider, { initialCatalog: catalog }, child));
+const cardSlugs = html => [...html.matchAll(/<h3><a href="\/product\/([^"]+)"/g)].map(match => match[1]);
 const home = render(React.createElement(HomeVials, { products: ordered }));
 const initialLinks = [...new Set([...home.matchAll(/href="\/product\/([^"]+)"/g)].map(match => match[1]))].sort();
 const homeCards = [...home.matchAll(/<article class="product-card">([\s\S]*?)<\/article>/g)].map(match => match[1]);
-assert.equal(homeCards.length, 16, 'Homepage retains its 16-card initial page');
-assert.deepEqual(homeCards.map(card => card.match(/<h3><a href="\/product\/([^"]+)"/)?.[1]), ordered.slice(0, 16).map(product => product.slug));
+assert.equal(homeCards.length, reviewed.length, 'Every eligible vial is rendered before Load more');
+assert.deepEqual(homeCards.map(card => card.match(/<h3><a href="\/product\/([^"]+)"/)?.[1]), ordered.filter(eligibleDiscovery).map(product => product.slug));
 assert(initialLinks.every(slug => reviewed.includes(slug)), 'Initial cards and alternate-size links exclude held products');
-assert(home.includes('Showing 16 of 33 lyophilized peptides'));
+assert(home.includes(`Showing ${reviewed.length} of ${ordered.length} lyophilized peptides`));
+assert(initialLinks.includes('thymosin-alpha-1-10mg'), 'Thymosin Alpha-1 has a crawlable homepage link without a click');
 assert(home.includes('Load more lyophilized peptides'), 'The remaining vial members retain the existing Load more control');
+// Cover changing catalog sizes without promoting held products just to fill 16 slots.
+const eligibleVials = ordered.filter(eligibleDiscovery);
+const heldVials = ordered.filter(product => !eligibleDiscovery(product));
+const heldSale = { ...heldVials[0], price: 123, inStock: true, purchasable: true,
+  activeSale: { percentOff: 91, basePrice: 12300, ends: '2099-12-31T23:59:59.000Z' } };
+for (const count of [0, 1, 16, eligibleVials.length]) {
+  for (const held of [[], [heldSale, ...heldVials.slice(1)]]) {
+    // Interleave holds first to verify the component enforces its own discovery order.
+    const catalog = [...held, ...eligibleVials.slice(0, count)];
+    const snapshot = JSON.stringify(catalog);
+    const html = render(React.createElement(HomeVials, { products: catalog }), catalog);
+    assert.deepEqual(cardSlugs(html), eligibleVials.slice(0, count).map(product => product.slug), `${count} eligible vials: no missing or held initial cards`);
+    assert(html.includes(`Showing ${count} of ${catalog.length} lyophilized peptides`));
+    assert.equal(html.includes('Load more lyophilized peptides'), held.length > 0, 'Load more exists exactly when undisplayed vials remain');
+    assert(!html.includes('Sale · 91%'), 'A sale never moves a held product into initial discovery');
+    assert.equal(JSON.stringify(catalog), snapshot, 'Discovery leaves supplied runtime records untouched');
+  }
+}
+const dynamicHtml = render(React.createElement(HomeVials, { products: dynamic }), dynamic);
+assert.deepEqual(cardSlugs(dynamicHtml), eligibleVials.map(product => product.slug));
+assert(dynamicHtml.includes(money(dynamic.find(product => product.id === ten.id).price)), 'Rendered cards use supplied runtime prices');
+
+// Isolate only this component's state hook to exercise its real Load more callback
+// and prop updates. Product cards still render through React with the real provider;
+// browser effects, network requests, and checkout actions never run.
+const homeFilename = path.join(root, 'components/store/home-vials.tsx');
+const homeModule = new Module(homeFilename, module);
+homeModule.filename = homeFilename;
+homeModule.paths = Module._nodeModulePaths(root);
+const homeRequire = homeModule.require.bind(homeModule);
+let extraState;
+homeModule.require = name => name === 'react' ? { ...React, useState: initial => {
+  if (extraState === undefined) extraState = typeof initial === 'function' ? initial() : initial;
+  return [extraState, update => { extraState = typeof update === 'function' ? update(extraState) : update; }];
+} } : homeRequire(name);
+homeModule._compile(ts.transpileModule(fs.readFileSync(homeFilename, 'utf8'), {
+  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true },
+}).outputText, homeFilename);
+const statefulHome = catalog => homeModule.exports.HomeVials({ products: catalog });
+const loadMore = tree => {
+  if (!React.isValidElement(tree)) return null;
+  if (tree.type === 'button' && tree.props['aria-controls'] === 'home-vial-grid') return tree;
+  return React.Children.toArray(tree.props.children).map(loadMore).find(Boolean) || null;
+};
+statefulHome([eligibleVials[0], ...heldVials]);
+let tree = statefulHome([...heldVials, ...eligibleVials]);
+assert.deepEqual(cardSlugs(render(tree)), eligibleVials.map(product => product.slug), 'An enlarged eligible catalog appears without remounting or clicking');
+tree = statefulHome([heldSale, eligibleVials[0]]);
+assert.deepEqual(cardSlugs(render(tree, [heldSale, eligibleVials[0]])), [eligibleVials[0].slug], 'A smaller eligible catalog does not expose held sale cards through stale state');
+const allHeld = products.filter(product => !eligibleDiscovery(product));
+const extraVials = allHeld.map(product => ({ ...product, categories: eligibleVials[0].categories }));
+const pagingCatalog = [...eligibleVials.slice(0, 1), ...extraVials];
+tree = statefulHome(pagingCatalog);
+loadMore(tree).props.onClick();
+tree = statefulHome(pagingCatalog);
+assert.equal(cardSlugs(render(tree, pagingCatalog)).length, 17, 'Load more adds one existing 16-card page');
+assert(loadMore(tree), 'More than one extra page retains the control');
+loadMore(tree).props.onClick();
+loadMore(statefulHome(pagingCatalog)).props.onClick();
+tree = statefulHome(pagingCatalog);
+assert.equal(cardSlugs(render(tree, pagingCatalog)).length, pagingCatalog.length, 'Load more caps at the actual catalog length');
+assert.equal(loadMore(tree), null, 'The control disappears after the final page');
+assert.equal(cardSlugs(render(statefulHome([]), [])).length, 0, 'Empty replacement data cannot retain stale cards');
+
 assert(nav.some(([label, href]) => label === 'Research Vials' && href === '/shop'));
 assert(nav.some(([label, href]) => label === 'COAs & testing' && href === '/testing'));
 const header = render(React.createElement(Header));
@@ -115,9 +181,11 @@ pageModule._compile(ts.transpileModule(fs.readFileSync(pageFilename, 'utf8'), {
   const page = render(await pageModule.exports.default({ searchParams: Promise.resolve({}) }));
   const featured = [...new Set([...page.matchAll(/href="\/product\/([^"]+)"/g)].map(match => match[1]))].sort();
   assert(featured.every(slug => reviewed.includes(slug)), 'Actual homepage cards and size links remain reviewed');
-  assert(page.includes('Showing 16 of 33 lyophilized peptides'));
+  assert(page.includes(`Showing ${reviewed.length} of ${ordered.length} lyophilized peptides`));
   const cards = [...page.matchAll(/<article class="product-card">([\s\S]*?)<\/article>/g)].map(match => match[1]);
-  assert.equal(cards.length, 16, 'Actual homepage retains 16 cards before Load more');
+  assert.equal(cards.length, reviewed.length, 'Actual homepage renders every reviewed vial before Load more');
+  assert.deepEqual(cardSlugs(page).sort(), reviewed, 'Every eligible product has its own initial homepage card');
+  assert(featured.includes('thymosin-alpha-1-10mg'), 'The current 17th eligible vial is linked in the actual initial homepage');
   const tenIndex = cards.findIndex(card => card.includes('<h3><a href="/product/mots-c-10mg">'));
   const fortyIndex = cards.findIndex(card => card.includes('<h3><a href="/product/mots-c-40mg">'));
   assert(tenIndex >= 0 && fortyIndex === tenIndex + 1, 'MOTS-c sizes are adjacent on the actual homepage');
@@ -132,5 +200,5 @@ pageModule._compile(ts.transpileModule(fs.readFileSync(pageFilename, 'utf8'), {
   }
   assert(!page.includes('/shop?category=research-compounds'), 'Actual home research links use the canonical catalog');
   assert.equal(JSON.stringify(products), before);
-  console.log('PASS: actual homepage renders 16 of 33 vials with adjacent MOTS-c 10/40 and SS-31 10/50 pairs; all 17 reviewed targets lead held items; held pairs remain noindex while available for size browsing; Load more retained; explicit size links and live values preserved; canonical navigation; no catalog mutation');
+  console.log('PASS: all eligible vials render initially, including Thymosin Alpha-1; empty/small/16/17-item and held-sale cases; catalog updates and Load more pagination; adjacent MOTS-c and SS-31 size pairs; holds, runtime values, canonical navigation and catalog records preserved');
 })().catch(error => { console.error(error); process.exitCode = 1; });
