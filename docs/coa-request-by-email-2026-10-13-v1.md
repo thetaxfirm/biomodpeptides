@@ -15,3 +15,7 @@ Safeguards: only the original report the store already matches to the product's 
 Gate: TypeScript and 72 suites. Production build passed. New built-Worker test `coa-link-worker-v1.mjs` with synthetic non-laboratory PDFs and an intercepted mail provider: instant email and link, served bytes equal the original's hash, tampered/unknown/expired/unsent links refused, no-COA product sends nothing, validation, origin guard, provider failure, per-email rate limit.
 
 Affected: product and testing pages with on-request COAs; `/api/coa-link`, `/api/coa-file/[token]`. No migration.
+
+## Release
+
+Main 8639e2a. Cloudflare version 6ae0e964-9f4a-44a7-adc7-e00ac7ccb3f9 deployed 2026-10-14T03:34:56Z. Live: /product/heat-r-30mg shows "Request by email" for lot 102-30-0001; /api/coa-link refuses a foreign origin (403); an invalid /api/coa-file link returns 404. No live email was sent by Claude; first real send is untested live.
