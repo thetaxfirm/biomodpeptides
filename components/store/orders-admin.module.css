@@ -20,6 +20,7 @@
 .orderButton { font-weight:700; text-decoration:underline; text-underline-offset:3px; cursor:pointer; color:#43284f; padding:4px 0; }
 .sub { display:block; font-size:12px; color:#6b6070; margin-top:2px; overflow-wrap:anywhere; }
 .next { white-space:nowrap; }
+.nextGroup { display:inline-flex; gap:14px; align-items:baseline; }
 .next :global(.button) { padding:8px 12px; min-height:0; font-size:13px; }
 .next :global(.text-button) { padding:4px 0; font-size:14px; }
 .more { display:flex; justify-content:center; margin:18px 0; }
