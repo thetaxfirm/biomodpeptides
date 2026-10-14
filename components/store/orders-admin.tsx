@@ -37,6 +37,24 @@ const orderNumber = (id: string) => '#' + id.slice(0, 8).toUpperCase();
 const units = (o: QueueRow) => (Array.isArray(o.data?.items) ? o.data.items : []).reduce((n: number, i: any) => n + (Number(i?.quantity) || 0), 0);
 const place = (o: QueueRow) => [o.data?.address?.city, o.data?.address?.state].filter(Boolean).join(', ');
 
+/** A bought label can be confirmed as handed to the carrier straight from the queue. */
+export const canConfirmShipped = (o: QueueRow, allowed: (permission: string) => boolean) =>
+    allowed('orders:fulfill') && o.bucket === 'label' && ['paid', 'shipped'].includes(o.status);
+
+/**
+ * Queue shortcut for the manual "handed to carrier" confirmation already in the order panel.
+ * Keeps the tracking number recorded with the label; never buys or voids anything.
+ */
+export function MarkShipped({ order, busy, change }: { order: QueueRow; busy: boolean; change: (action: string, body: any, onSaved?: (result: any) => void) => Promise<void> }) {
+    const number = orderNumber(order.id);
+    function click() {
+        const ask = typeof window === 'undefined' ? undefined : window.confirm;
+        if (ask && !ask('Mark ' + number + ' as shipped? This records a store confirmation that the parcel is with the carrier, and the customer is told it has shipped.')) return;
+        void change('order', { id: order.id, status: 'shipped', tracking: order.data?.tracking || '' }, () => toast.success(number + ' marked shipped.'));
+    }
+    return <button type="button" className="text-button" disabled={busy} onClick={click}>Mark shipped</button>;
+}
+
 function query(params: Record<string, string | number>) {
     const search = new URLSearchParams(Object.entries(params).filter(([, v]) => v !== '' && v !== undefined).map(([k, v]) => [k, String(v)]));
     return api('admin-orders?' + search.toString()) as Promise<QueueResult>;
@@ -86,7 +104,10 @@ export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, form
     function nextStep(o: QueueRow) {
         const s = o.data?.shipment;
         if (o.bucket === 'to_ship' && allowed('orders:fulfill')) return <ShippingLabel order={o} onDone={reload} compact/>;
-        if (o.bucket === 'label' && s?.labelUrl) return <a className="text-button" href={s.labelUrl} target="_blank" rel="noopener">Print label</a>;
+        if (o.bucket === 'label' && s?.labelUrl) return <span className={styles.nextGroup}>
+            <a className="text-button" href={s.labelUrl} target="_blank" rel="noopener">Print label</a>
+            {canConfirmShipped(o, allowed) && <MarkShipped order={o} busy={busy} change={change}/>}
+        </span>;
         if ((o.bucket === 'shipped' || o.bucket === 'delivered') && s?.trackingUrl) return <a className="text-button" href={s.trackingUrl} target="_blank" rel="noopener">Track</a>;
         if ((o.bucket === 'unpaid' || o.bucket === 'review') && canReconcile(o)) return <button type="button" className="text-button" disabled={busy} onClick={() => reconcile(o)}>Check payment</button>;
         return <button type="button" className="text-button" onClick={() => setSelected(o)}>View</button>;
