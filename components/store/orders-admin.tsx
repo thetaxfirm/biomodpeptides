@@ -141,7 +141,8 @@ export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, form
 
     return <section className={styles.orders} aria-labelledby="orders-title">
         <div className={styles.heading}>
-            <div><h2 id="orders-title">Orders</h2><p>Paid orders waiting to ship come first. Select an order number for the full order.</p></div>
+            <div><h2 id="orders-title">Orders</h2><p>Paid orders waiting to ship come first. Select an order number for the full order.</p>
+                <p className={styles.sub}><a className="text-button" href="/api/admin/pick-list" target="_blank" rel="noopener">Print pick list (To ship)</a>{allowed('orders:fulfill') && <> · <a className="text-button" href="/api/admin/labels" target="_blank" rel="noopener">Print all bought labels</a></>} · printing changes nothing</p></div>
             <label className={styles.search}>Search orders
                 <input type="search" value={input} onChange={e => setInput(e.target.value)} placeholder="Name, email, order number or tracking"/>
             </label>
@@ -199,6 +200,7 @@ export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, form
                     {recoveryJobs(selected.id).map((j: any) => <p key={j.order_id}>Recovery email: {j.status === 'accepted' ? 'Accepted by mail provider' : j.status === 'review' ? 'Needs manual review' : j.status}. {String(j.reason || '').replaceAll('_', ' ')}{j.accepted_at ? ' · ' + new Date(j.accepted_at).toLocaleString() : ''}</p>)}
                     <div className={styles.actions}>
                         <h3>Actions</h3>
+                        {['to_ship', 'label'].includes(selected.bucket) && <p className={styles.panelMeta}><a className="text-button" href={'/api/admin/pick-list?id=' + encodeURIComponent(selected.id)} target="_blank" rel="noopener">Pick list for this order</a></p>}
                         {selected.data?.hold ? <div className={styles.hold}>
                             <p><strong>On hold: {issueLabel(selected.data.hold.issue)}</strong>{selected.data.hold.note ? ' · ' + selected.data.hold.note : ''}<br/><span className={styles.panelMeta}>By {selected.data.hold.by} · {new Date(selected.data.hold.at).toLocaleString()}. No label or shipping until the hold is cleared.</span></p>
                             {onClearHold && <button type="button" className="text-button" disabled={busy} onClick={() => { const order = selected; void onClearHold(order).then(() => setSelected(null)); }}>Clear hold (problem solved)</button>}
