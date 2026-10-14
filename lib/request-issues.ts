@@ -5,7 +5,7 @@ export const issueTypes = [
   ['product_question', 'Product question'], ['partner', 'Partner or affiliate'], ['vendor', 'Vendor pitch'], ['other', 'Other'],
 ] as const;
 export const resolutionTypes = [
-  ['waiting', 'Customer will wait'], ['refund', 'Refunded'], ['store_credit', 'Store credit'], ['substitute', 'Sent something else meanwhile'],
+  ['waiting', 'Customer will wait'], ['free_item', 'Free item of their choice if they wait'], ['refund', 'Refunded'], ['store_credit', 'Store credit'], ['substitute', 'Sent something else meanwhile'],
   ['discount', 'Discount on next order'], ['replacement', 'Replacement sent'], ['answered', 'Answered'], ['other', 'Other'],
 ] as const;
 export type IssueType = typeof issueTypes[number][0];

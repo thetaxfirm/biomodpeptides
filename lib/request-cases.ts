@@ -56,3 +56,21 @@ export async function caseLog(env: Env): Promise<{ requestId: string; issue: str
     return rows.map(r => { let resolutions: string[] = []; try { resolutions = JSON.parse(r.resolutions); } catch { resolutions = []; } return { requestId: r.request_id, issue: r.issue, resolutions, note: r.note, updated: r.updated, updatedBy: r.updated_by, name: String(r.name || ''), subject: String(r.subject || '') }; });
   } catch { return []; }
 }
+
+export type OrderHold = { issue: string; note: string; by: string; at: number };
+/** Put an order on hold for a problem (or clear it). A held order cannot get a label or be marked shipped. */
+export async function setOrderHold(env: Env, orderId: string, hold: { issue: string; note?: string } | null, actor: Actor): Promise<OrderHold | null> {
+  if (!['owner', 'manager', 'support'].includes(actor.role)) fail('Not permitted.', 403);
+  if (typeof orderId !== 'string' || !/^[A-Za-z0-9_-]{6,80}$/.test(orderId)) fail('Choose an existing order.', 400);
+  const db = withAuditDb(env.DB, { source: 'admin', actor: actor.email, actorType: 'staff', action: hold ? 'order.hold' : 'order.hold_cleared', summary: hold ? 'Order put on hold for a problem' : 'Order hold cleared' });
+  if (!hold) {
+    const r = await db.prepare("UPDATE orders SET data=json_remove(data,'$.hold'),updated=? WHERE id=? AND json_extract(data,'$.hold') IS NOT NULL").bind(Date.now(), orderId).run();
+    if (!r.meta.changes) fail('This order is not on hold.', 409);
+    return null;
+  }
+  if (!isIssue(hold.issue)) fail('Choose what the problem is.', 400);
+  const value: OrderHold = { issue: hold.issue, note: typeof hold.note === 'string' ? hold.note.slice(0, 500).trim() : '', by: actor.email, at: Date.now() };
+  const r = await db.prepare("UPDATE orders SET data=json_set(data,'$.hold',json(?)),updated=? WHERE id=? AND status NOT IN ('refunded','cancelled','canceled','failed','delivered')").bind(JSON.stringify(value), Date.now(), orderId).run();
+  if (!r.meta.changes) fail('Only open orders can be put on hold.', 409);
+  return value;
+}

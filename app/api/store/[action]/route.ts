@@ -2,7 +2,7 @@ import { replyBridgeRoute } from '@/lib/request-reply-route';
 import { queryOrders, scanLimit } from '@/lib/order-queue';
 import { publicCatalog } from '@/lib/public-catalog';
 import { batchRecordsFor, batchStatus, batchPath } from '@/lib/testing';
-import { startOrderConversation, saveRequestIssue, issuesFor, caseLog } from '@/lib/request-cases';
+import { startOrderConversation, saveRequestIssue, issuesFor, caseLog, setOrderHold } from '@/lib/request-cases';
 import { forwardRequest, forwardsFor, teamMembers, activityFor } from '@/lib/request-forward';
 import { summarizeRequestReplies, prepareRequestReply, replyDeskOptions, saveReplyRule } from '@/lib/request-replies';
 import { adminBatchRecords, validateBatchEdit } from '@/lib/product-batch';
@@ -37,7 +37,7 @@ export const dynamic = 'force-dynamic';
 // What each admin write needs. An admin action missing here requires the owner.
 const adminActionPermission: Record<string, StaffPermission> = {
     'admin-order': 'orders:fulfill', 'admin-reconcile': 'orders:reconcile',
-    'admin-request': 'requests:write', 'admin-request-reply': 'requests:write', 'admin-reply-desk': 'requests:write', 'admin-request-replies': 'requests:write', 'admin-reply-rule': 'requests:write', 'admin-request-forward': 'requests:write', 'admin-order-conversation': 'requests:write', 'admin-request-issue': 'requests:write', 'admin-case-log': 'requests:write', 'admin-coa-process': 'requests:write',
+    'admin-request': 'requests:write', 'admin-request-reply': 'requests:write', 'admin-reply-desk': 'requests:write', 'admin-request-replies': 'requests:write', 'admin-reply-rule': 'requests:write', 'admin-request-forward': 'requests:write', 'admin-order-conversation': 'requests:write', 'admin-order-hold': 'requests:write', 'admin-request-issue': 'requests:write', 'admin-case-log': 'requests:write', 'admin-coa-process': 'requests:write',
     'admin-config': 'store:write', 'admin-product': 'store:write', 'admin-campaign': 'store:write', 'admin-reward': 'store:write', 'admin-coa-config': 'store:write',
     'admin-staff': 'team:manage',
 };
@@ -504,6 +504,17 @@ export async function POST(req: NextRequest, { params }: {
                 try { const result = await startOrderConversation(runtime(), input.orderId, actor); return j({ ...result, message: result.created ? 'Conversation started. Nothing was sent.' : 'Opened the existing conversation for this order.' }); }
                 catch (error) { const status = (error as Error & { status?: number }).status; return j({ error: status ? (error as Error).message : 'Could not open a conversation for this order.' }, status || 500); }
             }
+            if (action === 'admin-order-hold') {
+                const input = z.object({ orderId: z.string().min(6).max(80), issue: z.string().max(40).optional(), note: z.string().max(500).optional(), clear: z.boolean().optional() }).parse(b);
+                try {
+                    if (input.clear) { await setOrderHold(runtime(), input.orderId, null, actor); return j({ message: 'Hold cleared. The order can ship again.' }); }
+                    const hold = await setOrderHold(runtime(), input.orderId, { issue: input.issue || '', note: input.note }, actor);
+                    const conversation = await startOrderConversation(runtime(), input.orderId, actor);
+                    const known = (await issuesFor(runtime(), [conversation.requestId]))[conversation.requestId];
+                    await saveRequestIssue(runtime(), { requestId: conversation.requestId, issue: hold!.issue, resolutions: known?.resolutions || [], note: hold!.note || known?.note || '' }, actor);
+                    return j({ hold, requestId: conversation.requestId, message: 'Order on hold. Nothing was sent to the customer.' });
+                } catch (error) { const status = (error as Error & { status?: number }).status; return j({ error: status ? (error as Error).message : 'Could not update the hold.' }, status || 500); }
+            }
             if (action === 'admin-request-issue') {
                 const input = z.object({ id: z.string().uuid(), issue: z.string().max(40), resolutions: z.array(z.string().max(40)).max(10).optional(), note: z.string().max(1000).optional() }).parse(b);
                 try { return j({ issue: await saveRequestIssue(runtime(), { requestId: input.id, issue: input.issue, resolutions: input.resolutions, note: input.note }, actor) }); }
@@ -635,6 +646,8 @@ export async function POST(req: NextRequest, { params }: {
                 }>('SELECT data,status FROM orders WHERE id=?', str(b.id, 50));
                 if (!o || !['paid', 'shipped'].includes(o.status))
                     throw new Error('Only verified paid orders may be fulfilled.');
+                if (parse<Record<string, any>>(o.data, {}).hold)
+                    throw new Error('This order is on hold for a reported problem. Clear the hold before marking it shipped.');
                 const data = { ...parse(o.data, {}), tracking: str(b.tracking, 200) };
                 await run('UPDATE orders SET status=?,data=?,updated=? WHERE id=?', status, JSON.stringify(data), timestamp(), b.id);
                 return j({ message: 'Order updated.' });

@@ -17,7 +17,7 @@ export function orderPreorderNotice(data: { items?: unknown } | undefined): stri
 }
 
 /** Payment status is not proof of physical dispatch. Shared by admin and customer views. */
-export type FulfillmentOrder = { status: string; data?: { items?: unknown; internalTest?: boolean; shipment?: { status?: string; checkedAt?: number }; tracking?: string } };
+export type FulfillmentOrder = { status: string; data?: { items?: unknown; internalTest?: boolean; shipment?: { status?: string; checkedAt?: number }; tracking?: string; hold?: unknown } };
 const moving = new Set(['in_transit', 'out_for_delivery', 'available_for_pickup']);
 const problems = new Set(['return_to_sender', 'failure', 'cancelled', 'error']);
 export function fulfillmentLabel(order: FulfillmentOrder): string {
@@ -70,6 +70,8 @@ export function orderBucket(order: FulfillmentOrder): OrderBucket {
     if (['refunded', 'cancelled', 'canceled', 'failed'].includes(order.status)) return 'closed';
     const carrier = order.data?.shipment?.status;
     if (carrier === 'delivered' || order.status === 'delivered') return 'delivered';
+    // A reported problem (for example, the item is not in stock yet) holds the order in Needs review until cleared.
+    if (order.data?.hold) return 'review';
     if (carrier && problems.has(carrier)) return 'review';
     if (carrier && moving.has(carrier)) return 'shipped';
     if (order.status === 'labeling' || (order.data?.shipment && ['paid', 'shipped'].includes(order.status))) return 'label';

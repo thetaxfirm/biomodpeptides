@@ -163,10 +163,12 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
     return () => { stopped = true; if (timer) clearTimeout(timer); };
   }, [onRefreshReplies, requestIds]);
   // Opened from an order: select that conversation once it is in the list.
+  // focusId is "requestId|token" so asking for the same conversation again reopens it.
   useEffect(() => {
-    if (!focusId || !requests.some(r => r.id === focusId)) return;
-    setFilter('all'); setSelected(focusId);
-    setDrafts(previous => previous[focusId] ? previous : { ...previous, [focusId]: newDraft(replyOf(focusId)) });
+    const id = focusId?.split('|')[0];
+    if (!id || !requests.some(r => r.id === id)) return;
+    setFilter('all'); setSelected(id);
+    setDrafts(previous => previous[id] ? previous : { ...previous, [id]: newDraft(replyOf(id)) });
   }, [focusId, requestIds]);
   // A clean draft follows the newest saved/AI version; an edited one is never overwritten.
   useEffect(() => {

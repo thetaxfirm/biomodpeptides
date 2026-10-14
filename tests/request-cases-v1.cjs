@@ -25,5 +25,16 @@ const cases=require('../lib/request-cases.ts'),replies=require('../lib/request-r
  const job=(await replies.handleReplyBridge(env,{action:'claim'})).job;assert.equal(job.request.origin,'order');assert.match(job.caseInfo,/Item not in stock yet[\s\S]*Customer will wait, Discount on next order[\s\S]*30%/);
  assert.deepEqual(job.style.rules.sort(),['Out of stock: offer wait, refund, credit or substitute.','Sign off as Ash.'],'General rules plus only this issue\'s rules');
  const log=await cases.caseLog(env);assert.equal(log.length,1);assert.equal(log[0].name,'Synthetic Buyer');
+ // Hold: a reported problem parks the order in Needs review; label purchase and Mark shipped refuse until cleared.
+ const fulfillment=require('../lib/fulfillment.ts');
+ const hold=await cases.setOrderHold(env,orderId,{issue:'out_of_stock',note:'Restock in November'},owner);assert.equal(hold.issue,'out_of_stock');
+ const held=JSON.parse(sql.prepare('SELECT data FROM orders WHERE id=?').get(orderId).data);assert.equal(held.hold.by,owner.email);
+ assert.equal(fulfillment.orderBucket({status:'paid',data:held}),'review');
+ const label=sql.prepare("UPDATE orders SET status='labeling' WHERE id=? AND status='paid' AND json_extract(data,'$.shipment') IS NULL AND json_extract(data,'$.hold') IS NULL").run(orderId);assert.equal(label.changes,0,'Label claim refuses a held order');
+ await assert.rejects(()=>cases.setOrderHold(env,orderId,{issue:'nope'},owner),e=>e.status===400);
+ await cases.setOrderHold(env,orderId,null,owner);assert.equal(JSON.parse(sql.prepare('SELECT data FROM orders WHERE id=?').get(orderId).data).hold,undefined);
+ await assert.rejects(()=>cases.setOrderHold(env,orderId,null,owner),e=>e.status===409);
+ assert.equal(fulfillment.orderBucket({status:'paid',data:{}}),'to_ship');
+ assert(require('../lib/request-issues.ts').resolutionTypes.some(([k,l])=>k==='free_item'&&/free item of their choice/i.test(l)));
  console.log('PASS: one conversation per order with staff-only order context, order subject kept, issue + resolutions validated, issue-scoped rules and the decided case reach the AI, case log for rules. Isolated SQLite, no email.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

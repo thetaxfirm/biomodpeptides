@@ -48,3 +48,10 @@ Owner instruction after a HEAT-R 20mg reply was staged saying "Attached" with no
 - Each conversation can be tagged with what it is about (out of stock, website problem, COA, shipping, refund, wrong/damaged, product question, partner, vendor, other), how it was handled (wait, refund, store credit, substitute, discount, replacement, answered, other) and a case note. Migration `0027_request_issues.sql`.
 - **Issues & rules** groups every tagged case by issue with a tally of how each was handled, and holds rules per issue plus general rules. AI drafts get the general rules, that issue's rules and the owner's decision for the case.
 - Tests: `tests/request-cases-v1.cjs`; desk cases for order notes and tagging; Jarvis test that order notes never reach the customer email (27 Jarvis tests).
+
+## Follow-up (Oct 13): report a problem on an order (hold)
+
+- Orders rows get **Report problem**; the order panel gets a "Report a problem" form (what is wrong + note) and, on a held order, **Clear hold**. Reporting stores `data.hold` on the order (audited), opens the order's desk conversation tagged with the issue, and sends nothing.
+- A held order shows "On hold: <issue>" with **Email customer**, sits in Needs review, and cannot have a label bought (`app/api/admin/shipping` claim refuses) or be marked shipped/delivered (`admin-order` refuses) until cleared.
+- New resolution: "Free item of their choice if they wait", so the AI can write that offer.
+- Tests: hold/clear, bucket, label-claim refusal in `tests/request-cases-v1.cjs`; `tests/orders-mark-shipped-v1.cjs` loader maps the shared issue list.

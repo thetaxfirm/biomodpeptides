@@ -45,3 +45,12 @@
   .number { text-align:left; }
   .panel { padding:20px 16px 32px; }
 }
+
+.holdTag { font-size:13px; font-weight:600; color:#7a3b12; }
+.hold { padding:12px 14px; border-radius:8px; background:#fbf1e3; color:#5e3b0c; display:grid; gap:6px; }
+.hold p { margin:0; }
+.problem { display:grid; gap:10px; padding:12px 14px; border-radius:8px; border:1px solid #e3dae6; }
+.problem p { margin:0; }
+.problem label { display:grid; gap:4px; font-size:13px; color:#655a68; }
+.problem select, .problem input { font:inherit; font-size:14px; padding:8px 10px; border:1px solid #d8cedd; border-radius:6px; background:white; color:#2d1235; }
+.problem button { justify-self:start; }

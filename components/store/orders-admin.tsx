@@ -4,6 +4,7 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { issueTypes, issueLabel } from '@/lib/request-issues';
 import { api, report } from './provider';
 import { Field } from './primitives';
 import { money } from '@/lib/catalog';
@@ -26,6 +27,9 @@ type Props = {
     reload: () => void;
     /** Opens (or reuses) a reply-desk conversation with this order's customer. Never sends by itself. */
     onEmailCustomer?: (order: QueueRow) => void;
+    /** Puts the order on hold for a problem and opens the customer email. Nothing is sent by itself. */
+    onReportProblem?: (order: QueueRow, problem: { issue: string; note: string }) => Promise<void>;
+    onClearHold?: (order: QueueRow) => Promise<void>;
 };
 
 export function StatusBadge({ bucket }: { bucket: OrderBucket }) {
@@ -60,7 +64,8 @@ function query(params: Record<string, string | number>) {
     return api('admin-orders?' + search.toString()) as Promise<QueueResult>;
 }
 
-export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, formGeneration, change, submit, markDraft, reload, onEmailCustomer }: Props) {
+export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, formGeneration, change, submit, markDraft, reload, onEmailCustomer, onReportProblem, onClearHold }: Props) {
+    const [problem, setProblem] = useState<{ issue: string; note: string }>({ issue: 'out_of_stock', note: '' });
     const [tab, setTab] = useState<QueueTab>('to_ship');
     const [input, setInput] = useState('');
     const [q, setQ] = useState('');
@@ -103,6 +108,15 @@ export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, form
 
     function nextStep(o: QueueRow) {
         const s = o.data?.shipment;
+        if (o.data?.hold) return <span className={styles.nextGroup}>
+            <span className={styles.holdTag}>On hold: {issueLabel(o.data.hold.issue)}</span>
+            {onEmailCustomer && o.data?.email && <button type="button" className="text-button" disabled={busy} onClick={() => onEmailCustomer(o)}>Email customer</button>}
+        </span>;
+        const report = onReportProblem && !['closed', 'delivered', 'test'].includes(o.bucket) ? <button type="button" className="text-button" onClick={() => { setProblem({ issue: 'out_of_stock', note: '' }); setSelected(o); }}>Report problem</button> : null;
+        const step = mainStep(o, s);
+        return report ? <span className={styles.nextGroup}>{step}{report}</span> : step;
+    }
+    function mainStep(o: QueueRow, s: any) {
         if (o.bucket === 'to_ship' && allowed('orders:fulfill')) return <ShippingLabel order={o} onDone={reload} compact/>;
         if (o.bucket === 'label' && s?.labelUrl) return <span className={styles.nextGroup}>
             <a className="text-button" href={s.labelUrl} target="_blank" rel="noopener">Print label</a>
@@ -167,10 +181,19 @@ export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, form
                     {recoveryJobs(selected.id).map((j: any) => <p key={j.order_id}>Recovery email: {j.status === 'accepted' ? 'Accepted by mail provider' : j.status === 'review' ? 'Needs manual review' : j.status}. {String(j.reason || '').replaceAll('_', ' ')}{j.accepted_at ? ' · ' + new Date(j.accepted_at).toLocaleString() : ''}</p>)}
                     <div className={styles.actions}>
                         <h3>Actions</h3>
+                        {selected.data?.hold ? <div className={styles.hold}>
+                            <p><strong>On hold: {issueLabel(selected.data.hold.issue)}</strong>{selected.data.hold.note ? ' · ' + selected.data.hold.note : ''}<br/><span className={styles.panelMeta}>By {selected.data.hold.by} · {new Date(selected.data.hold.at).toLocaleString()}. No label or shipping until the hold is cleared.</span></p>
+                            {onClearHold && <button type="button" className="text-button" disabled={busy} onClick={() => { const order = selected; void onClearHold(order).then(() => setSelected(null)); }}>Clear hold (problem solved)</button>}
+                        </div> : onReportProblem && !['closed', 'delivered', 'test'].includes(selected.bucket) && <form className={styles.problem} onSubmit={event => { event.preventDefault(); const order = selected; setSelected(null); void onReportProblem(order, problem); }}>
+                            <p><strong>Report a problem</strong> <span className={styles.panelMeta}>Holds the order (no label, no shipping) and opens an email to the customer. Nothing is sent until you press Send.</span></p>
+                            <label>What is wrong<select value={problem.issue} onChange={e => setProblem({ ...problem, issue: e.target.value })}>{issueTypes.filter(([k]) => !['partner', 'vendor', 'coa'].includes(k)).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>
+                            <label>Note (optional)<input value={problem.note} maxLength={500} onChange={e => setProblem({ ...problem, note: e.target.value })} placeholder="e.g. Restock expected late November"/></label>
+                            <button type="submit" className="button button-dark" disabled={busy}>Hold order and email customer</button>
+                        </form>}
                         {onEmailCustomer && selected.data?.email && <button type="button" className="button button-dark" disabled={busy} onClick={() => { const order = selected; setSelected(null); onEmailCustomer(order); }}>Email customer</button>}
                         {canReconcile(selected) && <button type="button" className="button button-dark" disabled={busy} onClick={() => reconcile(selected)}>Check payment status</button>}
-                        {allowed('orders:fulfill') && <ShippingLabel order={selected} onDone={reload}/>}
-                        {allowed('orders:fulfill') && ['paid', 'shipped'].includes(selected.status) && (selected.data?.shipment
+                        {allowed('orders:fulfill') && !selected.data?.hold && <ShippingLabel order={selected} onDone={reload}/>}
+                        {allowed('orders:fulfill') && !selected.data?.hold && ['paid', 'shipped'].includes(selected.status) && (selected.data?.shipment
                             ? <details className={styles.manual}><summary>Manual confirmation (only if the carrier is not tracking this parcel)</summary><ManualForm order={selected} formGeneration={formGeneration} submit={submit} markDraft={markDraft} busy={busy}/></details>
                             : <ManualForm order={selected} formGeneration={formGeneration} submit={submit} markDraft={markDraft} busy={busy}/>)}
                         {!allowed('orders:fulfill') && !canReconcile(selected) && <p className={styles.panelMeta}>No actions available for your role on this order.</p>}

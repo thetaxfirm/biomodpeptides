@@ -74,7 +74,8 @@ export async function POST(req: NextRequest) {
         }
         await record('shipping.label_purchase', 'attempted', 'Requested a carrier label purchase.');
         // Claim the order first so a double click cannot buy two labels.
-        const claim = await run("UPDATE orders SET status='labeling',updated=? WHERE id=? AND status='paid' AND json_extract(data,'$.shipment') IS NULL", timestamp(), id);
+        if (data.hold) return j({ error: 'This order is on hold for a reported problem. Clear the hold before buying a label.' }, 409);
+        const claim = await run("UPDATE orders SET status='labeling',updated=? WHERE id=? AND status='paid' AND json_extract(data,'$.shipment') IS NULL AND json_extract(data,'$.hold') IS NULL", timestamp(), id);
         if (!claim.meta.changes) {
             await outcome('shipping.label_purchase', 'failed', 'Label purchase stopped because the order was not eligible. No provider purchase was attempted.');
             return j({ error: data.shipment ? 'A label was already bought for this order.' : 'Only paid orders without a label can have a label purchased.' }, 409);

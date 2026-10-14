@@ -41,5 +41,6 @@ export function adminOrderView(data: Record<string, any>) {
     shipment: data.shipment,
     shippedAt: data.shippedAt,
     labelCreatedAt: data.labelCreatedAt,
+    ...(data.hold ? { hold: data.hold } : {}),
   };
 }
