@@ -106,6 +106,9 @@ const conflict=async(fn)=>assert.rejects(fn,e=>e.status===409);
   const j3=(await f.bridge({action:'claim'})).job;assert.equal(j3.id,a3.id);const r3=randomUUID();await f.bridge({action:'complete',id:j3.id,revision:1,leaseToken:j3.leaseToken,readyId:r3,body:j3.proposedBody,model:'staff'});
   await f.bridge({action:'send_blocked',id:j3.id,revision:1,readyId:r3});assert.equal(f.row(j3.id).approved_at,null);assert.equal(f.row(j3.id).reason,'send_blocked');
  }
+ // New messages: customers get an automatic AI draft; supplier pitches do not.
+ {const cust=f.request({email:'auto-customer@example.invalid',subject:'Order question',message:'When will my order ship?'});assert.equal((await api.autoDraftNewRequest(f.env,cust)).status,'queued');
+  const pitch=f.request({email:'auto-vendor@example.invalid',subject:'High quality peptides',message:'We are a leading manufacturer with competitive price.'});assert.equal(await api.autoDraftNewRequest(f.env,pitch),null);assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM request_reply_drafts WHERE request_id=?').get(pitch).n,0);}
  assert.equal(fetches,0);
  console.log('PASS: private draft CAS/roles, raw original and threaded follow-ups, bounded claims/leases, staff equality, exact private COA bytes and current-lot checks, duplicate/unknown send holds, one-time owner send locks, exact-body/idempotent ACK, immutable history and non-PII audit. Real isolated SQLite, zero providers.');
 }finally{for(const f of fixtures)f.sql.close();}})().catch(error=>{console.error(error);process.exitCode=1;});

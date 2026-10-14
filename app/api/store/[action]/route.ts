@@ -5,7 +5,7 @@ import { batchRecordsFor, batchStatus, batchPath } from '@/lib/testing';
 import { externalRepliesFor, markReplied } from '@/lib/request-external';
 import { startOrderConversation, saveRequestIssue, issuesFor, caseLog, setOrderHold, startWinBack, winBackPreview } from '@/lib/request-cases';
 import { forwardRequest, forwardsFor, teamMembers, activityFor } from '@/lib/request-forward';
-import { summarizeRequestReplies, prepareRequestReply, replyDeskOptions, saveReplyRule } from '@/lib/request-replies';
+import { summarizeRequestReplies, prepareRequestReply, autoDraftNewRequest, replyDeskOptions, saveReplyRule } from '@/lib/request-replies';
 import { adminBatchRecords, validateBatchEdit } from '@/lib/product-batch';
 import { coaHash, loadCoaReports, readCoaOriginal, verifiedCoaAttachment } from '@/lib/coa-delivery';
 import { changeHistory, auditRun, withAuditDb, recordChange, type AuditActor } from '@/lib/change-history';
@@ -53,7 +53,7 @@ function scheduleInquiryDelivery(env: ReturnType<typeof runtime>, requestId: str
         const deliveryEnv = { ...env, DB: withAuditDb(env.DB, { source: 'system', actor: 'Inquiry delivery automation', actorType: 'system' }) } as ReturnType<typeof runtime>;
         after(async () => {
             await Promise.allSettled([
-                prepareRequestReply(env, { requestId, mode: 'ai', expectedRevision: null }, { email: 'Website request automation', role: 'system' }),
+                autoDraftNewRequest(env, requestId),
                 processCoaOutbox(deliveryEnv, { requestId, purpose: 'request-alert', limit: 1 }),
             ]);
         });

@@ -88,3 +88,9 @@ Owner feedback (relayed by the Orders session): he could not tell who had been a
 
 - A reply can carry up to five original COA PDFs (`coa_choice` holds comma-separated hashes; first is the primary). Every extra is verified like the primary (approved original, intact PDF hash, same-moment duplicate guard). The claim sends `extraAttachments`; validate requires `extraSha256s` to match exactly; Jarvis writes, re-verifies and attaches each PDF (`extra_json`) and refuses a tampered one. The desk's Attach COA PDF adds reports one at a time with Remove.
 - Wording: rows and headers now say "Not replied yet" (plus "reply ready to send in Jarvis" / "AI is writing a draft") or "Replied <date>, then they wrote again". Supplier pitches stay in Sales pitches even after we replied; pitch detection also catches "raws", "raw materials", "high purity".
+
+## Admin audit (Oct 14)
+
+Jarvis vs website: 12 replies sent from research@ (Oct 13-14), every one acknowledged, recorded in the conversation and its request archived (Albert's three by one reply). No reply sent outside the desk was found in any mirrored mailbox. Automatic mail: 10 owner request alerts and 2 old COA emails accepted; no recovery, COA-link or forward sends yet; nothing stuck in sending or review.
+Bookkeeping applied (attributed `claude-agent (owner request: admin audit)`): 15 cases tagged with issue/resolution/note; order #5683EF1B (IGNITE not yet in stock, label bought Oct 11, never picked up by the carrier) put on hold so the label cannot be shipped while the customer chooses. Natalie (Manufactured) and Gerardo's two requests left untagged.
+Change: new website messages that read as supplier sales pitches no longer get an automatic AI draft (`autoDraftNewRequest`).

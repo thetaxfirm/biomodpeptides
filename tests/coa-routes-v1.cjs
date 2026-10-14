@@ -46,7 +46,7 @@ const called = name => calls.filter(call => call.name === name);
 const checkedAdmin = () => assert(called('admin-ok').length, 'Admin authorization must precede sensitive reads/writes');
 const status = value => ({ status: value, reason: value === 'accepted' ? 'accepted_by_email_provider' : 'fixture', acceptedAt: value === 'accepted' ? now : null, canProcess: value === 'queued' });
 const dependencies = {
-  '@/lib/request-replies': {
+  '@/lib/request-replies': (m=>Object.assign(m,{autoDraftNewRequest:(e,id)=>m.prepareRequestReply(e,{requestId:id,mode:'ai',expectedRevision:null},{email:'Website request automation',role:'system'})}))({
     summarizeRequestReplies: async(receivedEnv,ids)=>{checkedAdmin();assert.equal(receivedEnv,env);return {};},
     prepareRequestReply: async(receivedEnv,input,actor)=>{
       assert.deepEqual(receivedEnv,env);assert(saved.has(input.requestId));
@@ -56,7 +56,7 @@ const dependencies = {
       if(scenario.prepareFailure)throw Object.assign(Error('Reply revision changed.'),{status:409});
       return {id:requestId,revision:1,status:'queued'};
     },
-  },
+  }),
   '@/lib/change-history': { withAuditDb: (db, actor) => { assert.equal(db, env.DB); assert(['staff','system'].includes(actor.actorType)); return db; }, recordChange: async (db, event) => { checkedAdmin(); assert.equal(db,env.DB); assert.equal(event.status,'attempted'); assert.equal(event.action,'coa.process_requested'); }, auditRun: forbidden('unrelated admin audit write') },
   '@/lib/checkout-recovery': { recoveryAdminStatus: async()=>{checkedAdmin();return {enabled:false,jobs:[]};} },
   '@/lib/auth': {

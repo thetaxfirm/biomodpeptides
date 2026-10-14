@@ -4,7 +4,7 @@ import { loadCoaBatchContext } from './product-batch';
 import { withAuditDb, type AuditActor } from './change-history';
 import { activePromotions } from './promotions';
 import { openRequestsForBridge, recordMailboxReplies } from './request-external';
-import { isIssue, issueLabel, resolutionLabel } from './request-issues';
+import { isIssue, issueLabel, resolutionLabel, looksLikePitchText } from './request-issues';
 export const REPLY_SENDER = 'research@biomodpeptides.com';
 type Env = { DB: D1Database };
 type Actor = { email: string; role: string };
@@ -213,4 +213,11 @@ export async function handleReplyBridge(env:Env,payload:unknown):Promise<Record<
   await learnFromSend(env,current,body).catch(()=>undefined);return {ok:true};
  }
  return fail('Unknown reply bridge action.',400);
+}
+
+/** New website message: the AI drafts a reply for customers only. Supplier sales pitches get no automatic draft. */
+export async function autoDraftNewRequest(env:Env,requestId:string){
+ const request=await inquiryFor(env,id(requestId));if(!request)return null;const d=source(request);
+ if(looksLikePitchText(d.subject,d.message))return null;
+ return prepareRequestReply(env,{requestId,mode:'ai',expectedRevision:null},{email:'Website request automation',role:'system'});
 }
