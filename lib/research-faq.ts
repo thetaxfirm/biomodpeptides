@@ -79,7 +79,7 @@ export const researchFaqGroups = [
       {
         id: 'order-processing',
         question: 'When will my order be processed?',
-        answer: 'For products ready to ship, weekday orders placed before 2 p.m. Pacific normally process the same business day, excluding federal holidays. Preorders follow the estimate shown on each product. Orders containing preorder items ship together when all items are ready. Orders placed later normally process the next business day. Order review may extend processing.',
+        answer: 'For products ready to ship, weekday orders placed before 2 p.m. Pacific normally process the same business day, excluding federal holidays. Preorders follow the estimate shown on each product. Preorders are purchased in their own order, separate from in-stock items, and ship when the preorder is ready. Orders placed later normally process the next business day. Order review may extend processing.',
         href: '/shipping-policy',
         link: 'Review processing and delivery information',
       },

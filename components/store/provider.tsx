@@ -8,6 +8,7 @@ import { nextSaleBoundary } from '@/lib/sale-display';
 import type { CartLine, StoreConfig } from '@/lib/commerce';
 import type { CartConflict } from '@/lib/cart-import';
 import { toast, Toaster } from 'sonner';
+import { mixesPreorder, preorderSeparateMessage } from '@/lib/preorders';
 import { measureShoppingStage, watchShoppingView, validShoppingQuote, validShoppingHandoff, type MeasureShopping } from '@/lib/shopping-measurement';
 import type { ShoppingStage } from '@/lib/shopping-metrics';
 const initialConfig: StoreConfig = { packDiscounts: { ...packDiscounts }, shippingCents: null, freeShippingAt: 20000, shippingOptions: normalizeShippingOptions(), presalesEnabled: false, rewardsEnabled: false, affiliateEnabled: false };
@@ -189,12 +190,16 @@ export function StoreProvider({ children, initialCatalog = initialProducts, shop
             return replacement;
         }, false);
     }
+    // Preorders are purchased in their own order: never add a preorder to in-stock items, or the reverse.
+    function assertNotMixing(cart: CartLine[]) { if (mixesPreorder(cart, stateRef.current.products)) throw new Error(preorderSeparateMessage); }
     async function add(p: Product, quantity = 1, presaleId?: string) {
+        assertNotMixing([...stateRef.current.cart, { id: p.id, quantity }]);
         await enqueueCart(current => {
             const cart = [...current];
             const at = cart.findIndex(l => l.id === p.id && !l.packId && l.presaleId === presaleId);
             if (at >= 0) cart[at] = { ...cart[at], quantity: cart[at].quantity + quantity };
             else cart.push({ id: p.id, quantity, ...(presaleId ? { presaleId } : {}) });
+            assertNotMixing(cart);
             return cart;
         });
         toast.success(p.name + ' added to cart', { action: { label: 'View cart', onClick: () => location.assign('/cart') } });
@@ -202,12 +207,14 @@ export function StoreProvider({ children, initialCatalog = initialProducts, shop
     async function addFixedPack(p: Product, count: number, packs = 1) {
         if (!packSizes.includes(count as any) || !Number.isInteger(packs) || packs < 1 || count * packs > 100) throw new Error('Choose an available pack quantity.');
         if (count === 1) return add(p, packs);
+        assertNotMixing([...stateRef.current.cart, { id: p.id, quantity: count }]);
         await enqueueCart(cart => [...cart, ...Array.from({ length: packs }, () => ({ id: p.id, quantity: count, packId: crypto.randomUUID(), packSize: count, packKind: 'fixed' as const }))]);
         toast.success(p.name + ' ' + count + '-pack added to cart', { action: { label: 'View cart', onClick: () => location.assign('/cart') } });
     }
     async function addMixedPack(ids: number[]) {
         if (!packSizes.includes(ids.length as any)) throw new Error('Complete every slot in your pack.');
         if (ids.length === 1) { const p = stateRef.current.products.find(p => p.id === ids[0]); if (!p) throw new Error('Product unavailable.'); return add(p); }
+        assertNotMixing([...stateRef.current.cart, ...ids.map(id => ({ id, quantity: 1 }))]);
         const packId = crypto.randomUUID();
         await enqueueCart(cart => [...cart, ...ids.map(id => ({ id, quantity: 1, packId, packSize: ids.length, packKind: 'mixed' as const }))]);
         toast.success('Your ' + ids.length + '-pack has been added to cart', { action: { label: 'View cart', onClick: () => location.assign('/cart') } });

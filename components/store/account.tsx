@@ -1,5 +1,5 @@
 'use client';
-import { hasPreorder, preorderOrderNotice } from '@/lib/preorders';
+import { hasPreorder, preorderOrderNotice, mixesPreorder, preorderSeparateMessage } from '@/lib/preorders';
 import { PreorderNotice } from './preorder-notice';
 import { fulfillmentLabel, customerOrderStatus } from '@/lib/fulfillment';
 import { ProductImage } from './product-image';
@@ -86,6 +86,14 @@ export function Cart() {
     const packSavings = q?.packDiscount ?? q?.discount ?? 0;
     const promoSavings = q?.promoDiscount ?? q?.promo?.savings ?? 0;
     const locked = busy || promoBusy || cartUpdating || cartSync === 'uncertain' || Boolean(store.pricingStale);
+    // Preorders are purchased in their own order. A mixed cart keeps one group and removes the other.
+    const mixed = ready && mixesPreorder(store.cart, store.products);
+    async function keepOnly(preorders: boolean) {
+        if (locked) return;
+        const isPre = (id: number) => Boolean(store.products.find(p => p.id === id)?.activePreorder);
+        setBusy(true);
+        try { await saveCart(store.cart.filter(l => isPre(l.id) === preorders), store.cart); } catch (e) { report(e); } finally { setBusy(false); }
+    }
     async function update(index: number, delta: number) {
         if (locked) return;
         const next = store.cart.map((l, i) => i === index ? { ...l, quantity: l.quantity + delta } : l).filter(l => l.quantity > 0);
@@ -114,6 +122,9 @@ export function Cart() {
         </div> : !store.cart.length && cartSync === 'uncertain' ? <p role="status">Saved cart confirmation is needed.</p> : !store.cart.length ? <Blank title="Your cart is empty."><a className="button button-dark" href="/shop">Explore products</a></Blank> : <div className="cart-layout">
             <div>
                 {store.cartError && <div className="notice error"><p>{store.cartError}</p><button className="text-button" disabled={locked} onClick={async () => { setBusy(true); try { await saveCart([], store.cart); } catch (e) { report(e); } finally { setBusy(false); } }}>Clear cart and start again</button></div>}
+                {mixed && <div className="notice preorder-checkout-notice" role="alert"><p>{preorderSeparateMessage}</p>
+                    <button type="button" className="text-button" disabled={locked} onClick={() => keepOnly(false)}>Check out in-stock items now (remove preorders)</button>{' '}
+                    <button type="button" className="text-button" disabled={locked} onClick={() => keepOnly(true)}>Check out preorders now (remove in-stock items)</button></div>}
                 {store.cart.map((l, i) => {
                     const p = store.products.find(p => p.id === l.id);
                     return p ? <article className="cart-line" key={i}>
@@ -136,7 +147,8 @@ export function Cart() {
                     <p className="total"><span>Items total</span><strong>{q ? money(q.total) : 'Unavailable'}</strong></p>
                 </div>
                 {q && freeStandardThreshold !== null && q.total < freeStandardThreshold && <p className="muted">Add {money(freeStandardThreshold - q.total)} for free standard shipping. Faster options are priced separately.</p>}
-                <a className="button button-gold" href={store.cartError || locked || promoUnapplied ? undefined : '/checkout'} aria-disabled={Boolean(store.cartError) || locked || promoUnapplied} onClick={e => { if (store.cartError || locked || promoScopeRef.current !== promoScope || promoScope.busy || promoScope.unapplied) e.preventDefault(); }}>Proceed to checkout</a>
+                <a className="button button-gold" href={store.cartError || locked || promoUnapplied || mixed ? undefined : '/checkout'} aria-disabled={Boolean(store.cartError) || locked || promoUnapplied || mixed} onClick={e => { if (store.cartError || locked || mixed || promoScopeRef.current !== promoScope || promoScope.busy || promoScope.unapplied) e.preventDefault(); }}>Proceed to checkout</a>
+                {mixed && <p className="muted">Preorders and in-stock items check out separately. Remove one group above to continue.</p>}
                 <p className="muted">{store.payment.enabled ? store.payment.state === 'sandbox' ? 'Test checkout only. Real payments are not accepted.' : 'Secure card payment is available at checkout.' : 'Checkout is not accepting payments yet. Your cart stays saved.'}</p>
             </aside>
         </div>}

@@ -13,7 +13,7 @@ export function orderPreorderNotice(data: { items?: unknown } | undefined): stri
     if (!Array.isArray(data?.items)) return '';
     const estimates = [...new Set(data.items.map(item => savedPreorder(item?.product?.activePreorder)?.ships).filter((value): value is string => Boolean(value)))];
     if (!estimates.length) return '';
-    return 'Preorder: estimated dispatch ' + estimates.join(' / ') + '. All items in this order ship together when ready. Timing may change; this is not an immediate shipment.';
+    return 'Preorder: estimated dispatch ' + estimates.join(' / ') + '. Ships when the preorder is ready. Timing may change; this is not an immediate shipment.';
 }
 
 /** Payment status is not proof of physical dispatch. Shared by admin and customer views. */

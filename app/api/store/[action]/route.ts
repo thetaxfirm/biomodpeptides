@@ -23,6 +23,7 @@ import { session, customer, requireCustomer, requireStaff, staffRole, authReady,
 import { presentationData } from '@/lib/private-presentation';
 import { adminOrderView, currentCart, currentProductId, currentSelection, orderView, unavailableOrder } from '@/lib/catalog-visibility';
 import { catalog, config, quote, validateLines } from '@/lib/commerce';
+import { mixesPreorder, preorderSeparateMessage } from '@/lib/preorders';
 import { availabilityOptions, hasPublicationHold, sourcePublicationHold, blockedReleaseLot } from '@/lib/availability';
 import { all, one, run, uid, timestamp, parse, runtime, database } from '@/lib/runtime';
 import { checkout, reconcile, addressSchema, issueQuote } from '@/lib/checkout';
@@ -467,9 +468,12 @@ export async function POST(req: NextRequest, { params }: {
         if (action === 'checkout') {
             const u = await requireCustomer();
             await cartImports().assertResolved(u.id, s.id);
-            return j(await checkout(u.id, validateLines(parse((await one<{
+            const checkoutLines = validateLines(parse((await one<{
                 cart: string;
-            }>('SELECT cart FROM customer_carts WHERE id=?', u.id))?.cart, [])), b, await currentPromoCode()));
+            }>('SELECT cart FROM customer_carts WHERE id=?', u.id))?.cart, []));
+            // Preorders are purchased in their own order, never mixed with in-stock items.
+            if (mixesPreorder(checkoutLines, await catalog())) return j({ error: preorderSeparateMessage }, 409);
+            return j(await checkout(u.id, checkoutLines, b, await currentPromoCode()));
         }
         if (action === 'resume') {
             const u = await requireCustomer();

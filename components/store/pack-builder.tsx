@@ -1,7 +1,7 @@
 'use client';
 import { PreorderNotice } from './preorder-notice';
 import { SaleNotice } from './sale-notice';
-import { preorderOrderNotice } from '@/lib/preorders';
+import { preorderOrderNotice, preorderSeparateMessage, mixesPreorder } from '@/lib/preorders';
 import { useId, useState } from 'react';
 import { Plus, X, Search, ChevronDown } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -44,6 +44,8 @@ export function PackBuilder({ initialSize = 3 }: { initialSize?: number }) {
     return !product || !product.inStock || !product.purchasable || !supportsPacks(product) || quantity > packUnitLimit(product);
   }));
   const complete = selected.length === count && invalidIds.size === 0;
+  // Preorders are purchased in their own order, so one pack cannot mix preorder and in-stock items.
+  const packMixes = mixesPreorder(selected.map(id => ({ id })), store.products);
   const addPack = async () => {
     setBusy(true);
     try { await addMixedPack(selected); setSelected([]); setSavedId(undefined); }
@@ -74,8 +76,8 @@ export function PackBuilder({ initialSize = 3 }: { initialSize?: number }) {
           </CollapsibleContent>
         </Collapsible>
         <dl className="pack-price-summary"><div><dt>Single prices</dt><dd>{money(total)}</dd></div>{percent > 0 && <div><dt>Pack savings · {percent}%</dt><dd>−{money(savings)}</dd></div>}<div className="pack-final-price"><dt>Pack total</dt><dd aria-live="polite">{money(total - savings)}</dd></div></dl>
-        <button className="button pack-add-button" disabled={!complete || busy || !ready} onClick={addPack}>{busy ? 'Adding…' : complete ? (count === 1 ? 'Add product to cart' : 'Add ' + count + '-pack to cart') : 'Complete your pack'}<Plus size={17}/></button>
-        {selected.some(id => store.products.find(p => p.id === id)?.activePreorder) && <p className="preorder-checkout-notice">{preorderOrderNotice}</p>}{selected.some(id => store.products.find(p => p.id === id)?.activeSale) && <p className="pack-shipping-note">Current sale prices are included. Prices are checked again at checkout.</p>}<p className="pack-shipping-note">Shipping and tax calculated at checkout.</p>
+        <button className="button pack-add-button" disabled={!complete || busy || !ready || packMixes} onClick={addPack}>{busy ? 'Adding…' : complete ? (count === 1 ? 'Add product to cart' : 'Add ' + count + '-pack to cart') : 'Complete your pack'}<Plus size={17}/></button>
+        {packMixes ? <p className="preorder-checkout-notice" role="alert">A pack is either all preorder or all in-stock items. {preorderSeparateMessage}</p> : selected.some(id => store.products.find(p => p.id === id)?.activePreorder) && <p className="preorder-checkout-notice">{preorderOrderNotice}</p>}{selected.some(id => store.products.find(p => p.id === id)?.activeSale) && <p className="pack-shipping-note">Current sale prices are included. Prices are checked again at checkout.</p>}<p className="pack-shipping-note">Shipping and tax calculated at checkout.</p>
       </aside>
       <div className="pack-catalog" id="pack-products">
         <div className="pack-catalog-tools"><div className="pack-search-field"><Search size={19}/><input aria-label="Search pack products" value={q} onChange={e => setQ(e.target.value)} type="search" maxLength={200} placeholder="Name, compound, strength, CAS or SKU"/></div><Choice label="Sort pack products" value={sort} onChange={setSort} options={[["name", "Name: A–Z"], ["price-up", "Price: low to high"], ["price-down", "Price: high to low"]]}/></div>
@@ -92,6 +94,6 @@ export function PackBuilder({ initialSize = 3 }: { initialSize?: number }) {
         {!visible.length && <Blank title="No products found."><p>Try another name or format.</p><button className="text-button" onClick={() => { setQ(''); setFormat('all'); }}>Clear search and filters</button></Blank>}
       </div>
     </div>
-    <div className="pack-mobile-summary"><a href="#pack-review" onClick={() => setReviewOpen(true)}><span>{selected.length} of {count} selected</span><strong>{money(total - savings)}</strong></a><button className="button pack-add-button" disabled={!complete || busy || !ready} onClick={addPack}>{busy ? 'Adding…' : 'Add to cart'}</button></div>
+    <div className="pack-mobile-summary"><a href="#pack-review" onClick={() => setReviewOpen(true)}><span>{selected.length} of {count} selected</span><strong>{money(total - savings)}</strong></a><button className="button pack-add-button" disabled={!complete || busy || !ready || packMixes} onClick={addPack}>{busy ? 'Adding…' : 'Add to cart'}</button></div>
   </section>;
 }
