@@ -16,7 +16,7 @@ const tests = [
   "checkout-recovery-v1.cjs", "preorder-pricing-v1.cjs", "preorder-order-v1.cjs",
   "admin-shipping-services-ui-v1.cjs", "shipping-services-v1.cjs", "shipping-settings-route-v1.cjs", "shipping-options-v1.cjs",
   "shipping-policy-history-v1.cjs", "merchant-policies-v1.cjs",
-  "fulfillment-v1.cjs", "orders-queue-v1.cjs", "easypost-v1.mjs", "easypost-admin-ui-v1.cjs", "sales-v24.cjs", "address-normalization-v1.cjs",
+  "fulfillment-v1.cjs", "orders-queue-v1.cjs", "orders-mark-shipped-v1.cjs", "easypost-v1.mjs", "easypost-admin-ui-v1.cjs", "sales-v24.cjs", "address-normalization-v1.cjs",
   "promo-checkout-v1.cjs", "promo-ui-v1.cjs",
   "cart-save-recovery-v1.cjs", "checkout-owner-recovery-v1.cjs",
   "store-load-recovery-v1.cjs", "account-load-recovery-v1.cjs",
