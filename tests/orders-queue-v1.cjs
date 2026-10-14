@@ -35,6 +35,15 @@ const rows = [
 const expected = { paid1: 'to_ship', paid2: 'to_ship', label1: 'label', labeling: 'label', moving: 'shipped', storeship: 'shipped', dlv1: 'delivered', dlv2: 'delivered', unpaid1: 'unpaid', pend1: 'unpaid', rev1: 'review', lost1: 'review', refund1: 'closed', test1: 'test' };
 for (const [prefix, bucket] of Object.entries(expected)) assert.equal(q.orderBucket(rows.find(o => o.id.startsWith(prefix))), bucket, prefix);
 
+// A reported problem holds an order in Needs review, but never hides a test, a refund or a delivery.
+const held = { issue: 'out_of_stock', note: 'fixture', by: 'fixture', at: 1 };
+assert.equal(q.orderBucket(order('hold1', 'paid', { hold: held })), 'review');
+assert.equal(q.orderBucket(order('hold2', 'paid', { hold: held, shipment: { status: 'in_transit' } })), 'review');
+assert.equal(q.orderBucket(order('hold3', 'paid', { hold: held, internalTest: true })), 'test');
+assert.equal(q.orderBucket(order('hold4', 'refunded', { hold: held })), 'closed');
+assert.equal(q.orderBucket(order('hold5', 'delivered', { hold: held })), 'delivered');
+assert.equal(q.orderBucket(order('hold6', 'paid', { hold: null })), 'to_ship', 'a cleared hold returns the order to its queue');
+
 // Counts cover every bucket; All excludes internal tests.
 const all = q.queryOrders(rows, { tab: 'all' });
 assert.deepEqual(all.counts, { to_ship: 2, label: 2, shipped: 2, delivered: 2, unpaid: 2, review: 2, closed: 1, all: 13, test: 1 });
