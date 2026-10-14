@@ -1,4 +1,4 @@
-// Printable pick sheets: which orders qualify, how totals combine, and that the sheet leaks no contact details.
+// Printable pick sheets: which orders qualify, how lines merge, and that the sheet leaks no contact details.
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),Module=require('node:module');
 const root=path.resolve(__dirname,'..'),ts=require('typescript');
 function load(file){const name=path.join(root,file),m=new Module(name,module);m.filename=name;m.paths=Module._nodeModulePaths(root);
@@ -25,6 +25,26 @@ assert.equal(p.needsPicking(order('f','paid',{data:{internalTest:true}})),false,
 const entries=p.pickEntries([order('11111111-1111-1111-1111-111111111111','paid',{created:300}),order('22222222-2222-2222-2222-222222222222','pending',{created:100}),order('33333333-3333-3333-3333-333333333333','paid',{created:200})]);
 assert.deepEqual(entries.map(e=>e.number),['#33333333','#11111111'],'unpaid dropped, oldest first');
 assert.equal(entries[0].units,2);
+
+// Merging: one row per product, quantities added, distinct notes kept beside it.
+const merged=p.mergeLines([
+  {name:'AZURE 10 mg',detail:'Lot A-1',quantity:2},
+  {name:'AZURE 10 mg',detail:'Lot A-2',quantity:3},
+  {name:'AZURE 10 mg',detail:'Lot A-1',quantity:1},
+  {name:'FORGE 5 mg',detail:'',quantity:1}]);
+assert.deepEqual(merged.map(l=>[l.name,l.quantity]),[['AZURE 10 mg',6],['FORGE 5 mg',1]],'one row per product, quantities summed');
+assert.equal(merged[0].detail,'Lot A-1 · Lot A-2','distinct notes kept once each');
+assert.equal(merged[1].detail,'');
+
+// The same product on two saved lines of one order prints once.
+const twice=p.pickEntry(order('eeeeeeee-1111-1111-1111-111111111111','paid',{items:[
+  {id:1,quantity:2,lineTotal:1,product:{name:'AZURE 10 mg'}},
+  {id:2,quantity:3,lineTotal:1,product:{name:'AZURE 10 mg'}},
+  {id:3,quantity:1,lineTotal:1,product:{name:'FORGE 5 mg'}}]}));
+assert.equal(twice.units,6,'the unit count still counts every unit');
+const sheet=p.renderPickList([twice],1,true);
+assert.equal((sheet.match(/>AZURE 10 mg</g)||[]).length,1,'printed once');
+assert(sheet.includes('>5<'),'with the combined quantity');
 
 // The same product across orders combines into one pull line.
 const totals=p.pickTotals(p.pickEntries([
@@ -53,4 +73,4 @@ assert(p.renderPickList([],1760000000000).includes('Nothing is waiting'));
 // Order names are escaped, never injected.
 const nasty=p.renderPickList(p.pickEntries([order('dddddddd-1111-1111-1111-111111111111','paid',{name:'<script>alert(1)</script>'})]),1);
 assert(!nasty.includes('<script>alert(1)</script>')&&nasty.includes('&lt;script&gt;'),'markup in saved data is escaped');
-console.log('PASS: picking eligibility incl. holds and tests, oldest-first queue, combined pull totals, single-order sheet, empty sheet, contact details withheld, markup escaped.');
+console.log('PASS: picking eligibility incl. holds and tests, oldest-first queue, one row per product with quantities summed and notes kept, combined pull totals, single-order sheet, empty sheet, contact details withheld, markup escaped.');

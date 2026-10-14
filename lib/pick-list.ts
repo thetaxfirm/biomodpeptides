@@ -35,17 +35,26 @@ export function pickEntry(order: PickOrder): PickEntry {
 /** Oldest first: the queue is worked in the order it was earned. */
 export const pickEntries = (orders: PickOrder[]) => orders.filter(needsPicking).sort((a, b) => a.created - b.created).map(pickEntry);
 
-/** Everything to pull from the shelf once, before splitting it between orders. */
-export function pickTotals(entries: PickEntry[]): PickLine[] {
-    const totals = new Map<string, PickLine>();
-    for (const entry of entries) for (const line of entry.lines) {
-        const key = line.name + '\u0000' + line.detail;
-        const found = totals.get(key);
-        if (found) found.quantity += line.quantity;
-        else totals.set(key, { ...line });
+/**
+ * One row per product. A product bought on two saved lines, or carrying two lots, is one line to
+ * pick with the quantities added up; the distinct lot and certificate notes stay beside it.
+ */
+export function mergeLines(lines: PickLine[]): PickLine[] {
+    const merged = new Map<string, { name: string; quantity: number; details: string[] }>();
+    for (const line of lines) {
+        const found = merged.get(line.name);
+        if (found) {
+            found.quantity += line.quantity;
+            if (line.detail && !found.details.includes(line.detail)) found.details.push(line.detail);
+        } else merged.set(line.name, { name: line.name, quantity: line.quantity, details: line.detail ? [line.detail] : [] });
     }
-    return [...totals.values()].sort((a, b) => a.name.localeCompare(b.name) || a.detail.localeCompare(b.detail));
+    return [...merged.values()]
+        .map(entry => ({ name: entry.name, detail: entry.details.join(' · '), quantity: entry.quantity }))
+        .sort((a, b) => a.name.localeCompare(b.name));
 }
+
+/** Everything to pull from the shelf once, before splitting it between orders. */
+export const pickTotals = (entries: PickEntry[]) => mergeLines(entries.flatMap(entry => entry.lines));
 
 const esc = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const when = (ms: number) => new Date(ms).toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
@@ -91,7 +100,7 @@ const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 function orderBlock(entry: PickEntry) {
     return '<section class="order"><h2><span>' + esc(entry.number) + ' · ' + esc(entry.customer) + '</span><span>' + entry.units + 'u</span></h2>'
         + '<p class="sub">' + [entry.place, day(entry.placed), entry.service].filter(Boolean).map(esc).join(' · ') + '</p>'
-        + (entry.lines.length ? table(entry.lines, 'Item') : '<p class="sub">No items recorded on this order.</p>')
+        + (entry.lines.length ? table(mergeLines(entry.lines), 'Item') : '<p class="sub">No items recorded on this order.</p>')
         + '</section>';
 }
 
