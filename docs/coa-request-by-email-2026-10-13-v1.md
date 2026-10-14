@@ -27,3 +27,5 @@ Owner: "this should be a popup and not take the person away from our page ... ad
 - "Send me the COA" now also works for products whose current-lot report is public: the email links that public original (same certificate /testing shows for the current lot). On-request (private) reports keep the 30-day private link. Products with no matched report still send nothing.
 - Sending runs in the Cloudflare Worker through the store's mail provider. It does not use Jarvis or any computer.
 - Checks: release gate (73 suites), production build, built-Worker `coa-link-worker-v1.mjs` passed.
+
+Correction, October 14, 2026 (owner): "the only products that mail COA are the heat products. that's it." The public-report email fallback was removed the same day. Only on-request HEAT products show the email box (inside the popup); every other product's popup shows its report to read on the page.

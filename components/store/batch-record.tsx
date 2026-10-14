@@ -37,12 +37,10 @@ export function BatchPassport({product:p}:{product:Product}){const r=batchFor(p.
 export function CoaPopup({product:p,label='View COA and testing',className='coa-link'}:{product:Product;label?:string;className?:string}){
  const [open,setOpen]=useState(false);const r=batchFor(p.id,p);
  if(!r)return null;
- const emailable=!coaOnRequest(r)&&Boolean(matchingCertificateFor(r));
  return <><button type="button" className={className+' '+styles.popupButton} onClick={()=>setOpen(true)}>{label} <ArrowUpRight size={17}/></button>
   <Dialog open={open} onOpenChange={setOpen}><DialogContent className={'coa-dialog '+styles.coaPopup}>
    <DialogTitle>{p.name} · COA and testing</DialogTitle>
    <DialogDescription>{batchStatusLabel(r)}{r.product_lot?' · Lot '+r.product_lot:''}</DialogDescription>
    <BatchDetails record={r}/>
-   {emailable&&<CoaEmailRequest record={r}/>}
   </DialogContent></Dialog></>;
 }
