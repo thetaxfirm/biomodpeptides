@@ -93,6 +93,14 @@ const conflict=async(fn)=>assert.rejects(fn,e=>e.status===409);
   const sibJob=(await f.bridge({action:'claim'})).job;assert.equal(sibJob.requestId,latest);assert(sibJob.history.some(m=>m.body.includes('SIBLING_TEXT')),'The AI sees the same customer\'s earlier request');assert.deepEqual(claimed.style.rules,['Sign off as Ash.']);assert.equal(claimed.style.examples[0].sent,'Here is the report you asked about.');assert(claimed.codes.some(c=>c.code==='BM10'));
   const desk=await api.replyDeskOptions(f.env);assert.equal(desk.coas.length,originals.length);assert.equal(desk.learning.recent,1);assert.equal(desk.learning.unchanged,0);assert(desk.bridgeSeen>0,'Jarvis heartbeat recorded');assert(!JSON.stringify(desk).includes(picked.base64.slice(0,40)),'Desk options never carry report bytes');
   await assert.rejects(()=>api.prepareRequestReply(f.env,{requestId:second,mode:'staff',body:'x',expectedRevision:1,coaSha256:'not-a-hash'},owner),e=>e.status===400);
+  // Several chosen originals ride on one reply; each is verified and travels to Jarvis; validate needs every hash.
+  const multi=f.request({email:'multi@example.invalid',subject:'Two products'});const m=await api.prepareRequestReply(f.env,{requestId:multi,mode:'staff',body:'Both reports are attached.',expectedRevision:null,coaSha256:originals[0].sha256+','+originals[1].sha256},owner);
+  assert.equal(m.coa.state,'matched');assert.deepEqual(m.coa.extras.map(e=>e.sha256),[originals[1].sha256]);
+  const mj=(await f.bridge({action:'claim'})).job;assert.equal(mj.requestId,multi);assert.equal(mj.attachment.sha256,originals[0].sha256);assert.deepEqual(mj.extraAttachments.map(a=>a.base64),[originals[1].base64]);
+  const mr=randomUUID();await f.bridge({action:'complete',id:mj.id,revision:mj.revision,leaseToken:mj.leaseToken,readyId:mr,body:mj.proposedBody,model:'staff'});
+  const mv={action:'validate',id:mj.id,revision:mj.revision,readyId:mr,recipient:'multi@example.invalid',sender:api.REPLY_SENDER,attachmentSha256:originals[0].sha256,body:mj.proposedBody};
+  await conflict(()=>f.bridge({...mv,extraSha256s:[]}));await f.bridge({...mv,extraSha256s:[originals[1].sha256]});assert.equal(f.row(mj.id).status,'sending');
+  await assert.rejects(()=>api.prepareRequestReply(f.env,{requestId:f.request({email:'x@example.invalid'}),mode:'staff',body:'x',expectedRevision:null,coaSha256:Array(6).fill(originals[0].sha256).join(',')},owner),e=>e.status===400);
   // A send Jarvis refuses before any provider call clears the approval so the desk asks again.
   const third=f.request({subject:'Another question'});const a3=await api.prepareRequestReply(f.env,{requestId:third,mode:'staff',body:'Plain answer.',expectedRevision:null,send:true},owner);
   const j3=(await f.bridge({action:'claim'})).job;assert.equal(j3.id,a3.id);const r3=randomUUID();await f.bridge({action:'complete',id:j3.id,revision:1,leaseToken:j3.leaseToken,readyId:r3,body:j3.proposedBody,model:'staff'});

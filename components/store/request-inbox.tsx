@@ -15,7 +15,7 @@ export type ReplySummary = {
   mode: 'ai' | 'staff'; sender: string; recipient: string; subject: string; body: string;
   preparedBy: string; updated: number; readyId?: string; model?: string; reason?: string;
   instruction?: string; approvedAt?: number; approvedBy?: string; coaChoice?: string | null;
-  coa: { state: 'matched' | 'needs_review' | 'already_sent' | 'not_requested'; reason: string; productName?: string; strength?: string; lot?: string; reportId?: string; chemicalIdentity?: string; filename?: string; sha256?: string };
+  coa: { state: 'matched' | 'needs_review' | 'already_sent' | 'not_requested'; reason: string; extras?: { productName?: string; strength?: string; lot?: string; sha256?: string }[]; productName?: string; strength?: string; lot?: string; reportId?: string; chemicalIdentity?: string; filename?: string; sha256?: string };
   history: { id: string; direction: 'incoming' | 'outgoing'; body: string; created: number }[];
 };
 export type PrepareReplyInput = { id: string; mode: 'ai' | 'staff'; body?: string; instruction?: string; expectedRevision: number | null; coaSha256?: string | null; send?: boolean };
@@ -464,8 +464,11 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
   // An order conversation starts with internal order notes, shown to staff only.
   const history = fromOrder ? allHistory.filter(m => !m.id.startsWith('original:')) : allHistory;
   const coaChoice = draft?.coa !== undefined ? draft.coa : (reply?.coaChoice ?? null);
-  const chosen = coaChoice ? options?.coas.find(c => c.sha256 === coaChoice) : undefined;
+  // Several reports can ride on one reply (comma-separated choice).
+  const chosenList = coaChoice ? coaChoice.split(',').map(sha => options?.coas.find(c => c.sha256 === sha)).filter((c): c is DeskCoa => Boolean(c)) : [];
+  const chosen = chosenList[0];
   const attachedNow = reply?.coa.state === 'matched' && (draft?.coa === undefined || draft.coa === reply.coaChoice) ? reply.coa : null;
+  const setChoice = (list: string[]) => onDraft({ coa: list.length ? list.join(',') : null, edited: true });
   const isCoaRequest = /^coa request:/i.test(subject);
   const lastSent = [...history].reverse().find(m => m.direction === 'outgoing');
   let status = '';
@@ -580,15 +583,15 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
           <option value="">{options ? (options.links?.length ? 'Choose a product' : 'No public COAs') : 'Loading…'}</option>
           {options?.links?.map(link => <option key={link.url} value={link.url}>{link.label}</option>)}
         </select></label>
-        <label><span>Attach COA PDF</span><select value={coaChoice === null ? 'auto' : coaChoice} disabled={locked || writing || !options} onChange={event => onDraft({ coa: event.target.value === 'auto' ? null : event.target.value, edited: true })}>
-          <option value="auto">{isCoaRequest ? 'Match the requested lot' : 'No report'}</option>
-          {isCoaRequest && <option value="">No report</option>}
-          {options?.coas.map(coa => <option key={coa.sha256} value={coa.sha256}>{coa.productName} {coa.strength} · lot {coa.lot}{coa.current ? ' (current)' : ''}</option>)}
+        <label><span>Attach COA PDF</span><select value="" disabled={locked || writing || !options || chosenList.length >= 5} onChange={event => { const v = event.target.value; if (v === 'none') onDraft({ coa: '', edited: true }); else if (v === 'auto') onDraft({ coa: null, edited: true }); else if (v && !chosenList.some(c => c.sha256 === v)) setChoice([...chosenList.map(c => c.sha256), v]); }}>
+          <option value="">{chosenList.length ? 'Add another report' : isCoaRequest && coaChoice === null ? 'Matching the requested lot' : 'Add a report'}</option>
+          {isCoaRequest && coaChoice !== null && <option value="auto">Match the requested lot</option>}
+          {(chosenList.length > 0 || coaChoice === null) && <option value="none">No report</option>}
+          {options?.coas.filter(coa => !chosenList.some(c => c.sha256 === coa.sha256)).map(coa => <option key={coa.sha256} value={coa.sha256}>{coa.productName} {coa.strength} · lot {coa.lot}{coa.current ? ' (current)' : ''}</option>)}
         </select></label>
       </div>
-      {(attachedNow || chosen) && <p className={styles.attachment}>{attachedNow && (!chosen || chosen.sha256 === attachedNow.sha256)
-        ? <>Attached: <strong>{attachedNow.filename || attachedNow.reportId}</strong> · {attachedNow.productName} {attachedNow.strength}, lot {attachedNow.lot}</>
-        : <>Will attach when you save or send: <strong>{chosen!.productName} {chosen!.strength}, lot {chosen!.lot}</strong></>}</p>}
+      {attachedNow && draft.coa === undefined && <p className={styles.attachment}>Attached: {[attachedNow, ...(attachedNow.extras || [])].map((c, i) => <span key={i}>{i ? ', ' : ''}<strong>{c.productName} {c.strength}</strong> lot {c.lot}</span>)}</p>}
+      {draft.coa !== undefined && chosenList.length > 0 && <p className={styles.attachment}>Will attach when you save or send: {chosenList.map(c => <span key={c.sha256}><strong>{c.productName} {c.strength}</strong> lot {c.lot} <button type="button" className={styles.link} onClick={() => setChoice(chosenList.filter(o => o.sha256 !== c.sha256).map(o => o.sha256))}>Remove</button> </span>)}</p>}
       {reply && reply.coa.state !== 'matched' && reply.coa.state !== 'not_requested' && !chosen && <p className={styles.note}>{reply.coa.reason}</p>}
       {conflict && <div className={styles.conflict} role="alert"><p>Someone saved a newer version of this reply. Your text is kept.</p><button type="button" className={styles.action} disabled={locked} onClick={() => onDraft({ ...newDraft(reply), coa: draft.coa })}>Use the newer version</button><button type="button" className={styles.action} disabled={locked} onClick={() => onDraft({ revision: reply?.revision ?? null, error: '', message: '' })}>Keep mine</button></div>}
       {draft.error && <p className={styles.error} role="alert">{draft.error}</p>}
