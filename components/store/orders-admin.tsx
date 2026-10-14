@@ -43,6 +43,13 @@ export function StatusBadge({ bucket }: { bucket: OrderBucket }) {
 const orderNumber = (id: string) => '#' + id.slice(0, 8).toUpperCase();
 const units = (o: QueueRow) => (Array.isArray(o.data?.items) ? o.data.items : []).reduce((n: number, i: any) => n + (Number(i?.quantity) || 0), 0);
 const place = (o: QueueRow) => [o.data?.address?.city, o.data?.address?.state].filter(Boolean).join(', ');
+/** What the carrier last said, and when we last heard it. Empty until a label exists. */
+function carrierLine(o: QueueRow) {
+    const s = o.data?.shipment;
+    if (!s?.status) return '';
+    const seen = Number.isFinite(s.checkedAt) ? ' · ' + new Date(s.checkedAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '';
+    return String(s.status).replaceAll('_', ' ') + seen;
+}
 
 /** A bought label can be confirmed as handed to the carrier straight from the queue. */
 export const canConfirmShipped = (o: QueueRow, allowed: (permission: string) => boolean) =>
@@ -177,7 +184,7 @@ export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, form
                     <td>{o.data?.address?.name || 'Name not recorded'}<span className={styles.sub}>{[place(o), o.data?.email].filter(Boolean).join(' · ')}</span></td>
                     <td className={styles.number}>{units(o)}</td>
                     <td className={styles.number}>{money(Number(o.total) || 0)}</td>
-                    <td><StatusBadge bucket={o.bucket}/></td>
+                    <td><StatusBadge bucket={o.bucket}/>{o.data?.shipment?.status && <span className={styles.sub}>{carrierLine(o)}</span>}</td>
                     <td className={styles.next}>{nextStep(o)}</td>
                 </tr>)}</tbody>
             </table>}
