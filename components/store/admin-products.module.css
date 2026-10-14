@@ -97,3 +97,6 @@
 .releaseReview>p { font-size:13px; color:#685b6c; line-height:1.6; margin:0 0 14px; }
 .releaseReview .toggle { align-items:flex-start; line-height:1.55; font-size:13px; }
 @media(max-width:400px) { .batchSummary dl>div { grid-template-columns:1fr; gap:2px; } }
+
+.filterLabel { font-size:13px; font-weight:600; color:#665969; align-self:center; margin-right:4px; }
+.noCoa { color:#9a3412; font-weight:600; }

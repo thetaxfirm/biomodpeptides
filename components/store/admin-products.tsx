@@ -1,4 +1,5 @@
 'use client';
+import { hasCoa } from '@/lib/coa-shipping';
 
 import { useState, type FormEvent } from 'react';
 import { money, type Product } from '@/lib/catalog';
@@ -56,12 +57,21 @@ type Props = {
     onSave: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
 };
 
+// Quick views of products that need the owner's attention. COA uses the same rule as the shipping block.
+const issues = [
+    { id: 'no_coa', label: 'No COA', test: (p: Product) => !hasCoa(p) },
+    { id: 'stock_unset', label: 'Stock not entered', test: (p: Product) => p.stockQuantity == null },
+    { id: 'low', label: 'Low stock (5 or fewer)', test: (p: Product) => p.stockQuantity != null && p.stockQuantity > 0 && p.stockQuantity <= 5 },
+    { id: 'out', label: 'Out of stock', test: (p: Product) => p.stockQuantity != null && p.stockQuantity <= 0 },
+] as const;
 export function AdminProducts(props: Props) {
     const [format, setFormat] = useState('all');
+    const [issue, setIssue] = useState<string | null>(null);
     const { products, edited, query, busy, onQuery, onEdit, batchRecords = [] } = props;
     if (edited) return <ProductEditor key={`${props.formKey}:${edited.id}`} {...props} product={edited}/>;
     const needle = query.trim().toLowerCase();
-    const matched = products.filter(p => [p.name, p.sku, ...p.sizes].join(' ').toLowerCase().includes(needle));
+    const issueTest = issues.find(i => i.id === issue)?.test;
+    const matched = products.filter(p => [p.name, p.sku, ...p.sizes].join(' ').toLowerCase().includes(needle) && (!issueTest || issueTest(p)));
     const shownGroups = groups.filter(g => (format === 'all' || format === g.id) && matched.some(p => groupFor(p).id === g.id));
     return <section className={styles.products} aria-labelledby="admin-products-title">
         <div className={styles.heading}><div><h2 id="admin-products-title">Products</h2><p>Set availability, prices and timed offers for each product.</p></div>
@@ -71,13 +81,17 @@ export function AdminProducts(props: Props) {
             <button type="button" aria-pressed={format === 'all'} onClick={() => setFormat('all')}>All products <span>{products.length}</span></button>
             {groups.filter(g => products.some(p => groupFor(p).id === g.id)).map(g => <button key={g.id} type="button" className={styles[g.color]} aria-pressed={format === g.id} onClick={() => setFormat(g.id)}>{g.label} <span>{products.filter(p => groupFor(p).id === g.id).length}</span></button>)}
         </div>
+        <div className={styles.filters} aria-label="Show products that need attention">
+            <span className={styles.filterLabel}>Needs attention</span>
+            {issues.map(i => { const n = products.filter(i.test).length; return <button key={i.id} type="button" aria-pressed={issue === i.id} disabled={!n && issue !== i.id} onClick={() => setIssue(issue === i.id ? null : i.id)}>{i.label} <span>{n}</span></button>; })}
+        </div>
         {shownGroups.map(g => <section className={`${styles.group} ${styles[g.color]}`} key={g.id} aria-labelledby={`product-group-${g.id}`}>
             <header className={styles.groupHeading}><div><h3 id={`product-group-${g.id}`}>{g.label}</h3><p>{g.description}</p></div><span>{matched.filter(p => groupFor(p).id === g.id).length} products</span></header>
             <div className={styles.tableWrap}><table className={styles.table}>
                 <thead><tr><th scope="col">Product</th><th scope="col">Base price</th><th scope="col">Availability</th><th scope="col">Offer</th><th scope="col">Verified stock</th><th scope="col"><span className={styles.srOnly}>Action</span></th></tr></thead>
                 <tbody>{matched.filter(p => groupFor(p).id === g.id).map(p => {
                     const effective = productAvailability(p), priced = applySale(p), batch = batchRecords.find(record => record.productId === p.id);
-                    return <tr key={p.id}><th scope="row"><strong>{p.name}</strong><small>{p.sizes.join(' · ')}{p.sku ? ` · ${p.sku}` : ''}</small>{batch && <small>Lot {batch.lot || 'not listed'} · {batch.coaAvailable ? 'COA available' : 'COA unavailable'}</small>}</th>
+                    return <tr key={p.id}><th scope="row"><strong>{p.name}</strong><small>{p.sizes.join(' · ')}{p.sku ? ` · ${p.sku}` : ''}</small>{batch && <small>Lot {batch.lot || 'not listed'} · {hasCoa(p) ? 'COA on file' : <span className={styles.noCoa}>No COA, can't ship</span>}</small>}</th>
                         <td data-label="Base price"><strong>{money(p.price)}</strong>{priced.price !== p.price && <small>{money(priced.price)} with offer</small>}</td>
                         <td data-label="Availability"><span className={styles[effective]}>{effective === 'available' && p.preorder?.enabled ? 'Preorder' : productAvailabilityLabel(p)}</span></td>
                         <td data-label="Offer"><span className={p.preorder?.enabled || p.sale?.enabled ? styles.offer : undefined}>{offerLabel(p)}</span>{p.preorder?.enabled ? <small>{effective !== 'available' ? 'Ordering closed · ' : ''}{p.preorder.ships}</small> : p.sale?.enabled && <small>{effective !== 'available' ? 'Ordering closed · ' : ''}{Date.parse(p.sale.starts) > Date.now() ? 'Starts ' + dateLabel(p.sale.starts) : 'Ends ' + dateLabel(p.sale.ends)}</small>}</td>
@@ -86,7 +100,7 @@ export function AdminProducts(props: Props) {
                 })}</tbody>
             </table></div>
         </section>)}
-        {!shownGroups.length && <p className={styles.empty} role="status">No products match this search and format. Try another name or choose All products.</p>}
+        {!shownGroups.length && <p className={styles.empty} role="status">{issue ? 'No products match this view. Choose the view again to clear it.' : 'No products match this search and format. Try another name or choose All products.'}</p>}
         <p className={styles.footnote}>Base prices are before preorder, sale, pack and promo discounts. Existing orders keep their saved prices and fulfillment terms.</p>
     </section>;
 }

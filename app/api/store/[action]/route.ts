@@ -35,6 +35,7 @@ import { salesDiagnostics } from '@/lib/sales-diagnostics';
 import { can, permissionsFor, type StaffPermission } from '@/lib/staff';
 import { saveStaffMember, staffDirectory } from '@/lib/staff-store';
 import { coaBlockedItems, coaBlockMessage, noCoaProducts } from '@/lib/coa-shipping';
+import { adminOverview } from '@/lib/admin-overview';
 export const dynamic = 'force-dynamic';
 // What each admin write needs. An admin action missing here requires the owner.
 const adminActionPermission: Record<string, StaffPermission> = {
@@ -212,6 +213,15 @@ export async function GET(req: NextRequest, { params }: {
                 }>('SELECT id,status,total,data,created FROM orders WHERE owner=? ORDER BY created DESC LIMIT 100', user.id)).map(o => ({ ...o, data: orderView(parse(o.data, {})) })), requests: (await all<{
                     data: string;
                 }>('SELECT id,kind,data,status,created FROM requests WHERE owner=? AND kind IN (\'contact\',\'stock\',\'affiliate\') ORDER BY created DESC LIMIT 100', user.id)).map(r => ({ ...r, data: presentationData(parse(r.data, {})) })), rewards: presentationData(await all('SELECT points,reason,created FROM rewards WHERE owner=? ORDER BY created DESC LIMIT 100', user.id)) });
+        }
+        if (action === 'admin-overview') {
+            // "Today" home: work waiting now, sales and setup gaps. Each section is limited to what the role may see.
+            const { role } = await requireStaff('orders:read');
+            const allowed = (permission: StaffPermission) => can(role, permission);
+            const rows = (await all<{ id: string; status: string; total: number; data: string; created: number }>('SELECT id,status,total,data,created FROM orders ORDER BY created DESC LIMIT ?', scanLimit)).map(o => ({ ...o, data: parse<Record<string, any>>(o.data, {}) }));
+            const store = await config();
+            return j(await adminOverview(runtime() as any, { orders: rows, products: await catalog(false, true), shipping: store.shippingOptions, environment: paymentEnvironment(runtime()),
+                access: { orders: true, requests: allowed('requests:write'), reports: allowed('reports:read'), store: allowed('store:write') } }));
         }
         if (action === 'admin-orders') {
             // Paged, searchable order queue. Counts cover the whole scanned history, not just one page.

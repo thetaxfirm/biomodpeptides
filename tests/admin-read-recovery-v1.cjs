@@ -29,7 +29,7 @@ const alerts=h=>nodes(h.tree).filter(n=>n.props.role==='alert').map(text).join('
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return{promise,resolve,reject};};
 const flush=async h=>{for(let i=0;i<16;i++)await Promise.resolve();h?.render();};
 const noop=()=>null;
-function Field(){}function Check(){}function Choice(){}function Blank(){}function AuthPage(){}function ShippingLabel(){}function OrdersAdmin(){}function Dialog(){}function Tabs(){}function TabsTrigger(){}function TabsContent(){}function CoaAutomation(){}function ChangeHistory(){}function AdminProducts(){}function AdminShippingSettings(){}
+function AdminOverview(){}function PresaleProductPicker(){}function Field(){}function Check(){}function Choice(){}function Blank(){}function AuthPage(){}function ShippingLabel(){}function OrdersAdmin(){}function Dialog(){}function Tabs(){}function TabsTrigger(){}function TabsContent(){}function CoaAutomation(){}function ChangeHistory(){}function AdminProducts(){}function AdminShippingSettings(){}
 const ownerA={id:'fixture-admin-a',name:'Fixture A',email:'a@example.invalid'};
 const ownerB={id:'fixture-admin-b',name:'Fixture B',email:'b@example.invalid'};
 const fixture=(label='Snapshot A')=>({config:{presalesEnabled:false,rewardsEnabled:false,affiliateEnabled:false,packDiscounts:{},shippingCents:null,freeShippingAt:20000},products:[{id:900001,name:label,price:10000,stockQuantity:1,inStock:true,purchasable:true}],campaigns:[{id:'fixture-campaign',title:'Simulated campaign',active:false,starts:'2099-01-01',ends:'2099-02-01'}],orders:[{id:'fixture-order',status:'pending',total:10000,created:0,data:{items:[]}}],requests:[{id:'fixture-request',kind:'fixture',status:'new',created:0,data:{}}],searchPublishing:{}});
@@ -51,6 +51,7 @@ mod.require=id=>{
  if(id==='@/lib/catalog')return{money:c=>'$'+(c/100).toFixed(2)};if(id==='@/lib/packs')return{supportsPacks:p=>Boolean(p.categories?.some(c=>['research-compounds','spray-products','softgels'].includes(c.slug)))};
  if(id==='./account')return{AuthPage};if(id==='./shipping-admin')return{ShippingLabel};if(id==='./orders-admin')return{OrdersAdmin};
  if(id==='./coa-automation')return{CoaAutomation};
+ if(id==='./admin-overview')return{AdminOverview};if(id==='./presale-product-picker')return{PresaleProductPicker};
  if(id==='./change-history')return{ChangeHistory};
  if(id==='./admin-products')return{AdminProducts};
  if(id==='./admin-shipping-settings'){
@@ -83,12 +84,17 @@ const editFirst=h=>{const panel=productPanel(h);panel.props.onEdit(panel.props.p
 const productNames=h=>String(Boolean(productPanel(h).props.edited));
 (async()=>{
  // Default and deep-linked sections use the actual Admin and Experience components.
+ // Administration opens on Today; daily work follows in order, reports sit at the end.
  reset();let h=mount();await flush(h);
- assert.equal(find(h,n=>n.type===Tabs).props.value,'orders');
- assert.deepEqual(nodes(h.tree).filter(n=>n.type===TabsTrigger).slice(0,2).map(n=>[n.props.value,text(n)]),[['orders','Orders'],['promos','Affiliate & promo codes']]);
+ assert.equal(find(h,n=>n.type===Tabs).props.value,'overview');
+ assert.deepEqual(nodes(h.tree).filter(n=>n.type===TabsTrigger).slice(0,4).map(n=>[n.props.value,text(n)]),[['overview','Today'],['orders','Orders'],['requests','Requests'],['products','Products']]);
+ const reportsTab=nodes(h.tree).filter(n=>n.type===TabsTrigger).at(-1);
+ assert.deepEqual([reportsTab.props.value,text(reportsTab),reportsTab.props.className],['diagnostics','Reports','admin-tab-reports'],'One Reports tab opens Sales reports first');
+ assert(!nodes(h.tree).some(n=>n.type===TabsTrigger&&['traffic','search','changes'].includes(n.props.value)),'Report pages live behind the Reports tab');
+ assert(nodes(h.tree).some(n=>n.type===AdminOverview),'Today is shown on open');
  for(const initialTab of ['orders','promos','settings','changes','unknown','https://example.invalid/','../orders']){
   reset({store:{admin:false,customer:null}});h=mount({initialTab});
-  assert.equal(h.tree.type,AuthPage);assert.equal(h.tree.props.returnTo,'/admin?tab='+(['orders','promos','settings','changes'].includes(initialTab)?initialTab:'orders'));assert.equal(reads(),0);
+  assert.equal(h.tree.type,AuthPage);assert.equal(h.tree.props.returnTo,'/admin?tab='+(['orders','promos','settings','changes'].includes(initialTab)?initialTab:'overview'));assert.equal(reads(),0);
  }
  const experienceFile=path.join(root,'components/store/experience.tsx');
  const experienceModule=new Module(experienceFile,module);experienceModule.filename=experienceFile;experienceModule.paths=Module._nodeModulePaths(root);
@@ -141,12 +147,12 @@ const productNames=h=>String(Boolean(productPanel(h).props.edited));
   const form=nodes(h.tree).find(n=>n.type==='form'&&(formTitle==='Tracking number / carrier'?nodes(n).some(f=>f.type===Field&&f.props.label===formTitle):text(n).includes(formTitle)));assert(form);
   const key=form.key;form.props.onChangeCapture();h.render();const before=reads();cleanRefresh();button(h,'Refresh administration').props.onClick();
   assert.equal(reads(),before);assert(button(h,'Refresh administration').props.disabled);assert(text(h.tree).includes('Save or discard unsaved edits'));
-  find(h,n=>n.type===Tabs).props.onValueChange('products');h.render();assert.equal(find(h,n=>n.type===Tabs).props.value,'orders');
+  find(h,n=>n.type===Tabs).props.onValueChange('products');h.render();assert.equal(find(h,n=>n.type===Tabs).props.value,'overview');
   button(h,'Discard unsaved edits').props.onClick();h.render();assert.equal(button(h,'Refresh administration').props.disabled,false);assert.notEqual(settingsForm(h).key,key);
  }
  {const generation=queue(h).formGeneration;queue(h).markDraft('order:order001-new');h.render();const before=reads();cleanRefresh();button(h,'Refresh administration').props.onClick();
   assert.equal(reads(),before);assert(button(h,'Refresh administration').props.disabled);assert(text(h.tree).includes('Save or discard unsaved edits'));
-  find(h,n=>n.type===Tabs).props.onValueChange('products');h.render();assert.equal(find(h,n=>n.type===Tabs).props.value,'orders');
+  find(h,n=>n.type===Tabs).props.onValueChange('products');h.render();assert.equal(find(h,n=>n.type===Tabs).props.value,'overview');
   button(h,'Discard unsaved edits').props.onClick();h.render();assert.equal(button(h,'Refresh administration').props.disabled,false);assert.notEqual(queue(h).formGeneration,generation);}
  find(h,n=>n.type===Check).props.onChange(true);h.render();assert.equal(find(h,n=>n.type===Check).props.checked,true);assert(button(h,'Refresh administration').props.disabled);
  button(h,'Discard unsaved edits').props.onClick();h.render();assert.equal(find(h,n=>n.type===Check).props.checked,false);

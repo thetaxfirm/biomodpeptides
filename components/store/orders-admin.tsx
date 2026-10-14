@@ -149,12 +149,16 @@ export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, form
         <div className={styles.tabs} role="group" aria-label="Order status">
             {queueTabs.map(t => <button key={t.id} type="button" aria-pressed={tab === t.id} className={t.id === 'test' ? styles.quiet : undefined} onClick={() => setTab(t.id)}>{t.label}<span>{counts ? counts[t.id] : '…'}</span></button>)}
         </div>
-        {result?.noCoa && result.noCoa.length > 0 && <details className={styles.noCoa} open={result.noCoa.some(p => p.waitingOrders > 0)}>
-            <summary><strong>Can't ship: no COA on file</strong> · {result.noCoa.length} {result.noCoa.length === 1 ? 'product' : 'products'}{result.noCoa.some(p => p.waitingOrders) ? ' · ' + result.noCoa.reduce((n, p) => n + p.waitingOrders, 0) + ' waiting order lines' : ''}</summary>
-            <p>Orders containing these products are blocked from labels and from being marked shipped until the COA for the current lot is attached under Products.</p>
-            <table><thead><tr><th>Product</th><th>Lot being sold</th><th className={styles.number}>Paid orders waiting</th></tr></thead>
-                <tbody>{result.noCoa.map(p => <tr key={p.id}><td>{p.name}</td><td>{p.lot || 'No lot recorded'}</td><td className={styles.number}>{p.waitingOrders || ''}</td></tr>)}</tbody></table>
-        </details>}
+        {result?.noCoa && result.noCoa.length > 0 && (() => {
+            const holding = result.noCoa.filter(p => p.waitingOrders > 0), rest = result.noCoa.length - holding.length;
+            const table = (rows: typeof holding) => <table><thead><tr><th>Product</th><th>Lot being sold</th><th className={styles.number}>Paid orders waiting</th></tr></thead>
+                <tbody>{rows.map(p => <tr key={p.id}><td>{p.name}</td><td>{p.lot || 'No lot recorded'}</td><td className={styles.number}>{p.waitingOrders || ''}</td></tr>)}</tbody></table>;
+            return <div className={styles.noCoa} data-holding={holding.length > 0}>
+                {holding.length > 0 ? <><p><strong>{holding.reduce((n, p) => n + p.waitingOrders, 0)} paid {holding.reduce((n, p) => n + p.waitingOrders, 0) === 1 ? 'order is' : 'orders are'} waiting on a missing COA.</strong> They can't get a label or be marked shipped until the COA for the current lot is attached under Products.</p>{table(holding)}</>
+                    : <p>No paid order is waiting on a missing COA.</p>}
+                <details><summary>{holding.length ? `${rest} more ${rest === 1 ? 'product' : 'products'}` : `${result.noCoa.length} ${result.noCoa.length === 1 ? 'product' : 'products'}`} for sale without a COA</summary>{table(result.noCoa.filter(p => !p.waitingOrders))}</details>
+            </div>;
+        })()}
         {error && <div className="notice error"><p role="alert">{error}</p><button type="button" className="text-button" onClick={() => fetchPage(0)}>Retry</button></div>}
         {result && <p className={styles.summary} role="status">
             {result.total} {result.total === 1 ? 'order' : 'orders'} in {current.label}{q ? ' matching “' + q + '”' : ''}{tab === 'to_ship' || tab === 'label' ? ', oldest first' : ', newest first'}.

@@ -39,7 +39,7 @@ export const can = (role: StaffRole | null | undefined, permission: StaffPermiss
 
 // The permission each admin tab needs. A tab missing here is never shown.
 export const tabPermission: Record<string, StaffPermission> = {
-  orders: 'orders:read', requests: 'requests:write',
+  overview: 'orders:read', orders: 'orders:read', requests: 'requests:write',
   promos: 'reports:read', diagnostics: 'reports:read', traffic: 'reports:read', search: 'reports:read', changes: 'reports:read',
   settings: 'store:write', products: 'store:write', presales: 'store:write', rewards: 'store:write',
   team: 'team:manage',
