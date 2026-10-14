@@ -19,7 +19,8 @@ export const queueTabs: { id: QueueTab; label: string }[] = [
 
 export type QueueOrder = { id: string; owner?: string; status: string; total: number; created: number; data: Record<string, any> };
 export type QueueRow = QueueOrder & { bucket: OrderBucket };
-export type QueueResult = { orders: QueueRow[]; counts: Record<QueueTab, number>; total: number; offset: number; limit: number; hasMore: boolean; scanned: number; truncated: boolean };
+export type NoCoaRow = { id: number; name: string; lot: string | null; waitingOrders: number };
+export type QueueResult = { noCoa?: NoCoaRow[]; orders: (QueueRow & { coaMissing?: string[] })[]; counts: Record<QueueTab, number>; total: number; offset: number; limit: number; hasMore: boolean; scanned: number; truncated: boolean };
 
 export const pageSize = 50;
 export const scanLimit = 5000;

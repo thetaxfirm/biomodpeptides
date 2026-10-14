@@ -56,3 +56,10 @@
 .problem button { justify-self:start; }
 
 .winBack { font:inherit; font-size:13px; font-weight:600; padding:4px 8px; border:1px solid #d8cedd; border-radius:6px; background:white; color:#2d1235; cursor:pointer; }
+.noCoa { margin:0 0 18px; padding:14px 16px; border:1px solid #e5b9a0; border-radius:5px; background:#fff5ee; color:#6e2f12; font-size:14px; }
+.noCoa summary { cursor:pointer; line-height:1.5; }
+.noCoa p { margin:8px 0 10px; font-size:13px; line-height:1.55; }
+.noCoa table { width:100%; border-collapse:collapse; font-size:13px; background:#fff; border-radius:4px; }
+.noCoa th { text-align:left; font-weight:600; padding:7px 10px; border-bottom:1px solid #f0d9cb; }
+.noCoa td { padding:7px 10px; border-bottom:1px solid #f7e8df; }
+.coaHold { color:#8a2f12; font-weight:600; font-size:13px; line-height:1.4; }

@@ -138,8 +138,8 @@ export async function checkout(owner: string, lines: CartLine[], body: Record<st
         throw new Error('Your checkout quote changed or expired. Recalculate delivery and review the order again.');
     if (!Number.isInteger(body.expectedTotal) || body.expectedTotal !== q.total)
         throw new Error('Your total changed. Recalculate delivery and review the updated total before paying.');
-    if (q.items.some(i => i.product.stockQuantity == null))
-        throw new Error('Inventory is awaiting verification. Please contact us before ordering.');
+    // No stock count means inventory is not tracked for that product; it never blocks a purchase.
+    // The original COA ships with the order or is sent on request.
     const campaignId = lines[0]?.presaleId || null;
     const campaign = campaignId ? parse<Record<string, any>>((await one<{
         data: string;

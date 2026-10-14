@@ -138,8 +138,20 @@ const rejected = async(fn,pattern)=>{const count=sql.prepare('SELECT COUNT(*) n 
  const { shippingTerms }=require('../lib/shipping-terms.ts');
  assert.match(shippingTerms({freeShippingAt:20000,shippingOptions:{services}}).overnight,/Overnight delivery is offered/);
  assert.equal(shippingTerms({freeShippingAt:20000,shippingOptions:{services:services.map(s=>s.key==='UPS:NEXTDAYAIR'?{...s,enabled:false}:s)}}).overnight,null);
+ // A product with no stock count is untracked: it never blocks checkout with a contact-us hold.
+ store();sql.prepare('INSERT INTO product_overrides(id,data) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data').run(product.id,JSON.stringify({price:7999}));
+ const untracked=await issueQuote('untracked-owner',[{id:product.id,quantity:2}],address);
+ const order=await checkout('untracked-owner',[{id:product.id,quantity:2}],requestBody(untracked));
+ assert.match(order.url,/isolated-payment/);
+ assert.equal(sql.prepare('SELECT quantity FROM inventory_reservations WHERE order_id=?').get(order.id).quantity,2);
+ sql.prepare("UPDATE orders SET status='paid' WHERE id=?").run(order.id);
+ const inv=require('../lib/inventory-statements.json');sql.prepare(inv.settleInventory).run(order.id,order.id,order.id);
+ assert.equal(JSON.parse(sql.prepare('SELECT data FROM product_overrides WHERE id=?').get(product.id).data).stockQuantity ?? null,null,'Paying never invents a count');
+ // A counted product still cannot be oversold.
+ sql.prepare('INSERT INTO product_overrides(id,data) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data').run(product.id,JSON.stringify({price:7999,stockQuantity:1,inStock:true,purchasable:true}));
+ await rejected(async()=>{const over=await issueQuote('counted-owner',[{id:product.id,quantity:2}],address);return checkout('counted-owner',[{id:product.id,quantity:2}],requestBody(over));},/./);
  // Tampered snapshots are refused.
  assert.equal(shipping.savedShippingOption({...saved.shippingOption,serviceKey:'USPS:PRIORITY'}),null);
  assert.equal(shipping.savedShippingOption({...saved.shippingOption,note:'x'.repeat(161)}),null);
- console.log('PASS: per-service shipping: only chosen services shown, carrier price + owner extra, owner wording, exact saved service and label, stale price/off-service quotes refused, free minimum on the lowest-carrier-cost standard only, no invented price, live check statuses, policy copy. No live providers.');
+ console.log('PASS: per-service shipping: only chosen services shown, carrier price + owner extra, owner wording, exact saved service and label, stale price/off-service quotes refused, free minimum on the lowest-carrier-cost standard only, no invented price, live check statuses, policy copy, untracked stock never holds checkout while counted stock cannot oversell. No live providers.');
 })().catch(e=>{console.error(e);process.exitCode=1}).finally(()=>{Module._load=originalLoad;global.fetch=originalFetch;sql.close();});

@@ -40,7 +40,9 @@ m.filename = filename; m.require = name => {
   if (name === '@/lib/runtime') return runtime;
   if (name === '@/lib/change-history') return history;
   if (name === '@/lib/easypost') return shipping;
-  if (name === '@/lib/commerce') return {config: async()=>({shippingOptions:{}})};
+  if (name === '@/lib/commerce') return {config: async()=>({shippingOptions:{}}), catalog: async()=>[]};
+  // The COA shipping rule has its own suite (coa-shipping-v1); here every order is cleared to ship.
+  if (name === '@/lib/coa-shipping') return {coaBlockedItems: () => [], coaBlockMessage: names => 'blocked ' + names.join(',')};
   if (name === '@/lib/shipping-options') return {savedShippingOption:()=>null};
   throw Error('Unexpected import ' + name);
 };

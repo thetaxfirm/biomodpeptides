@@ -3,8 +3,9 @@ import { requireStaff } from '@/lib/auth';
 import { buyLabel, easypostReady, sendTrackingEmail, shippingConnection, readShipmentTracking } from '@/lib/easypost';
 import { one, parse, runtime, timestamp } from '@/lib/runtime';
 import { auditRun, recordChange } from '@/lib/change-history';
-import { config } from '@/lib/commerce';
 import { savedShippingOption } from '@/lib/shipping-options';
+import { catalog, config } from '@/lib/commerce';
+import { coaBlockedItems, coaBlockMessage } from '@/lib/coa-shipping';
 export const dynamic = 'force-dynamic';
 const j = (value: unknown, status = 200) => NextResponse.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
 const auditWarning = ' Change history could not record the final result. Do not repeat this action just to update history.';
@@ -72,6 +73,8 @@ export async function POST(req: NextRequest) {
             const result = await trackingEmail(data.shipment);
             return j({ message: (result.sent ? 'Tracking email accepted by the mail provider. Inbox delivery is not confirmed.' : 'Tracking email acceptance was not confirmed. Check mail provider records before resending.') + (result.recorded ? '' : auditWarning) });
         }
+        const coaBlocked = coaBlockedItems(data.items, await catalog(false, true));
+        if (coaBlocked.length) return j({ error: coaBlockMessage(coaBlocked) + ' No label was bought.' }, 409);
         await record('shipping.label_purchase', 'attempted', 'Requested a carrier label purchase.');
         // Claim the order first so a double click cannot buy two labels.
         if (data.hold) return j({ error: 'This order is on hold for a reported problem. Clear the hold before buying a label.' }, 409);

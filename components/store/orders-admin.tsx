@@ -123,6 +123,8 @@ export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, form
         return report || winBack ? <span className={styles.nextGroup}>{step}{winBack}{report}</span> : step;
     }
     function mainStep(o: QueueRow, s: any) {
+        const noCoa = (o as QueueRow & { coaMissing?: string[] }).coaMissing || [];
+        if (noCoa.length && (o.bucket === 'to_ship' || o.bucket === 'label')) return <span className={styles.coaHold}>Can't ship: no COA for {noCoa.join(', ')}</span>;
         if (o.bucket === 'to_ship' && allowed('orders:fulfill')) return <ShippingLabel order={o} onDone={reload} compact/>;
         if (o.bucket === 'label' && s?.labelUrl) return <span className={styles.nextGroup}>
             <a className="text-button" href={s.labelUrl} target="_blank" rel="noopener">Print label</a>
@@ -147,6 +149,12 @@ export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, form
         <div className={styles.tabs} role="group" aria-label="Order status">
             {queueTabs.map(t => <button key={t.id} type="button" aria-pressed={tab === t.id} className={t.id === 'test' ? styles.quiet : undefined} onClick={() => setTab(t.id)}>{t.label}<span>{counts ? counts[t.id] : '…'}</span></button>)}
         </div>
+        {result?.noCoa && result.noCoa.length > 0 && <details className={styles.noCoa} open={result.noCoa.some(p => p.waitingOrders > 0)}>
+            <summary><strong>Can't ship: no COA on file</strong> · {result.noCoa.length} {result.noCoa.length === 1 ? 'product' : 'products'}{result.noCoa.some(p => p.waitingOrders) ? ' · ' + result.noCoa.reduce((n, p) => n + p.waitingOrders, 0) + ' waiting order lines' : ''}</summary>
+            <p>Orders containing these products are blocked from labels and from being marked shipped until the COA for the current lot is attached under Products.</p>
+            <table><thead><tr><th>Product</th><th>Lot being sold</th><th className={styles.number}>Paid orders waiting</th></tr></thead>
+                <tbody>{result.noCoa.map(p => <tr key={p.id}><td>{p.name}</td><td>{p.lot || 'No lot recorded'}</td><td className={styles.number}>{p.waitingOrders || ''}</td></tr>)}</tbody></table>
+        </details>}
         {error && <div className="notice error"><p role="alert">{error}</p><button type="button" className="text-button" onClick={() => fetchPage(0)}>Retry</button></div>}
         {result && <p className={styles.summary} role="status">
             {result.total} {result.total === 1 ? 'order' : 'orders'} in {current.label}{q ? ' matching “' + q + '”' : ''}{tab === 'to_ship' || tab === 'label' ? ', oldest first' : ', newest first'}.

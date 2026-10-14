@@ -33,6 +33,7 @@ import { searchReport, seoConfig } from '@/lib/seo-policy';
 import { salesDiagnostics } from '@/lib/sales-diagnostics';
 import { can, permissionsFor, type StaffPermission } from '@/lib/staff';
 import { saveStaffMember, staffDirectory } from '@/lib/staff-store';
+import { coaBlockedItems, coaBlockMessage, noCoaProducts } from '@/lib/coa-shipping';
 export const dynamic = 'force-dynamic';
 // What each admin write needs. An admin action missing here requires the owner.
 const adminActionPermission: Record<string, StaffPermission> = {
@@ -216,7 +217,11 @@ export async function GET(req: NextRequest, { params }: {
             await requireStaff('orders:read');
             const p = req.nextUrl.searchParams;
             const rows = (await all<{ id: string; owner: string; status: string; total: number; data: string; created: number }>('SELECT id,owner,status,total,data,created FROM orders ORDER BY created DESC LIMIT ?', scanLimit + 1)).map(o => ({ ...o, data: adminOrderView(parse(o.data, {})) }));
-            return j(queryOrders(rows, { tab: p.get('tab'), q: p.get('q'), offset: p.get('offset'), id: p.get('id') }));
+            const result = queryOrders(rows, { tab: p.get('tab'), q: p.get('q'), offset: p.get('offset'), id: p.get('id') });
+            // Products without a COA for the current lot cannot be mailed; flag waiting orders and list the products.
+            const products = await catalog(false, true);
+            const waiting = rows.filter(o => o.status === 'paid' && !o.data?.shipment).map(o => ({ items: o.data?.items }));
+            return j({ ...result, orders: result.orders.map((o: any) => ({ ...o, coaMissing: ['paid', 'labeling'].includes(o.status) && !o.data?.shipment ? coaBlockedItems(o.data?.items, products) : [] })), noCoa: noCoaProducts(products, waiting) });
         }
         if (action === 'admin') {
             // Every role sees orders; other sections are sent only to roles that hold them.
@@ -658,6 +663,10 @@ export async function POST(req: NextRequest, { params }: {
                     throw new Error('Only verified paid orders may be fulfilled.');
                 if (parse<Record<string, any>>(o.data, {}).hold)
                     throw new Error('This order is on hold for a reported problem. Clear the hold before marking it shipped.');
+                if (status === 'shipped' && o.status === 'paid') {
+                    const blocked = coaBlockedItems(parse<Record<string, any>>(o.data, {}).items, await catalog(false, true));
+                    if (blocked.length) throw new Error(coaBlockMessage(blocked));
+                }
                 const data = { ...parse(o.data, {}), tracking: str(b.tracking, 200) };
                 await run('UPDATE orders SET status=?,data=?,updated=? WHERE id=?', status, JSON.stringify(data), timestamp(), b.id);
                 return j({ message: 'Order updated.' });
