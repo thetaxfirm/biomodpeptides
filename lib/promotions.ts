@@ -1,6 +1,8 @@
 // Server-owned promotions. Never accept percentages or savings from a browser.
 export const PROMO_COOKIE = 'bm_promo';
-const promotions: Readonly<Record<string, number>> = Object.freeze({ BM10: 10, BIOMOD15: 15, BMOD20: 20, ANNA20: 20, KIMC15: 15 });
+const promotions: Readonly<Record<string, number>> = Object.freeze({ BM10: 10, BIOMOD15: 15, BMOD20: 20, ANNA20: 20, KIMC15: 15,
+    // Come-back codes for win-back and service emails (owner, Oct 13 2026). Not advertised on the site.
+    COMEBACK10: 10, COMEBACK15: 15, COMEBACK20: 20, COMEBACK25: 25, COMEBACK30: 30 });
 export function activePromotions(): { code: string; percentOff: number }[] {
     return Object.entries(promotions).map(([code, percentOff]) => ({ code, percentOff }));
 }

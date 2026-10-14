@@ -62,3 +62,9 @@ Owner instruction after a HEAT-R 20mg reply was staged saying "Attached" with no
 - Templates (`lib/win-back.ts`): Need a hand? (service first), Your order is saved (reminder + lot-matched lab reports), 10% off to finish (code BM10, used on a fresh checkout because a code cannot be added to a started order), Personal note from Ash, Last reminder. No invented deadlines or scarcity.
 - The existing automatic recovery email (one email after 24 h, 7.5% off the saved order) is detected: the order note and the templates mention the saving already applied, so offers do not conflict.
 - Research basis: Klaviyo's abandoned-cart benchmarks (a short sequence: reminder, then incentive, then a final note) and Baymard's checkout-abandonment reasons (extra costs, payment trust, friction). Most "2026" subject-line statistics online are secondary and directional only.
+
+## Follow-up (Oct 13): come-back codes
+
+- Owner request: add COMEBACK30, plus more like it. `lib/promotions.ts` now also accepts COMEBACK10, COMEBACK15, COMEBACK20, COMEBACK25 and COMEBACK30 (server-owned, case/space normalized, applied after pack/sale prices like every other code, not advertised on the site, reusable by anyone who has the code).
+- They appear in the desk's Insert code menu, in Affiliate & promo codes reporting, and the AI may offer them when asked. The Win back menu now has one offer email per come-back code (10/15/20/25/30%) in place of the single BM10 offer.
+- Checks: `tests/promo-checkout-v1.cjs` verifies exact totals and case/space variants for all five new codes; `tests/promo-analytics-v1.cjs` lists all ten active codes; `tests/request-cases-v1.cjs` checks every code used in a template is an active code.

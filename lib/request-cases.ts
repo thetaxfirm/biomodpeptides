@@ -4,7 +4,6 @@ import { coaEmail } from './coa-delivery';
 import { isIssue, isResolution, type RequestIssue } from './request-issues';
 import { winBackTemplates, winBackTemplate, type WinBackContext } from './win-back';
 import { products } from './catalog';
-import { activePromotions } from './promotions';
 import { prepareRequestReply } from './request-replies';
 type Env = { DB: D1Database };
 type Actor = { email: string; role: string };
@@ -90,8 +89,7 @@ async function winBackContext(env: Env, orderId: string): Promise<WinBackContext
   const items = (Array.isArray(data.items) ? data.items : []).map((item: any) => { const product = products.find(p => p.id === item.id); return { name: product?.name || String(item.product?.name || 'your item'), url: product ? 'https://trybiomod.com/product/' + product.slug : 'https://trybiomod.com/shop' }; })
     .filter((item: { name: string }, index: number, all: { name: string }[]) => all.findIndex(other => other.name === item.name) === index);
   const recovery = await env.DB.prepare("SELECT savings FROM checkout_recovery WHERE order_id=? AND status='accepted'").bind(orderId).first<{ savings: number }>().catch(() => null);
-  const codes = activePromotions();
-  return { firstName: String(data.address?.name || '').trim().split(/\s+/)[0]?.slice(0, 40) || '', items, orderNumber: orderNumber(order!.id), ordersUrl: 'https://trybiomod.com/account/orders', code: codes.find(c => c.code === 'BM10') || codes.find(c => c.percentOff === 10) || null, autoRecovery: recovery ? { savingsCents: recovery.savings } : null };
+  return { firstName: String(data.address?.name || '').trim().split(/\s+/)[0]?.slice(0, 40) || '', items, orderNumber: orderNumber(order!.id), ordersUrl: 'https://trybiomod.com/account/orders', autoRecovery: recovery ? { savingsCents: recovery.savings } : null };
 }
 /** Rendered win-back templates for one desk conversation started from an unpaid order. */
 export async function winBackPreview(env: Env, requestId: string) {
