@@ -3,6 +3,7 @@ import { coaEmail, coaHash, coaMessage, exactCoaReport, coaReportByHash, readCoa
 import { loadCoaBatchContext } from './product-batch';
 import { withAuditDb, type AuditActor } from './change-history';
 import { activePromotions } from './promotions';
+import { openRequestsForBridge, recordMailboxReplies } from './request-external';
 import { isIssue, issueLabel, resolutionLabel } from './request-issues';
 export const REPLY_SENDER = 'research@biomodpeptides.com';
 type Env = { DB: D1Database };
@@ -149,6 +150,8 @@ export async function handleReplyBridge(env:Env,payload:unknown):Promise<Record<
   return {job:{id:row.id,requestId:row.request_id,revision:row.revision,leaseToken:token,mode:row.mode,sender:row.sender,recipient:row.recipient,subject:row.subject,instruction:row.instruction,proposedBody:row.proposed_body,request:source(request!),history:await historyFor(env,request!),coa:plan.coa,...('attachment' in plan&&plan.attachment?{attachment:plan.attachment}:{}),preparedBy:row.prepared_by,...(row.approved_at?{approved:{by:row.approved_by||'',at:row.approved_at}}:{}),...(row.mode==='ai'?await (async()=>{const c=await env.DB.prepare('SELECT issue,resolutions,note FROM request_issues WHERE request_id=?').bind(row.request_id).first<{issue:string;resolutions:string;note:string}>().catch(()=>null);let res:string[]=[];try{res=c?JSON.parse(c.resolutions):[];}catch{res=[];}
    return {style:await replyStyle(env,c?.issue||null),codes:activePromotions(),...(c?{caseInfo:`Issue: ${issueLabel(c.issue)}.${res.length?' Resolution Ash chose: '+res.map(resolutionLabel).join(', ')+'.':''}${c.note?' Ash\'s note: '+c.note.slice(0,500):''}`}:{})};})():{})}};
  }
+ if(p.action==='open_requests')return {requests:await openRequestsForBridge(env)};
+ if(p.action==='external_replies')return recordMailboxReplies(env,p.replies);
  const jobId=id(p.id),rev=revision(p.revision),row=await rowFor(env,jobId);
  if(p.action==='sent'){const provider=reference(p.providerMessageId),readyId=reference(p.readyId),thread=p.providerThreadId===undefined?null:reference(p.providerThreadId),body=text(p.body,60000,true),sentAt=stamp(p.sentAt),oldAck=await env.DB.prepare('SELECT * FROM request_reply_messages WHERE reply_job_id=? AND reply_revision=? AND ready_id=?').bind(jobId,rev,readyId).first<any>();if(oldAck){if(oldAck.provider_message_id!==provider||oldAck.provider_thread_id!==thread||oldAck.body!==body||oldAck.created!==sentAt)fail('This provider acknowledgement conflicts with the saved send.');return {ok:true};}}
  if(p.action==='messages'){

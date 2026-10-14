@@ -34,7 +34,8 @@ type Props = {
   canSend?: boolean;
   onStatus: (request: CustomerRequest, status: string) => void | Promise<void>;
   onPrepareReply: (input: PrepareReplyInput) => Promise<ReplySummary>;
-  onRefreshReplies?: (ids: string[]) => Promise<{ replies: Record<string, ReplySummary>; forwards?: Record<string, RequestForward[]>; activity?: Record<string, { at: number; text: string }[]>; issues?: Record<string, RequestIssue> }>;
+  onRefreshReplies?: (ids: string[]) => Promise<{ replies: Record<string, ReplySummary>; forwards?: Record<string, RequestForward[]>; activity?: Record<string, { at: number; text: string }[]>; issues?: Record<string, RequestIssue>; external?: Record<string, ExternalReply[]> }>;
+  onMarkReplied?: (input: { id: string; note: string }) => Promise<ExternalReply>;
   onSaveIssue?: (input: { id: string; issue: string; resolutions: string[]; note: string }) => Promise<RequestIssue>;
   onLoadCases?: () => Promise<CaseEntry[]>;
   onLoadTemplates?: (requestId: string) => Promise<{ id: string; label: string; why: string; body: string }[]>;
@@ -45,7 +46,7 @@ type Props = {
 };
 // coa: undefined = keep what the saved reply uses; null = auto-match the request; '' = none; sha = chosen report.
 type Draft = { body: string; instruction: string; revision: number | null; edited: boolean; error: string; message: string; coa?: string | null; undo?: string; remember: boolean };
-type Stage = 'todo' | 'sending' | 'waiting' | 'done' | 'spam' | 'deleted';
+type Stage = 'todo' | 'sending' | 'waiting' | 'done' | 'spam' | 'deleted' | 'pitch';
 const noReplies: Record<string, ReplySummary> = {};
 const sender = 'research@biomodpeptides.com';
 const DAY = 86400000;
@@ -68,32 +69,42 @@ function when(value: number) {
   const sameDay = new Date().toDateString() === date.toDateString();
   return sameDay ? date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : date.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ', ' + date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
-function age(value: number, now: number) {
-  const minutes = Math.max(0, Math.round((now - value) / 60000));
-  if (minutes < 60) return minutes + 'm';
-  if (minutes < 1440) return Math.round(minutes / 60) + 'h';
-  return Math.round(minutes / 1440) + 'd';
-}
 function websiteLink(value: unknown) {
   try { const url = new URL(text(value)); return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password ? url.href : null; }
   catch { return null; }
 }
 const working = (reply?: ReplySummary) => reply?.status === 'queued' || reply?.status === 'preparing';
 const sendPending = (reply?: ReplySummary) => reply?.status === 'sending' || Boolean(reply?.approvedAt && reply.status !== 'sent' && reply.status !== 'needs_review');
-function stageOf(request: CustomerRequest, reply?: ReplySummary): { stage: Stage; label: string; since: number } {
+export type ExternalReply = { at: number; source: 'mailbox' | 'manual'; account: string; body: string; preview: boolean };
+const shortDate = (value: number) => new Date(value).toLocaleDateString([], { month: 'short', day: 'numeric' });
+const mailbox = (account: string) => account.split('@')[0] + '@';
+// Supplier and vendor sales pitches, not customers. Only a suggestion; tagging the issue overrides it.
+const PITCH = /\b(manufactur\w*|supplier|factory|wholesale|OEM|ODM|private label|bulk (?:order|price)|competitive pric\w*|price list|MOQ|our company|we are a (?:leading|professional)|we (?:can )?(?:supply|provide) (?:high|all)|high quality peptides?|sarms)\b/i;
+export const looksLikePitch = (request: CustomerRequest) => request.data.origin !== 'order' && PITCH.test(text(request.data.subject) + ' ' + text(request.data.message));
+type StageInfo = { stage: Stage; label: string; since: number; when: string; late: boolean };
+function stageOf(request: CustomerRequest, reply: ReplySummary | undefined, external: ExternalReply[] = [], issue: string | null = null, activity: { at: number; text: string }[] = [], now = Date.now()): StageInfo {
   const history = reply?.history || [];
-  const outgoing = history.filter(m => m.direction === 'outgoing').map(m => m.created);
-  const incoming = history.filter(m => m.direction === 'incoming').map(m => m.created);
-  const lastOut = outgoing.length ? Math.max(...outgoing) : 0;
-  const lastIn = Math.max(request.created, ...incoming);
+  const desk = history.filter(m => m.direction === 'outgoing').map(m => ({ at: m.created, how: 'from research@' }));
+  const outside = external.map(e => ({ at: e.at, how: e.source === 'manual' ? 'by phone/text · ' + mailbox(e.account) : 'in Gmail from ' + mailbox(e.account) }));
+  const replies = [...desk, ...outside].sort((a, b) => a.at - b.at);
+  const last = replies[replies.length - 1];
+  const lastOut = last?.at || 0;
+  const lastIn = Math.max(request.created, ...history.filter(m => m.direction === 'incoming').map(m => m.created));
   const customerReplied = lastOut > 0 && lastIn > lastOut;
-  if (request.status === 'deleted') return { stage: 'deleted', label: 'Deleted', since: request.created };
-  if (request.status === 'spam') return { stage: 'spam', label: 'Spam', since: request.created };
-  if (sendPending(reply)) return { stage: 'sending', label: 'Sending', since: reply!.approvedAt || reply!.updated };
-  if (request.status === 'resolved' && !customerReplied) return { stage: 'done', label: lastOut ? 'Replied' : 'Archived', since: lastOut || request.created };
-  if (lastOut && !customerReplied) return { stage: 'waiting', label: 'Replied', since: lastOut };
-  const label = customerReplied ? 'Customer replied' : working(reply) ? 'AI writing' : reply?.status === 'ready' ? 'Draft ready' : reply?.status === 'needs_review' ? 'Needs a look' : 'New';
-  return { stage: 'todo', label, since: lastIn };
+  const replied = last ? `Replied ${when(last.at)} ${last.how}` : '';
+  if (request.status === 'deleted') return { stage: 'deleted', label: 'Deleted', since: request.created, when: 'Received ' + shortDate(request.created), late: false };
+  if (request.status === 'spam') return { stage: 'spam', label: 'Spam', since: request.created, when: 'Received ' + shortDate(request.created), late: false };
+  if (sendPending(reply)) return { stage: 'sending', label: 'Sending…', since: reply!.approvedAt || reply!.updated, when: 'Received ' + shortDate(request.created), late: false };
+  if ((issue === 'vendor' || (!issue && looksLikePitch(request))) && !lastOut) return { stage: 'pitch', label: issue === 'vendor' ? 'Sales pitch' : 'Looks like a sales pitch', since: request.created, when: 'Received ' + shortDate(request.created), late: false };
+  if (lastOut && !customerReplied) return { stage: request.status === 'resolved' ? 'done' : 'waiting', label: replied, since: lastOut, when: replied, late: false };
+  if (request.status === 'resolved' && !customerReplied) {
+    const closed = [...activity].reverse().find(a => a.text.startsWith('Archived'));
+    return { stage: 'done', label: 'Closed without reply' + (closed ? ` · ${shortDate(closed.at)}${closed.text.includes(' by ') ? ' by ' + mailbox(closed.text.split(' by ').pop()!) : ''}` : ''), since: closed?.at || request.created, when: 'Received ' + shortDate(request.created), late: false };
+  }
+  const state = customerReplied ? 'Customer wrote again' : working(reply) ? 'Needs reply · AI is writing' : reply?.status === 'ready' ? (reply.mode === 'ai' ? 'Needs reply · AI draft ready' : 'Needs reply · draft saved') : reply?.status === 'needs_review' ? 'Needs reply · draft needs a look' : 'Needs reply';
+  const waited = now - lastIn;
+  const days = Math.floor(waited / DAY);
+  return { stage: 'todo', label: state, since: lastIn, when: (customerReplied ? 'Wrote ' : 'Received ') + shortDate(lastIn) + (days >= 1 ? ` · waiting ${days} day${days === 1 ? '' : 's'}` : ''), late: waited > DAY };
 }
 function friendlyReason(reason?: string) {
   if (!reason) return '';
@@ -108,7 +119,7 @@ function speechRecognition(): (new () => Speech) | null {
   return w.SpeechRecognition || w.webkitSpeechRecognition || null;
 }
 
-export function RequestInbox({ requests, automation, requestReplies = noReplies, busy, dirty, refreshing, canSend = false, onStatus, onPrepareReply, onRefreshReplies, onLoadOptions, onSaveRule, onForward, onSaveIssue, onLoadCases, onLoadTemplates, focusId }: Props) {
+export function RequestInbox({ requests, automation, requestReplies = noReplies, busy, dirty, refreshing, canSend = false, onStatus, onPrepareReply, onRefreshReplies, onLoadOptions, onSaveRule, onForward, onSaveIssue, onLoadCases, onLoadTemplates, focusId, onMarkReplied }: Props) {
   const [selected, setSelected] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [preparedReplies, setPreparedReplies] = useState<Record<string, ReplySummary>>({});
@@ -123,7 +134,9 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
   const [panel, setPanel] = useState<{ id: string; kind: 'forward' | 'delete'; to: string; note: string; busy: boolean; error: string } | null>(null);
   const [pending, setPending] = useState<Record<string, boolean>>({});
   const [options, setOptions] = useState<DeskOptions | null>(null);
-  const [filter, setFilter] = useState<'todo' | 'waiting' | 'done' | 'spam' | 'deleted' | 'all'>('todo');
+  const [filter, setFilterState] = useState<'todo' | 'waiting' | 'done' | 'spam' | 'deleted' | 'pitch' | 'all'>('todo');
+  const [external, setExternal] = useState<Record<string, ExternalReply[]>>({});
+  const [replyNote, setReplyNote] = useState<{ id: string; note: string; busy: boolean } | null>(null);
   const [query, setQuery] = useState('');
   const [listening, setListening] = useState<string | null>(null);
   const [rulesOpen, setRulesOpen] = useState(false);
@@ -152,7 +165,7 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
       if (stopped) return;
       const ids = requestIds ? requestIds.split(',') : [];
       if (ids.length && typeof document !== 'undefined' && document.visibilityState !== 'hidden') {
-        try { const fresh = await onRefreshReplies(ids); if (!stopped && mounted.current) { setLiveReplies(fresh?.replies || {}); if (fresh?.forwards) setForwards(fresh.forwards); if (fresh?.activity) setActivity(fresh.activity); if (fresh?.issues) setIssues(fresh.issues); } } catch { /* keep the last loaded status */ }
+        try { const fresh = await onRefreshReplies(ids); if (!stopped && mounted.current) { setLiveReplies(fresh?.replies || {}); if (fresh?.forwards) setForwards(fresh.forwards); if (fresh?.activity) setActivity(fresh.activity); if (fresh?.issues) setIssues(fresh.issues); if (fresh?.external) setExternal(fresh.external); } } catch { /* keep the last loaded status */ }
       }
       if (stopped) return;
       if (mounted.current) setNow(Date.now());
@@ -197,15 +210,21 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
   }, [requestReplies, preparedReplies, liveReplies]);
   const disabled = busy || dirty || refreshing;
 
-  const rows = requests.map(request => ({ request, reply: replyOf(request.id), ...stageOf(request, replyOf(request.id)) }));
-  const counts = { todo: 0, waiting: 0, done: 0, spam: 0, deleted: 0, all: rows.filter(row => row.stage !== 'deleted').length };
+  const rows = requests.map(request => ({ request, reply: replyOf(request.id), ...stageOf(request, replyOf(request.id), external[request.id], issues[request.id]?.issue || null, activity[request.id], now) }));
+  const counts = { todo: 0, waiting: 0, done: 0, spam: 0, deleted: 0, pitch: 0, all: rows.filter(row => row.stage !== 'deleted').length };
   for (const row of rows) { if (row.stage === 'sending' || row.stage === 'todo') counts.todo++; else if (row.stage === 'waiting') counts.done++; else counts[row.stage]++; }
+  const inView = (stage: Stage, view: typeof filter) => view === 'all' ? stage !== 'deleted' : view === 'todo' ? stage === 'todo' || stage === 'sending' : view === 'done' ? stage === 'done' || stage === 'waiting' : stage === view;
+  // Selection follows the tab: switching tabs never leaves another tab's conversation open.
+  function setFilter(view: typeof filter) {
+    setFilterState(view);
+    setSelected(current => { const row = current ? rows.find(r => r.request.id === current) : null; return row && inView(row.stage, view) ? current : null; });
+  }
   const needle = query.trim().toLowerCase();
-  const shown = rows.filter(row => ((filter === 'all' && row.stage !== 'deleted') || (filter === 'todo' ? row.stage === 'todo' || row.stage === 'sending' : filter === 'done' ? row.stage === 'done' || row.stage === 'waiting' : row.stage === filter))
+  const shown = rows.filter(row => inView(row.stage, filter)
     && (!needle || [row.request.id, row.request.kind, ...Object.values(row.request.data).filter(value => typeof value === 'string')].join(' ').toLowerCase().includes(needle)))
     // To reply: oldest first, so nothing waits behind newer mail. Everything else: newest first.
     .sort((a, b) => filter === 'todo' ? a.since - b.since : b.since - a.since);
-  const views = [['todo', 'To reply'], ['done', 'Archive'], ['spam', 'Spam'], ['deleted', 'Deleted'], ['all', 'All']] as const;
+  const views = [['todo', 'Needs reply'], ['done', 'Replied & archive'], ['pitch', 'Sales pitches'], ['spam', 'Spam'], ['deleted', 'Deleted'], ['all', 'All']] as const;
 
   function open(id: string) {
     const reply = replyOf(id);
@@ -295,6 +314,13 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
     try { const saved = await onSaveIssue({ id, ...next }); if (mounted.current) { setIssues(previous => ({ ...previous, [id]: saved })); setCases(null); } }
     catch { if (mounted.current) setIssues(previous => { const copy = { ...previous }; if (current) copy[id] = current; else delete copy[id]; return copy; }); }
   }
+  async function markRepliedNow(id: string) {
+    if (!onMarkReplied || replyNote?.busy) return;
+    const note = replyNote?.id === id ? replyNote.note : '';
+    setReplyNote({ id, note, busy: true });
+    try { const saved = await onMarkReplied({ id, note }); if (mounted.current) { setExternal(previous => ({ ...previous, [id]: [...(previous[id] || []), saved] })); setReplyNote(null); } }
+    catch { if (mounted.current) setReplyNote({ id, note, busy: false }); }
+  }
   async function openRules() {
     const next = !rulesOpen; setRulesOpen(next);
     if (next && onLoadCases) { try { const list = await onLoadCases(); if (mounted.current) setCases(list); } catch { if (mounted.current) setCases([]); } }
@@ -347,13 +373,14 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
           const { request, reply } = row;
           const name = text(request.data.name) || text(request.data.email) || 'Customer';
           const preview = text(request.data.message) || text(request.data.subject);
-          const late = (row.stage === 'todo') && now - row.since > DAY;
+          const late = row.late;
           return <article key={request.id} role="listitem" className={styles.row} data-selected={selected === request.id ? 'true' : 'false'}>
             <button type="button" className={styles.rowButton} aria-expanded={selected === request.id} aria-controls={`request-reply-${request.id}`} onClick={() => open(request.id)}>
-              <span className={styles.rowTop}><strong>{name}</strong><span className={late ? styles.late : styles.age}>{age(row.since, now)}</span></span>
+              <span className={styles.rowTop}><strong>{name}</strong></span>
               <span className={styles.rowSubject}>{text(request.data.subject) || (request.kind === 'affiliate' ? 'Partner application' : request.kind === 'stock' ? 'Product availability' : 'Website message')}</span>
               <span className={styles.rowPreview}>{preview}</span>
-              <span className={styles.rowState} data-stage={row.stage}>{row.label}{reply?.coa?.state === 'matched' && row.stage !== 'done' ? ' · COA' : ''}</span>
+              <span className={styles.rowState} data-stage={row.stage}>{row.label}{reply?.coa?.state === 'matched' && row.stage === 'todo' ? ' · COA' : ''}</span>
+              {row.stage === 'todo' && <span className={late ? styles.late : styles.rowPreview}>{row.when}</span>}
             </button>
           </article>;
         })}
@@ -368,6 +395,10 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
         onDictate: () => dictate(active.request),
         onStatus: status => { if (!disabled) { setPanel(null); void onStatus(active.request, status); } },
         templates: templates[active.request.id] || [],
+        external: external[active.request.id] || [], canMarkReplied: Boolean(onMarkReplied),
+        markNote: replyNote?.id === active.request.id ? replyNote.note : null,
+        onMarkNote: note => setReplyNote(note === null ? null : { id: active.request.id, note, busy: false }),
+        onMarkReplied: () => void markRepliedNow(active.request.id),
         issue: issues[active.request.id] || null, canTag: Boolean(onSaveIssue), onIssue: patch => void saveIssue(active.request.id, patch),
         issueNote: issueDrafts[active.request.id]?.note ?? issues[active.request.id]?.note ?? '', onIssueNote: note => setIssueDrafts(previous => ({ ...previous, [active.request.id]: { note } })),
         forwards: forwards[active.request.id] || [], activity: activity[active.request.id] || [], team: options?.team || [], canForward: Boolean(onForward),
@@ -380,18 +411,19 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
 }
 
 type ConversationProps = {
-  row: { request: CustomerRequest; reply?: ReplySummary; stage: Stage; label: string; since: number };
+  row: { request: CustomerRequest; reply?: ReplySummary; stage: Stage; label: string; since: number; when: string; late: boolean };
   draft?: Draft; automation?: CoaAutomationReport | null; options: DeskOptions | null; canSend: boolean; disabled: boolean; listening: boolean; preparing: boolean; now: number;
   bodyField: { current: HTMLTextAreaElement | null };
   onClose: () => void; onEdit: (field: 'body' | 'instruction', value: string) => void; onDraft: (patch: Partial<Draft>) => void; onInsert: (snippet: string) => void;
   onSubmit: (mode: 'ai' | 'staff', send?: boolean, instruction?: string) => void; onDictate: () => void; onStatus: (status: string) => void;
   forwards: RequestForward[]; team: TeamMember[]; canForward: boolean; activity: { at: number; text: string }[];
   templates: { id: string; label: string; why: string; body: string }[];
+  external: ExternalReply[]; canMarkReplied: boolean; markNote: string | null; onMarkNote: (note: string | null) => void; onMarkReplied: () => void;
   issue: RequestIssue | null; canTag: boolean; onIssue: (patch: Partial<{ issue: string; resolutions: string[]; note: string }>) => void; issueNote: string; onIssueNote: (note: string) => void;
   panel: { kind: 'forward' | 'delete'; to: string; note: string; busy: boolean; error: string } | null;
   onPanel: (next: Partial<{ kind: 'forward' | 'delete'; to: string; note: string; busy: boolean; error: string }> | null) => void; onForward: () => void;
 };
-function conversation({ row, draft, automation, options, canSend, disabled, listening, preparing, bodyField, now, onClose, onEdit, onDraft, onInsert, onSubmit, onDictate, onStatus, forwards, team, canForward, panel, onPanel, onForward, activity, templates, issue, canTag, onIssue, issueNote, onIssueNote }: ConversationProps) {
+function conversation({ row, draft, automation, options, canSend, disabled, listening, preparing, bodyField, now, onClose, onEdit, onDraft, onInsert, onSubmit, onDictate, onStatus, forwards, team, canForward, panel, onPanel, onForward, activity, templates, external, canMarkReplied, markNote, onMarkNote, onMarkReplied, issue, canTag, onIssue, issueNote, onIssueNote }: ConversationProps) {
   const { request, reply } = row;
   const email = text(request.data.email), canReply = usableEmail(request.data.email);
   const name = text(request.data.name) || email || 'Customer';
@@ -420,7 +452,7 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
   return <section key={request.id} className={styles.pane} id={`request-reply-${request.id}`} aria-label={`Reply to ${name}`} aria-busy={writing || sending}>
     <header className={styles.paneHead}>
       <button type="button" className={styles.back} onClick={onClose}>Back to list</button>
-      <div className={styles.who}><h3>{name}</h3><p>{email || 'No email address saved'}{website && <> · <a href={website} target="_blank" rel="noopener noreferrer">Website</a></>}</p></div>
+      <div className={styles.who}><h3>{name}</h3><p>{email || 'No email address saved'}{website && <> · <a href={website} target="_blank" rel="noopener noreferrer">Website</a></>}</p><p className={styles.stateLine} data-stage={row.stage}>{row.label}{row.stage === 'todo' ? ' · ' + row.when : ''}</p></div>
       <div className={styles.paneActions}>
         {canForward && request.status !== 'deleted' && <button type="button" className={styles.action} aria-expanded={panel?.kind === 'forward'} disabled={disabled} onClick={() => onPanel(panel?.kind === 'forward' ? null : { kind: 'forward', error: '' })}>Forward</button>}
         {request.status === 'deleted'
@@ -431,6 +463,10 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
         {request.status !== 'deleted' && <button type="button" className={styles.link} disabled={disabled} onClick={() => onPanel(panel?.kind === 'delete' ? null : { kind: 'delete', error: '' })}>Delete</button>}
       </div>
     </header>
+    {(row.stage === 'todo' || row.stage === 'pitch') && canMarkReplied && (markNote === null
+      ? <p className={styles.note}>Already answered by phone, text or another app? <button type="button" className={styles.link} disabled={disabled} onClick={() => onMarkNote('')}>Mark as replied</button></p>
+      : <div className={styles.confirm}><p>How did you reply? (optional)</p><input value={markNote} maxLength={1000} onChange={e => onMarkNote(e.target.value)} placeholder="e.g. Called him, he will wait for the restock"/><button type="button" className={styles.action} disabled={disabled} onClick={onMarkReplied}>Mark as replied</button><button type="button" className={styles.link} onClick={() => onMarkNote(null)}>Cancel</button></div>)}
+    {row.stage === 'pitch' && <p className={styles.warning}>{row.label === 'Sales pitch' ? 'Tagged as a sales pitch. It stays out of Needs reply.' : 'This reads like a supplier or vendor pitch, so it is kept out of Needs reply.'} <button type="button" className={styles.link} onClick={() => onIssue({ issue: 'other' })}>Not a sales pitch</button>{row.label !== 'Sales pitch' && <> · <button type="button" className={styles.link} onClick={() => onIssue({ issue: 'vendor' })}>Yes, a sales pitch</button></>}</p>}
     {panel?.kind === 'delete' && <div className={styles.confirm} role="alertdialog" aria-label="Delete this request">
       <p>Delete this request from the inbox? It moves to Deleted, where you can restore it. Nothing is sent to the customer.</p>
       <button type="button" className={styles.danger} disabled={disabled} onClick={() => onStatus('deleted')}>Delete</button>
@@ -456,8 +492,10 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
       {issue?.issue && <p className={styles.note}>The AI drafts with this decision and with your {issueLabel(issue.issue)} rules.</p>}
     </div>}
     <ol className={styles.thread} aria-label="Conversation">
-      {history.map(message => <li key={message.id} data-direction={message.direction}>
-        <p className={styles.meta}>{message.direction === 'incoming' ? name : 'You'} · {when(message.created)}</p>
+      {[...history.map(m => ({ ...m, who: m.direction === 'incoming' ? name : 'You, from research@ (reply desk)' })),
+        ...external.map((e, i) => ({ id: 'ext-' + i + '-' + e.at, direction: 'outgoing' as const, created: e.at, body: e.body + (e.preview ? ' …' : ''), who: e.source === 'manual' ? 'Marked as replied by ' + e.account : 'You, from ' + e.account + ' (sent in Gmail)' }))]
+        .sort((a, b) => a.created - b.created).map(message => <li key={message.id} data-direction={message.direction}>
+        <p className={styles.meta}>{message.who} · {when(message.created)}</p>
         <p className={styles.message}>{message.body || 'No message text was included.'}</p>
       </li>)}
     </ol>

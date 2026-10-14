@@ -2,6 +2,7 @@ import { replyBridgeRoute } from '@/lib/request-reply-route';
 import { queryOrders, scanLimit } from '@/lib/order-queue';
 import { publicCatalog } from '@/lib/public-catalog';
 import { batchRecordsFor, batchStatus, batchPath } from '@/lib/testing';
+import { externalRepliesFor, markReplied } from '@/lib/request-external';
 import { startOrderConversation, saveRequestIssue, issuesFor, caseLog, setOrderHold, startWinBack, winBackPreview } from '@/lib/request-cases';
 import { forwardRequest, forwardsFor, teamMembers, activityFor } from '@/lib/request-forward';
 import { summarizeRequestReplies, prepareRequestReply, replyDeskOptions, saveReplyRule } from '@/lib/request-replies';
@@ -38,7 +39,7 @@ export const dynamic = 'force-dynamic';
 // What each admin write needs. An admin action missing here requires the owner.
 const adminActionPermission: Record<string, StaffPermission> = {
     'admin-order': 'orders:fulfill', 'admin-reconcile': 'orders:reconcile',
-    'admin-request': 'requests:write', 'admin-request-reply': 'requests:write', 'admin-reply-desk': 'requests:write', 'admin-request-replies': 'requests:write', 'admin-reply-rule': 'requests:write', 'admin-request-forward': 'requests:write', 'admin-order-conversation': 'requests:write', 'admin-order-hold': 'requests:write', 'admin-win-back': 'requests:write', 'admin-win-back-preview': 'requests:write', 'admin-request-issue': 'requests:write', 'admin-case-log': 'requests:write', 'admin-coa-process': 'requests:write',
+    'admin-request': 'requests:write', 'admin-request-reply': 'requests:write', 'admin-reply-desk': 'requests:write', 'admin-request-replies': 'requests:write', 'admin-reply-rule': 'requests:write', 'admin-request-forward': 'requests:write', 'admin-order-conversation': 'requests:write', 'admin-order-hold': 'requests:write', 'admin-win-back': 'requests:write', 'admin-mark-replied': 'requests:write', 'admin-win-back-preview': 'requests:write', 'admin-request-issue': 'requests:write', 'admin-case-log': 'requests:write', 'admin-coa-process': 'requests:write',
     'admin-config': 'store:write', 'admin-product': 'store:write', 'admin-campaign': 'store:write', 'admin-reward': 'store:write', 'admin-coa-config': 'store:write',
     'admin-staff': 'team:manage',
 };
@@ -502,7 +503,7 @@ export async function POST(req: NextRequest, { params }: {
             if (action === 'admin-reply-desk') return j({ ...(await replyDeskOptions(runtime())), links: await publicCoaLinks(), team: await teamMembers(runtime()) });
             if (action === 'admin-request-replies') {
                 const ids = z.object({ ids: z.array(z.string().uuid()).max(200) }).parse(b).ids;
-                return j({ replies: await summarizeRequestReplies(runtime(), ids), forwards: await forwardsFor(runtime(), ids), activity: await activityFor(runtime(), ids), issues: await issuesFor(runtime(), ids) });
+                return j({ replies: await summarizeRequestReplies(runtime(), ids), forwards: await forwardsFor(runtime(), ids), activity: await activityFor(runtime(), ids), issues: await issuesFor(runtime(), ids), external: await externalRepliesFor(runtime(), ids) });
             }
             if (action === 'admin-order-conversation') {
                 const input = z.object({ orderId: z.string().min(6).max(80) }).parse(b);
@@ -519,6 +520,11 @@ export async function POST(req: NextRequest, { params }: {
                     await saveRequestIssue(runtime(), { requestId: conversation.requestId, issue: hold!.issue, resolutions: known?.resolutions || [], note: hold!.note || known?.note || '' }, actor);
                     return j({ hold, requestId: conversation.requestId, message: 'Order on hold. Nothing was sent to the customer.' });
                 } catch (error) { const status = (error as Error & { status?: number }).status; return j({ error: status ? (error as Error).message : 'Could not update the hold.' }, status || 500); }
+            }
+            if (action === 'admin-mark-replied') {
+                const input = z.object({ id: z.string().uuid(), note: z.string().max(1000).optional() }).parse(b);
+                try { return j({ reply: await markReplied(runtime(), { requestId: input.id, note: input.note }, actor), message: 'Marked as replied.' }); }
+                catch (error) { const status = (error as Error & { status?: number }).status; return j({ error: status ? (error as Error).message : 'Could not mark it.' }, status || 500); }
             }
             if (action === 'admin-win-back') {
                 const input = z.object({ orderId: z.string().min(6).max(80), template: z.string().max(40) }).parse(b);

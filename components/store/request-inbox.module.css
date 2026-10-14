@@ -127,3 +127,9 @@
 .templates ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
 .templates li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; align-items: start; }
 .templates li .note { grid-column: 2; margin: 0; }
+
+.stateLine { margin: 4px 0 0 !important; font-size: 14px !important; font-weight: 600; color: var(--ink) !important; }
+.stateLine[data-stage="waiting"], .stateLine[data-stage="done"] { color: #2f6b45 !important; }
+.stateLine[data-stage="pitch"], .stateLine[data-stage="spam"], .stateLine[data-stage="deleted"] { color: var(--muted) !important; }
+.rowState[data-stage="waiting"], .rowState[data-stage="done"] { color: #2f6b45; font-weight: 500; }
+.confirm input { flex: 1 1 260px; min-width: 0; font-size: 14px !important; padding: 7px 10px !important; }

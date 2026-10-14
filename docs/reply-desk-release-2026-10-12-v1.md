@@ -68,3 +68,12 @@ Owner instruction after a HEAT-R 20mg reply was staged saying "Attached" with no
 - Owner request: add COMEBACK30, plus more like it. `lib/promotions.ts` now also accepts COMEBACK10, COMEBACK15, COMEBACK20, COMEBACK25 and COMEBACK30 (server-owned, case/space normalized, applied after pack/sale prices like every other code, not advertised on the site, reusable by anyone who has the code).
 - They appear in the desk's Insert code menu, in Affiliate & promo codes reporting, and the AI may offer them when asked. The Win back menu now has one offer email per come-back code (10/15/20/25/30%) in place of the single BM10 offer.
 - Checks: `tests/promo-checkout-v1.cjs` verifies exact totals and case/space variants for all five new codes; `tests/promo-analytics-v1.cjs` lists all ten active codes; `tests/request-cases-v1.cjs` checks every code used in a template is an active code.
+
+## Follow-up (Oct 13): reply status at a glance
+
+Owner feedback (relayed by the Orders session): he could not tell who had been answered; Archive mixed replied and never-replied items; times were unlabeled; supplier pitches sat with customers.
+- Tabs: **Needs reply** (default, oldest first), **Replied & archive**, **Sales pitches**, Spam, Deleted, All. Switching tabs clears a conversation that does not belong to the new tab.
+- Every row and the conversation header state one thing: "Needs reply" (with "AI draft ready", "draft saved", "AI is writing" or "Customer wrote again") and "Received Oct 13 · waiting 3 days" (red after a day), or "Replied Oct 13, 12:57 PM from research@" / "in Gmail from research@" / "by phone/text · ash@", or "Closed without reply · Oct 13 by ash@".
+- Replies sent outside the desk count: Jarvis checks the Gmail mirror of every connected mailbox every 2 minutes for sent mail to an open requester after the request arrived (drafts, older mail and the desk's own sends excluded) and records it (migration `0028_request_external_replies.sql`). The text appears in the conversation. **Mark as replied** records phone/text answers with an optional note.
+- Supplier pitches (manufacturer, wholesale, OEM, price list, "high quality peptides", SARMs…) are kept out of Needs reply as "Looks like a sales pitch", with "Not a sales pitch" / "Yes, a sales pitch" to correct it. Tagging the issue overrides the guess.
+- Fix: issue tags saved in a conversation were not reloaded by the live refresh; they now are.

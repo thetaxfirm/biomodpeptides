@@ -50,11 +50,11 @@ async function main(){
  // To reply: oldest first; a customer reply after a resolved thread comes back; answered threads wait.
  const rowIds=()=>nodes(host.tree).filter(n=>n.type==='article').map(n=>n.key);
  assert.deepEqual(rowIds(),['new-old','came-back','new-young']);
- assert(text(host.tree).includes('3d'),'Age is shown');assert(text(host.tree).includes('Customer replied'));
- filter(host,'Archive');assert.deepEqual(rowIds().sort(),['answered','closed'],'Replied and archived requests share the Archive');
+ assert(text(host.tree).includes('waiting 3 days'),'Waiting time is spelled out');assert(text(host.tree).includes('Customer wrote again'));
+ filter(host,'Replied & archive');assert.deepEqual(rowIds().sort(),['answered','closed'],'Replied and archived requests share the Archive');
  openRow(host,'answered');assert(text(host.tree).includes('Activity ('));assert(text(host.tree).includes('Received from the website'));openRow(host,'answered');
  filter(host,'Spam');assert.deepEqual(rowIds(),['junk']);
- filter(host,'To reply');query(host,'NEW-YOUNG@EXAMPLE');assert.deepEqual(rowIds(),['new-young']);query(host,'');
+ filter(host,'Needs reply');query(host,'NEW-YOUNG@EXAMPLE');assert.deepEqual(rowIds(),['new-young']);query(host,'');
  assert(text(host.tree).includes('3 of the last 4'),'Learning progress is visible');
  // Opening a conversation never sends; it shows the thread, pickers and an owner Send.
  openRow(host,'new-old');assert.equal(preparations.length,0);
@@ -97,7 +97,7 @@ async function main(){
  await flush(host);
  filter(host,'All');assert(!rowIds().includes('gone'),'Deleted requests leave All');filter(host,'Deleted');assert.deepEqual(rowIds(),['gone']);
  openRow(host,'gone');nodes(host.tree).find(n=>n.type==='button'&&text(n)==='Restore').props.onClick();assert.deepEqual(changes.at(-1),['gone','new']);
- filter(host,'To reply');openRow(host,'new-old');
+ filter(host,'Needs reply');openRow(host,'new-old');
  nodes(host.tree).find(n=>n.type==='button'&&text(n)==='Delete').props.onClick();host.render();
  const before=changes.length;assert(text(host.tree).includes('It moves to Deleted'));assert.equal(changes.length,before,'Delete asks before acting');
  nodes(host.tree).filter(n=>n.type==='button'&&text(n)==='Delete').at(-1).props.onClick();assert.deepEqual(changes.at(-1),['new-old','deleted']);
@@ -135,6 +135,18 @@ async function main(){
  nodes(host.tree).find(n=>n.type==='button'&&text(n)==='Use').props.onClick();host.render();assert.equal(field(host,'replyBody').props.value,'Hi Synthetic, need a hand?');
  const before2=preparations.length;nodes(host.tree).find(n=>n.type==='button'&&text(n)==='Tailor').props.onClick();await flush(host);
  assert.equal(preparations.length,before2+1);assert.equal(preparations.at(-1).mode,'ai');assert.match(preparations.at(-1).instruction,/^Tailor this email/);assert.equal(preparations.at(-1).body,'Hi Synthetic, need a hand?');
+ // Reply status at a glance: Mark as replied moves it out of Needs reply with who/how; pitches stay out of Needs reply; selection follows the tab.
+ const pitch=request('pitch','new','contact',{subject:'High quality peptides and SARMs',message:'We are a leading manufacturer with competitive price.'});
+ const marked=[];host=mount({...props,requests:[request('phone','new'),pitch],requestReplies:{},onMarkReplied:async input=>{marked.push(input);return {at:now,source:'manual',account:'owner@example.invalid',body:input.note||'Replied outside email (phone or text).',preview:false};}});await flush(host);
+ assert.deepEqual(rowIds(),['phone'],'A sales pitch is kept out of Needs reply');filter(host,'Sales pitches');assert.deepEqual(rowIds(),['pitch']);
+ openRow(host,'pitch');assert(text(host.tree).includes('reads like a supplier or vendor pitch'));
+ filter(host,'Needs reply');assert(text(host.tree).includes('Pick a request on the left'),'Switching tabs closes a conversation from another tab');
+ openRow(host,'phone');assert(text(host.tree).includes('Needs reply'));
+ nodes(host.tree).find(n=>n.type==='button'&&text(n)==='Mark as replied').props.onClick();host.render();
+ nodes(host.tree).find(n=>n.type==='input'&&n.props.placeholder?.startsWith('e.g. Called')).props.onChange({target:{value:'Called him'}});host.render();
+ nodes(host.tree).filter(n=>n.type==='button'&&text(n)==='Mark as replied').at(-1).props.onClick();await flush(host);
+ assert.deepEqual(marked,[{id:'phone',note:'Called him'}]);assert.deepEqual(rowIds(),[],'Marked request leaves Needs reply');
+ filter(host,'Replied & archive');assert.deepEqual(rowIds(),['phone']);assert(text(host.tree).includes('Replied'));assert(text(host.tree).includes('by phone/text · owner@'));
  for(const email of ['a@example.invalid\r\nBcc:x@example.invalid','a@example.invalid,b@example.invalid']){const h=mount({...props,requests:[request('bad','new','contact',{email})],requestReplies:{}});openRow(h,'bad');assert(text(h.tree).includes('no way to reply'));assert(!nodes(h.tree).some(n=>n.type==='textarea'));}
  const escaped=render({...props,requests:[request('escape','new','contact',{name:'<script>Fixture</script>',message:'<b>x</b>'})],requestReplies:{}});assert(!escaped.includes('<script>'));assert(!escaped.includes('<b>x'));
  console.log('PASS: reply desk queue order (oldest unanswered first, customer replies resurface), waiting/done/spam views, learning progress, code insert, COA pick, AI rewrite with draft+instruction+remembered rule, undo, single owner Send, staff draft-only, plain failure text, unsafe addresses blocked. Isolated fixtures, no I/O.');
