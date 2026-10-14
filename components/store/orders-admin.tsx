@@ -142,7 +142,11 @@ export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, form
     return <section className={styles.orders} aria-labelledby="orders-title">
         <div className={styles.heading}>
             <div><h2 id="orders-title">Orders</h2><p>Paid orders waiting to ship come first. Select an order number for the full order.</p>
-                <p className={styles.sub}><a className="text-button" href="/api/admin/pick-list" target="_blank" rel="noopener">Print pick list (To ship)</a>{allowed('orders:fulfill') && <> · <a className="text-button" href="/api/admin/labels" target="_blank" rel="noopener">Print all bought labels</a></>} · printing changes nothing</p></div>
+                <div className={styles.sheetButtons}>
+                    <a className="button button-dark" href="/api/admin/pick-list" target="_blank" rel="noopener">Print pick list (To ship)</a>
+                    {allowed('orders:fulfill') && <a className="button button-gold" href="/api/admin/labels" target="_blank" rel="noopener">Print all bought labels</a>}
+                    <span>Printing changes nothing.</span>
+                </div></div>
             <label className={styles.search}>Search orders
                 <input type="search" value={input} onChange={e => setInput(e.target.value)} placeholder="Name, email, order number or tracking"/>
             </label>
