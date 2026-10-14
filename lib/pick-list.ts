@@ -51,27 +51,28 @@ const esc = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;'
 const when = (ms: number) => new Date(ms).toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
 
 const STYLE = `
+@page{size:portrait;margin:10mm}
 *{box-sizing:border-box}
-body{font:14px/1.45 -apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#1b1b1b;margin:0;padding:28px}
-h1{font-size:21px;margin:0 0 4px}
-h2{font-size:16px;margin:0 0 8px}
-.meta{color:#555;font-size:12px;margin:0 0 20px}
-table{width:100%;border-collapse:collapse;margin-bottom:10px}
-th{text-align:left;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:#555;border-bottom:1.5px solid #333;padding:0 8px 4px}
-td{padding:7px 8px;border-bottom:1px solid #ddd;vertical-align:top}
-.qty{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:700;width:60px}
-.tick{width:30px}
-.tick span{display:inline-block;width:15px;height:15px;border:1.5px solid #555}
-.detail{display:block;font-size:11px;color:#555}
-.pull{border:2px solid #333;padding:14px 16px;margin-bottom:24px}
-.order{border-top:2px solid #333;padding-top:12px;margin-top:22px;page-break-inside:avoid}
-.order h2{display:flex;justify-content:space-between;gap:16px}
-.sub{font-size:12px;color:#555;margin:0 0 8px}
-.foot{margin-top:26px;border-top:1px solid #ccc;padding-top:8px;font-size:11px;color:#555}
-.empty{padding:26px;border:1px dashed #999;color:#555}
-@media print{body{padding:0}.noprint{display:none}@page{margin:14mm}}
-.noprint{margin-bottom:18px}
-.noprint button{font:inherit;padding:8px 16px;cursor:pointer}
+body{font:11px/1.3 -apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#000;margin:0;padding:18px}
+h1{font-size:15px;margin:0}
+h2{font-size:11px;margin:0;text-transform:uppercase;letter-spacing:.05em}
+.meta{color:#444;font-size:9.5px;margin:1px 0 8px}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:8.5px;text-transform:uppercase;letter-spacing:.04em;color:#444;border-bottom:1px solid #000;padding:0 4px 1px}
+td{padding:2px 4px;border-bottom:1px solid #e0e0e0;vertical-align:baseline}
+.qty{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:700;width:34px}
+.tick{width:16px}
+.tick span{display:inline-block;width:9px;height:9px;border:1px solid #666;vertical-align:-1px}
+.detail{color:#444}
+.pull{border:1.5px solid #000;padding:6px 8px;margin-bottom:10px}
+.order{border-top:1px solid #000;padding-top:4px;margin-top:8px;page-break-inside:avoid;break-inside:avoid}
+.order h2{display:flex;justify-content:space-between;gap:10px}
+.sub{color:#444;font-size:9.5px;margin:0 0 2px}
+.foot{margin-top:10px;border-top:1px solid #999;padding-top:4px;font-size:9px;color:#444}
+.empty{padding:14px;border:1px dashed #888;color:#444}
+@media print{body{padding:0}.noprint{display:none}}
+.noprint{margin-bottom:12px}
+.noprint button{font:inherit;padding:6px 14px;cursor:pointer}
 `;
 
 const lineRows = (lines: PickLine[]) => lines.map(line =>
@@ -80,9 +81,11 @@ const lineRows = (lines: PickLine[]) => lines.map(line =>
 const table = (lines: PickLine[], first: string) =>
     '<table><thead><tr><th class="tick"></th><th>' + first + '</th><th class="qty">Qty</th></tr></thead><tbody>' + lineRows(lines) + '</tbody></table>';
 
+const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+
 function orderBlock(entry: PickEntry) {
-    return '<section class="order"><h2><span>' + esc(entry.number) + '</span><span>' + entry.units + ' unit' + (entry.units === 1 ? '' : 's') + '</span></h2>'
-        + '<p class="sub">' + esc(entry.customer) + (entry.place ? ' · ' + esc(entry.place) : '') + ' · placed ' + when(entry.placed) + (entry.service ? ' · ' + esc(entry.service) : '') + '</p>'
+    return '<section class="order"><h2><span>' + esc(entry.number) + ' · ' + esc(entry.customer) + '</span><span>' + entry.units + 'u</span></h2>'
+        + '<p class="sub">' + [entry.place, day(entry.placed), entry.service].filter(Boolean).map(esc).join(' · ') + '</p>'
         + (entry.lines.length ? table(entry.lines, 'Item') : '<p class="sub">No items recorded on this order.</p>')
         + '</section>';
 }
@@ -94,8 +97,8 @@ export function renderPickList(entries: PickEntry[], generatedAt: number, single
     const title = single && entries[0] ? 'Pick list ' + entries[0].number : 'Pick list · ' + entries.length + ' order' + (entries.length === 1 ? '' : 's');
     const body = !entries.length
         ? '<p class="empty">Nothing is waiting to be picked right now.</p>'
-        : (single ? '' : '<section class="pull"><h2>Pull from stock</h2><p class="sub">Everything below covers all ' + entries.length + ' order'
-            + (entries.length === 1 ? '' : 's') + ' together. Split it between the orders on the following pages.</p>' + table(totals, 'Product') + '</section>')
+        : (single ? '' : '<section class="pull"><h2>Pull from stock · all ' + entries.length + ' order'
+            + (entries.length === 1 ? '' : 's') + ' together</h2>' + table(totals, 'Product') + '</section>')
           + entries.map(orderBlock).join('');
     return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
         + '<meta name="robots" content="noindex"><title>' + esc(title) + ' · TryBiomod</title><style>' + STYLE + '</style></head><body>'
@@ -103,7 +106,7 @@ export function renderPickList(entries: PickEntry[], generatedAt: number, single
         + '<h1>' + esc(title) + '</h1>'
         + '<p class="meta">trybiomod.com · generated ' + when(generatedAt) + (entries.length && !single ? ' · ' + units + ' units in total' : '') + '</p>'
         + body
-        + '<p class="foot">Picked by ________________  ·  Checked by ________________  ·  Date ____________<br>'
-        + 'A pick sheet is not a shipping confirmation. Mark the order shipped in administration once it is handed to the carrier.</p>'
+        + '<p class="foot">Picked by ____________ · Checked by ____________ · Date ________ · '
+        + 'Not a shipping confirmation: mark the order shipped in administration once the carrier has it.</p>'
         + '</body></html>';
 }
