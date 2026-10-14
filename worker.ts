@@ -5,6 +5,7 @@ import { cleanupTraffic } from './lib/traffic-metrics-server';
 import { type CoaEnvironment } from './lib/coa-outbox';
 import { runScheduledCoaOutbox } from './lib/coa-scheduler';
 import { runOverdueDigest } from './lib/reply-overdue';
+import { runTrackingSweep } from './lib/tracking-sweep';
 
 type TrafficWorkerEnvironment = CoaEnvironment;
 
@@ -20,7 +21,9 @@ export default {
       const coaEnv = { ...env, DB: withAuditDb(env.DB, { source: 'system', actor: 'COA email scheduler', actorType: 'system' }) } as TrafficWorkerEnvironment;
       const digestEnv = { ...env, DB: withAuditDb(env.DB, { source: 'system', actor: 'Reply overdue digest', actorType: 'system' }) } as TrafficWorkerEnvironment;
       const recoveryEnv = { ...env, DB: withAuditDb(env.DB, { source: 'system', actor: 'Unpaid checkout recovery scheduler', actorType: 'system' }) } as TrafficWorkerEnvironment;
-      const results=await Promise.allSettled([runScheduledCoaOutbox(coaEnv, controller.scheduledTime),runCheckoutRecovery(recoveryEnv),runOverdueDigest(digestEnv)]);
+      // Carrier tracking fail-safe: the webhook is the fast path, this catches whatever it missed.
+      const trackingEnv = { ...env, DB: withAuditDb(env.DB, { source: 'system', actor: 'Carrier tracking sweep', actorType: 'system' }) } as TrafficWorkerEnvironment;
+      const results=await Promise.allSettled([runScheduledCoaOutbox(coaEnv, controller.scheduledTime),runCheckoutRecovery(recoveryEnv),runOverdueDigest(digestEnv),runTrackingSweep(trackingEnv as never)]);
       if(results.some(result=>result.status==='rejected'))throw new Error('One or more scheduled correspondence tasks failed.');
     }
   },
