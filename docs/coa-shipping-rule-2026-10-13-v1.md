@@ -21,3 +21,7 @@ At release, 28 live products had no matched COA for the lot being sold (most spr
 `npm run check:release`: TypeScript and 72 suites, including new `coa-shipping-v1.cjs` and the untracked-stock checkout case in `shipping-services-v1.cjs`. `BIOMOD_DEPLOY=true npm run build` passed. Built-Worker tests passed: `shipping-options-worker-v1.mjs` (label still bought for a product with a COA), `shipping-services-worker-v1.mjs`, and new `coa-shipping-worker-v1.mjs` (label refused with no carrier call, mark-shipped refused, order stays paid, queue flag and list). Synthetic data only.
 
 Affected: /checkout, /admin?tab=orders, /api/admin/shipping, /api/store/admin-order, /api/store/admin-orders. No migration, no product, price or order data changed.
+
+## Release
+
+Main 5958e89 (after collaborator commit 5dcad86), gate 72 suites passed. Cloudflare version cc09e63c-2188-400c-b12d-1689f1fc13eb deployed 2026-10-14T03:26:21Z. Live: /, /checkout, /shop 200; admin orders data refused when signed out. Signed-in Orders list not yet viewed live (needs owner sign-in).
