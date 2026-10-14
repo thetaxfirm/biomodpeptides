@@ -93,13 +93,15 @@ function stageOf(request: CustomerRequest, reply: ReplySummary | undefined, exte
   if (request.status === 'deleted') return { stage: 'deleted', label: 'Deleted', since: request.created, when: 'Received ' + shortDate(request.created), late: false };
   if (request.status === 'spam') return { stage: 'spam', label: 'Spam', since: request.created, when: 'Received ' + shortDate(request.created), late: false };
   if (sendPending(reply)) return { stage: 'sending', label: 'Sending…', since: reply!.approvedAt || reply!.updated, when: 'Received ' + shortDate(request.created), late: false };
-  if ((issue === 'vendor' || (!issue && looksLikePitch(request))) && !lastOut) return { stage: 'pitch', label: issue === 'vendor' ? 'Sales pitch' : 'Looks like a sales pitch', since: request.created, when: 'Received ' + shortDate(request.created), late: false };
+  if (issue === 'vendor' || (!issue && looksLikePitch(request))) return { stage: 'pitch', label: issue === 'vendor' ? 'Sales pitch' : 'Looks like a sales pitch', since: request.created, when: 'Received ' + shortDate(request.created), late: false };
   if (lastOut && !customerReplied) return { stage: request.status === 'resolved' ? 'done' : 'waiting', label: replied, since: lastOut, when: replied, late: false };
   if (request.status === 'resolved' && !customerReplied) {
     const closed = [...activity].reverse().find(a => a.text.startsWith('Archived'));
     return { stage: 'done', label: 'Closed without reply' + (closed ? ` · ${shortDate(closed.at)}${closed.text.includes(' by ') ? ' by ' + mailbox(closed.text.split(' by ').pop()!) : ''}` : ''), since: closed?.at || request.created, when: 'Received ' + shortDate(request.created), late: false };
   }
-  const state = customerReplied ? 'Customer wrote again' : working(reply) ? 'Needs reply · AI is writing' : reply?.status === 'ready' ? (reply.mode === 'ai' ? 'Needs reply · AI draft ready' : 'Needs reply · draft saved') : reply?.status === 'needs_review' ? 'Needs reply · draft needs a look' : 'Needs reply';
+  // Plain answer to "did we reply?" first, then what is waiting.
+  const base = customerReplied ? `Replied ${shortDate(lastOut)}, then they wrote again` : 'Not replied yet';
+  const state = base + (working(reply) ? ' · AI is writing a draft' : reply?.status === 'ready' ? ' · reply ready to send in Jarvis' : reply?.status === 'needs_review' ? ' · draft needs a look' : '');
   const waited = now - lastIn;
   const days = Math.floor(waited / DAY);
   return { stage: 'todo', label: state, since: lastIn, when: (customerReplied ? 'Wrote ' : 'Received ') + shortDate(lastIn) + (days >= 1 ? ` · waiting ${days} day${days === 1 ? '' : 's'}` : ''), late: waited > DAY };

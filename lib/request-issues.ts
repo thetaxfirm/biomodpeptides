@@ -17,5 +17,5 @@ export const isIssue = (value: unknown): value is IssueType => issueTypes.some((
 export const isResolution = (value: unknown): value is ResolutionType => resolutionTypes.some(([key]) => key === value);
 
 // Supplier and vendor sales pitches, not customers. Only a suggestion; tagging the issue overrides it.
-const PITCH = /\b(manufactur\w*|supplier|factory|wholesale|OEM|ODM|private label|bulk (?:order|price)|competitive pric\w*|price list|MOQ|our company|we are a (?:leading|professional)|we (?:can )?(?:supply|provide) (?:high|all)|high quality peptides?|sarms)\b/i;
+const PITCH = /\b(manufactur\w*|supplier|factory|wholesale|OEM|ODM|private label|bulk (?:order|price)|competitive pric\w*|price list|MOQ|our company|we are a (?:leading|professional)|we (?:can )?(?:supply|provide) (?:high|all)|high quality peptides?|high purity|raw materials?|raws|sarms)\b/i;
 export const looksLikePitchText = (subject: string, message: string) => PITCH.test(subject + ' ' + message);

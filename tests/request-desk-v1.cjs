@@ -50,7 +50,7 @@ async function main(){
  // To reply: oldest first; a customer reply after a resolved thread comes back; answered threads wait.
  const rowIds=()=>nodes(host.tree).filter(n=>n.type==='article').map(n=>n.key);
  assert.deepEqual(rowIds(),['new-old','came-back','new-young']);
- assert(text(host.tree).includes('waiting 3 days'),'Waiting time is spelled out');assert(text(host.tree).includes('Customer wrote again'));
+ assert(text(host.tree).includes('waiting 3 days'),'Waiting time is spelled out');assert(text(host.tree).includes('then they wrote again'));
  filter(host,'Replied & archive');assert.deepEqual(rowIds().sort(),['answered','closed'],'Replied and archived requests share the Archive');
  openRow(host,'answered');assert(text(host.tree).includes('Activity ('));assert(text(host.tree).includes('Received from the website'));openRow(host,'answered');
  filter(host,'Spam');assert.deepEqual(rowIds(),['junk']);
