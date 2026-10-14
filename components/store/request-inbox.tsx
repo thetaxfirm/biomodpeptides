@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CoaAutomationReport } from './coa-automation';
 import styles from './request-inbox.module.css';
-import { issueTypes, resolutionTypes, issueLabel, resolutionLabel, type RequestIssue } from '@/lib/request-issues';
+import { issueTypes, resolutionTypes, issueLabel, resolutionLabel, looksLikePitchText, type RequestIssue } from '@/lib/request-issues';
 
 export type CustomerRequest = {
   id: string; kind: string; status: string; created: number;
@@ -78,15 +78,13 @@ const sendPending = (reply?: ReplySummary) => reply?.status === 'sending' || Boo
 export type ExternalReply = { at: number; source: 'mailbox' | 'manual'; account: string; body: string; preview: boolean };
 const shortDate = (value: number) => new Date(value).toLocaleDateString([], { month: 'short', day: 'numeric' });
 const mailbox = (account: string) => account.split('@')[0] + '@';
-// Supplier and vendor sales pitches, not customers. Only a suggestion; tagging the issue overrides it.
-const PITCH = /\b(manufactur\w*|supplier|factory|wholesale|OEM|ODM|private label|bulk (?:order|price)|competitive pric\w*|price list|MOQ|our company|we are a (?:leading|professional)|we (?:can )?(?:supply|provide) (?:high|all)|high quality peptides?|sarms)\b/i;
-export const looksLikePitch = (request: CustomerRequest) => request.data.origin !== 'order' && PITCH.test(text(request.data.subject) + ' ' + text(request.data.message));
+export const looksLikePitch = (request: CustomerRequest) => request.data.origin !== 'order' && looksLikePitchText(text(request.data.subject), text(request.data.message));
 type StageInfo = { stage: Stage; label: string; since: number; when: string; late: boolean };
-function stageOf(request: CustomerRequest, reply: ReplySummary | undefined, external: ExternalReply[] = [], issue: string | null = null, activity: { at: number; text: string }[] = [], now = Date.now()): StageInfo {
+function stageOf(request: CustomerRequest, reply: ReplySummary | undefined, external: ExternalReply[] = [], issue: string | null = null, activity: { at: number; text: string }[] = [], now = Date.now(), shared: { at: number; how: string }[] = []): StageInfo {
   const history = reply?.history || [];
   const desk = history.filter(m => m.direction === 'outgoing').map(m => ({ at: m.created, how: 'from research@' }));
   const outside = external.map(e => ({ at: e.at, how: e.source === 'manual' ? 'by phone/text · ' + mailbox(e.account) : 'in Gmail from ' + mailbox(e.account) }));
-  const replies = [...desk, ...outside].sort((a, b) => a.at - b.at);
+  const replies = [...desk, ...outside, ...shared].sort((a, b) => a.at - b.at);
   const last = replies[replies.length - 1];
   const lastOut = last?.at || 0;
   const lastIn = Math.max(request.created, ...history.filter(m => m.direction === 'incoming').map(m => m.created));
@@ -108,6 +106,7 @@ function stageOf(request: CustomerRequest, reply: ReplySummary | undefined, exte
 }
 function friendlyReason(reason?: string) {
   if (!reason) return '';
+  if (reason === 'request_closed') return 'This draft was set aside because the request was closed (for example, a reply to this customer already answered it). Nothing was sent.';
   if (reason === 'send_blocked') return 'Jarvis stopped that send before anything went out (the request, recipient or report changed). Check the reply and press Send again.';
   if (reason === 'bridge_preparation_failed' || /^[a-z0-9]+(?:_[a-z0-9]+)+$/.test(reason)) return 'The AI could not finish this draft. Nothing was sent. Ask again or write the reply yourself.';
   return reason;
@@ -210,9 +209,20 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
   }, [requestReplies, preparedReplies, liveReplies]);
   const disabled = busy || dirty || refreshing;
 
-  const rows = requests.map(request => ({ request, reply: replyOf(request.id), ...stageOf(request, replyOf(request.id), external[request.id], issues[request.id]?.issue || null, activity[request.id], now) }));
+  // One customer, one conversation: requests from the same email (any letter case) are grouped, and a reply
+  // to any of them counts as a reply to all their earlier ones.
+  const emailKey = (request: CustomerRequest) => text(request.data.email).toLowerCase() || request.id;
+  const family: Record<string, CustomerRequest[]> = {};
+  for (const request of requests) (family[emailKey(request)] ||= []).push(request);
+  const sharedReplies = (request: CustomerRequest) => (family[emailKey(request)] || []).filter(other => other.id !== request.id).flatMap(other => [
+    ...(replyOf(other.id)?.history || []).filter(m => m.direction === 'outgoing').map(m => ({ at: m.created, how: 'from research@' })),
+    ...(external[other.id] || []).map(e => ({ at: e.at, how: e.source === 'manual' ? 'by phone/text · ' + mailbox(e.account) : 'in Gmail from ' + mailbox(e.account) })),
+  ]);
+  const rows = requests.map(request => ({ request, reply: replyOf(request.id), ...stageOf(request, replyOf(request.id), external[request.id], issues[request.id]?.issue || null, activity[request.id], now, sharedReplies(request)) }));
   const counts = { todo: 0, waiting: 0, done: 0, spam: 0, deleted: 0, pitch: 0, all: rows.filter(row => row.stage !== 'deleted').length };
-  for (const row of rows) { if (row.stage === 'sending' || row.stage === 'todo') counts.todo++; else if (row.stage === 'waiting') counts.done++; else counts[row.stage]++; }
+  const counted = new Set<string>();
+  for (const row of rows) { const bucket = row.stage === 'sending' || row.stage === 'todo' ? 'todo' : row.stage === 'waiting' ? 'done' : row.stage; const key = bucket + ':' + emailKey(row.request); if (counted.has(key)) continue; counted.add(key); counts[bucket]++; }
+  counts.all = new Set(rows.filter(row => row.stage !== 'deleted').map(row => emailKey(row.request))).size;
   const inView = (stage: Stage, view: typeof filter) => view === 'all' ? stage !== 'deleted' : view === 'todo' ? stage === 'todo' || stage === 'sending' : view === 'done' ? stage === 'done' || stage === 'waiting' : stage === view;
   // Selection follows the tab: switching tabs never leaves another tab's conversation open.
   function setFilter(view: typeof filter) {
@@ -224,6 +234,14 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
     && (!needle || [row.request.id, row.request.kind, ...Object.values(row.request.data).filter(value => typeof value === 'string')].join(' ').toLowerCase().includes(needle)))
     // To reply: oldest first, so nothing waits behind newer mail. Everything else: newest first.
     .sort((a, b) => filter === 'todo' ? a.since - b.since : b.since - a.since);
+  // Collapse each customer's requests in this view into one row that opens their newest request.
+  const grouped: (typeof shown[number] & { count: number; members: CustomerRequest[] })[] = [];
+  for (const row of shown) {
+    const existing = grouped.find(g => emailKey(g.request) === emailKey(row.request));
+    if (!existing) { grouped.push({ ...row, count: 1, members: [row.request] }); continue; }
+    existing.count++; existing.members.push(row.request);
+    if (row.request.created > existing.request.created) Object.assign(existing, { request: row.request, reply: row.reply, label: row.label, stage: row.stage });
+  }
   const views = [['todo', 'Needs reply'], ['done', 'Replied & archive'], ['pitch', 'Sales pitches'], ['spam', 'Spam'], ['deleted', 'Deleted'], ['all', 'All']] as const;
 
   function open(id: string) {
@@ -332,6 +350,7 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
 
   const bridgeQuiet = options?.bridgeSeen != null && now - options.bridgeSeen > 3 * 60000;
   const active = rows.find(row => row.request.id === selected) || null;
+  const siblings = active ? (family[emailKey(active.request)] || []).filter(r => r.id !== active.request.id && r.status !== 'deleted') : [];
   return <section className={styles.inbox} aria-labelledby="request-inbox-title" aria-busy={busy || refreshing}>
     <div className={styles.top}>
       <h2 id="request-inbox-title">Customer requests</h2>
@@ -369,14 +388,14 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
     </div>
     <div className={styles.desk} data-open={active ? 'true' : 'false'}>
       <div className={styles.list} role="list" aria-label="Requests">
-        {!shown.length ? <p className={styles.empty}>{requests.length ? (filter === 'todo' ? 'Nothing waiting for a reply.' : filter === 'done' ? 'Nothing archived yet. Requests move here once a reply is sent or you archive them.' : 'No requests here.') : 'No customer requests yet.'}</p> : shown.map(row => {
+        {!grouped.length ? <p className={styles.empty}>{requests.length ? (filter === 'todo' ? 'Nothing waiting for a reply.' : filter === 'done' ? 'Nothing archived yet. Requests move here once a reply is sent or you archive them.' : 'No requests here.') : 'No customer requests yet.'}</p> : grouped.map(row => {
           const { request, reply } = row;
           const name = text(request.data.name) || text(request.data.email) || 'Customer';
           const preview = text(request.data.message) || text(request.data.subject);
           const late = row.late;
           return <article key={request.id} role="listitem" className={styles.row} data-selected={selected === request.id ? 'true' : 'false'}>
             <button type="button" className={styles.rowButton} aria-expanded={selected === request.id} aria-controls={`request-reply-${request.id}`} onClick={() => open(request.id)}>
-              <span className={styles.rowTop}><strong>{name}</strong></span>
+              <span className={styles.rowTop}><strong>{name}</strong>{row.count > 1 && <span className={styles.age}>{row.count} requests</span>}</span>
               <span className={styles.rowSubject}>{text(request.data.subject) || (request.kind === 'affiliate' ? 'Partner application' : request.kind === 'stock' ? 'Product availability' : 'Website message')}</span>
               <span className={styles.rowPreview}>{preview}</span>
               <span className={styles.rowState} data-stage={row.stage}>{row.label}{reply?.coa?.state === 'matched' && row.stage === 'todo' ? ' · COA' : ''}</span>
@@ -393,7 +412,11 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
         onInsert: snippet => insertAtCursor(active.request.id, snippet),
         onSubmit: (mode, send, instruction) => void submit(active.request, mode, send, instruction),
         onDictate: () => dictate(active.request),
-        onStatus: status => { if (!disabled) { setPanel(null); void onStatus(active.request, status); } },
+        onStatus: status => { if (disabled) return; setPanel(null);
+          // Archive, spam, delete or restore the customer's whole conversation, one request at a time.
+          const targets = [active.request, ...siblings.filter(r => r.status !== status && (status === 'new' ? ['resolved', 'spam', 'deleted'].includes(r.status) : !['spam', 'deleted'].includes(r.status)))];
+          void (async () => { for (const target of targets) await onStatus(target, status); })(); },
+        siblings: siblings.map(r => ({ request: r, reply: replyOf(r.id), external: external[r.id] || [] })),
         templates: templates[active.request.id] || [],
         external: external[active.request.id] || [], canMarkReplied: Boolean(onMarkReplied),
         markNote: replyNote?.id === active.request.id ? replyNote.note : null,
@@ -417,13 +440,14 @@ type ConversationProps = {
   onClose: () => void; onEdit: (field: 'body' | 'instruction', value: string) => void; onDraft: (patch: Partial<Draft>) => void; onInsert: (snippet: string) => void;
   onSubmit: (mode: 'ai' | 'staff', send?: boolean, instruction?: string) => void; onDictate: () => void; onStatus: (status: string) => void;
   forwards: RequestForward[]; team: TeamMember[]; canForward: boolean; activity: { at: number; text: string }[];
+  siblings: { request: CustomerRequest; reply?: ReplySummary; external: ExternalReply[] }[];
   templates: { id: string; label: string; why: string; body: string }[];
   external: ExternalReply[]; canMarkReplied: boolean; markNote: string | null; onMarkNote: (note: string | null) => void; onMarkReplied: () => void;
   issue: RequestIssue | null; canTag: boolean; onIssue: (patch: Partial<{ issue: string; resolutions: string[]; note: string }>) => void; issueNote: string; onIssueNote: (note: string) => void;
   panel: { kind: 'forward' | 'delete'; to: string; note: string; busy: boolean; error: string } | null;
   onPanel: (next: Partial<{ kind: 'forward' | 'delete'; to: string; note: string; busy: boolean; error: string }> | null) => void; onForward: () => void;
 };
-function conversation({ row, draft, automation, options, canSend, disabled, listening, preparing, bodyField, now, onClose, onEdit, onDraft, onInsert, onSubmit, onDictate, onStatus, forwards, team, canForward, panel, onPanel, onForward, activity, templates, external, canMarkReplied, markNote, onMarkNote, onMarkReplied, issue, canTag, onIssue, issueNote, onIssueNote }: ConversationProps) {
+function conversation({ row, draft, automation, options, canSend, disabled, listening, preparing, bodyField, now, onClose, onEdit, onDraft, onInsert, onSubmit, onDictate, onStatus, forwards, team, canForward, panel, onPanel, onForward, activity, siblings, templates, external, canMarkReplied, markNote, onMarkNote, onMarkReplied, issue, canTag, onIssue, issueNote, onIssueNote }: ConversationProps) {
   const { request, reply } = row;
   const email = text(request.data.email), canReply = usableEmail(request.data.email);
   const name = text(request.data.name) || email || 'Customer';
@@ -481,6 +505,7 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
       {panel.error && <p className={styles.error} role="alert">{panel.error}</p>}
       <div className={styles.sendRow}><button type="button" className={styles.send} disabled={panel.busy || !panel.to} onClick={onForward}>{panel.busy ? 'Forwarding…' : 'Forward'}</button><button type="button" className={styles.link} onClick={() => onPanel(null)}>Cancel</button><span className={styles.note}>The customer is not emailed. Replies to the forward come back to you.</span></div>
     </div>}
+    {siblings.length > 0 && <p className={styles.note}>{siblings.length + 1} requests from this customer, shown as one conversation. One reply answers all of them.</p>}
     <p className={styles.subjectLine}><strong>{subject}</strong> <span className={styles.note}>· Ref {request.id.slice(0, 8)}</span></p>
     {fromOrder && <p className={styles.orderNote}><strong>Order details (only you see this):</strong> {text(request.data.message)}</p>}
     {canTag && <div className={styles.case}>
@@ -492,8 +517,20 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
       {issue?.issue && <p className={styles.note}>The AI drafts with this decision and with your {issueLabel(issue.issue)} rules.</p>}
     </div>}
     <ol className={styles.thread} aria-label="Conversation">
-      {[...history.map(m => ({ ...m, who: m.direction === 'incoming' ? name : 'You, from research@ (reply desk)' })),
-        ...external.map((e, i) => ({ id: 'ext-' + i + '-' + e.at, direction: 'outgoing' as const, created: e.at, body: e.body + (e.preview ? ' …' : ''), who: e.source === 'manual' ? 'Marked as replied by ' + e.account : 'You, from ' + e.account + ' (sent in Gmail)' }))]
+      {(() => {
+        const seen = new Set<string>();
+        const outside = (list: ExternalReply[], tag: string) => list.map((e, i) => ({ id: 'ext-' + tag + i + '-' + e.at, direction: 'outgoing' as const, created: e.at, body: e.body + (e.preview ? ' …' : ''), who: e.source === 'manual' ? 'Marked as replied by ' + e.account : 'You, from ' + e.account + ' (sent in Gmail)' }));
+        const all = [
+          ...history.map(m => ({ ...m, who: m.direction === 'incoming' ? name : 'You, from research@ (reply desk)' })),
+          ...outside(external, 'a'),
+          ...siblings.flatMap(sib => [
+            { id: 'original:' + sib.request.id, direction: 'incoming' as const, created: sib.request.created, body: [text(sib.request.data.subject), text(sib.request.data.message)].filter(Boolean).join('\n'), who: (text(sib.request.data.name) || name) + ' (earlier request)' },
+            ...(sib.reply?.history || []).filter(m => m.direction === 'outgoing').map(m => ({ ...m, who: 'You, from research@ (reply desk)' })),
+            ...outside(sib.external, sib.request.id),
+          ]),
+        ];
+        return all.filter(m => { if (seen.has(m.id)) return false; seen.add(m.id); return true; });
+      })()
         .sort((a, b) => a.created - b.created).map(message => <li key={message.id} data-direction={message.direction}>
         <p className={styles.meta}>{message.who} · {when(message.created)}</p>
         <p className={styles.message}>{message.body || 'No message text was included.'}</p>

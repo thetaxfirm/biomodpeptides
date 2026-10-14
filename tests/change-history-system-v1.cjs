@@ -16,6 +16,7 @@ const worker=load('worker.ts',{
  './lib/traffic-metrics-server':{cleanupTraffic:async db=>{assert.notEqual(db,DB);jobs.push('traffic');await write(db,900003);}},
  './lib/coa-scheduler':{runScheduledCoaOutbox:async copy=>{assert.notEqual(copy,env);assert.notEqual(copy.DB,DB);jobs.push('coa');await write(copy.DB,900001);}},
  './lib/checkout-recovery':{runCheckoutRecovery:async copy=>{assert.notEqual(copy,env);assert.notEqual(copy.DB,DB);jobs.push('recovery');await write(copy.DB,900002);}},
+ './lib/reply-overdue':{runOverdueDigest:async copy=>{assert.notEqual(copy,env);assert.notEqual(copy.DB,DB);}},
 }).default;
 class NextResponse extends Response{}
 const runtime={runtime:()=>env,timestamp:()=>Date.now()};

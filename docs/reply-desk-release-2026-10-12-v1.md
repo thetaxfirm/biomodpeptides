@@ -77,3 +77,9 @@ Owner feedback (relayed by the Orders session): he could not tell who had been a
 - Replies sent outside the desk count: Jarvis checks the Gmail mirror of every connected mailbox every 2 minutes for sent mail to an open requester after the request arrived (drafts, older mail and the desk's own sends excluded) and records it (migration `0028_request_external_replies.sql`). The text appears in the conversation. **Mark as replied** records phone/text answers with an optional note.
 - Supplier pitches (manufacturer, wholesale, OEM, price list, "high quality peptides", SARMs…) are kept out of Needs reply as "Looks like a sales pitch", with "Not a sales pitch" / "Yes, a sales pitch" to correct it. Tagging the issue overrides the guess.
 - Fix: issue tags saved in a conversation were not reloaded by the live refresh; they now are.
+
+## Follow-up (Oct 14): one customer, one conversation; daily "waiting" alert
+
+- Requests from the same email (any letter case) show as one row ("3 requests") and one conversation containing every message. A reply (desk, Gmail or Mark as replied) to any of them counts for their earlier ones; a desk send archives all of that customer's open requests sent before it; Archive/Spam/Delete/Restore act on the whole conversation. The AI sees the customer's earlier requests.
+- A queued draft whose request was closed meanwhile is set aside (`request_closed`) instead of blocking the Jarvis queue.
+- Daily digest (`lib/reply-overdue.ts`, from the existing 5-minute schedule): after 8 am Pacific, once a day, one email to the owner notification address (COA settings notifyTo, else the first owner) listing customers waiting over a day with no reply, grouped by email; sales pitches, answered, phoned and closed requests excluded; nothing is sent when nobody waits. Internal only.

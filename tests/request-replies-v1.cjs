@@ -83,7 +83,14 @@ const conflict=async(fn)=>assert.rejects(fn,e=>e.status===409);
   assert.equal(f.sql.prepare('SELECT status FROM requests WHERE id=?').get(second).status,'resolved','A sent reply archives the request');
   const learned=f.sql.prepare('SELECT * FROM request_reply_learning').all();assert.equal(learned.length,1);assert.equal(learned[0].changed,1);assert.equal(learned[0].ai_draft,'AI wording that was too long.');assert.equal(learned[0].final_body,'Here is the report you asked about.');
   await api.saveReplyRule(f.env,{rule:'Sign off as Ash.'},owner);
-  claimed=(await f.bridge({action:'claim'})).job;assert.equal(claimed.requestId,first);assert.deepEqual(claimed.style.rules,['Sign off as Ash.']);assert.equal(claimed.style.examples[0].sent,'Here is the report you asked about.');assert(claimed.codes.some(c=>c.code==='BM10'));
+  // One reply answers the customer: their earlier open request is archived and its queued draft set aside without blocking the queue.
+  assert.equal(f.sql.prepare('SELECT status FROM requests WHERE id=?').get(first).status,'resolved');
+  assert.equal((await f.bridge({action:'claim'})).job,null);assert.equal(f.sql.prepare('SELECT status,reason FROM request_reply_drafts WHERE request_id=?').get(first).reason,'request_closed');
+  const other=f.request({email:'other-customer@example.invalid'});await f.prepare(other);
+  claimed=(await f.bridge({action:'claim'})).job;assert.equal(claimed.requestId,other);
+  const sib=f.request({email:'OTHER-customer@example.invalid',subject:'Earlier question',message:'SIBLING_TEXT first message'});f.sql.prepare('UPDATE requests SET created=? WHERE id=?').run(Date.now()-86400000,sib);
+  const latest=f.request({email:'other-customer@example.invalid'});await f.prepare(latest);await f.bridge({action:'fail',id:claimed.id,revision:claimed.revision,leaseToken:claimed.leaseToken,reason:'fixture'});
+  const sibJob=(await f.bridge({action:'claim'})).job;assert.equal(sibJob.requestId,latest);assert(sibJob.history.some(m=>m.body.includes('SIBLING_TEXT')),'The AI sees the same customer\'s earlier request');assert.deepEqual(claimed.style.rules,['Sign off as Ash.']);assert.equal(claimed.style.examples[0].sent,'Here is the report you asked about.');assert(claimed.codes.some(c=>c.code==='BM10'));
   const desk=await api.replyDeskOptions(f.env);assert.equal(desk.coas.length,originals.length);assert.equal(desk.learning.recent,1);assert.equal(desk.learning.unchanged,0);assert(desk.bridgeSeen>0,'Jarvis heartbeat recorded');assert(!JSON.stringify(desk).includes(picked.base64.slice(0,40)),'Desk options never carry report bytes');
   await assert.rejects(()=>api.prepareRequestReply(f.env,{requestId:second,mode:'staff',body:'x',expectedRevision:1,coaSha256:'not-a-hash'},owner),e=>e.status===400);
   // A send Jarvis refuses before any provider call clears the approval so the desk asks again.

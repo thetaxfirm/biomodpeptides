@@ -147,6 +147,14 @@ async function main(){
  nodes(host.tree).filter(n=>n.type==='button'&&text(n)==='Mark as replied').at(-1).props.onClick();await flush(host);
  assert.deepEqual(marked,[{id:'phone',note:'Called him'}]);assert.deepEqual(rowIds(),[],'Marked request leaves Needs reply');
  filter(host,'Replied & archive');assert.deepEqual(rowIds(),['phone']);assert(text(host.tree).includes('Replied'));assert(text(host.tree).includes('by phone/text · owner@'));
+ // One customer, one row: same email in any letter case groups; opening it shows every message; a reply to one answers the earlier ones.
+ const a1=request('alb-1','new','contact',{name:'Albert A',email:'Albert@Example.invalid',subject:'Cart',message:'Cart will not load'});a1.created=now-6*day;
+ const a2=request('alb-2','new','contact',{name:'Albert Alvarez',email:'albert@example.invalid',subject:'COA request',message:'Need the COA'});a2.created=now-4*day;
+ host=mount({...props,requests:[a1,a2],requestReplies:{}});await flush(host);
+ assert.equal(nodes(host.tree).filter(n=>n.type==='article').length,1,'Two requests from one person are one row');assert(text(host.tree).includes('2 requests'));
+ openRow(host,'alb-2');assert(text(host.tree).includes('Cart will not load'));assert(text(host.tree).includes('Need the COA'));assert(text(host.tree).includes('One reply answers all of them'));
+ host=mount({...props,requests:[a1,a2],requestReplies:{'alb-2':reply('alb-2',{status:'sent',history:[{id:'o2',direction:'incoming',body:'Need the COA',created:a2.created},{id:'s2',direction:'outgoing',body:'Here it is',created:now-day}]})}});await flush(host);
+ assert.equal(nodes(host.tree).filter(n=>n.type==='article').length,0,'Replying to the newer request clears the older one too');
  for(const email of ['a@example.invalid\r\nBcc:x@example.invalid','a@example.invalid,b@example.invalid']){const h=mount({...props,requests:[request('bad','new','contact',{email})],requestReplies:{}});openRow(h,'bad');assert(text(h.tree).includes('no way to reply'));assert(!nodes(h.tree).some(n=>n.type==='textarea'));}
  const escaped=render({...props,requests:[request('escape','new','contact',{name:'<script>Fixture</script>',message:'<b>x</b>'})],requestReplies:{}});assert(!escaped.includes('<script>'));assert(!escaped.includes('<b>x'));
  console.log('PASS: reply desk queue order (oldest unanswered first, customer replies resurface), waiting/done/spam views, learning progress, code insert, COA pick, AI rewrite with draft+instruction+remembered rule, undo, single owner Send, staff draft-only, plain failure text, unsafe addresses blocked. Isolated fixtures, no I/O.');
