@@ -2,7 +2,7 @@
 // Every number reuses the rule that already drives its own tab (order buckets, the reply desk's
 // overdue list, the no-COA shipping block), so this page can never disagree with the tab it links to.
 import type { Product } from './catalog';
-import { hasCoa, noCoaProducts } from './coa-shipping';
+import { hasCoa, noCoaProducts, COA_REQUIRED_TO_SHIP } from './coa-shipping';
 import { orderBucket, type OrderBucket } from './fulfillment';
 import { overdueCustomers } from './reply-overdue';
 import type { CoaEnvironment } from './coa-outbox';
@@ -31,7 +31,7 @@ export function orderAttention(orders: OverviewOrder[], products: Product[], now
     const bucketed = orders.map(o => ({ ...o, bucket: orderBucket(o as any) }));
     const toShip = bucketed.filter(o => o.bucket === 'to_ship');
     if (toShip.length) {
-        const blocked = toShip.filter(o => (Array.isArray(o.data?.items) ? o.data.items : []).some((i: any) => !hasCoa(products.find(p => p.id === Number(i?.id ?? i?.product?.id)))));
+        const blocked = !COA_REQUIRED_TO_SHIP ? [] : toShip.filter(o => (Array.isArray(o.data?.items) ? o.data.items : []).some((i: any) => !hasCoa(products.find(p => p.id === Number(i?.id ?? i?.product?.id)))));
         const oldest = Math.min(...toShip.map(o => o.created));
         out.push({ id: 'to_ship', tab: 'orders', count: toShip.length, tone: now - oldest > 2 * DAY ? 'urgent' : 'normal', title: plural(toShip.length, 'paid order') + ' to ship',
             detail: `Oldest waiting ${ago(now, oldest)}.` + (blocked.length ? ` ${blocked.length} can't ship until a COA is attached.` : '') });

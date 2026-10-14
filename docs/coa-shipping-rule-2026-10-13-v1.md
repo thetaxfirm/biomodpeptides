@@ -25,3 +25,11 @@ Affected: /checkout, /admin?tab=orders, /api/admin/shipping, /api/store/admin-or
 ## Release
 
 Main 5958e89 (after collaborator commit 5dcad86), gate 72 suites passed. Cloudflare version cc09e63c-2188-400c-b12d-1689f1fc13eb deployed 2026-10-14T03:26:21Z. Live: /, /checkout, /shop 200; admin orders data refused when signed out. Signed-in Orders list not yet viewed live (needs owner sign-in).
+
+## Exception, October 14, 2026
+
+Owner: "remove need for coa for lipo-c" and "fix the order to allow for shipment". `shipsWithoutCoa` in `lib/coa-shipping.ts` lists products that ship without a COA on file; it holds Lipo-C w/B12 (product 784). It ships normally and is no longer on the "Can't ship: no COA on file" list. Paid orders containing it clear automatically (the rule is evaluated live; no order data changed). `tests/coa-shipping-v1.cjs` uses a synthetic product for the blocked case and asserts the Lipo-C exception.
+
+## Rule removed, October 14, 2026
+
+Owner, minutes after the Lipo-C exception: "remove the never ship without coa rule". `COA_REQUIRED_TO_SHIP = false` in `lib/coa-shipping.ts`: no order is held for a missing COA (label purchase and Mark shipped proceed), the admin "Can't ship: no COA on file" list is empty, and the overview no longer counts blocked orders. The code stays behind the switch so the rule can be restored. The checkout change from Oct 13 (no contact-us hold for untracked stock) is unchanged.

@@ -30,12 +30,12 @@ const orders = [
 (async () => {
   const work = orderAttention(orders, products, now);
   const byId = Object.fromEntries(work.map(w => [w.id, w]));
-  assert.equal(byId.to_ship.count, 2); assert.equal(byId.to_ship.tone, 'urgent', 'Oldest paid order waiting 3 days is urgent'); assert.match(byId.to_ship.detail, /3 days.*1 can't ship until a COA/);
+  assert.equal(byId.to_ship.count, 2); assert.equal(byId.to_ship.tone, 'urgent', 'Oldest paid order waiting 3 days is urgent'); assert.match(byId.to_ship.detail, /3 days/); assert(!/COA/.test(byId.to_ship.detail), 'COA shipping rule removed Oct 14: no blocked count');
   assert.equal(byId.label.count, 1); assert.equal(byId.review.count, 1, 'Held order needs review'); assert.equal(byId.unpaid.count, 1, 'Only this week\'s unfinished checkouts');
   assert(!work.some(w => w.id === 'test'), 'Internal tests never count');
   const items = productAttention(products, [{ items: [{ id: 2 }] }]);
   const p = Object.fromEntries(items.map(i => [i.id, i]));
-  assert.equal(p.coa_blocked.count, 1); assert.match(p.coa_blocked.detail, /Lipo-C/); assert.equal(p.out_of_stock.count, 1); assert.match(p.low_stock.detail, /KPV \(3\)/); assert.equal(p.no_coa.count, 1, 'Products not for sale are left out');
+  assert.equal(p.coa_blocked, undefined, 'COA shipping rule removed: nothing held'); assert.equal(p.out_of_stock.count, 1); assert.match(p.low_stock.detail, /KPV \(3\)/); assert.equal(p.no_coa, undefined, 'COA shipping rule removed: no can\'t-ship warning');
   const sales = salesWindows(orders, now, 'authorizenet:live');
   assert.deepEqual(sales.map(s => [s.label, s.orders, s.revenue]), [['Today', 1, 10000], ['Last 7 days', 4, 40000], ['Last 30 days', 5, 50000]], 'Paid buckets only, live payments only, tests and holds excluded');
   assert.equal(setupAttention({ carriers: [] }, 'authorizenet:live')[0].id, 'shipping', 'Shipping not set up is flagged');
