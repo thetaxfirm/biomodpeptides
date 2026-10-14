@@ -50,6 +50,8 @@ export function pickTotals(entries: PickEntry[]): PickLine[] {
 const esc = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const when = (ms: number) => new Date(ms).toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
 
+// Pages fill top to bottom: an order may run over a break rather than leave a gap behind it.
+// Only a single item row is kept whole, and a heading never sits alone at the foot of a page.
 const STYLE = `
 @page{size:portrait;margin:10mm}
 *{box-sizing:border-box}
@@ -60,12 +62,15 @@ h2{font-size:11px;margin:0;text-transform:uppercase;letter-spacing:.05em}
 table{width:100%;border-collapse:collapse}
 th{text-align:left;font-size:8.5px;text-transform:uppercase;letter-spacing:.04em;color:#444;border-bottom:1px solid #000;padding:0 4px 1px}
 td{padding:2px 4px;border-bottom:1px solid #e0e0e0;vertical-align:baseline}
+thead{display:table-header-group}
+tr{page-break-inside:avoid;break-inside:avoid}
 .qty{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:700;width:34px}
 .tick{width:16px}
 .tick span{display:inline-block;width:9px;height:9px;border:1px solid #666;vertical-align:-1px}
 .detail{color:#444}
 .pull{border:1.5px solid #000;padding:6px 8px;margin-bottom:10px}
-.order{border-top:1px solid #000;padding-top:4px;margin-top:8px;page-break-inside:avoid;break-inside:avoid}
+.order{border-top:1px solid #000;padding-top:4px;margin-top:8px}
+.order h2,.order .sub{page-break-after:avoid;break-after:avoid}
 .order h2{display:flex;justify-content:space-between;gap:10px}
 .sub{color:#444;font-size:9.5px;margin:0 0 2px}
 .foot{margin-top:10px;border-top:1px solid #999;padding-top:4px;font-size:9px;color:#444}
