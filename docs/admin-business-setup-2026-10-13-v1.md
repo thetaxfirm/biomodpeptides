@@ -24,3 +24,7 @@ Scope: trybiomod.com administration. Author: Claude, at the owner's request: "ma
 `npm run check:release` and `BIOMOD_DEPLOY=true npm run build`: TypeScript and 74 suites, including new `admin-overview-v1.cjs` and updated `admin-read-recovery-v1.cjs` (default Today, tab order, single Reports tab). Production build reviewed locally on synthetic data with providers intercepted: Today counts, Reports switcher deep link (?tab=traffic), Products filters, collapsed Orders panel.
 
 Affected: /admin (all tabs), /api/store/admin-overview (new, staff only). No migration, no data change.
+
+## Follow-up: Batch documents header
+
+Owner: remove the three-number strip on /testing ("24 Products with lab reports / 19 Lab reports online / 5 Printed COAs in the box") and use a slogan and a vial instead. The strip is replaced by one header: "Batch documents", the line "The lot on your vial. The report behind it.", a one-line instruction to search the lot, the existing "Understand the tests" link, and the store's own BPC-157 vial render (public/brand/testing-vial-v1.webp, cropped from the v37 product artwork, edges faded into the page). The same filtering stays in the "All records" dropdown. Checked at 1280px and 375px (no horizontal scroll).
