@@ -143,7 +143,7 @@ export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, form
         <div className={styles.heading}>
             <div><h2 id="orders-title">Orders</h2><p>Paid orders waiting to ship come first. Select an order number for the full order.</p>
                 <div className={styles.sheetButtons}>
-                    <a className="button button-dark" href="/api/admin/pick-list" target="_blank" rel="noopener">Print pick list (To ship)</a>
+                    <a className="button button-dark" href="/api/admin/pick-list" target="_blank" rel="noopener">Print pick list</a>
                     {allowed('orders:fulfill') && <a className="button button-gold" href="/api/admin/labels" target="_blank" rel="noopener">Print all bought labels</a>}
                     <span>Printing changes nothing.</span>
                 </div></div>
