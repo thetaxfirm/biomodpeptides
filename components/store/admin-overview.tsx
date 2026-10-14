@@ -44,11 +44,14 @@ export function AdminOverview({ onOpen, reloadToken = 0 }: { onOpen: (tab: strin
             {work.length ? <ul className={styles.list}>{work.map(item => <Item key={item.id} item={item} onOpen={onOpen}/>)}</ul>
                 : <p className={styles.clear} role="status">Nothing is waiting. Every paid order is moving, no customer has waited over a day, and no product is holding up an order.</p>}
             {data.sales && <>
-                <h3 className={styles.sectionTitle}>Sales</h3>
+                <h3 className={styles.sectionTitle}>Recorded live payments</h3>
                 <div className={styles.sales}>{data.sales.map(w => <div key={w.label} className={styles.figure}>
-                    <span>{w.label}</span><strong>{money(w.revenue)}</strong><small>{w.orders} paid {w.orders === 1 ? 'order' : 'orders'}</small>
+                    <span>{w.label}</span><strong>{money(w.live.grossCents)}</strong><small>{w.live.paymentRecorded} paid {w.live.paymentRecorded === 1 ? 'order' : 'orders'} with payment records</small>
+                    {w.live.missingPaymentRecords > 0 && <small>{w.live.missingPaymentRecords} live paid {w.live.missingPaymentRecords === 1 ? 'order' : 'orders'} missing payment records, excluded</small>}
+                    {w.sandbox.orders > 0 && <small>{w.sandbox.orders} sandbox {w.sandbox.orders === 1 ? 'order' : 'orders'}, excluded</small>}
+                    {w.unknown.orders > 0 && <small>{w.unknown.orders} {w.unknown.orders === 1 ? 'order' : 'orders'} with unknown payment environment, excluded</small>}
                 </div>)}</div>
-                <p className={styles.muted}>Paid orders by the day they were placed, including shipping and tax, before refunds. Internal tests are left out. Today runs from midnight Pacific time.</p>
+                <p className={styles.muted}>Gross recorded amounts by order date include shipping and tax; this is not net revenue. Refunded, cancelled and failed orders are excluded; fulfillment holds still count. Orders marked as internal tests are excluded; remaining records are not confirmed customer sales. Today starts at midnight Pacific; 7- and 30-day windows are rolling.</p>
             </>}
         </>}
     </section>;

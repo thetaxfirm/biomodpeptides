@@ -218,7 +218,7 @@ export async function GET(req: NextRequest, { params }: {
             // "Today" home: work waiting now, sales and setup gaps. Each section is limited to what the role may see.
             const { role } = await requireStaff('orders:read');
             const allowed = (permission: StaffPermission) => can(role, permission);
-            const rows = (await all<{ id: string; status: string; total: number; data: string; created: number }>('SELECT id,status,total,data,created FROM orders ORDER BY created DESC LIMIT ?', scanLimit)).map(o => ({ ...o, data: parse<Record<string, any>>(o.data, {}) }));
+            const rows = (await all<{ id: string; status: string; total: number; data: string; created: number; payment_ref: string | null; notification_id: string | null }>('SELECT id,status,total,data,created,payment_ref,notification_id FROM orders ORDER BY created DESC LIMIT ?', scanLimit)).map(o => ({ ...o, data: parse<Record<string, any>>(o.data, {}) }));
             const store = await config();
             return j(await adminOverview(runtime() as any, { orders: rows, products: await catalog(false, true), shipping: store.shippingOptions, environment: paymentEnvironment(runtime()),
                 access: { orders: true, requests: allowed('requests:write'), reports: allowed('reports:read'), store: allowed('store:write') } }));
