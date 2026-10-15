@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { money } from '@/lib/catalog';
-import { normalizeShippingOptions, shippingServiceCatalog, type CatalogService, type ShippingOptionsConfig, type ShippingServiceSetting } from '@/lib/shipping-options';
+import { normalizeShippingOptions, shippingServiceCatalog, defaultMinimumServiceKey, type CatalogService, type ShippingOptionsConfig, type ShippingServiceSetting } from '@/lib/shipping-options';
 import styles from './admin-shipping-settings.module.css';
 
 type ShippingSettingsConfig = { shippingCents: number | null; freeShippingAt: number; shippingOptions?: unknown };
@@ -10,7 +10,7 @@ type LiveRate = { key: string; name: string; cents: number; days: number | null;
 type ServiceCheck = { key: string; label: string; status: 'ok' | 'missing' | 'wrong'; carrierCents: number | null; customerCents: number | null; message: string };
 type Check = { ok: true; checkedAt: string; destination: string; package: string; rates: LiveRate[]; options: { label: string; note: string; cents: number; days: number | null }[]; services: ServiceCheck[]; freeStandardLabel: string | null } | { ok: false; error: string };
 type Row = ShippingServiceSetting & { markup: string };
-type Draft = { rows: Row[]; freeStandardEnabled: boolean; threshold: string; fallback: string };
+type Draft = { rows: Row[]; freeStandardEnabled: boolean; threshold: string; fallback: string; minimumServiceKey: string };
 const ENDPOINT = '/api/admin/shipping-services';
 const carriers = ['USPS', 'UPS', 'FedEx'] as const;
 const groups = { standard: 'Standard', expedited: 'Faster', overnight: 'Overnight' } as const;
@@ -35,7 +35,7 @@ function startingRows(options: ShippingOptionsConfig): Row[] {
 }
 function draftFrom(config: ShippingSettingsConfig): Draft {
     const options = normalizeShippingOptions(config.shippingOptions);
-    return { rows: startingRows(options), freeStandardEnabled: options.freeStandardEnabled, threshold: centsText(config.freeShippingAt), fallback: config.shippingCents == null ? '' : centsText(config.shippingCents) };
+    return { rows: startingRows(options), freeStandardEnabled: options.freeStandardEnabled, threshold: centsText(config.freeShippingAt), fallback: config.shippingCents == null ? '' : centsText(config.shippingCents), minimumServiceKey: options.minimumServiceKey || defaultMinimumServiceKey };
 }
 /** Validated save payload. Throws a message the owner can act on. */
 export function shippingServicesPayload(draft: Draft) {
@@ -45,7 +45,7 @@ export function shippingServicesPayload(draft: Draft) {
         if (row.enabled && !label) throw new Error(`Give ${name} a name customers will see.`);
         return { key: row.key, enabled: row.enabled, markupCents: parseDollars(row.markup, `The extra charge for ${name}`), label: label || name, note: row.note.trim() };
     });
-    return { services, freeStandardEnabled: draft.freeStandardEnabled, freeShippingAt: parseDollars(draft.threshold, 'Free shipping minimum', 1000000), shippingCents: draft.fallback.trim() === '' ? null : parseDollars(draft.fallback, 'Backup standard price') };
+    return { services, freeStandardEnabled: draft.freeStandardEnabled, freeShippingAt: parseDollars(draft.threshold, 'Free shipping minimum', 1000000), shippingCents: draft.fallback.trim() === '' ? null : parseDollars(draft.fallback, 'Backup standard price'), minimumServiceKey: draft.minimumServiceKey || defaultMinimumServiceKey };
 }
 async function call(body?: unknown): Promise<any> {
     const response = await fetch(ENDPOINT, body === undefined ? { cache: 'no-store' } : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -164,6 +164,13 @@ export function AdminShippingSettings({ config, busy = false }: { config: Shippi
             <div>
                 <label className={styles.field}><span>Backup standard price if carriers do not answer ($)</span><input type="number" min="0" max="1000" step="0.01" value={draft.fallback} placeholder="None" disabled={locked} onChange={e => setDraft(d => ({ ...d, fallback: e.target.value }))}/></label>
                 <p className={styles.muted}>Leave empty to stop checkout instead of guessing a price.</p>
+                <label className={styles.field}><span>Never ship slower than</span>
+                    <select value={draft.minimumServiceKey} disabled={locked} onChange={e => setDraft(d => ({ ...d, minimumServiceKey: e.target.value }))}>
+                        <option value="none">No minimum — ship exactly what the customer paid for</option>
+                        {shippingServiceCatalog.filter(service => service.group !== 'standard').map(service => <option key={service.key} value={service.key}>{service.name}</option>)}
+                    </select>
+                </label>
+                <p className={styles.muted}>Upgrades a label when the paid service is slower. You pay the difference; the customer is never charged more. Faster paid services are left alone. New stores start at USPS Priority Mail.</p>
             </div>
         </div>
 
