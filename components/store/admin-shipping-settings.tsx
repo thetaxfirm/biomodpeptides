@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { money } from '@/lib/catalog';
-import { normalizeShippingOptions, shippingServiceCatalog, defaultMinimumServiceKey, type CatalogService, type ShippingOptionsConfig, type ShippingServiceSetting } from '@/lib/shipping-options';
+import { normalizeShippingOptions, shippingServiceCatalog, defaultMinimumServiceKey, signatureOptions, defaultSignatureConfirmation, type CatalogService, type ShippingOptionsConfig, type ShippingServiceSetting } from '@/lib/shipping-options';
 import styles from './admin-shipping-settings.module.css';
 
 type AutoLabel = { enabled: boolean; delayMs: number; dailyCapCents: number };
@@ -11,7 +11,7 @@ type LiveRate = { key: string; name: string; cents: number; days: number | null;
 type ServiceCheck = { key: string; label: string; status: 'ok' | 'missing' | 'wrong'; carrierCents: number | null; customerCents: number | null; message: string };
 type Check = { ok: true; checkedAt: string; destination: string; package: string; rates: LiveRate[]; options: { label: string; note: string; cents: number; days: number | null }[]; services: ServiceCheck[]; freeStandardLabel: string | null } | { ok: false; error: string };
 type Row = ShippingServiceSetting & { markup: string };
-type Draft = { rows: Row[]; freeStandardEnabled: boolean; threshold: string; fallback: string; minimumServiceKey: string; autoEnabled?: boolean; autoDelay?: string; autoCap?: string };
+type Draft = { rows: Row[]; freeStandardEnabled: boolean; threshold: string; fallback: string; minimumServiceKey: string; signatureConfirmation: string; autoEnabled?: boolean; autoDelay?: string; autoCap?: string };
 const ENDPOINT = '/api/admin/shipping-services';
 const carriers = ['USPS', 'UPS', 'FedEx'] as const;
 const groups = { standard: 'Standard', expedited: 'Faster', overnight: 'Overnight' } as const;
@@ -37,7 +37,7 @@ function startingRows(options: ShippingOptionsConfig): Row[] {
 function draftFrom(config: ShippingSettingsConfig): Draft {
     const options = normalizeShippingOptions(config.shippingOptions);
     const auto = config.autoLabel;
-    return { rows: startingRows(options), freeStandardEnabled: options.freeStandardEnabled, threshold: centsText(config.freeShippingAt), fallback: config.shippingCents == null ? '' : centsText(config.shippingCents), minimumServiceKey: options.minimumServiceKey || defaultMinimumServiceKey,
+    return { rows: startingRows(options), freeStandardEnabled: options.freeStandardEnabled, threshold: centsText(config.freeShippingAt), fallback: config.shippingCents == null ? '' : centsText(config.shippingCents), minimumServiceKey: options.minimumServiceKey || defaultMinimumServiceKey, signatureConfirmation: options.signatureConfirmation || defaultSignatureConfirmation,
         autoEnabled: auto ? auto.enabled : true, autoDelay: String(auto ? Math.round(auto.delayMs / 60000) : 20), autoCap: centsText(auto ? auto.dailyCapCents : 50000) };
 }
 /** Validated save payload. Throws a message the owner can act on. */
@@ -48,7 +48,7 @@ export function shippingServicesPayload(draft: Draft) {
         if (row.enabled && !label) throw new Error(`Give ${name} a name customers will see.`);
         return { key: row.key, enabled: row.enabled, markupCents: parseDollars(row.markup, `The extra charge for ${name}`), label: label || name, note: row.note.trim() };
     });
-    return { services, freeStandardEnabled: draft.freeStandardEnabled, freeShippingAt: parseDollars(draft.threshold, 'Free shipping minimum', 1000000), shippingCents: draft.fallback.trim() === '' ? null : parseDollars(draft.fallback, 'Backup standard price'), minimumServiceKey: draft.minimumServiceKey || defaultMinimumServiceKey,
+    return { services, freeStandardEnabled: draft.freeStandardEnabled, freeShippingAt: parseDollars(draft.threshold, 'Free shipping minimum', 1000000), shippingCents: draft.fallback.trim() === '' ? null : parseDollars(draft.fallback, 'Backup standard price'), minimumServiceKey: draft.minimumServiceKey || defaultMinimumServiceKey, signatureConfirmation: draft.signatureConfirmation || defaultSignatureConfirmation,
         // Omitted rather than guessed when the caller did not collect them; the server then keeps what it has.
         ...(typeof draft.autoEnabled === 'boolean' ? { autoLabel: { enabled: draft.autoEnabled, delayMinutes: minutes(draft.autoDelay), dailyCapCents: parseDollars(draft.autoCap ?? '', 'The daily automatic postage limit', 10000000) } } : {}) };
 }
@@ -181,6 +181,13 @@ export function AdminShippingSettings({ config, busy = false }: { config: Shippi
                     </select>
                 </label>
                 <p className={styles.muted}>Upgrades a label when the paid service is slower. You pay the difference; the customer is never charged more. Faster paid services are left alone. Set to USPS Priority Mail unless you change it.</p>
+                <label className={styles.field}><span>Delivery confirmation</span>
+                    <select value={draft.signatureConfirmation} disabled={locked} onChange={e => setDraft(d => ({ ...d, signatureConfirmation: e.target.value }))}>
+                        <option value="none">None — leave it on the doorstep</option>
+                        {signatureOptions.map(option => <option key={option.key} value={option.key}>{option.name}</option>)}
+                    </select>
+                </label>
+                <p className={styles.muted}>Asked for when the label is bought, so checkout prices never change and you pay the fee. Proof of delivery is what defeats a &ldquo;never arrived&rdquo; chargeback; the trade is a missed delivery when nobody is home.</p>
             </div>
             <div>
                 <label className={styles.check}><input type="checkbox" checked={draft.autoEnabled} disabled={locked} onChange={e => setDraft(d => ({ ...d, autoEnabled: e.target.checked }))}/><span>Buy labels automatically</span></label>
