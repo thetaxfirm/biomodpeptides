@@ -5,13 +5,15 @@ import { money } from '@/lib/catalog';
 import { normalizeShippingOptions, shippingServiceCatalog, defaultMinimumServiceKey, signatureOptions, defaultSignatureConfirmation, type CatalogService, type ShippingOptionsConfig, type ShippingServiceSetting } from '@/lib/shipping-options';
 import styles from './admin-shipping-settings.module.css';
 
-type AutoLabel = { enabled: boolean; delayMs: number; dailyCapCents: number };
-type ShippingSettingsConfig = { shippingCents: number | null; freeShippingAt: number; shippingOptions?: unknown; autoLabel?: AutoLabel; automaticSpend?: { cents: number; labels: number } };
+type AutoLabel = { enabled: boolean; delayMs: number; dailyCapCents: number; maxLabelCents?: number };
+/** What the last scheduled run did. Null means no run has reported yet, which is not the same as a failure. */
+type AutoLabelHealth = { checkedAt: number; status: string; enabled: boolean; bought: number; failed: number; blocked: number; due: number; recovered: number; released: number; capReached: boolean } | null;
+type ShippingSettingsConfig = { shippingCents: number | null; freeShippingAt: number; shippingOptions?: unknown; autoLabel?: AutoLabel; automaticSpend?: { cents: number; labels: number }; autoLabelHealth?: AutoLabelHealth };
 type LiveRate = { key: string; name: string; cents: number; days: number | null; tier: string | null };
 type ServiceCheck = { key: string; label: string; status: 'ok' | 'missing' | 'wrong'; carrierCents: number | null; customerCents: number | null; message: string };
 type Check = { ok: true; checkedAt: string; destination: string; package: string; rates: LiveRate[]; options: { label: string; note: string; cents: number; days: number | null }[]; services: ServiceCheck[]; freeStandardLabel: string | null } | { ok: false; error: string };
 type Row = ShippingServiceSetting & { markup: string };
-type Draft = { rows: Row[]; freeStandardEnabled: boolean; threshold: string; fallback: string; minimumServiceKey: string; signatureConfirmation: string; autoEnabled?: boolean; autoDelay?: string; autoCap?: string };
+type Draft = { rows: Row[]; freeStandardEnabled: boolean; threshold: string; fallback: string; minimumServiceKey: string; signatureConfirmation: string; autoEnabled?: boolean; autoDelay?: string; autoCap?: string; autoMax?: string };
 const ENDPOINT = '/api/admin/shipping-services';
 const carriers = ['USPS', 'UPS', 'FedEx'] as const;
 const groups = { standard: 'Standard', expedited: 'Faster', overnight: 'Overnight' } as const;
@@ -38,7 +40,7 @@ function draftFrom(config: ShippingSettingsConfig): Draft {
     const options = normalizeShippingOptions(config.shippingOptions);
     const auto = config.autoLabel;
     return { rows: startingRows(options), freeStandardEnabled: options.freeStandardEnabled, threshold: centsText(config.freeShippingAt), fallback: config.shippingCents == null ? '' : centsText(config.shippingCents), minimumServiceKey: options.minimumServiceKey || defaultMinimumServiceKey, signatureConfirmation: options.signatureConfirmation || defaultSignatureConfirmation,
-        autoEnabled: auto ? auto.enabled : true, autoDelay: String(auto ? Math.round(auto.delayMs / 60000) : 20), autoCap: centsText(auto ? auto.dailyCapCents : 50000) };
+        autoEnabled: auto ? auto.enabled : true, autoDelay: String(auto ? Math.round(auto.delayMs / 60000) : 20), autoCap: centsText(auto ? auto.dailyCapCents : 50000), autoMax: centsText(auto?.maxLabelCents ?? 5000) };
 }
 /** Validated save payload. Throws a message the owner can act on. */
 export function shippingServicesPayload(draft: Draft) {
@@ -50,7 +52,42 @@ export function shippingServicesPayload(draft: Draft) {
     });
     return { services, freeStandardEnabled: draft.freeStandardEnabled, freeShippingAt: parseDollars(draft.threshold, 'Free shipping minimum', 1000000), shippingCents: draft.fallback.trim() === '' ? null : parseDollars(draft.fallback, 'Backup standard price'), minimumServiceKey: draft.minimumServiceKey || defaultMinimumServiceKey, signatureConfirmation: draft.signatureConfirmation || defaultSignatureConfirmation,
         // Omitted rather than guessed when the caller did not collect them; the server then keeps what it has.
-        ...(typeof draft.autoEnabled === 'boolean' ? { autoLabel: { enabled: draft.autoEnabled, delayMinutes: minutes(draft.autoDelay), dailyCapCents: parseDollars(draft.autoCap ?? '', 'The daily automatic postage limit', 10000000) } } : {}) };
+        ...(typeof draft.autoEnabled === 'boolean' ? { autoLabel: { enabled: draft.autoEnabled, delayMinutes: minutes(draft.autoDelay), dailyCapCents: parseDollars(draft.autoCap ?? '', 'The daily automatic postage limit', 10000000),
+            // Omitted rather than guessed when the caller did not collect it; the server keeps the saved ceiling.
+            ...(draft.autoMax === undefined || draft.autoMax === '' ? {} : { maxLabelCents: labelCeiling(draft.autoMax) }) } } : {}) };
+}
+/** The most one automatic label may cost. Bounded here and again on the server. */
+function labelCeiling(value: string | undefined) {
+    const cents = parseDollars(String(value ?? ''), 'The most to spend on one label', 100000);
+    if (cents < 100) throw new Error('The most to spend on one label must be at least $1.00, or no label could ever be bought.');
+    return cents;
+}
+/**
+ * What the last scheduled run reported, in the owner's words. The job runs every five minutes, so a
+ * report much older than that means the scheduler itself stopped — which is the failure nobody would
+ * otherwise notice, because a job that never runs produces no errors at all.
+ */
+const STALE_REPORT_MS = 30 * 60000;
+export function autoLabelReport(health: AutoLabelHealth, now = Date.now()): string {
+    if (!health || typeof health.checkedAt !== 'number') return 'No automatic run has reported yet. Until one does, buy labels from the order.';
+    const when = new Date(health.checkedAt).toLocaleString();
+    if (now - health.checkedAt > STALE_REPORT_MS)
+        return 'Last automatic run: ' + when + '. That is older than expected — the job runs every five minutes, so it may have stopped. Buy labels from the order until it reports again.';
+    const reason: Record<string, string> = {
+        settings_unreadable: 'Ran ' + when + ', but could not read your shipping settings, so it bought nothing. Nothing was charged.',
+        disabled: 'Automatic buying is off. Ran ' + when + ' for recovery only.',
+        coa_rule_on: 'Ran ' + when + ', but the COA-before-shipping rule is on, so it leaves every label to a person.',
+        spend_unreadable: 'Ran ' + when + ', but could not total the last 24 hours of automatic postage, so it bought nothing.',
+        cap_reached: 'Ran ' + when + '. The daily limit is reached, so orders are waiting in To ship for you.',
+        queue_unreadable: 'Ran ' + when + ', but could not read the order queue, so it bought nothing.',
+    };
+    if (reason[health.status]) return reason[health.status];
+    const parts = [health.bought + (health.bought === 1 ? ' label bought' : ' labels bought')];
+    if (health.failed) parts.push(health.failed + (health.failed === 1 ? ' attempt failed' : ' attempts failed'));
+    if (health.blocked) parts.push(health.blocked + (health.blocked === 1 ? ' order handed to you' : ' orders handed to you'));
+    if (health.recovered) parts.push(health.recovered + ' already-paid label recovered');
+    if (health.released) parts.push(health.released + ' stuck order released');
+    return 'Last automatic run: ' + when + '. ' + parts.join(', ') + '.';
 }
 function minutes(value: string | undefined) {
     const n = Number(String(value ?? '').trim());
@@ -87,6 +124,8 @@ export function AdminShippingSettings({ config, busy = false }: { config: Shippi
     const [draft, setDraft] = useState<Draft>(() => draftFrom(config));
     const [savedDraft, setSavedDraft] = useState(() => JSON.stringify(draftFrom(config)));
     const [perServiceSaved, setPerServiceSaved] = useState(() => Boolean(normalizeShippingOptions(config.shippingOptions).services));
+    const [health, setHealth] = useState<AutoLabelHealth>(config.autoLabelHealth ?? null);
+    const [spend, setSpend] = useState(config.automaticSpend ?? null);
     const [destination, setDestination] = useState('ny');
     const [sample, setSample] = useState('v3');
     const [check, setCheck] = useState<Check | null>(null);
@@ -102,7 +141,12 @@ export function AdminShippingSettings({ config, busy = false }: { config: Shippi
 
     async function runCheck(nextDestination = destination, nextSample = sample) {
         setWorking('check'); setError(''); setSavedMatches(null);
-        try { setCheck((await call({ action: 'check', destination: nextDestination, sample: nextSample })).check); }
+        try {
+            const result = await call({ action: 'check', destination: nextDestination, sample: nextSample });
+            setCheck(result.check);
+            if (result.autoLabelHealth !== undefined) setHealth(result.autoLabelHealth);
+            if (result.automaticSpend) setSpend(result.automaticSpend);
+        }
         catch (e) { setError(e instanceof Error ? e.message : 'The check failed.'); }
         finally { setWorking(''); }
     }
@@ -116,6 +160,8 @@ export function AdminShippingSettings({ config, busy = false }: { config: Shippi
             const next = draftFrom({ shippingCents: result.shippingCents, freeShippingAt: result.freeShippingAt, shippingOptions: result.settings, autoLabel: result.autoLabel, automaticSpend: result.automaticSpend });
             setDraft(next); setSavedDraft(JSON.stringify(next)); setPerServiceSaved(true);
             setSavedMatches(result.savedMatches === true); setCheck(result.check);
+            if (result.autoLabelHealth !== undefined) setHealth(result.autoLabelHealth);
+            if (result.automaticSpend) setSpend(result.automaticSpend);
             setTimeout(() => verdictRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }), 0);
         } catch (e) { setError(e instanceof Error ? e.message : 'Shipping could not be saved.'); }
         finally { setWorking(''); }
@@ -195,7 +241,10 @@ export function AdminShippingSettings({ config, busy = false }: { config: Shippi
                 <label className={styles.field}><span>Wait after payment (minutes)</span><input type="number" min="0" max="1440" step="1" value={draft.autoDelay} disabled={locked || !draft.autoEnabled} onChange={e => setDraft(d => ({ ...d, autoDelay: e.target.value }))}/></label>
                 <p className={styles.muted}>Your window to spot a bad address or a problem order before postage is spent. The clock restarts whenever anyone touches the order.</p>
                 <label className={styles.field}><span>Most to spend automatically per day ($)</span><input type="number" min="0" max="100000" step="1" value={draft.autoCap} disabled={locked || !draft.autoEnabled} onChange={e => setDraft(d => ({ ...d, autoCap: e.target.value }))}/></label>
-                <p className={styles.muted}>Counts only labels bought automatically in the last 24 hours; your own purchases never count against it. At the limit, orders simply wait in To ship for you.{config.automaticSpend ? ' Spent automatically in the last 24 hours: ' + money(config.automaticSpend.cents) + ' across ' + config.automaticSpend.labels + (config.automaticSpend.labels === 1 ? ' label.' : ' labels.') : ''}</p>
+                <p className={styles.muted}>Counts only labels bought automatically in the last 24 hours; your own purchases never count against it. At the limit, orders simply wait in To ship for you.{spend ? ' Spent automatically in the last 24 hours: ' + money(spend.cents) + ' across ' + spend.labels + (spend.labels === 1 ? ' label.' : ' labels.') : ''}</p>
+                <label className={styles.field}><span>Most to spend on one label ($)</span><input type="number" min="1" max="1000" step="1" value={draft.autoMax} disabled={locked || !draft.autoEnabled} onChange={e => setDraft(d => ({ ...d, autoMax: e.target.value }))}/></label>
+                <p className={styles.muted}>A single label above this is never bought automatically; the order waits in To ship so you can look at it. This is what catches a mistyped address that quotes a freight rate.</p>
+                <p className={styles.muted} aria-live="polite">{autoLabelReport(health)}</p>
             </div>
         </div>
 
