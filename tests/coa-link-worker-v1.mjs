@@ -40,7 +40,7 @@ try {
   await DB.batch(registry.reports.map(r => DB.prepare('INSERT INTO coa_original_reports VALUES(?,?,1)').bind(r.sha256, JSON.stringify(r))));
   const heatR30 = registry.reports.find(r => r.productId === 745);
   // Customer types an email for HEAT-R 30mg: the email goes out at once with a private link.
-  let r = await post({ productId: 745, email: '  Buyer@Example.invalid ' });
+  let r = await post({ productId: 745, email: '  Buyer@Example.invalid ', lot: ' lot: 102-30-0001 ' });
   assert.equal(r.status, 200, JSON.stringify(r.body)); assert.match(r.body.message, /HEAT-R 30mg COA \(lot 102-30-0001\)/);
   assert.equal(sent.length, 1); const mail = sent[0];
   assert.deepEqual(mail.to, ['buyer@example.invalid']); assert.equal(mail.subject, 'Your COA: HEAT-R 30mg / lot 102-30-0001');
@@ -60,18 +60,30 @@ try {
   await DB.prepare("UPDATE requests SET data=json_set(data,'$.expires',1) WHERE id=?").bind(id).run();
   assert.equal((await mf.dispatchFetch(origin + link)).status, 404, 'Expired link refused');
   // HEAT-R 20mg works the same way.
-  r = await post({ productId: 1389, email: 'second@example.invalid' }, { ip: 2 }); assert.equal(r.status, 200); assert.match(sent.at(-1).subject, /HEAT-R 20mg \/ lot 102-20-0001/);
+  r = await post({ productId: 1389, email: 'second@example.invalid', lot: '102-20-0001' }, { ip: 2 }); assert.equal(r.status, 200); assert.match(sent.at(-1).subject, /HEAT-R 20mg \/ lot 102-20-0001/);
+  // Owner rule (Oct 14 2026): the vial's lot decides the report. A 30mg lot typed on the 20mg page gets the 30mg report.
+  r = await post({ productId: 1389, email: 'expo@example.invalid', lot: '102 30 0001' }, { ip: 20 }); assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.match(r.body.message, /Lot 102-30-0001 is HEAT-R 30mg/); assert.equal(sent.at(-1).subject, 'Your COA: HEAT-R 30mg / lot 102-30-0001');
+  const expo = await DB.prepare("SELECT data FROM requests WHERE kind='coa_link' AND json_extract(data,'$.email')='expo@example.invalid'").first();
+  assert.equal(JSON.parse(expo.data).labelLot, '102-30-0001'); assert.equal(JSON.parse(expo.data).pageProductId, 1389); assert.equal(JSON.parse(expo.data).productId, 745);
+  // A lot with no report on file is never guessed: no email, a person reviews it in the reply desk.
+  const before = sent.length; r = await post({ productId: 1389, email: 'unknown@example.invalid', lot: '999-20-0001' }, { ip: 21 });
+  assert.equal(r.status, 202); assert.equal(r.body.review, true); assert.match(r.body.message, /check lot 999-20-0001/); assert.equal(sent.length, before, 'Unknown lot sends nothing');
+  const review = await DB.prepare("SELECT data,status FROM requests WHERE kind='contact' AND json_extract(data,'$.email')='unknown@example.invalid'").first();
+  assert.equal(review.status, 'new'); assert.equal(JSON.parse(review.data).labelLot, '999-20-0001'); assert.match(JSON.parse(review.data).subject, /lot 999-20-0001/);
+  // The lot is required.
+  r = await post({ productId: 745, email: 'nolot@example.invalid' }, { ip: 22 }); assert.equal(r.status, 400); assert.match(r.body.error, /lot number printed on your vial/);
   // A product with no COA on file for its lot sends nothing.
-  r = await post({ productId: 784, email: 'third@example.invalid' }, { ip: 3 }); assert.equal(r.status, 404); assert.match(r.body.error, /cannot be sent by email yet/); assert.equal(sent.length, 2);
+  r = await post({ productId: 784, email: 'third@example.invalid', lot: '205-10-0001' }, { ip: 3 }); assert.equal(r.status, 404); assert.match(r.body.error, /cannot be sent by email yet/); assert.equal(sent.length, 3);
   // Validation and cross-site protection.
-  assert.equal((await post({ productId: 745, email: 'not-an-email' }, { ip: 4 })).status, 400);
-  assert.equal((await post({ productId: 745, email: 'x@example.invalid' }, { origin: 'https://evil.example', ip: 5 })).status, 403);
+  assert.equal((await post({ productId: 745, email: 'not-an-email', lot: '102-30-0001' }, { ip: 4 })).status, 400);
+  assert.equal((await post({ productId: 745, email: 'x@example.invalid', lot: '102-30-0001' }, { origin: 'https://evil.example', ip: 5 })).status, 403);
   // Provider failure: customer told to retry, link never becomes usable.
-  providerOk = false; r = await post({ productId: 745, email: 'fail@example.invalid' }, { ip: 6 }); assert.equal(r.status, 502);
+  providerOk = false; r = await post({ productId: 745, email: 'fail@example.invalid', lot: '102-30-0001' }, { ip: 6 }); assert.equal(r.status, 502);
   const failed = sent.at(-1); assert.equal((await mf.dispatchFetch(origin + linkIn(failed))).status, 404, 'Unsent link stays dead'); providerOk = true;
   // Rate limit per email address.
-  let last; for (let i = 0; i < 5; i++) last = await post({ productId: 745, email: 'repeat@example.invalid' }, { ip: 10 + i });
+  let last; for (let i = 0; i < 5; i++) last = await post({ productId: 745, email: 'repeat@example.invalid', lot: '102-30-0001' }, { ip: 10 + i });
   assert.equal(last.status, 429);
   assert.equal(forbidden, 0);
-  console.log('PASS: built Worker Request by email: instant email with a private link (no attachment, no compound name), link serves the verified original, tampered/unknown/expired/unsent links refused, no-COA product sends nothing, validation, origin guard, provider failure and per-email rate limit. Synthetic fixtures only.');
+  console.log('PASS: built Worker Request by email: the vial lot decides the report (wrong-page lot sends the right report, unknown lot goes to review, lot required), instant email with a private link (no attachment, no compound name), link serves the verified original, tampered/unknown/expired/unsent links refused, no-COA product sends nothing, validation, origin guard, provider failure and per-email rate limit. Synthetic fixtures only.');
 } finally { await mf.dispose(); await fs.rm(temporary, { recursive: true, force: true }); }

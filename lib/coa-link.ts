@@ -1,7 +1,8 @@
 // Owner request, October 13, 2026: "Request by email" sends the customer a private link to the
 // original COA right away. Only the original report attached to the product's current lot is ever
 // linked, the link expires, and the PDF is served only after its hash is re-verified.
-import { coaEmail, coaHash, coaReportByHash, coaSender, readCoaOriginal, verifiedCoaAttachment, type OriginalCoaMetadata } from './coa-delivery';
+import { coaEmail, coaHash, coaReportByHash, coaSender, normalizeLot, readCoaOriginal, verifiedCoaAttachment, type OriginalCoaMetadata } from './coa-delivery';
+export { normalizeLot } from './coa-delivery';
 import { loadCoaBatchContext } from './product-batch';
 import { readCoaConfig, type CoaEnvironment } from './coa-outbox';
 
@@ -21,6 +22,20 @@ export async function currentCoaFor(db: D1Database, productId: number): Promise<
     return coaReportByHash(association.reportRef.slice('private:'.length), originals, associations);
 }
 
+/**
+ * Owner rule (Oct 14, 2026), after a wrong-lot COA went to an expo buyer: the COA follows the lot printed on the
+ * customer's vial, never the product page they happened to be on. Returns the verified report for that lot,
+ * which may belong to another size or product, or null when no report for that lot is on file.
+ */
+export async function coaForLabelLot(db: D1Database, productId: number, lot: string): Promise<{ report: OriginalCoaMetadata | null; current: OriginalCoaMetadata | null }> {
+    const current = await currentCoaFor(db, productId);
+    if (current && current.lot.toUpperCase() === lot) return { report: current, current };
+    const { originals, associations } = await loadCoaBatchContext(db);
+    const candidates = originals.filter(r => r.lot.toUpperCase() === lot && Number.isSafeInteger(r.productId) && associations.some(a => a.productId === r.productId));
+    // Two different reports claiming one lot is a records problem for a person, not a guess.
+    return { report: candidates.length === 1 ? candidates[0] : null, current };
+}
+
 export function coaLinkEmail(report: OriginalCoaMetadata, link: string) {
     const subject = `Your COA: ${report.productName} / lot ${report.lot}`;
     const text = `Here is the original Certificate of Analysis you requested for ${report.productName} (${report.strength}), lot ${report.lot}.\n\nOpen the COA: ${link}\n\nThe link works for ${COA_LINK_DAYS} days. Compare the lot on the report with the lot on your vial. For laboratory research use only. Questions? Reply to this email.`;
@@ -34,21 +49,24 @@ export function coaLinkEmail(report: OriginalCoaMetadata, link: string) {
 }
 
 /** Records the request, then emails the link. Throws CoaLinkError with a customer-safe message. */
-export async function sendCoaLink(env: CoaEnvironment, input: { productId: unknown; email: unknown }, deps: Dependencies = {}) {
+export async function sendCoaLink(env: CoaEnvironment, input: { productId: unknown; email: unknown; lot?: unknown }, deps: Dependencies = {}) {
     const email = coaEmail(input.email);
     if (!email) throw new CoaLinkError('Enter a valid email address.');
     const productId = Number(input.productId);
     if (!Number.isSafeInteger(productId) || productId <= 0) throw new CoaLinkError('Choose a product.');
-    const report = await currentCoaFor(env.DB, productId);
+    const lot = normalizeLot(input.lot);
+    if (!lot) throw new CoaLinkError('Enter the lot number printed on your vial (after LOT:).');
+    const { report, current } = await coaForLabelLot(env.DB, productId, lot);
     // Owner rule (Oct 14): only the on-request HEAT products are emailed. Everything else is read on the page.
-    if (!report) throw new CoaLinkError('This COA cannot be sent by email yet. Contact us and we will send it.', 404);
+    if (!current) throw new CoaLinkError('This COA cannot be sent by email yet. Contact us and we will send it.', 404);
+    if (!report) return queueLotReview(env, { email, productId, productName: current.productName, lot, currentLot: current.lot }, deps);
     const sender = coaSender(env.COA_EMAIL_FROM || env.ORDER_EMAIL_FROM || 'BIOMOD <no-reply@trybiomod.com>');
     if (!env.RESEND_API_KEY?.trim() || !sender) throw new CoaLinkError('COA email is not available right now. Contact us and we will send it.', 503);
     const now = (deps.now || Date.now)();
     const id = (deps.uuid || (() => crypto.randomUUID()))();
     const secret = (deps.random || (() => hex(crypto.getRandomValues(new Uint8Array(32)))))();
     const link = coaLinkUrl(id, secret);
-    const record = { email, productId, productName: report.productName, lot: report.lot, reportId: report.reportId, sha256: report.sha256, tokenHash: await coaHash(secret), expires: now + COA_LINK_DAYS * DAY, opens: 0 };
+    const record = { email, productId: report.productId, pageProductId: productId, labelLot: lot, productName: report.productName, lot: report.lot, reportId: report.reportId, sha256: report.sha256, tokenHash: await coaHash(secret), expires: now + COA_LINK_DAYS * DAY, opens: 0 };
     await env.DB.prepare('INSERT INTO requests(id,owner,kind,data,status,created) VALUES(?,?,?,?,?,?)').bind(id, null, 'coa_link', JSON.stringify(record), 'sending', now).run();
     const message = coaLinkEmail(report, link);
     const replyTo = (await readCoaConfig(env)).replyTo;
@@ -63,7 +81,17 @@ export async function sendCoaLink(env: CoaEnvironment, input: { productId: unkno
     } catch { /* reported below */ }
     await env.DB.prepare('UPDATE requests SET status=? WHERE id=?').bind(accepted ? 'sent' : 'failed', id).run();
     if (!accepted) throw new CoaLinkError('The email could not be sent. Try again, or contact us and we will send it.', 502);
-    return { productName: report.productName, lot: report.lot };
+    return { productName: report.productName, lot: report.lot, otherProduct: report.productId !== productId, review: false };
+}
+
+/** No verified report for the customer's lot: a person checks it in the reply desk. Nothing is emailed automatically. */
+async function queueLotReview(env: CoaEnvironment, input: { email: string; productId: number; productName: string; lot: string; currentLot: string }, deps: Dependencies) {
+    const now = (deps.now || Date.now)();
+    const data = { name: input.email, email: input.email, subject: `COA request: lot ${input.lot} (${input.productName} page)`,
+        message: `Lot printed on the customer's vial: ${input.lot}. They asked from the ${input.productName} page, whose current lot is ${input.currentLot}. No report for lot ${input.lot} is on file, so nothing was sent automatically. Confirm the product and lot before sending a COA.`,
+        labelLot: input.lot, pageProductId: input.productId, origin: 'coa-link' };
+    await env.DB.prepare('INSERT INTO requests(id,owner,kind,data,status,created) VALUES(?,?,?,?,?,?)').bind((deps.uuid || (() => crypto.randomUUID()))(), null, 'contact', JSON.stringify(data), 'new', now).run();
+    return { productName: input.productName, lot: input.lot, otherProduct: false, review: true };
 }
 
 /** Returns the verified original PDF for a valid, unexpired link. Never reveals why a link failed. */

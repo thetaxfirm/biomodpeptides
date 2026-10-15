@@ -7,7 +7,7 @@ import { startOrderConversation, saveRequestIssue, issuesFor, caseLog, setOrderH
 import { forwardRequest, forwardsFor, teamMembers, activityFor } from '@/lib/request-forward';
 import { summarizeRequestReplies, prepareRequestReply, autoDraftNewRequest, replyDeskOptions, saveReplyRule } from '@/lib/request-replies';
 import { adminBatchRecords, validateBatchEdit } from '@/lib/product-batch';
-import { coaHash, loadCoaReports, readCoaOriginal, verifiedCoaAttachment } from '@/lib/coa-delivery';
+import { coaHash, loadCoaReports, readCoaOriginal, verifiedCoaAttachment, normalizeLot } from '@/lib/coa-delivery';
 import { changeHistory, auditRun, withAuditDb, recordChange, type AuditActor } from '@/lib/change-history';
 import { recoveryAdminStatus } from '@/lib/checkout-recovery';
 import { coaAutomationStatus, enqueueCoaRequest, enqueueRequestAlert, processCoaOutbox, saveCoaConfig } from '@/lib/coa-outbox';
@@ -404,7 +404,9 @@ export async function POST(req: NextRequest, { params }: {
             return j({ ok: true });
         }
         if (action === 'contact') {
-            const data = { name: str(b.name, 100), email: z.string().email().parse(b.email), subject: str(b.subject, 150), message: str(b.message, 5000) };
+            // labelLot: the lot the customer reads off their own vial; it decides any COA (owner rule, Oct 14 2026).
+            const labelLot = normalizeLot(b.labelLot);
+            const data = { name: str(b.name, 100), email: z.string().email().parse(b.email), subject: str(b.subject, 150), message: str(b.message, 5000), ...(labelLot ? { labelLot } : {}) };
             if (b.website)
                 return j({ ok: true });
             const u = await customer();

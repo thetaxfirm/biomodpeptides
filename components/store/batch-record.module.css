@@ -20,3 +20,10 @@
 
 .coaPopup { max-width: min(760px, 94vw) !important; max-height: 90vh; overflow: auto; }
 .popupButton { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: left; }
+
+/* Request by email: the lot printed on the customer's vial decides which COA is sent (Oct 14, 2026). */
+.coaEmailTitle { margin:0; font-weight:600; font-size:14px; }
+.coaEmail .coaFields { align-items:flex-end; }
+.coaEmail .coaFields label { display:grid; gap:4px; flex:1 1 150px; font-size:13px; }
+.coaEmail .coaFields label:nth-of-type(2) { flex-basis:210px; }
+.coaEmail .coaFields input { width:100%; }

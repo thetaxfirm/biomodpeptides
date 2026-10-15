@@ -133,3 +133,6 @@
 .stateLine[data-stage="pitch"], .stateLine[data-stage="spam"], .stateLine[data-stage="deleted"] { color: var(--muted) !important; }
 .rowState[data-stage="waiting"], .rowState[data-stage="done"] { color: #2f6b45; font-weight: 500; }
 .confirm input { flex: 1 1 260px; min-width: 0; font-size: 14px !important; padding: 7px 10px !important; }
+
+.alarm { font-size: 14px; margin: 12px 0; padding: 10px 14px; border-radius: 6px; background: #fbeceb; color: #842a22; border: 1px solid #ecc3bf; font-weight: 600; line-height: 1.5; }
+.vialLot { font-size: 14px; margin: 4px 0 10px; color: #3d2a44; }

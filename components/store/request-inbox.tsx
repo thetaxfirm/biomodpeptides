@@ -351,6 +351,8 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
   }
 
   const bridgeQuiet = options?.bridgeSeen != null && now - options.bridgeSeen > 3 * 60000;
+  // Jarvis heals a stuck pass within minutes; 15 minutes of silence means it needs a person (Oct 14 2026).
+  const bridgeStopped = options?.bridgeSeen != null && now - options.bridgeSeen > 15 * 60000;
   const active = rows.find(row => row.request.id === selected) || null;
   const siblings = active ? (family[emailKey(active.request)] || []).filter(r => r.id !== active.request.id && r.status !== 'deleted') : [];
   return <section className={styles.inbox} aria-labelledby="request-inbox-title" aria-busy={busy || refreshing}>
@@ -382,7 +384,9 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
         <button type="submit" className={styles.action} disabled={!newRule.trim()}>Add rule</button>
       </form>
     </div>}
-    {bridgeQuiet && <p className={styles.warning} role="status">Jarvis last checked in at {when(options!.bridgeSeen!)}. AI drafts and sends wait until your Mac is awake and Jarvis is running.</p>}
+    {bridgeQuiet && (bridgeStopped
+      ? <p className={styles.alarm} role="alert">Jarvis stopped checking in at {when(options!.bridgeSeen!)}. Until it is back, AI drafts, your sends and customers' email replies are on hold. Check that your Mac is awake and Jarvis is running.</p>
+      : <p className={styles.warning} role="status">Jarvis last checked in at {when(options!.bridgeSeen!)}. AI drafts and sends wait until your Mac is awake and Jarvis is running.</p>)}
     {dirty && <p role="status">Save or discard your unsaved admin edits before changing a request.</p>}
     <div className={styles.toolbar}>
       <div className={styles.filters} role="group" aria-label="Filter customer requests">{views.map(([value, label]) => <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)}>{label} <span>{counts[value]}</span></button>)}</div>
@@ -511,7 +515,7 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
       <div className={styles.sendRow}><button type="button" className={styles.send} disabled={panel.busy || !panel.to} onClick={onForward}>{panel.busy ? 'Forwarding…' : 'Forward'}</button><button type="button" className={styles.link} onClick={() => onPanel(null)}>Cancel</button><span className={styles.note}>The customer is not emailed. Replies to the forward come back to you.</span></div>
     </div>}
     {siblings.length > 0 && <p className={styles.note}>{siblings.length + 1} requests from this customer, shown as one conversation. One reply answers all of them.</p>}
-    <p className={styles.subjectLine}><strong>{subject}</strong> <span className={styles.note}>· Ref {request.id.slice(0, 8)}</span></p>
+    <p className={styles.subjectLine}><strong>{subject}</strong> <span className={styles.note}>· Ref {request.id.slice(0, 8)}</span></p>{typeof request.data?.labelLot === 'string' && <p className={styles.vialLot}>Lot on the customer's vial: <strong>{request.data.labelLot}</strong>. Only the report for this lot can be attached.</p>}
     {fromOrder && <p className={styles.orderNote}><strong>Order details (only you see this):</strong> {text(request.data.message)}</p>}
     {canTag && <div className={styles.case}>
       <label><span>What is this about?</span><select value={issue?.issue || ''} onChange={event => onIssue({ issue: event.target.value })}>

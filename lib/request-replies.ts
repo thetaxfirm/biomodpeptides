@@ -1,5 +1,5 @@
 // Private operational correspondence. These functions never send email.
-import { coaEmail, coaHash, coaMessage, exactCoaReport, coaReportByHash, readCoaOriginal, verifiedCoaAttachment, isCoaRequest, type OriginalCoaMetadata } from './coa-delivery';
+import { coaEmail, coaHash, coaMessage, exactCoaReport, labelLotMismatch, labelLotOf, reportForLabelLot, coaReportByHash, readCoaOriginal, verifiedCoaAttachment, isCoaRequest, type OriginalCoaMetadata } from './coa-delivery';
 import { loadCoaBatchContext } from './product-batch';
 import { withAuditDb, type AuditActor } from './change-history';
 import { activePromotions } from './promotions';
@@ -53,8 +53,10 @@ async function coaForOne(env:Env,request:Inquiry,ignoreId?:string,choice:string|
  if(choice==='')return {coa:{state:'not_requested',reason:'No report is attached to this reply.'}};
  if(!chosen&&!isCoaRequest(inquiry.subject))return {coa:{state:'not_requested',reason:'No COA was requested in this inquiry.'}};
  try{
-  const context=await loadCoaBatchContext(env.DB),picked=chosen?context.originals.filter(item=>item.sha256===choice):[],report=chosen?(picked.length===1?picked[0]:null):exactCoaReport(inquiry.subject,context.originals,context.associations);
+  const context=await loadCoaBatchContext(env.DB),picked=chosen?context.originals.filter(item=>item.sha256===choice):[],labelLot=labelLotOf(parse(request.data)),report=chosen?(picked.length===1?picked[0]:null):labelLot?reportForLabelLot(labelLot,context.originals,context.associations):exactCoaReport(inquiry.subject,context.originals,context.associations);
   if(chosen&&!report)return {coa:{state:'needs_review',reason:'The chosen report is no longer an approved original. Choose another report.'}};
+  // Owner rule (Oct 14 2026), after a wrong-lot COA: never attach a report for a lot other than the one on the customer's vial.
+  const wrongLot=report?labelLotMismatch(labelLot,report.lot):null;if(wrongLot)return {coa:{state:'needs_review',reason:wrongLot}};
   // Preserve old accepted/uncertain outcomes even if the current catalog association has changed.
   const own=chosen?null:await env.DB.prepare("SELECT a.status,a.attempts,a.accepted_at,a.duplicate_of,b.status AS related_status,b.attempts AS related_attempts FROM coa_delivery_outbox a LEFT JOIN coa_delivery_outbox b ON b.request_id=a.duplicate_of AND b.purpose='coa' WHERE a.request_id=? AND a.purpose='coa'").bind(request.id).first<any>();
   // Owner rule (Oct 12): a customer who asks for a report gets the PDF, even if it was emailed before.

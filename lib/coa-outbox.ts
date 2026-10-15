@@ -1,5 +1,5 @@
 // Backend only: immutable original reports are read from private D1 at the send boundary.
-import { exactCoaReport, approvedCoaReportCount, coaReportByHash, readCoaOriginal, type OriginalCoaMetadata, type CoaBatchAssociation, coaEmail, coaSender, isCoaRequest, coaHash, verifiedCoaAttachment, coaMessage, COA_TEMPLATE_VERSION } from './coa-delivery';
+import { exactCoaReport, labelLotOf, reportForLabelLot, approvedCoaReportCount, coaReportByHash, readCoaOriginal, type OriginalCoaMetadata, type CoaBatchAssociation, coaEmail, coaSender, isCoaRequest, coaHash, verifiedCoaAttachment, coaMessage, COA_TEMPLATE_VERSION } from './coa-delivery';
 import { loadCoaBatchContext } from './product-batch';
 export type CoaEnvironment = Record<string, string | undefined> & { DB: D1Database };
 export type CoaConfig = { enabled: boolean; replyTo: string; notifyTo: string | null };
@@ -36,7 +36,9 @@ async function requestById(env: CoaEnvironment,id:string):Promise<StoredRequest|
 }
 async function makePlan(env:CoaEnvironment,request:StoredRequest,config:CoaConfig,purpose:Purpose,now:number,originals:readonly OriginalCoaMetadata[],associations:readonly CoaBatchAssociation[]):Promise<Row|null> {
  const data=parse(request.data); if(!data||typeof data!=='object')return null;
- const report=purpose==='coa'&&request.kind==='contact'?exactCoaReport(data.subject,originals,associations):null;
+ // Owner rule (Oct 14 2026): the lot printed on the customer's vial decides the report, never the subject alone.
+ const labelLot=labelLotOf(data);
+ const report=purpose==='coa'&&request.kind==='contact'?(labelLot?reportForLabelLot(labelLot,originals,associations):exactCoaReport(data.subject,originals,associations)):null;
  if(purpose==='coa'&&(request.kind!=='contact'||!isCoaRequest(data.subject)))return null;
  if(purpose==='request-alert'&&(!config.notifyTo||request.created<now-300000||request.created>now))return null;
  const recipient=purpose==='coa'?coaEmail(data.email):config.notifyTo;

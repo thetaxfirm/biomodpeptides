@@ -45,7 +45,12 @@ const note = (name, value) => { calls.push({ name, value }); };
 const called = name => calls.filter(call => call.name === name);
 const checkedAdmin = () => assert(called('admin-ok').length, 'Admin authorization must precede sensitive reads/writes');
 const status = value => ({ status: value, reason: value === 'accepted' ? 'accepted_by_email_provider' : 'fixture', acceptedAt: value === 'accepted' ? now : null, canProcess: value === 'queued' });
+// The contact route reads the customer's vial lot with the real parser; every other COA-delivery call stays forbidden here.
+if (!require.extensions['.ts']) require.extensions['.ts'] = (m, f) => m._compile(ts.transpileModule(fs.readFileSync(f, 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText, f);
+const realNormalizeLot = require('../lib/coa-delivery.ts').normalizeLot;
+const coaDeliveryStrict = new Proxy({}, { get: (_, key) => key === '__esModule' ? true : key === 'normalizeLot' ? realNormalizeLot : forbidden('@/lib/coa-delivery:' + String(key)) });
 const dependencies = {
+  '@/lib/coa-delivery': coaDeliveryStrict,
   '@/lib/request-replies': (m=>Object.assign(m,{autoDraftNewRequest:(e,id)=>m.prepareRequestReply(e,{requestId:id,mode:'ai',expectedRevision:null},{email:'Website request automation',role:'system'})}))({
     summarizeRequestReplies: async(receivedEnv,ids)=>{checkedAdmin();assert.equal(receivedEnv,env);return {};},
     prepareRequestReply: async(receivedEnv,input,actor)=>{

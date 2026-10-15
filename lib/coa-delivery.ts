@@ -18,6 +18,24 @@ export function coaSender(value: unknown): string | null {
   return match && coaEmail(match[1] || match[2]) ? cleaned : null;
 }
 export const isCoaRequest = (subject: unknown) => typeof subject === 'string' && /\bCOA\b|certificate of analysis/i.test(subject);
+/** The lot as printed on a vial label ("LOT: 102-30-0001"), normalized; null when it cannot be a lot. */
+export function normalizeLot(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length > 60) return null;
+  const lot = value.trim().toUpperCase().replace(/^LOT\s*(?:NO\.?|NUMBER|#)?\s*[:#]?\s*/, '').replace(/[\s_\u2010-\u2015]+/g, '-').replace(/-{2,}/g, '-').replace(/^-|-$/g, '');
+  return /^[A-Z0-9][A-Z0-9-]{2,31}$/.test(lot) ? lot : null;
+}
+/** The lot the customer read off their own vial, when they gave one (owner rule, Oct 14 2026). */
+export const labelLotOf = (data: unknown): string | null => data && typeof data === 'object' ? normalizeLot((data as Record<string, unknown>).labelLot) : null;
+/** A report may go to a customer only for the lot printed on their vial. Returns the reason to stop, or null. */
+export function labelLotMismatch(labelLot: string | null, reportLot: string): string | null {
+  return labelLot && reportLot.trim().toUpperCase() !== labelLot ? `The customer's vial says lot ${labelLot}, but this report is for lot ${reportLot}. Attach the report for lot ${labelLot}, or confirm the lot with the customer first.` : null;
+}
+/** The approved report for the lot on the customer's vial, whatever product page they asked from. */
+export function reportForLabelLot(lot: string, originals: readonly OriginalCoaMetadata[], associations?: readonly CoaBatchAssociation[]): OriginalCoaMetadata | null {
+  const candidates = originals.filter(report => report.lot.trim().toUpperCase() === lot);
+  if (candidates.length !== 1) return null;
+  return exactCoaReport(`COA request: ${candidates[0].productName} / ${candidates[0].lot}`, originals, associations);
+}
 export function exactCoaReport(subject: unknown, originals: readonly OriginalCoaMetadata[], associations?:readonly CoaBatchAssociation[]): OriginalCoaMetadata | null {
   if (typeof subject !== 'string') return null;
   const matches = originals.filter(report => canonical(subject) === canonical(`COA request: ${report.productName} / ${report.lot}`) && (!associations || associations.some(item => item.productId === report.productId && item.coaAvailable && item.lot === report.lot && item.reportRef === 'private:' + report.sha256)));
