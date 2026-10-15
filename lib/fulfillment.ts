@@ -17,7 +17,20 @@ export function orderPreorderNotice(data: { items?: unknown } | undefined): stri
 }
 
 /** Payment status is not proof of physical dispatch. Shared by admin and customer views. */
-export type FulfillmentOrder = { status: string; data?: { items?: unknown; internalTest?: boolean; shipment?: { status?: string; checkedAt?: number }; tracking?: string; hold?: unknown } };
+export type FulfillmentOrder = { status: string; data?: { items?: unknown; internalTest?: boolean; shipment?: { status?: string; checkedAt?: number }; tracking?: string; hold?: unknown; labelCreatedAt?: number } };
+/** A label the carrier has not scanned in this long was probably never handed over. */
+export const STALLED_LABEL_MS = 48 * 3600000;
+/**
+ * Bought, but the carrier has never reported it moving. Automatic purchase makes this likelier:
+ * nobody consciously handled the order, so nobody notices the parcel still sitting on the bench.
+ */
+export function stalledLabel(order: FulfillmentOrder, now = Date.now()): boolean {
+    const created = order.data?.labelCreatedAt;
+    if (!order.data?.shipment || typeof created !== 'number' || !Number.isFinite(created)) return false;
+    const carrier = order.data.shipment.status;
+    if (carrier && carrier !== 'pre_transit' && carrier !== 'unknown') return false;
+    return now - created > STALLED_LABEL_MS;
+}
 const moving = new Set(['in_transit', 'out_for_delivery', 'available_for_pickup']);
 const problems = new Set(['return_to_sender', 'failure', 'cancelled', 'error']);
 export function fulfillmentLabel(order: FulfillmentOrder): string {
@@ -65,14 +78,19 @@ export const bucketStatus: Record<OrderBucket, { label: string; tone: Tone }> = 
 };
 
 /** Same rules as fulfillmentLabel(), reduced to one state per order. */
-export function orderBucket(order: FulfillmentOrder): OrderBucket {
+export function orderBucket(order: FulfillmentOrder, now = Date.now()): OrderBucket {
     if (order.data?.internalTest) return 'test';
     if (['refunded', 'cancelled', 'canceled', 'failed'].includes(order.status)) return 'closed';
     const carrier = order.data?.shipment?.status;
-    if (carrier === 'delivered' || order.status === 'delivered') return 'delivered';
-    // A reported problem (for example, the item is not in stock yet) holds the order in Needs review until cleared.
-    if (order.data?.hold) return 'review';
+    // Problems outrank delivery. A parcel the carrier later returns or fails to deliver is a refund and
+    // a lost shipment, so it must not disappear into Delivered just because it once arrived.
     if (carrier && problems.has(carrier)) return 'review';
+    if (carrier === 'delivered' || order.status === 'delivered') return 'delivered';
+    // A reported problem (for example, the item is not in stock yet) holds the order in Needs review
+    // until cleared. It does not hide a delivery that already happened.
+    if (order.data?.hold) return 'review';
+    // A label nobody ever handed to the carrier needs a human, not another day of waiting.
+    if (stalledLabel(order, now)) return 'review';
     if (carrier && moving.has(carrier)) return 'shipped';
     if (order.status === 'labeling' || (order.data?.shipment && ['paid', 'shipped'].includes(order.status))) return 'label';
     if (order.status === 'shipped') return 'shipped';
