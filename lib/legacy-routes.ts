@@ -18,4 +18,12 @@ export const legacyRoutes: Record<string, string> = {
   'research-peptide-supplier-las-vegas-evaluating-analytical-grade-standards': '/quality-standard',
   'las-vegas-research-peptide-warehouse-local-supply-and-analytical-standards': '/quality-standard',
   'peptide-softgels-in-las-vegas-a-laboratory-procurement-guide-2026': '/softgels',
+  // Old-domain URLs still listed by Bing (site:biomodpeptides.com, October 14, 2026)
+  // that previously ended in a 404 after the domain move.
+  'biomod-peptide-quality-standards': '/quality-standard',
+  'henderson-lab-supplies-sourcing-high-purity-research-peptides-in-nevada': '/quality-standard',
+  'peptide-supplier-with-third-party-testing-2026-analytical-standards': '/testing',
+  'alternative-to-gray-market-research-chemicals-verified-standards-for-analytical-labs': '/choosing-a-research-supplier',
+  'reliable-peptide-source-in-las-vegas-a-researchers-buying-guide-2026': '/choosing-a-research-supplier',
+  'product-tag/blends': '/shop',
 };
