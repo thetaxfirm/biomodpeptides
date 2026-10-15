@@ -20,7 +20,8 @@ try{
  r=await call('/api/store/admin-order',{method:'POST',body:JSON.stringify({id,status:'shipped',tracking:'X'})});
  assert.notEqual(r.status,200);assert.match(r.body.error,/no COA on file/);
  assert.equal((await f.db.prepare('SELECT status FROM orders WHERE id=?').bind(id).first()).status,'paid','Order stays paid, not shipped');
- r=await call('/api/store/admin-orders?tab=to_ship');assert.equal(r.status,200);
+ // The queue is a POST: the search term is customer contact detail and must stay out of request logs.
+ r=await call('/api/store/admin-orders',{method:'POST',body:JSON.stringify({tab:'to_ship'})});assert.equal(r.status,200);
  const row=r.body.orders.find(o=>o.id===id);assert.deepEqual(row.coaMissing,[noCoa.name]);
  const listed=r.body.noCoa.find(p=>p.id===noCoa.id);assert.equal(listed.waitingOrders,1);assert(!r.body.noCoa.some(p=>p.id===withCoa.id));
  console.log('PASS: built Worker no-COA rule: label refused before any carrier call, mark-shipped refused, order stays paid, queue flags the order and lists '+r.body.noCoa.length+' products with waiting counts. Synthetic data only.');

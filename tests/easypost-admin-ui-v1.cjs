@@ -7,11 +7,19 @@ function mount(fn,props={}){const h={s:[],i:0,tree:null,render(){this.i=0;active
 function nodes(t,out=[]){if(Array.isArray(t))t.forEach(v=>nodes(v,out));else if(t?.props){out.push(t);nodes(t.props.children,out);}return out;}
 function text(t){return Array.isArray(t)?t.map(text).join(' '):t?.props?text(t.props.children):typeof t==='string'?t:'';}
 const button=(h,name)=>nodes(h.tree).find(n=>n.type==='button'&&text(n)===name);
-(async()=>{const {CarrierConnection}=load('components/store/fulfillment-admin.tsx');let resolve,calls=0;
+(async()=>{const {CarrierConnection,trackingSweepReport}=load('components/store/fulfillment-admin.tsx');let resolve,calls=0;
+// The backup carrier check: a registered webhook says nothing about whether the sweep still runs.
+const NOW=Date.parse('2026-10-15T12:00:00Z');
+assert.match(trackingSweepReport(null,NOW),/no run has reported yet/);
+assert.match(trackingSweepReport({checkedAt:NOW-120000,status:'completed',due:3,read:3,changed:1,failed:0},NOW),/3 parcels checked, 1 updated\./);
+assert.match(trackingSweepReport({checkedAt:NOW-120000,status:'completed',due:2,read:1,changed:0,failed:1},NOW),/1 could not be reached/);
+assert.match(trackingSweepReport({checkedAt:NOW-120000,status:'queue_unreadable',due:0,read:0,changed:0,failed:1},NOW),/could not read the order list/);
+const sweptStale=trackingSweepReport({checkedAt:NOW-7200000,status:'completed',due:9,read:9,changed:9,failed:0},NOW);
+assert.match(sweptStale,/may have stopped/);assert(!sweptStale.includes('9 parcels checked'),'a stale report never reads as a healthy run');
 global.fetch=(url,init)=>{calls++;assert.equal(url,'/api/admin/shipping');assert(!init.method||init.method==='GET');return new Promise(r=>resolve=r);};
 const h=mount(CarrierConnection);assert(text(h.tree).includes('Not checked in this view'));const click=button(h,'Check EasyPost connection').props.onClick;
 const a=click(),b=click();assert.equal(calls,1);h.render();assert(button(h,'Checking…').props.disabled);
-resolve(Response.json({configured:true,connected:true,checkedAt:new Date().toISOString(),webhookConfigured:true,webhookRegistered:null}));await Promise.all([a,b]);h.render();assert(text(h.tree).includes('Connected: EasyPost accepted'));assert(text(h.tree).includes('Registration could not be checked'));
+resolve(Response.json({configured:true,connected:true,checkedAt:new Date().toISOString(),webhookConfigured:true,webhookRegistered:null}));await Promise.all([a,b]);h.render();assert(text(h.tree).includes('Connected: EasyPost accepted'));assert(text(h.tree).includes('Registration could not be checked'));assert(text(h.tree).includes('Backup carrier check: no run has reported yet'),'a missing sweep report is shown, not hidden');
 global.fetch=async()=>{throw Error('isolated outage');};await button(h,'Check EasyPost connection').props.onClick();h.render();assert(text(h.tree).includes('Connection status is unavailable'));assert(!text(h.tree).includes('Connected: EasyPost accepted'));
 for(const copy of ['does not book pickups','does not confirm inbox delivery','charges the connected EasyPost account','Pending payment is not ready to ship'])assert(text(h.tree).includes(copy));
 const {ShippingLabel}=load('components/store/shipping-admin.tsx');let writes=0;global.fetch=()=>{writes++;throw Error('Label preview must not call a provider');};
@@ -21,5 +29,5 @@ nodes(label.tree).find(n=>n.type==='img').props.onError();label.render();assert(
 let confirmation='';global.window={confirm:message=>{confirmation=message;return false;}};
 const paid=mount(ShippingLabel,{order:{id:'fixture-paid',status:'paid',data:{shippingService:'UPS Next Day Air'}},onDone(){}});
 assert(text(paid.tree).includes('Requested delivery:'));button(paid,'Buy shipping label').props.onClick();assert(confirmation.includes('UPS Next Day Air'));assert(!confirmation.includes('cheapest'));assert(confirmation.includes('saved customer charge will not change'));assert.equal(writes,0);
-console.log('PASS: actual embedded guide, duplicate-click guard, current connection/error states, unknown webhook state, label preview/hide/error without provider writes.');
+console.log('PASS: actual embedded guide, duplicate-click guard, current connection/error states, unknown webhook state, honest backup-sweep reporting, label preview/hide/error without provider writes.');
 })().catch(e=>{console.error(e);process.exitCode=1});
