@@ -61,6 +61,7 @@ const checkSafe = () => {
   for (const event of events) { assert.equal(event.actor, 'staff@example.invalid'); assert.equal(event.source, 'admin'); assert.equal(event.actorType, 'staff'); assert.equal(event.entityId, id); assert.deepEqual(event.changes, []); }
 };
 (async () => {
+  reset(); assert.equal((await post({}, 'https://bad.invalid')).status, 403); assert.equal(events.length, 0); assert.equal(calls.length, 0);
   allowed = false; assert.equal((await post()).status, 400); assert.equal(events.length, 0); assert.equal(calls.length, 0);
 
   reset(); let r = await post(); assert.equal(r.status, 200); assert.equal(row().status, 'paid'); assert.equal(row().data.shipment.tracking, label.tracking);
