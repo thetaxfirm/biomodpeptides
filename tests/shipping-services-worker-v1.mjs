@@ -25,16 +25,16 @@ try{
  r=await call('/api/store/admin-config',{method:'POST',body:JSON.stringify({packDiscounts:{3:12},presalesEnabled:false,rewardsEnabled:false,affiliateEnabled:false})});assert.equal(r.status,200,JSON.stringify(r.body));
  const after=JSON.parse((await f.db.prepare("SELECT value FROM settings WHERE key='store'").first()).value);assert.equal(after.shippingOptions.services.length,4);assert.equal(after.freeShippingAt,25000);assert.equal(after.packDiscounts['3'],12);
  // Automatic label purchase: the limits are stored as submitted, and an out-of-range one is refused.
- r=await save({services,freeStandardEnabled:true,freeShippingAt:25000,shippingCents:900,autoLabel:{enabled:true,delayMinutes:20,dailyCapCents:50000,maxLabelCents:5000}});assert.equal(r.status,200,JSON.stringify(r.body));
- assert.equal(r.body.autoLabel.maxLabelCents,5000);assert.equal(r.body.autoLabel.dailyCapCents,50000);assert.equal(r.body.autoLabel.delayMs,1200000);
- let saved=JSON.parse((await f.db.prepare("SELECT value FROM settings WHERE key='store'").first()).value);assert.equal(saved.autoLabel.maxLabelCents,5000);
+ r=await save({services,freeStandardEnabled:true,freeShippingAt:25000,shippingCents:900,autoLabel:{enabled:true,delayMinutes:20,dailyCapCents:50000,maxLabelCents:7500}});assert.equal(r.status,200,JSON.stringify(r.body));
+ assert.equal(r.body.autoLabel.maxLabelCents,7500);assert.equal(r.body.autoLabel.dailyCapCents,50000);assert.equal(r.body.autoLabel.delayMs,1200000);
+ let saved=JSON.parse((await f.db.prepare("SELECT value FROM settings WHERE key='store'").first()).value);assert.equal(saved.autoLabel.maxLabelCents,7500);
  // An older admin page that submits no ceiling keeps the saved one rather than silently resetting it.
  r=await save({services,freeStandardEnabled:true,freeShippingAt:25000,shippingCents:900,autoLabel:{enabled:true,delayMinutes:30,dailyCapCents:50000}});assert.equal(r.status,200,JSON.stringify(r.body));
  saved=JSON.parse((await f.db.prepare("SELECT value FROM settings WHERE key='store'").first()).value);
- assert.equal(saved.autoLabel.maxLabelCents,5000,'the saved ceiling survives a save that omits it');assert.equal(saved.autoLabel.delayMinutes,30,'and the submitted change still applies');
+ assert.equal(saved.autoLabel.maxLabelCents,7500,'the saved ceiling survives a save that omits it');assert.equal(saved.autoLabel.delayMinutes,30,'and the submitted change still applies');
  r=await save({services,freeStandardEnabled:true,freeShippingAt:25000,shippingCents:900,autoLabel:{enabled:true,delayMinutes:20,dailyCapCents:50000,maxLabelCents:0}});assert.equal(r.status,400,'a ceiling that could never buy a label is refused');
  r=await save({services,freeStandardEnabled:true,freeShippingAt:25000,shippingCents:900,autoLabel:{enabled:true,delayMinutes:20,dailyCapCents:50000,maxLabelCents:500000}});assert.equal(r.status,400);
- saved=JSON.parse((await f.db.prepare("SELECT value FROM settings WHERE key='store'").first()).value);assert.equal(saved.autoLabel.maxLabelCents,5000,'a refused save changes nothing');
+ saved=JSON.parse((await f.db.prepare("SELECT value FROM settings WHERE key='store'").first()).value);assert.equal(saved.autoLabel.maxLabelCents,7500,'a refused save changes nothing');
  // The health report travels with the panel, so a job that quietly stopped is visible to the owner.
  r=await call('/api/admin/shipping-services');assert.equal(r.status,200);assert.equal(r.body.autoLabelHealth,null,'no run has reported in this fixture, which is not an error');
  await f.db.prepare("INSERT INTO settings(key,value) VALUES('auto_label_health_v1',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(JSON.stringify({checkedAt:1760000000000,status:'completed',enabled:true,bought:2,failed:0,blocked:0,due:2,recovered:0,released:0,capReached:false,spentCents:2280})).run();

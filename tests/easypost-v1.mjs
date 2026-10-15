@@ -49,7 +49,14 @@ try {
   assert.equal(calls.at(-1)[3].rate.id, 'rate_usps');
   // The ceiling the unattended buyer passes: checked before the buy call, so no money moves.
   const buysBefore = calls.filter(c => String(c[0]).endsWith('/buy')).length;
-  await assert.rejects(() => e.buyLabel(env, to, [vial], 'BIOMOD 1234', undefined, undefined, { maxCents: 500 }), /above the automatic limit/);
+  await assert.rejects(() => e.buyLabel(env, to, [vial], 'BIOMOD 1234', undefined, undefined, { maxCents: 500 }), error => {
+    // The caller must be able to tell a price from a failure without reading the message, so it can
+    // ask a person instead of retrying something that would quote the same price again.
+    assert.equal(error.code, 'label_above_limit');
+    assert.equal(error.cents, 645, 'and it reports what the label would have cost');
+    assert.match(error.message, /\$6\.45.*\$5\.00/, 'the owner is told both figures');
+    return true;
+  });
   assert.equal(calls.filter(c => String(c[0]).endsWith('/buy')).length, buysBefore, 'a refused label never reaches the buy endpoint');
   const underCeiling = await e.buyLabel(env, to, [vial], 'BIOMOD 1234', undefined, undefined, { maxCents: 1000 });
   assert.equal(underCeiling.costCents, 645, 'a rate under the ceiling is bought as usual');
