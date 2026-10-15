@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { shipmentEmailText } from './fulfillment';
-import { normalizeShippingOptions, shippingCarrier, shippingTier, shippingTierEnabled, shippingHandling, serviceKey, enabledServiceSetting, catalogService, shippingCarriers, type ShippingOptionsConfig, type ShippingOption, type ShippingCarrier } from './shipping-options';
+import { normalizeShippingOptions, shippingCarrier, shippingTier, shippingTierEnabled, shippingHandling, serviceKey, enabledServiceSetting, catalogService, shippingCarriers, type ShippingOptionsConfig, type ShippingOption, type ShippingCarrier, minimumService, tierRank } from './shipping-options';
 // EasyPost shipping: live checkout rates, label purchase and tracking webhooks.
 // Everything stays off until EASYPOST_API_KEY is set; checkout then falls back to the flat rate in store settings.
 type Environment = Record<string, string | undefined>;
@@ -153,7 +153,9 @@ export async function buyLabel(env: Environment, to: ShipAddress, items: ShipIte
     if (precise && (!carrier || !selected.carrierService)) throw new ShippingError('The saved shipping service is invalid. Review this order before buying a label.');
     // A later settings change cannot silently downgrade an already purchased service.
     const historicalCarrier = !precise && selected?.shippingService ? shippingCarrier(selected.shippingService.trim().split(' ')[0]) : null;
-    const available = rates(shipment, env, carrier ? [carrier] : historicalCarrier ? [historicalCarrier] : settings.carriers);
+    const floor = minimumService(settings);
+    const floorCarrier = floor ? [floor.carrier] : [];
+    const available = rates(shipment, env, [...new Set([...(carrier ? [carrier] : historicalCarrier ? [historicalCarrier] : settings.carriers), ...floorCarrier])]);
     let best: Rate | undefined;
     if (precise) best = available.find(r => r.carrier === carrier && r.service === selected.carrierService && shippingTier(r.carrier as ShippingCarrier, r.service, r.days) === selected.tier);
     else {
@@ -164,6 +166,12 @@ export async function buyLabel(env: Environment, to: ShipAddress, items: ShipIte
         } else best = available.find(r => shippingTier(r.carrier as ShippingCarrier, r.service, r.days) === 'standard');
     }
     if (!best) throw new ShippingError('The paid shipping service is not available for this address. No label was purchased. Review the order shipping selection.');
+    // Store minimum service: only ever an upgrade, at the store's expense. The customer's saved charge is untouched.
+    if (floor) {
+        const chosenTier = shippingTier(best.carrier as ShippingCarrier, best.service, best.days);
+        const floorRate = available.find(r => serviceKey(r.carrier as ShippingCarrier, r.service) === floor.key);
+        if (floorRate && chosenTier && tierRank(floor.group) > tierRank(chosenTier)) best = floorRate;
+    }
     const bought = await call(env, '/shipments/' + encodeURIComponent(String(shipment.id)) + '/buy', { rate: { id: best.id } });
     const tracking = String(bought.tracking_code || '');
     const labelUrl = String(bought.postage_label?.label_url || '');
