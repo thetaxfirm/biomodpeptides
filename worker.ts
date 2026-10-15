@@ -6,6 +6,7 @@ import { type CoaEnvironment } from './lib/coa-outbox';
 import { runScheduledCoaOutbox } from './lib/coa-scheduler';
 import { runOverdueDigest } from './lib/reply-overdue';
 import { runTrackingSweep } from './lib/tracking-sweep';
+import { runAutoLabels } from './lib/auto-label';
 
 type TrafficWorkerEnvironment = CoaEnvironment;
 
@@ -23,7 +24,9 @@ export default {
       const recoveryEnv = { ...env, DB: withAuditDb(env.DB, { source: 'system', actor: 'Unpaid checkout recovery scheduler', actorType: 'system' }) } as TrafficWorkerEnvironment;
       // Carrier tracking fail-safe: the webhook is the fast path, this catches whatever it missed.
       const trackingEnv = { ...env, DB: withAuditDb(env.DB, { source: 'system', actor: 'Carrier tracking sweep', actorType: 'system' }) } as TrafficWorkerEnvironment;
-      const results=await Promise.allSettled([runScheduledCoaOutbox(coaEnv, controller.scheduledTime),runCheckoutRecovery(recoveryEnv),runOverdueDigest(digestEnv),runTrackingSweep(trackingEnv as never)]);
+      // Buys postage for paid orders after the grace period, and recovers purchases whose outcome was lost.
+      const labelEnv = { ...env, DB: withAuditDb(env.DB, { source: 'system', actor: 'Automatic label purchase', actorType: 'system' }) } as TrafficWorkerEnvironment;
+      const results=await Promise.allSettled([runScheduledCoaOutbox(coaEnv, controller.scheduledTime),runCheckoutRecovery(recoveryEnv),runOverdueDigest(digestEnv),runTrackingSweep(trackingEnv as never),runAutoLabels(labelEnv as never)]);
       if(results.some(result=>result.status==='rejected'))throw new Error('One or more scheduled correspondence tasks failed.');
     }
   },
