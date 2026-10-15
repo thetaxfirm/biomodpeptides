@@ -7,7 +7,7 @@ import styles from './admin-shipping-settings.module.css';
 
 type AutoLabel = { enabled: boolean; delayMs: number; dailyCapCents: number; maxLabelCents?: number };
 /** What the last scheduled run did. Null means no run has reported yet, which is not the same as a failure. */
-type AutoLabelHealth = { checkedAt: number; status: string; enabled: boolean; bought: number; failed: number; blocked: number; due: number; recovered: number; released: number; capReached: boolean } | null;
+type AutoLabelHealth = { checkedAt: number; status: string; enabled: boolean; bought: number; failed: number; blocked: number; needsApproval?: number; due: number; recovered: number; released: number; capReached: boolean } | null;
 type ShippingSettingsConfig = { shippingCents: number | null; freeShippingAt: number; shippingOptions?: unknown; autoLabel?: AutoLabel; automaticSpend?: { cents: number; labels: number }; autoLabelHealth?: AutoLabelHealth };
 type LiveRate = { key: string; name: string; cents: number; days: number | null; tier: string | null };
 type ServiceCheck = { key: string; label: string; status: 'ok' | 'missing' | 'wrong'; carrierCents: number | null; customerCents: number | null; message: string };
@@ -40,7 +40,7 @@ function draftFrom(config: ShippingSettingsConfig): Draft {
     const options = normalizeShippingOptions(config.shippingOptions);
     const auto = config.autoLabel;
     return { rows: startingRows(options), freeStandardEnabled: options.freeStandardEnabled, threshold: centsText(config.freeShippingAt), fallback: config.shippingCents == null ? '' : centsText(config.shippingCents), minimumServiceKey: options.minimumServiceKey || defaultMinimumServiceKey, signatureConfirmation: options.signatureConfirmation || defaultSignatureConfirmation,
-        autoEnabled: auto ? auto.enabled : true, autoDelay: String(auto ? Math.round(auto.delayMs / 60000) : 20), autoCap: centsText(auto ? auto.dailyCapCents : 50000), autoMax: centsText(auto?.maxLabelCents ?? 5000) };
+        autoEnabled: auto ? auto.enabled : true, autoDelay: String(auto ? Math.round(auto.delayMs / 60000) : 20), autoCap: centsText(auto ? auto.dailyCapCents : 50000), autoMax: centsText(auto?.maxLabelCents ?? 7500) };
 }
 /** Validated save payload. Throws a message the owner can act on. */
 export function shippingServicesPayload(draft: Draft) {
@@ -85,6 +85,7 @@ export function autoLabelReport(health: AutoLabelHealth, now = Date.now()): stri
     const parts = [health.bought + (health.bought === 1 ? ' label bought' : ' labels bought')];
     if (health.failed) parts.push(health.failed + (health.failed === 1 ? ' attempt failed' : ' attempts failed'));
     if (health.blocked) parts.push(health.blocked + (health.blocked === 1 ? ' order handed to you' : ' orders handed to you'));
+    if (health.needsApproval) parts.push(health.needsApproval + (health.needsApproval === 1 ? ' label waiting for your approval' : ' labels waiting for your approval'));
     if (health.recovered) parts.push(health.recovered + ' already-paid label recovered');
     if (health.released) parts.push(health.released + ' stuck order released');
     return 'Last automatic run: ' + when + '. ' + parts.join(', ') + '.';
@@ -243,7 +244,7 @@ export function AdminShippingSettings({ config, busy = false }: { config: Shippi
                 <label className={styles.field}><span>Most to spend automatically per day ($)</span><input type="number" min="0" max="100000" step="1" value={draft.autoCap} disabled={locked || !draft.autoEnabled} onChange={e => setDraft(d => ({ ...d, autoCap: e.target.value }))}/></label>
                 <p className={styles.muted}>Counts only labels bought automatically in the last 24 hours; your own purchases never count against it. At the limit, orders simply wait in To ship for you.{spend ? ' Spent automatically in the last 24 hours: ' + money(spend.cents) + ' across ' + spend.labels + (spend.labels === 1 ? ' label.' : ' labels.') : ''}</p>
                 <label className={styles.field}><span>Most to spend on one label ($)</span><input type="number" min="1" max="1000" step="1" value={draft.autoMax} disabled={locked || !draft.autoEnabled} onChange={e => setDraft(d => ({ ...d, autoMax: e.target.value }))}/></label>
-                <p className={styles.muted}>A single label above this is never bought automatically; the order waits in To ship so you can look at it. This is what catches a mistyped address that quotes a freight rate.</p>
+                <p className={styles.muted}>A single label above this is never bought automatically. The order moves to Needs review showing what the label would cost, and waits there until you buy it yourself &mdash; buying it is the approval. It is never retried in the meantime, and nothing is charged. Raise this limit and any order under the new figure goes back to being bought automatically. This is what catches a mistyped address that quotes a freight rate.</p>
                 <p className={styles.muted} aria-live="polite">{autoLabelReport(health)}</p>
             </div>
         </div>
