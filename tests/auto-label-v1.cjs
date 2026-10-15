@@ -31,9 +31,11 @@ function easypostStub(){
           buys++; s.selected_rate=nextRate; s.tracking_code='TRK'+buys; s.postage_label={label_url:'https://example.invalid/l'+buys};
         }
         throw Error('carrier timeout');}
-      // The real buyLabel refuses a rate above the caller's ceiling before any money moves.
-      if(typeof attempt.maxCents==='number'&&Math.round(Number(nextRate.rate)*100)>attempt.maxCents)
-        throw Error('above the automatic limit');
+      // The real buyLabel refuses a rate above the caller's ceiling before any money moves, and says
+      // so with a code and the quoted price so the caller can ask a person instead of retrying.
+      const cents=Math.round(Number(nextRate.rate)*100);
+      if(typeof attempt.maxCents==='number'&&cents>attempt.maxCents){
+        const refusal=Error('above the automatic limit');refusal.code='label_above_limit';refusal.cents=cents;throw refusal;}
       buys++; s.selected_rate=nextRate; s.tracking_code='TRK'+buys; s.postage_label={label_url:'https://example.invalid/l'+buys};
       return label(s);
     },
@@ -68,10 +70,10 @@ const health=db=>{const r=db.raw.prepare("SELECT value FROM settings WHERE key='
 
 (async()=>{
   // --- Settings bounds ---
-  assert.deepEqual(auto.autoLabelSettings(null),{enabled:true,delayMs:20*60000,dailyCapCents:50000,perRunLimit:10,stuckMs:5*60000,maxLabelCents:5000,maxAttempts:3},'agreed defaults: 20 minutes, $500/day, $50 a label, 3 tries');
+  assert.deepEqual(auto.autoLabelSettings(null),{enabled:true,delayMs:20*60000,dailyCapCents:50000,perRunLimit:10,stuckMs:5*60000,maxLabelCents:7500,maxAttempts:3},'agreed defaults: 20 minutes, $500/day, $75 a label, 3 tries');
   assert.equal(auto.autoLabelSettings({maxLabelCents:2500}).maxLabelCents,2500,'the per-label ceiling is configurable');
-  assert.equal(auto.autoLabelSettings({maxLabelCents:0}).maxLabelCents,5000,'a ceiling of zero would buy nothing, so it falls back');
-  assert.equal(auto.autoLabelSettings({maxLabelCents:9999999}).maxLabelCents,5000,'an out-of-range ceiling falls back');
+  assert.equal(auto.autoLabelSettings({maxLabelCents:0}).maxLabelCents,7500,'a ceiling of zero would buy nothing, so it falls back');
+  assert.equal(auto.autoLabelSettings({maxLabelCents:9999999}).maxLabelCents,7500,'an out-of-range ceiling falls back');
   assert.equal(auto.autoLabelSettings({maxAttempts:1}).maxAttempts,1,'one try is allowed');
   assert.equal(auto.autoLabelSettings({maxAttempts:0}).maxAttempts,3,'zero tries would stall every order, so it falls back');
   assert.equal(auto.autoLabelSettings({maxAttempts:500}).maxAttempts,3,'an out-of-range retry count falls back');
@@ -237,20 +239,39 @@ const health=db=>{const r=db.raw.prepare("SELECT value FROM settings WHERE key='
   assert.equal(read(db,'unread').status,'paid','and the order is left exactly as it was');
   assert.equal(health(db).status,'settings_unreadable','and the reason is recorded where the admin can see it');
 
-  // --- The per-label ceiling: above it, a person decides ---
+  // --- The per-label ceiling: above it, the order waits for a person rather than being retried ---
   reset(); db=database();
   store(db,{autoLabel:{maxLabelCents:1000}});
   order(db,'pricey','paid',payable());
   h=await auto.runAutoLabels({DB:db},NOW);
   assert.equal(attempts[0].maxCents,1000,'the ceiling is handed to the purchase, not merely stored');
-  assert.equal(h.bought,0); assert.equal(h.failed,1,'an $11.40 label is refused under a $10 ceiling');
+  assert.equal(h.bought,0); assert.equal(buys,0,'nothing was charged');
+  assert.equal(h.needsApproval,1,'it is reported as waiting for approval');
+  assert.equal(h.failed,0,'a price is not a failure');
   assert.equal(read(db,'pricey').status,'paid','and the claim is handed back');
-  assert.equal(read(db,'pricey').data.labelAttempts,1,'the refusal is counted');
-  // The same order under the agreed $50 ceiling goes through.
+  assert.equal(read(db,'pricey').data.labelAttempts,undefined,'a price never burns a retry');
+  assert.deepEqual(read(db,'pricey').data.labelApproval,{cents:1140,limitCents:1000,at:NOW},'what it would cost is recorded for the admin');
+  assert.equal(read(db,'pricey').data.hold,undefined,'not a hold: buying it by hand must stay available');
+  // Retrying would quote the same price, so the order is simply left alone.
+  db.raw.prepare("UPDATE orders SET updated=? WHERE id='pricey'").run(OLD);
+  h=await auto.runAutoLabels({DB:db},NOW+600000);
+  assert.equal(h.due,0,'an order waiting for approval is out of the automatic queue');
+  assert.equal(buys,0); assert.equal(h.needsApproval,0,'and it is not re-reported every five minutes');
+  // Raise the limit past the quoted price and it becomes due again, with no extra step.
+  store(db,{autoLabel:{maxLabelCents:5000}});
+  h=await auto.runAutoLabels({DB:db},NOW+600000);
+  assert.equal(h.due,1); assert.equal(h.bought,1,'a raised limit releases it automatically');
+  assert.equal(read(db,'pricey').data.labelApproval,undefined,'and the marker is cleared with the purchase');
+  // A label bought by hand clears it the same way (the save path is shared).
+  reset(); db=database();
+  order(db,'approved','paid',payable({labelApproval:{cents:9000,limitCents:7500,at:NOW}}));
+  h=await auto.runAutoLabels({DB:db},NOW);
+  assert.equal(h.due,0,'still waiting while the quote is above the ceiling');
+  // The same order under the agreed $75 ceiling goes through.
   reset(); db=database();
   order(db,'normal','paid',payable());
   h=await auto.runAutoLabels({DB:db},NOW);
-  assert.equal(attempts[0].maxCents,5000); assert.equal(h.bought,1,'an ordinary label is unaffected by the ceiling');
+  assert.equal(attempts[0].maxCents,7500); assert.equal(h.bought,1,'an ordinary label is unaffected by the ceiling');
 
   // --- An order the carrier keeps refusing stops being retried and asks for a person ---
   reset(); db=database();
@@ -292,5 +313,5 @@ const health=db=>{const r=db.raw.prepare("SELECT value FROM settings WHERE key='
   assert.equal((await auto.readAutoLabelHealth({DB:db})).status,'disabled');
   assert.equal(await auto.readAutoLabelHealth({DB:{prepare(){throw Error('gone');}}}),null,'an unreadable report is not an outage');
 
-  console.log('PASS: grace period, hold/test/labelled/unpaid/addressless gates, unreadable saved option skipped, daily cap counted from automatic labels in the last 24h only, kill switch stops buying but not recovery, a charged-but-lost attempt is adopted rather than repeated, stranded claims released, live requests untouched, a concurrent hold survives, one failure isolated, per-run limit honoured, unreadable settings stand the job down, the per-label ceiling is enforced, repeated failures hand the order to a person, health is reported. No live providers.');
+  console.log('PASS: grace period, hold/test/labelled/unpaid/addressless gates, unreadable saved option skipped, daily cap counted from automatic labels in the last 24h only, kill switch stops buying but not recovery, a charged-but-lost attempt is adopted rather than repeated, stranded claims released, live requests untouched, a concurrent hold survives, one failure isolated, per-run limit honoured, unreadable settings stand the job down, the per-label ceiling sends an expensive label to a person instead of retrying it, repeated failures hand the order to a person, health is reported. No live providers.');
 })().catch(e=>{console.error(e);process.exitCode=1});
