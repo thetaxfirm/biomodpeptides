@@ -44,6 +44,24 @@ assert.equal(q.orderBucket(order('hold4', 'refunded', { hold: held })), 'closed'
 assert.equal(q.orderBucket(order('hold5', 'delivered', { hold: held })), 'delivered');
 assert.equal(q.orderBucket(order('hold6', 'paid', { hold: null })), 'to_ship', 'a cleared hold returns the order to its queue');
 
+// A carrier problem outranks a delivery that already happened: a parcel delivered back to us is a
+// return and a refund, and must not sit quietly in Delivered where nobody looks at it again.
+assert.equal(q.orderBucket(order('rts1', 'delivered', { shipment: { status: 'return_to_sender' } })), 'review');
+assert.equal(q.orderBucket(order('rts2', 'shipped', { shipment: { status: 'failure' } })), 'review');
+assert.equal(q.orderBucket(order('rts3', 'paid', { shipment: { status: 'delivered' } })), 'delivered', 'a clean delivery still reads as delivered');
+
+// A label bought but never scanned by the carrier is a parcel still on the bench. Automatic purchase
+// makes that likelier, because nobody handled the order by hand and noticed.
+const stale = Date.now() - fulfillment.STALLED_LABEL_MS - 60000, fresh = Date.now() - 3600000;
+assert.equal(q.orderBucket(order('stall1', 'paid', { shipment: { status: 'pre_transit' }, labelCreatedAt: stale })), 'review');
+assert.equal(q.orderBucket(order('stall2', 'paid', { shipment: { status: 'unknown' }, labelCreatedAt: stale })), 'review');
+assert.equal(q.orderBucket(order('stall3', 'paid', { shipment: { status: 'pre_transit' }, labelCreatedAt: fresh })), 'label', 'a fresh label is not a stall');
+assert.equal(q.orderBucket(order('stall4', 'shipped', { shipment: { status: 'in_transit' }, labelCreatedAt: stale })), 'shipped', 'a moving parcel is not a stall');
+assert.equal(q.orderBucket(order('stall5', 'paid', { shipment: { status: 'delivered' }, labelCreatedAt: stale })), 'delivered', 'an arrival is not a stall');
+assert.equal(q.orderBucket(order('stall6', 'paid', { labelCreatedAt: stale })), 'to_ship', 'no label, no stall');
+assert.equal(q.orderBucket(order('stall7', 'paid', { shipment: { status: 'pre_transit' } })), 'label', 'an older label with no recorded purchase time is left alone');
+assert.equal(fulfillment.stalledLabel(order('stall8', 'paid', { shipment: { status: 'pre_transit' }, labelCreatedAt: 'nonsense' })), false, 'a corrupt timestamp never raises a stall');
+
 // Counts cover every bucket; All excludes internal tests.
 const all = q.queryOrders(rows, { tab: 'all' });
 assert.deepEqual(all.counts, { to_ship: 2, label: 2, shipped: 2, delivered: 2, unpaid: 2, review: 2, closed: 1, all: 13, test: 1 });
@@ -88,9 +106,17 @@ assert.equal(q.customerOrderStatus(rows.find(o => o.id.startsWith('unpaid1'))).l
 
 // Wiring: the route checks order access, and the admin tab uses the queue.
 const route = fs.readFileSync(path.join(root, 'app/api/store/[action]/route.ts'), 'utf8');
-const block = route.slice(route.indexOf("action === 'admin-orders'"), route.indexOf("action === 'admin'"));
-assert.match(block, /requireStaff\('orders:read'\)/);
-assert.match(block, /adminOrderView/);
+// The queue is a POST: the search term is a customer's email, phone or street address, and a query
+// string is written to every proxy log and browser history in front of this app. The GET name is kept
+// only to answer old bookmarks with a 405, and must not read a single order row.
+const getBlock = route.slice(route.indexOf("action === 'admin-orders'"), route.indexOf("action === 'admin'"));
+assert.match(getBlock, /405/);
+assert(!/FROM orders/.test(getBlock), 'the retired GET never reads orders');
+const postBlock = route.slice(route.indexOf("action === 'admin-orders'", route.indexOf("action.startsWith('admin-')")), route.indexOf("action === 'admin-staff'"));
+assert.match(route, /'admin-orders': 'orders:read'/, 'the queue is gated on orders:read');
+assert.match(route, /requireStaff\(adminActionPermission\[action\]/, 'every admin POST is gated before it runs');
+assert.match(postBlock, /adminOrderView/);
+assert.match(postBlock, /queryOrders\(rows, \{ tab: text\(b\.tab\), q: text\(b\.q\)/, 'the search term arrives in the body');
 const admin = fs.readFileSync(path.join(root, 'components/store/admin.tsx'), 'utf8');
 assert.match(admin, /<OrdersAdmin /);
 const ui = fs.readFileSync(path.join(root, 'components/store/orders-admin.tsx'), 'utf8');
