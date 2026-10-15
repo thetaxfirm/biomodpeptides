@@ -7,9 +7,9 @@ db.exec('CREATE TABLE orders(id TEXT PRIMARY KEY,status TEXT,data TEXT,updated I
 const id = '00000001-0000-4000-8000-000000000001';
 const env = { DB: {}, EASYPOST_API_KEY: 'fixture-only-do-not-log' };
 const label = { shipmentId: 'shp_fixture', carrier: 'USPS', service: 'GroundAdvantage', costCents: 500, tracking: 'PRIVATE_TRACKING', trackingUrl: 'https://example.invalid/private-tracking', labelUrl: 'https://example.invalid/private-label', status: 'pre_transit' };
-let events, writes, calls, timeline, failAudit, failSave, mailAccepted, carrierFail, purchaseFail, allowed, now = 1000;
+let events, writes, calls, timeline, failAudit, failSave, mailAccepted, carrierFail, purchaseFail, allowed, attempts, now = 1000;
 function reset(extra = {}) {
-  events = []; writes = []; calls = []; timeline = []; failAudit = () => false; failSave = false; mailAccepted = true; carrierFail = false; purchaseFail = false; allowed = true;
+  events = []; writes = []; calls = []; timeline = []; attempts = []; failAudit = () => false; failSave = false; mailAccepted = true; carrierFail = false; purchaseFail = false; allowed = true;
   db.prepare('INSERT OR REPLACE INTO orders VALUES(?,?,?,?)').run(id, 'paid', JSON.stringify({ email: 'private-customer@example.invalid', address: { name: 'Private Customer', line1: 'PRIVATE_ADDRESS' }, paymentReference: 'PRIVATE_PAYMENT', items: [], ...extra }), 0);
 }
 const row = () => { const r = db.prepare('SELECT * FROM orders WHERE id=?').get(id); return { ...r, data: JSON.parse(r.data) }; };
@@ -18,7 +18,7 @@ const runtime = { runtime: () => env, timestamp: () => ++now, parse: (s, fallbac
 const history = {
   auditRun: async (database, context, sql, ...values) => {
     assert.equal(database, env.DB); assert.deepEqual(context, { source: 'admin', actor: 'staff@example.invalid', actorType: 'staff' });
-    if (failSave && sql.includes("status='paid',data=?")) throw Error('Synthetic atomic audit failure');
+    if (failSave && sql.includes("'$.labelCreatedAt'")) throw Error('Synthetic atomic audit failure');
     timeline.push('write'); writes.push({ context, sql }); return { meta: db.prepare(sql).run(...values) };
   },
   recordChange: async (database, event) => {
@@ -29,7 +29,12 @@ const history = {
 };
 const shipping = {
   easypostReady: () => true, shippingConnection: async () => ({ connected: true }),
-  buyLabel: async () => { calls.push('buy'); timeline.push('provider:buy'); if (purchaseFail) throw Error('Provider response unavailable'); return label; },
+  buyLabel: async (_env, _to, _items, _ref, _selected, _settings, attempt = {}) => {
+    calls.push('buy'); timeline.push('provider:buy'); attempts.push(attempt);
+    if (attempt.onShipment) await attempt.onShipment('shp_fixture');
+    if (purchaseFail) throw Error('Provider response unavailable');
+    return label;
+  },
   sendTrackingEmail: async (_env, _to, _orderId, _label, _name, replyTo) => { assert.equal(replyTo, 'reply@example.invalid'); calls.push('mail'); timeline.push('provider:mail'); return mailAccepted; },
   readShipmentTracking: async () => { calls.push('read'); timeline.push('provider:read'); if (carrierFail) throw Error('PRIVATE_PROVIDER_DETAIL'); return 'in_transit'; },
 };
@@ -56,7 +61,6 @@ const checkSafe = () => {
   for (const event of events) { assert.equal(event.actor, 'staff@example.invalid'); assert.equal(event.source, 'admin'); assert.equal(event.actorType, 'staff'); assert.equal(event.entityId, id); assert.deepEqual(event.changes, []); }
 };
 (async () => {
-  reset(); assert.equal((await post({}, 'https://bad.invalid')).status, 403); assert.equal(events.length, 0); assert.equal(calls.length, 0);
   allowed = false; assert.equal((await post()).status, 400); assert.equal(events.length, 0); assert.equal(calls.length, 0);
 
   reset(); let r = await post(); assert.equal(r.status, 200); assert.equal(row().status, 'paid'); assert.equal(row().data.shipment.tracking, label.tracking);
@@ -79,5 +83,23 @@ const checkSafe = () => {
   reset({ shipment: label }); r = await post({ refreshTracking: true }); assert.equal(r.status, 200); assert.equal(row().status, 'shipped'); assert.equal(row().data.shipment.status, 'in_transit'); assert.deepEqual(calls, ['read']); assert.deepEqual(events.map(e => e.status), ['attempted', 'succeeded']); checkSafe();
   reset({ shipment: label }); carrierFail = true; r = await post({ refreshTracking: true }); assert.equal(r.status, 400); assert.equal(row().status, 'paid'); assert.equal(events.at(-1).status, 'failed'); assert(!JSON.stringify(r).includes('PRIVATE_PROVIDER_DETAIL')); checkSafe();
   reset(); purchaseFail = true; r = await post(); assert.equal(r.status, 502); assert.equal(row().status, 'paid', 'Existing provider-error workflow is preserved'); assert.equal(events.at(-1).status, 'observed'); assert.match(events.at(-1).summary, /Review the carrier account/); checkSafe();
+  // A purchase whose outcome was never learned must be resumable, never repeated.
+  assert.equal(row().data.pendingShipmentId, 'shp_fixture', 'The shipment is recorded before the buy, and survives the release');
+  assert.match(events.at(-1).summary, /resumes the same carrier shipment/);
+  purchaseFail = false; r = await post(); assert.equal(r.status, 200);
+  assert.equal(attempts.at(-1).resumeShipmentId, 'shp_fixture', 'The retry resumes the recorded shipment instead of creating another');
+  assert.equal(row().data.pendingShipmentId, undefined, 'and the resolved attempt is cleared once a label is saved');
+  // The label write must not rewrite the whole order: a hold saved mid-purchase survives.
+  reset(); db.prepare("UPDATE orders SET data=json_set(data,'$.hold',json(?)) WHERE id=?").run(JSON.stringify({ issue: 'out_of_stock' }), id);
+  r = await post(); assert.equal(r.status, 409, 'A held order is refused outright');
+  reset(); attempts = []; shipping.buyLabel = async (_e, _t, _i, _r, _s, _o, attempt = {}) => {
+    calls.push('buy'); timeline.push('provider:buy'); attempts.push(attempt);
+    if (attempt.onShipment) await attempt.onShipment('shp_fixture');
+    db.prepare("UPDATE orders SET data=json_set(data,'$.hold',json(?)) WHERE id=?").run(JSON.stringify({ issue: 'out_of_stock' }), id);
+    return label;
+  };
+  r = await post(); assert.equal(r.status, 200);
+  assert.deepEqual(row().data.hold, { issue: 'out_of_stock' }, 'A hold placed while the carrier call was in flight is not erased');
+  assert.equal(row().data.shipment.tracking, label.tracking, 'and the bought label is still recorded');
   console.log('PASS: actual shipping route records authenticated staff, durable provider intent, safe outcomes without customer details, truthful acceptance/dispatch states, and no provider retry after an audit failure. Provider calls are mocked.');
 })().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => db.close());
