@@ -58,9 +58,10 @@ const to={name:'Fixture Recipient',street1:'1 Test St',city:'Las Vegas',state:'N
 const items=[{quantity:1,product:{categories:[{slug:'research-compounds'}]}}];
 let bought=null;
 const realFetch=global.fetch;
+let created=[];
 global.fetch=async(url,init)=>{
   const body=init.body?JSON.parse(init.body):null;
-  if(url==='https://api.easypost.com/v2/shipments')return Response.json({id:'shp_fixture',mode:'production',rates:RATES});
+  if(url==='https://api.easypost.com/v2/shipments'){created.push(body.shipment);return Response.json({id:'shp_fixture',mode:'production',rates:RATES});}
   if(url==='https://api.easypost.com/v2/shipments/shp_fixture/buy'){bought=body.rate.id;return Response.json({id:'shp_fixture',tracking_code:'SYNTHETIC',postage_label:{label_url:'https://example.invalid/label'},tracker:{public_url:'https://example.invalid/tracking'}});}
   throw Error('Unexpected external request prohibited: '+url);
 };
@@ -95,6 +96,26 @@ const easypostOption=(carrier,carrierService,tier)=>({carrier,carrierService,tie
   assert.ok(o.minimumService(fedexFloor),'the fixture floor is a real catalog service');
   r=await buy(easypostOption('USPS','GroundAdvantage','standard'),fedexFloor);
   assert.equal(r.bought,'rate_ground','an unavailable floor leaves the paid service alone rather than failing');
+  // --- Delivery confirmation: on the label, never on a customer quote. ---
+  assert.equal(o.signatureConfirmation({}),'SIGNATURE','signature is required unless the store says otherwise');
+  assert.equal(o.normalizeShippingOptions({}).signatureConfirmation,'SIGNATURE','an unconfigured store still asks for one');
+  assert.equal(o.signatureConfirmation({signatureConfirmation:'ADULT_SIGNATURE'}),'ADULT_SIGNATURE','an owner choice is kept');
+  assert.equal(o.signatureConfirmation({signatureConfirmation:o.noSignature}),null,'only an explicit opt-out turns it off');
+  assert.equal(o.signatureConfirmation({signatureConfirmation:'WHATEVER'}),'SIGNATURE','junk cannot quietly drop the signature');
+  assert.equal(o.normalizeShippingOptions({signatureConfirmation:o.noSignature}).signatureConfirmation,'none','opting out is stored verbatim');
+
+  created=[]; r=await buy(easypostOption('USPS','GroundAdvantage','standard'),withFloor);
+  assert.deepEqual(created.at(-1).options,{delivery_confirmation:'SIGNATURE'},'every label asks the carrier for a signature');
+  created=[]; await buy(easypostOption('USPS','Priority','expedited'),o.normalizeShippingOptions({signatureConfirmation:'ADULT_SIGNATURE'}));
+  assert.deepEqual(created.at(-1).options,{delivery_confirmation:'ADULT_SIGNATURE'});
+  created=[]; await buy(easypostOption('USPS','Priority','expedited'),o.normalizeShippingOptions({signatureConfirmation:o.noSignature}));
+  assert.equal(created.at(-1).options,undefined,'with it off, nothing extra is asked of the carrier');
+  // Quoting must stay clean, or the customer would be charged for the store's choice.
+  created=[]; await easypost.carrierShippingOptions(env,to,items,withFloor);
+  assert.equal(created.at(-1).options,undefined,'a checkout quote never carries delivery confirmation');
+  created=[]; await easypost.liveShippingCheck(env,to,items,withFloor);
+  assert.equal(created.at(-1).options,undefined,'nor does the admin price check');
+
   global.fetch=realFetch;
-  console.log('PASS: USPS Priority default floor, explicit opt-out, junk falls back rather than removing the floor, catalog resolution, tier ranking, upgrade-only decision across carriers, saved charge untouched; buyLabel upgrades Ground/free-standard to Priority across carriers, never downgrades, respects the opt-out, and tolerates an unavailable floor. No live providers.');
+  console.log('PASS: USPS Priority default floor, explicit opt-out, junk falls back rather than removing the floor, catalog resolution, tier ranking, upgrade-only decision across carriers, saved charge untouched; signature required on every label and never on a quote; buyLabel upgrades Ground/free-standard to Priority across carriers, never downgrades, respects the opt-out, and tolerates an unavailable floor. No live providers.');
 })().catch(e=>{console.error(e);process.exitCode=1});
