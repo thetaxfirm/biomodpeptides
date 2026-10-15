@@ -9,7 +9,13 @@ export type ShipItem = { quantity: number; product: { categories?: { slug: strin
 export type Parcel = { length: number; width: number; height: number; weight: number };
 export type Rate = { id: string; carrier: string; service: string; cents: number; days: number | null };
 export class ShippingError extends Error {
-    constructor(message: string) { super(message); this.name = 'ShippingError'; }
+    /**
+     * `code` lets a caller tell one refusal from another without reading the message. The automatic
+     * buyer needs that: a price above its ceiling is a decision for a person, not a failure to retry.
+     */
+    code?: string;
+    cents?: number;
+    constructor(message: string, code?: string, cents?: number) { super(message); this.name = 'ShippingError'; this.code = code; this.cents = cents; }
 }
 const API = 'https://api.easypost.com/v2';
 const number = (value: string | undefined, fallback: number) => { const n = Number(value); return Number.isFinite(n) && n > 0 ? n : fallback; };
@@ -216,8 +222,10 @@ export async function buyLabel(env: Environment, to: ShipAddress, items: ShipIte
     }
     // A ceiling the caller sets, checked before any money moves. Only unattended buying passes one:
     // a person clicking Buy has already decided, and should not be blocked by a limit meant for a robot.
+    // Carries a code and the quoted price, so the caller can hand the decision to a person by name
+    // rather than treat an expensive label as an error to try again.
     if (typeof attempt.maxCents === 'number' && best.cents > attempt.maxCents)
-        throw new ShippingError('This label would cost ' + (best.cents / 100).toFixed(2) + ', above the automatic limit. Buy it by hand if that is right.');
+        throw new ShippingError('This label would cost $' + (best.cents / 100).toFixed(2) + ', above the automatic limit of $' + (attempt.maxCents / 100).toFixed(2) + '. Buy it by hand to approve that cost.', 'label_above_limit', best.cents);
     const bought = await call(env, '/shipments/' + encodeURIComponent(String(shipment.id)) + '/buy', { rate: { id: best.id } });
     const tracking = String(bought.tracking_code || '');
     const labelUrl = String(bought.postage_label?.label_url || '');
