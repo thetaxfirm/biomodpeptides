@@ -5,6 +5,7 @@ import { auditRun, recordChange, type AuditActor } from '@/lib/change-history';
 import { config } from '@/lib/commerce';
 import { easypostReady, liveShippingCheck, ShippingError, type ShipAddress, type ShipItem } from '@/lib/easypost';
 import { normalizeShippingOptions, shippingServiceCatalog, type ShippingServiceSetting } from '@/lib/shipping-options';
+import { autoLabelSettings } from '@/lib/auto-label';
 import { database, runtime } from '@/lib/runtime';
 export const dynamic = 'force-dynamic';
 const j = (value: unknown, status = 200) => NextResponse.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -31,7 +32,20 @@ const saveSchema = z.object({
     services: z.array(serviceSchema).max(60).refine(list => new Set(list.map(s => s.key)).size === list.length, 'A service is listed twice.'),
     freeStandardEnabled: z.boolean(), freeShippingAt: z.number().int().min(0).max(1000000), shippingCents: z.number().int().min(0).max(100000).nullable(),
     minimumServiceKey: z.string().max(80).optional(),
+    autoLabel: z.object({
+        enabled: z.boolean(),
+        delayMinutes: z.number().int().min(0).max(1440),
+        dailyCapCents: z.number().int().min(0).max(10000000),
+    }).strict().optional(),
 }).strict();
+const DAY = 86400000;
+/** What the scheduler has spent on postage by itself in the last 24 hours. Read-only. */
+async function automaticSpend() {
+    try {
+        const row = await database().prepare(`SELECT coalesce(sum(json_extract(data,'$.shipment.costCents')),0) AS cents, count(*) AS labels FROM orders WHERE json_extract(data,'$.labelAuto') IS NOT NULL AND coalesce(json_extract(data,'$.labelCreatedAt'),0) >= ?`).bind(Date.now() - DAY).first<{ cents: number; labels: number }>();
+        return { cents: Number(row?.cents) || 0, labels: Number(row?.labels) || 0 };
+    } catch { return { cents: 0, labels: 0 }; }
+}
 
 async function runCheck(sample: z.infer<typeof sampleSchema>) {
     const env = runtime();
@@ -62,6 +76,7 @@ export async function GET() {
     const current = await config();
     return j({
         catalog: shippingServiceCatalog, settings: current.shippingOptions, freeShippingAt: current.freeShippingAt, shippingCents: current.shippingCents,
+        autoLabel: autoLabelSettings((current as Record<string, any>).autoLabel), automaticSpend: await automaticSpend(),
         connected: easypostReady(runtime()),
         destinations: Object.entries(sampleDestinations).map(([id, d]) => ({ id, title: d.title })),
         packages: Object.entries(samplePackages).map(([id, p]) => ({ id, title: p.title })),
@@ -84,7 +99,8 @@ export async function POST(req: NextRequest) {
     const current = await config();
     // 'none' is the explicit opt-out; an absent key takes the store default, so the owner's choice is stored verbatim.
     const shippingOptions = { ...current.shippingOptions, freeStandardEnabled: next.freeStandardEnabled, services: next.services, minimumServiceKey: next.minimumServiceKey || undefined };
-    const nextConfig = { ...current, freeShippingAt: next.freeShippingAt, shippingCents: next.shippingCents, shippingOptions };
+    // The scheduler reads these straight from the stored settings; an omitted block leaves them as they were.
+    const nextConfig = { ...current, freeShippingAt: next.freeShippingAt, shippingCents: next.shippingCents, shippingOptions, autoLabel: next.autoLabel ?? (current as Record<string, any>).autoLabel };
     const auditActor: AuditActor = { source: 'admin', actor: actor.email, actorType: 'staff', action: 'admin-shipping-services' };
     await auditRun(database(), auditActor, 'INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', 'store', JSON.stringify(nextConfig));
     try {
@@ -95,5 +111,5 @@ export async function POST(req: NextRequest) {
     const expected = normalizeShippingOptions(shippingOptions);
     const savedMatches = JSON.stringify(saved.shippingOptions.services) === JSON.stringify(expected.services)
         && saved.freeShippingAt === next.freeShippingAt && saved.shippingCents === next.shippingCents && saved.shippingOptions.freeStandardEnabled === next.freeStandardEnabled;
-    return j({ message: 'Shipping saved.', savedMatches, settings: saved.shippingOptions, freeShippingAt: saved.freeShippingAt, shippingCents: saved.shippingCents, check: await runCheck(sample.data) });
+    return j({ message: 'Shipping saved.', savedMatches, settings: saved.shippingOptions, freeShippingAt: saved.freeShippingAt, shippingCents: saved.shippingCents, autoLabel: autoLabelSettings((saved as Record<string, any>).autoLabel), automaticSpend: await automaticSpend(), check: await runCheck(sample.data) });
 }
