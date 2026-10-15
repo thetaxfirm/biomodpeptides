@@ -13,17 +13,33 @@ export function FulfillmentQueue({ orders }: { orders: (FulfillmentOrder & { id:
         <p>Based on the loaded orders. Only carrier scans confirm mailing.</p>
     </section>;
 }
+type Connection = { configured: boolean; connected: boolean; checkedAt: string; webhookConfigured: boolean; webhookRegistered: boolean | null };
+/** What the backup tracking sweep last did. Null means it has not reported, which is not a failure. */
+type SweepHealth = { checkedAt: number; status: string; due: number; read: number; changed: number; failed: number } | null;
+const SWEEP_STALE_MS = 30 * 60000;
+/**
+ * The webhook can be registered and the five-minute backup sweep still be dead. Say which, because a
+ * job that never runs reports no errors at all, and silence reads like success.
+ */
+export function trackingSweepReport(health: SweepHealth, now = Date.now()): string {
+    if (!health || typeof health.checkedAt !== 'number') return 'Backup carrier check: no run has reported yet. Use Check carrier status on an order in the meantime.';
+    const when = new Date(health.checkedAt).toLocaleString();
+    if (now - health.checkedAt > SWEEP_STALE_MS)
+        return 'Backup carrier check: last ran ' + when + ', which is older than expected. It runs every five minutes, so it may have stopped.';
+    if (health.status === 'queue_unreadable') return 'Backup carrier check: ran ' + when + ', but could not read the order list, so nothing was checked.';
+    return 'Backup carrier check: ran ' + when + '. ' + health.read + (health.read === 1 ? ' parcel checked, ' : ' parcels checked, ') + health.changed + ' updated' + (health.failed ? ', ' + health.failed + ' could not be reached' : '') + '.';
+}
 export function CarrierConnection() {
     const [busy, setBusy] = useState(false);
     const checking = useRef(false);
-    const [result, setResult] = useState<{ configured: boolean; connected: boolean; checkedAt: string; webhookConfigured: boolean; webhookRegistered: boolean | null } | null>(null);
+    const [result, setResult] = useState<(Connection & { trackingSweep?: SweepHealth }) | null>(null);
     const [error, setError] = useState('');
     async function check() {
         if (checking.current) return;
         checking.current = true; setBusy(true); setError(''); setResult(null);
         try {
             const response = await fetch('/api/admin/shipping', { cache: 'no-store', credentials: 'same-origin' });
-            const data = await response.json() as { configured: boolean; connected: boolean; checkedAt: string; webhookConfigured: boolean; webhookRegistered: boolean | null };
+            const data = await response.json() as Connection & { trackingSweep?: SweepHealth };
             if (!response.ok || typeof data.connected !== 'boolean' || typeof data.configured !== 'boolean' || typeof data.checkedAt !== 'string') throw Error('Carrier check unavailable.');
             setResult(data);
         } catch { setError('Connection status is unavailable. Sign in again if your session expired, then retry. No label was bought.'); }
@@ -34,7 +50,7 @@ export function CarrierConnection() {
         <p>EasyPost connects BIOMOD to its configured carriers for shipping rates, postage labels and carrier tracking. Work from the orders below; you do not need to open the EasyPost dashboard for those tasks.</p>
         <div className={styles.connection}>
             <div><h4>Is the API connected?</h4><p aria-live="polite">{busy ? 'Checking EasyPost now…' : error || (result ? result.connected ? 'Connected: EasyPost accepted the API request.' : result.configured ? 'Configured, but the connection could not be verified.' : 'Not configured: a shipping API key is required.' : 'Not checked in this view. A saved API key alone does not confirm a working connection.')}</p>
-            {result && <><p className={styles.note}>Checked {new Date(result.checkedAt).toLocaleString()}. This verifies API access, not production mode, account funding, a successful postage purchase or carrier pickup.</p><p><strong>Automatic tracking:</strong> {!result.webhookConfigured ? 'Signing secret not configured.' : result.webhookRegistered === null ? 'Registration could not be checked.' : result.webhookRegistered ? 'Webhook registered and signing secret configured. Successful event delivery is not yet proven by this check.' : 'No active webhook registration found for this store.'}</p></>}
+            {result && <><p className={styles.note}>Checked {new Date(result.checkedAt).toLocaleString()}. This verifies API access, not production mode, account funding, a successful postage purchase or carrier pickup.</p><p><strong>Automatic tracking:</strong> {!result.webhookConfigured ? 'Signing secret not configured.' : result.webhookRegistered === null ? 'Registration could not be checked.' : result.webhookRegistered ? 'Webhook registered and signing secret configured. Successful event delivery is not yet proven by this check.' : 'No active webhook registration found for this store.'}</p><p className={styles.note}>{trackingSweepReport(result.trackingSweep ?? null)}</p></>}
             </div><button type="button" className="button button-dark" disabled={busy} onClick={check}>{busy ? 'Checking…' : 'Check EasyPost connection'}</button>
         </div>
         <h4>From payment to delivery</h4>
