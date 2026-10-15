@@ -154,7 +154,7 @@ export type LabelSelection = Pick<ShippingOption, 'carrier' | 'carrierService' |
  * the shipment before the buy and hands it back on a retry: an already-bought shipment is adopted
  * rather than replaced, which is the only thing standing between a slow carrier and double postage.
  */
-export type LabelAttempt = { resumeShipmentId?: string; onShipment?: (shipmentId: string) => Promise<void> };
+export type LabelAttempt = { resumeShipmentId?: string; onShipment?: (shipmentId: string) => Promise<void>; maxCents?: number };
 /** A shipment EasyPost has already bought. Reading it is how a retry avoids paying twice. */
 export function boughtLabel(shipment: Record<string, any>): Label | null {
     if (shipment?.mode !== 'production') return null;
@@ -214,6 +214,10 @@ export async function buyLabel(env: Environment, to: ShipAddress, items: ShipIte
         const floorRate = available.find(r => serviceKey(r.carrier as ShippingCarrier, r.service) === floor.key);
         if (floorRate && chosenTier && tierRank(floor.group) > tierRank(chosenTier)) best = floorRate;
     }
+    // A ceiling the caller sets, checked before any money moves. Only unattended buying passes one:
+    // a person clicking Buy has already decided, and should not be blocked by a limit meant for a robot.
+    if (typeof attempt.maxCents === 'number' && best.cents > attempt.maxCents)
+        throw new ShippingError('This label would cost ' + (best.cents / 100).toFixed(2) + ', above the automatic limit. Buy it by hand if that is right.');
     const bought = await call(env, '/shipments/' + encodeURIComponent(String(shipment.id)) + '/buy', { rate: { id: best.id } });
     const tracking = String(bought.tracking_code || '');
     const labelUrl = String(bought.postage_label?.label_url || '');
