@@ -32,4 +32,8 @@ No network, no provider calls, no real orders, customers or emails in any suite.
 
 ## Release
 
-Recorded after deployment below.
+- Source: `ab57a6c` on shared main, fast-forward from `6060424` (no intervening commits; nothing to reconcile).
+- Deployment: Cloudflare Workers Builds `biomod-peptides` succeeded for `ab57a6c` at 2026-10-15 22:10:01 UTC. GitHub `release-check` succeeded at 22:07:42 UTC.
+- Live check (read-only, no login): the admin page's served chunk `/_next/static/chunks/experience-TTzb1BPO.js`, reached by following the live entry scripts, contains the new strings "Not contacted", "Messages sent" and "Automatic checkout reminder".
+- Changes page: `node scripts/change-history-import-v1.mjs --remote` imported 6 new events (commit, checks, deployment, version).
+- Gap: the authenticated Orders tab and the `admin-orders` response were not viewed live. No staff session was used, and no credential was requested. The first real automatic tracking email after this release is the first that will show; earlier ones were never recorded.
