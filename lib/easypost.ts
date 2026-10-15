@@ -225,13 +225,15 @@ export function verifyEasypostWebhook(raw: string, header: string | null, secret
     return received.length === expected.length && timingSafeEqual(received, expected);
 }
 const esc = (v: string) => v.replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
-/** Sends the tracking email through Resend. Returns false (without throwing) when email is not configured. */
+/** Sends the tracking email through Resend. Uses the current configured reply address supplied by the caller. Returns false when mail or that reply address is unavailable. */
 export async function sendTrackingEmail(env: Environment, to: string, orderId: string, label: Label, name = '', replyTo = ''): Promise<boolean> {
     const key = (env.RESEND_API_KEY || '').trim();
     if (!key || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to))
         return false;
+    const reply = replyTo.trim();
+    if (replyTo.length > 254 || /[\x00-\x1f\x7f]/.test(replyTo) || !/^[^\s<>@,;]+@[^\s<>@,;]+\.[^\s<>@,;]+$/.test(reply))
+        return false;
     const link = label.trackingUrl || 'https://trybiomod.com/account/orders';
-    const reply = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(replyTo.trim()) ? replyTo.trim() : 'contact@trybiomod.com';
     // Brand colors match the storefront: plum (#2b1030) and cream (#fbf1ea).
     const html = '<div style="background:#fbf1ea;padding:24px 16px">'
         + '<div style="font-family:Arial,sans-serif;color:#141414;max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e9d9ef;border-radius:8px;overflow:hidden">'
