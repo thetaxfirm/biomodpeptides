@@ -34,9 +34,9 @@ What this costs: every order that would have gone Ground Advantage now goes Prio
 
 ## Release
 
-Source on main, pushed file by file with each file verified byte-identical afterwards: 37ef9f2 wrote a placeholder into `lib/shipping-options.ts` by mistake and fdc5e33 restored it (the gate runs before deploy, so the broken file failed the build and production was never served it); 134fe0d and e784448 (route, buy confirmation; the second fixed an `aria-expanded` attribute corrupted in the first); b551e25 (`buyLabel`); ba95191 (admin selector, new suite); this commit (gate list, updated expectation, this log).
+Source on main, pushed file by file with each file verified byte-identical afterwards: 37ef9f2 wrote a placeholder into `lib/shipping-options.ts` by mistake and fdc5e33 restored it (the gate runs before deploy, so the broken file failed the build and production was never served it); 134fe0d and e784448 (route, buy confirmation; the second fixed an `aria-expanded` attribute corrupted in the first); b551e25 (`buyLabel`); ba95191 (admin selector, new suite); 98c43ca (gate list, updated expectation, this log).
 
-Live read-only checks are recorded after the deploy of this commit.
+Live read-only checks after the deploy of 98c43ca: `/`, `/checkout` and `/shipping-policy` return 200, `/admin` redirects to sign-in (307), `/api/admin/shipping-services` returns 403 "Administrator sign-in required." when signed out. The gate was re-run against the exact bytes on main: TypeScript and 80 suites passed. No order, setting or label was touched by this verification.
 
 ## Gaps
 
