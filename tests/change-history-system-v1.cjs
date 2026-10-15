@@ -18,6 +18,7 @@ const worker=load('worker.ts',{
  './lib/checkout-recovery':{runCheckoutRecovery:async copy=>{assert.notEqual(copy,env);assert.notEqual(copy.DB,DB);jobs.push('recovery');await write(copy.DB,900002);}},
  './lib/reply-overdue':{runOverdueDigest:async copy=>{assert.notEqual(copy,env);assert.notEqual(copy.DB,DB);}},
  './lib/tracking-sweep':{runTrackingSweep:async copy=>{assert.notEqual(copy,env);assert.notEqual(copy.DB,DB);jobs.push('tracking');return{checkedAt:0,due:0,read:0,changed:0,failed:0,skipped:0};}},
+ './lib/auto-label':{runAutoLabels:async copy=>{assert.notEqual(copy,env);assert.notEqual(copy.DB,DB);jobs.push('labels');return{checkedAt:0,enabled:false,recovered:0,released:0,due:0,bought:0,failed:0,skipped:0,spentCents:0,capReached:false};}},
 }).default;
 class NextResponse extends Response{}
 const runtime={runtime:()=>env,timestamp:()=>Date.now()};
@@ -38,8 +39,9 @@ async function shippingEvent(signature=true,mode='production'){
   const row=rows().find(r=>r.entity_id===id);assert(row);assert.equal(row.actor,name);assert.equal(row.actor_type,'system');assert.equal(row.source,'system');
  }
  assert.equal(rows().length,baseline+3);assert.equal(sql.prepare('SELECT COUNT(*) n FROM change_context').get().n,0);
- await worker.scheduled({cron:'unrecognized'},env);assert.equal(jobs.length,4,'the four scheduled jobs ran once; an unrecognized cron runs none');
+ await worker.scheduled({cron:'unrecognized'},env);assert.equal(jobs.length,5,'the five scheduled jobs ran once; an unrecognized cron runs none');
  assert(jobs.includes('tracking'),'the carrier tracking sweep runs on the five-minute cron');
+ assert(jobs.includes('labels'),'automatic label purchase runs on the five-minute cron under its own audit identity');
  // A later uninstrumented write cannot inherit the most recent scheduler identity.
  await write(DB,900004);assert.equal(rows().find(r=>r.entity_id==='900004').actor_type,'unknown');
  sql.prepare('INSERT INTO orders(id,owner,request_key,status,data,total,created,updated) VALUES(?,?,?,?,?,?,?,?)').run(orderId,'synthetic-owner','synthetic-key','paid',JSON.stringify({email:'PRIVATE_CUSTOMER',shipment:{tracking:'PRIVATE_TRACKING',shipmentId:'shp_private',status:'pre_transit'}}),10000,1,1);
