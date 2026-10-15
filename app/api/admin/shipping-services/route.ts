@@ -30,6 +30,7 @@ const serviceSchema = z.object({ key: z.string().regex(/^(USPS|UPS|FedEx):[A-Z0-
 const saveSchema = z.object({
     services: z.array(serviceSchema).max(60).refine(list => new Set(list.map(s => s.key)).size === list.length, 'A service is listed twice.'),
     freeStandardEnabled: z.boolean(), freeShippingAt: z.number().int().min(0).max(1000000), shippingCents: z.number().int().min(0).max(100000).nullable(),
+    minimumServiceKey: z.string().max(80).optional(),
 }).strict();
 
 async function runCheck(sample: z.infer<typeof sampleSchema>) {
@@ -81,7 +82,8 @@ export async function POST(req: NextRequest) {
     if (!parsed.success) return j({ error: parsed.error.issues[0]?.message || 'Check the shipping settings and try again.' }, 400);
     const next = parsed.data;
     const current = await config();
-    const shippingOptions = { ...current.shippingOptions, freeStandardEnabled: next.freeStandardEnabled, services: next.services };
+    // 'none' is the explicit opt-out; an absent key takes the store default, so the owner's choice is stored verbatim.
+    const shippingOptions = { ...current.shippingOptions, freeStandardEnabled: next.freeStandardEnabled, services: next.services, minimumServiceKey: next.minimumServiceKey || undefined };
     const nextConfig = { ...current, freeShippingAt: next.freeShippingAt, shippingCents: next.shippingCents, shippingOptions };
     const auditActor: AuditActor = { source: 'admin', actor: actor.email, actorType: 'staff', action: 'admin-shipping-services' };
     await auditRun(database(), auditActor, 'INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', 'store', JSON.stringify(nextConfig));
