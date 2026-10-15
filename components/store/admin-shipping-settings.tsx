@@ -5,12 +5,13 @@ import { money } from '@/lib/catalog';
 import { normalizeShippingOptions, shippingServiceCatalog, defaultMinimumServiceKey, type CatalogService, type ShippingOptionsConfig, type ShippingServiceSetting } from '@/lib/shipping-options';
 import styles from './admin-shipping-settings.module.css';
 
-type ShippingSettingsConfig = { shippingCents: number | null; freeShippingAt: number; shippingOptions?: unknown };
+type AutoLabel = { enabled: boolean; delayMs: number; dailyCapCents: number };
+type ShippingSettingsConfig = { shippingCents: number | null; freeShippingAt: number; shippingOptions?: unknown; autoLabel?: AutoLabel; automaticSpend?: { cents: number; labels: number } };
 type LiveRate = { key: string; name: string; cents: number; days: number | null; tier: string | null };
 type ServiceCheck = { key: string; label: string; status: 'ok' | 'missing' | 'wrong'; carrierCents: number | null; customerCents: number | null; message: string };
 type Check = { ok: true; checkedAt: string; destination: string; package: string; rates: LiveRate[]; options: { label: string; note: string; cents: number; days: number | null }[]; services: ServiceCheck[]; freeStandardLabel: string | null } | { ok: false; error: string };
 type Row = ShippingServiceSetting & { markup: string };
-type Draft = { rows: Row[]; freeStandardEnabled: boolean; threshold: string; fallback: string; minimumServiceKey: string };
+type Draft = { rows: Row[]; freeStandardEnabled: boolean; threshold: string; fallback: string; minimumServiceKey: string; autoEnabled?: boolean; autoDelay?: string; autoCap?: string };
 const ENDPOINT = '/api/admin/shipping-services';
 const carriers = ['USPS', 'UPS', 'FedEx'] as const;
 const groups = { standard: 'Standard', expedited: 'Faster', overnight: 'Overnight' } as const;
@@ -35,7 +36,9 @@ function startingRows(options: ShippingOptionsConfig): Row[] {
 }
 function draftFrom(config: ShippingSettingsConfig): Draft {
     const options = normalizeShippingOptions(config.shippingOptions);
-    return { rows: startingRows(options), freeStandardEnabled: options.freeStandardEnabled, threshold: centsText(config.freeShippingAt), fallback: config.shippingCents == null ? '' : centsText(config.shippingCents), minimumServiceKey: options.minimumServiceKey || defaultMinimumServiceKey };
+    const auto = config.autoLabel;
+    return { rows: startingRows(options), freeStandardEnabled: options.freeStandardEnabled, threshold: centsText(config.freeShippingAt), fallback: config.shippingCents == null ? '' : centsText(config.shippingCents), minimumServiceKey: options.minimumServiceKey || defaultMinimumServiceKey,
+        autoEnabled: auto ? auto.enabled : true, autoDelay: String(auto ? Math.round(auto.delayMs / 60000) : 20), autoCap: centsText(auto ? auto.dailyCapCents : 50000) };
 }
 /** Validated save payload. Throws a message the owner can act on. */
 export function shippingServicesPayload(draft: Draft) {
@@ -45,7 +48,14 @@ export function shippingServicesPayload(draft: Draft) {
         if (row.enabled && !label) throw new Error(`Give ${name} a name customers will see.`);
         return { key: row.key, enabled: row.enabled, markupCents: parseDollars(row.markup, `The extra charge for ${name}`), label: label || name, note: row.note.trim() };
     });
-    return { services, freeStandardEnabled: draft.freeStandardEnabled, freeShippingAt: parseDollars(draft.threshold, 'Free shipping minimum', 1000000), shippingCents: draft.fallback.trim() === '' ? null : parseDollars(draft.fallback, 'Backup standard price'), minimumServiceKey: draft.minimumServiceKey || defaultMinimumServiceKey };
+    return { services, freeStandardEnabled: draft.freeStandardEnabled, freeShippingAt: parseDollars(draft.threshold, 'Free shipping minimum', 1000000), shippingCents: draft.fallback.trim() === '' ? null : parseDollars(draft.fallback, 'Backup standard price'), minimumServiceKey: draft.minimumServiceKey || defaultMinimumServiceKey,
+        // Omitted rather than guessed when the caller did not collect them; the server then keeps what it has.
+        ...(typeof draft.autoEnabled === 'boolean' ? { autoLabel: { enabled: draft.autoEnabled, delayMinutes: minutes(draft.autoDelay), dailyCapCents: parseDollars(draft.autoCap ?? '', 'The daily automatic postage limit', 10000000) } } : {}) };
+}
+function minutes(value: string | undefined) {
+    const n = Number(String(value ?? '').trim());
+    if (!Number.isFinite(n) || n < 0 || n > 1440) throw new Error('The wait before buying a label must be between 0 and 1440 minutes.');
+    return Math.round(n);
 }
 async function call(body?: unknown): Promise<any> {
     const response = await fetch(ENDPOINT, body === undefined ? { cache: 'no-store' } : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -103,7 +113,7 @@ export function AdminShippingSettings({ config, busy = false }: { config: Shippi
         setWorking('save'); setError('');
         try {
             const result = await call({ action: 'save', settings, destination, sample });
-            const next = draftFrom({ shippingCents: result.shippingCents, freeShippingAt: result.freeShippingAt, shippingOptions: result.settings });
+            const next = draftFrom({ shippingCents: result.shippingCents, freeShippingAt: result.freeShippingAt, shippingOptions: result.settings, autoLabel: result.autoLabel, automaticSpend: result.automaticSpend });
             setDraft(next); setSavedDraft(JSON.stringify(next)); setPerServiceSaved(true);
             setSavedMatches(result.savedMatches === true); setCheck(result.check);
             setTimeout(() => verdictRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }), 0);
@@ -170,7 +180,15 @@ export function AdminShippingSettings({ config, busy = false }: { config: Shippi
                         {shippingServiceCatalog.filter(service => service.group !== 'standard').map(service => <option key={service.key} value={service.key}>{service.name}</option>)}
                     </select>
                 </label>
-                <p className={styles.muted}>Upgrades a label when the paid service is slower. You pay the difference; the customer is never charged more. Faster paid services are left alone. New stores start at USPS Priority Mail.</p>
+                <p className={styles.muted}>Upgrades a label when the paid service is slower. You pay the difference; the customer is never charged more. Faster paid services are left alone. Set to USPS Priority Mail unless you change it.</p>
+            </div>
+            <div>
+                <label className={styles.check}><input type="checkbox" checked={draft.autoEnabled} disabled={locked} onChange={e => setDraft(d => ({ ...d, autoEnabled: e.target.checked }))}/><span>Buy labels automatically</span></label>
+                <p className={styles.muted}>Paid orders get a label without anyone clicking. Orders on hold, internal tests and orders that already have a label are never bought. Turning this off stops buying immediately; labels already bought are unaffected.</p>
+                <label className={styles.field}><span>Wait after payment (minutes)</span><input type="number" min="0" max="1440" step="1" value={draft.autoDelay} disabled={locked || !draft.autoEnabled} onChange={e => setDraft(d => ({ ...d, autoDelay: e.target.value }))}/></label>
+                <p className={styles.muted}>Your window to spot a bad address or a problem order before postage is spent. The clock restarts whenever anyone touches the order.</p>
+                <label className={styles.field}><span>Most to spend automatically per day ($)</span><input type="number" min="0" max="100000" step="1" value={draft.autoCap} disabled={locked || !draft.autoEnabled} onChange={e => setDraft(d => ({ ...d, autoCap: e.target.value }))}/></label>
+                <p className={styles.muted}>Counts only labels bought automatically in the last 24 hours; your own purchases never count against it. At the limit, orders simply wait in To ship for you.{config.automaticSpend ? ' Spent automatically in the last 24 hours: ' + money(config.automaticSpend.cents) + ' across ' + config.automaticSpend.labels + (config.automaticSpend.labels === 1 ? ' label.' : ' labels.') : ''}</p>
             </div>
         </div>
 
