@@ -97,6 +97,17 @@ const settle = () => new Promise(r => setTimeout(r, 0));
  assert.throws(() => shippingServicesPayload({ ...draft, rows: [{ ...draft.rows[0], markup: '2' }], threshold: '10000.01' }), /Free shipping minimum/);
  assert.equal(shippingServicesPayload({ ...draft, rows: [{ ...draft.rows[0], markup: '2', enabled: false, label: ' ' }] }).services[0].label, 'USPS Ground Advantage', 'An off service keeps its default name');
 
+ // Automatic label purchase: the switch, the grace period and the daily limit travel with the save.
+ const autoDraft = { ...draft, rows: [{ ...draft.rows[0], markup: '2' }], autoEnabled: true, autoDelay: '20', autoCap: '500' };
+ const autoPayload = shippingServicesPayload(autoDraft);
+ assert.deepEqual(autoPayload.autoLabel, { enabled: true, delayMinutes: 20, dailyCapCents: 50000 });
+ assert.equal(shippingServicesPayload({ ...autoDraft, autoEnabled: false }).autoLabel.enabled, false, 'the kill switch is saved');
+ assert.equal(shippingServicesPayload({ ...autoDraft, autoDelay: '0' }).autoLabel.delayMinutes, 0, 'no grace period is a real choice');
+ assert.throws(() => shippingServicesPayload({ ...autoDraft, autoDelay: '-5' }), /between 0 and 1440 minutes/);
+ assert.throws(() => shippingServicesPayload({ ...autoDraft, autoDelay: 'soon' }), /between 0 and 1440 minutes/);
+ assert.throws(() => shippingServicesPayload({ ...autoDraft, autoCap: '-1' }), /daily automatic postage limit/);
+ assert.equal(shippingServicesPayload({ ...draft, rows: [{ ...draft.rows[0], markup: '2' }] }).autoLabel, undefined, 'a save that never collected them leaves the stored settings alone');
+
  // Saved per-service settings load as saved, including zero extras and custom wording.
  h = mount({ shippingCents: null, freeShippingAt: 0, shippingOptions: { freeStandardEnabled: false, services: [{ key: 'UPS:GROUND', enabled: true, markupCents: 0, label: 'Ground', note: 'Tracked' }] } });
  assert(!text(h.tree).includes('Not set up yet'));
