@@ -88,18 +88,26 @@ export async function POST(req: NextRequest) {
         try {
             const selected = savedShippingOption(data.shippingOption);
             if (data.shippingOption && !selected) throw new Error('The saved shipping option needs review before buying a label.');
-            label = await buyLabel(env, data.address, data.items || [], 'BIOMOD ' + id.slice(0, 8), selected || { shippingService: data.shippingService }, (await config()).shippingOptions);
+            label = await buyLabel(env, data.address, data.items || [], 'BIOMOD ' + id.slice(0, 8), selected || { shippingService: data.shippingService }, (await config()).shippingOptions, {
+                // A shipment recorded before the buy turns an unknown outcome into a resumable one.
+                resumeShipmentId: typeof data.pendingShipmentId === 'string' ? data.pendingShipmentId : undefined,
+                onShipment: async shipmentId => { await run("UPDATE orders SET data=json_set(data,'$.pendingShipmentId',?),updated=? WHERE id=? AND status='labeling'", shipmentId, timestamp(), id); },
+            });
         }
         catch (e) {
+            // Release the claim so the order is workable again. The recorded shipment stays: the next
+            // attempt resumes it, so a purchase whose outcome we never learned is adopted, not repeated.
             await run("UPDATE orders SET status='paid',updated=? WHERE id=? AND status='labeling'", timestamp(), id);
-            const recorded = await outcome('shipping.label_purchase', 'observed', 'A label purchase result was not confirmed. Review the carrier account before retrying.');
-            return j({ error: (e instanceof Error ? e.message : 'The label could not be bought.') + ' Review the carrier account before retrying.' + (recorded ? '' : auditWarning) }, 502);
+            const recorded = await outcome('shipping.label_purchase', 'observed', 'A label purchase result was not confirmed. The next attempt resumes the same carrier shipment rather than buying a second label. Review the carrier account if it does not resolve.');
+            return j({ error: (e instanceof Error ? e.message : 'The label could not be bought.') + ' Retrying resumes the same carrier shipment; it cannot buy a second label.' + (recorded ? '' : auditWarning) }, 502);
         }
-        const next = { ...data, tracking: label.carrier + ' ' + label.tracking, shipment: label, labelCreatedAt: timestamp() };
-        try { await run("UPDATE orders SET status='paid',data=?,updated=? WHERE id=?", JSON.stringify(next), timestamp(), id); }
+        // Targeted writes only. A hold or a carrier status saved while the carrier call was in flight
+        // must survive, so the order record is never rewritten wholesale from a pre-purchase snapshot.
+        const saveLabel = (ts: number) => run("UPDATE orders SET status=CASE WHEN status='labeling' THEN 'paid' ELSE status END,data=json_remove(json_set(data,'$.tracking',?,'$.shipment',json(?),'$.labelCreatedAt',?),'$.pendingShipmentId','$.pendingAuto'),updated=? WHERE id=?", label.carrier + ' ' + label.tracking, JSON.stringify(label), ts, ts, id);
+        try { await saveLabel(timestamp()); }
         catch {
-            await outcome('shipping.label_purchase', 'observed', 'The carrier returned a label, but saving its order record failed. Review the existing carrier label; do not buy another.');
-            return j({ error: 'The carrier returned a label, but the order could not save it. Do not buy another label. Review the existing label in EasyPost.', labelUrl: label.labelUrl }, 502);
+            await outcome('shipping.label_purchase', 'observed', 'The carrier returned a label, but saving its order record failed. The recovery sweep will attach it; do not buy another.');
+            return j({ error: 'The carrier returned a label, but the order could not save it. Do not buy another label — the recovery sweep will attach it within a few minutes.', labelUrl: label.labelUrl }, 502);
         }
         const recorded = await outcome('shipping.label_purchase', 'succeeded', 'Carrier label purchased and saved. Packing and carrier handoff are still required.');
         let emailMessage: string;
