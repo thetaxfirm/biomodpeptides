@@ -20,6 +20,8 @@ export type AutoLabelHealth = {
     recovered: number; released: number;
     /** Buying: orders eligible, labels bought, attempts that failed, orders another writer took. */
     due: number; bought: number; failed: number; skipped: number;
+    /** Orders that failed too many times and were handed to a person. */
+    blocked: number;
     spentCents: number; capReached: boolean;
 };
 
@@ -41,11 +43,15 @@ export const autoLabelSettings = (stored: Record<string, unknown> | null | undef
         dailyCapCents: int(pick('dailyCapCents', 'AUTO_LABEL_DAILY_CAP_CENTS'), 50000, 0, 10000000),
         perRunLimit: int(pick('perRunLimit', 'AUTO_LABEL_PER_RUN'), 10, 1, 50),
         stuckMs: int(pick('stuckMinutes', 'AUTO_LABEL_STUCK_MINUTES'), 5, 2, 120) * 60000,
+        /** No single automatic label may cost more than this. Above it, a person decides. */
+        maxLabelCents: int(pick('maxLabelCents', 'AUTO_LABEL_MAX_LABEL_CENTS'), 5000, 100, 100000),
+        /** After this many failed attempts the order stops being retried and asks for a human. */
+        maxAttempts: int(pick('maxAttempts', 'AUTO_LABEL_MAX_ATTEMPTS'), 3, 1, 20),
     };
 };
 
 type StuckRow = { id: string; status: string; pending: string | null; auto: number | null };
-type DueRow = { id: string; data: string };
+type DueRow = { id: string; data: string; attempts: number };
 
 /**
  * Every attempt that reached EasyPost but left no label on the order, whether the claim is still
@@ -72,7 +78,7 @@ const RELEASE = `UPDATE orders SET status='paid',updated=? WHERE id=? AND status
  */
 const save = (auto: boolean) => `UPDATE orders SET
         status=CASE WHEN status='labeling' THEN 'paid' ELSE status END,
-        data=json_remove(json_set(data,'$.tracking',?,'$.shipment',json(?),'$.labelCreatedAt',?${auto ? ",'$.labelAuto',json('true')" : ''}),'$.pendingShipmentId','$.pendingAuto'),
+        data=json_remove(json_set(data,'$.tracking',?,'$.shipment',json(?),'$.labelCreatedAt',?${auto ? ",'$.labelAuto',json('true')" : ''}),'$.pendingShipmentId','$.pendingAuto','$.labelAttempts'),
         updated=?
     WHERE id=?`;
 /** Only labels this job bought count against the cap; the owner's own purchases are never blocked by it. */
@@ -81,7 +87,7 @@ const SPENT = `SELECT coalesce(sum(json_extract(data,'$.shipment.costCents')),0)
     WHERE json_extract(data,'$.labelAuto') IS NOT NULL
       AND coalesce(json_extract(data,'$.labelCreatedAt'),0) >= ?`;
 /** Paid, unlabelled, not held, not a test, and untouched for the grace period. Oldest order first. */
-const DUE = `SELECT id, data FROM orders
+const DUE = `SELECT id, data, coalesce(json_extract(data,'$.labelAttempts'),0) AS attempts FROM orders
     WHERE status='paid'
       AND json_extract(data,'$.shipment') IS NULL
       AND json_extract(data,'$.hold') IS NULL
@@ -89,6 +95,14 @@ const DUE = `SELECT id, data FROM orders
       AND updated <= ?
     ORDER BY created ASC
     LIMIT ?`;
+/** One more failed attempt on the record. Counted on the order so it survives a restart. */
+const COUNT_ATTEMPT = `UPDATE orders SET data=json_set(data,'$.labelAttempts',coalesce(json_extract(data,'$.labelAttempts'),0)+1),updated=? WHERE id=?`;
+/**
+ * Stop trying and tell someone. A hold is the mechanism the store already has for "a human must look
+ * at this": it moves the order into Needs review and blocks both automatic and manual purchase until
+ * it is cleared, which is exactly right for an address or service the carrier keeps refusing.
+ */
+const BLOCK = `UPDATE orders SET data=json_set(data,'$.hold',json(?)),updated=? WHERE id=? AND json_extract(data,'$.hold') IS NULL`;
 /** The same claim the admin button takes, so the two can never buy for one order at the same time. */
 const CLAIM = `UPDATE orders SET status='labeling',updated=? WHERE id=? AND status='paid'
     AND json_extract(data,'$.shipment') IS NULL AND json_extract(data,'$.hold') IS NULL`;
@@ -104,20 +118,39 @@ const replyAddress = async (env: AutoLabelEnvironment) => {
         return typeof reply === 'string' && /^[^\s<>@,;]+@[^\s<>@,;]+\.[^\s<>@,;]+$/.test(reply.trim()) ? reply.trim() : '';
     } catch { return ''; }
 };
-const settingsRow = async (env: AutoLabelEnvironment) => {
+/**
+ * null means "we could not read the settings". That is not the same as "nothing is configured":
+ * defaulting to enabled there would let a database hiccup resurrect a job the owner switched off,
+ * so the caller treats null as a reason to stand down rather than a reason to use defaults.
+ */
+const settingsRow = async (env: AutoLabelEnvironment): Promise<Record<string, any> | null> => {
     try {
         const row = await env.DB.prepare(`SELECT value FROM settings WHERE key='store'`).first<{ value: string }>();
-        const parsed = row?.value ? JSON.parse(row.value) : {};
+        if (!row?.value) return {};
+        const parsed = JSON.parse(row.value);
         return parsed && typeof parsed === 'object' ? parsed as Record<string, any> : {};
-    } catch { return {}; }
+    } catch { return null; }
 };
+/** Health is written where the admin can read it, so a job that quietly stops is visible. */
+const HEALTH_KEY = 'auto_label_health_v1';
+const saveHealth = async (env: AutoLabelEnvironment, health: AutoLabelHealth, status: string) => {
+    try { await env.DB.prepare(`INSERT INTO settings(key,value) VALUES('${HEALTH_KEY}',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).bind(JSON.stringify({ ...health, status })).run(); }
+    catch { /* health is a report, never the thing that fails a run */ }
+};
+/** What the last run did, for the admin. Never throws: a missing report is not an outage. */
+export async function readAutoLabelHealth(env: AutoLabelEnvironment): Promise<(AutoLabelHealth & { status: string }) | null> {
+    try {
+        const row = await env.DB.prepare(`SELECT value FROM settings WHERE key='${HEALTH_KEY}'`).first<{ value: string }>();
+        return row?.value ? JSON.parse(row.value) : null;
+    } catch { return null; }
+}
 
 export async function runAutoLabels(env: AutoLabelEnvironment, now = Date.now()): Promise<AutoLabelHealth> {
     const stored = await settingsRow(env);
-    const settings = autoLabelSettings(stored.autoLabel, env as Record<string, unknown>);
+    const settings = autoLabelSettings(stored?.autoLabel, env as Record<string, unknown>);
     const health: AutoLabelHealth = {
-        checkedAt: now, enabled: settings.enabled,
-        recovered: 0, released: 0, due: 0, bought: 0, failed: 0, skipped: 0, spentCents: 0, capReached: false,
+        checkedAt: now, enabled: stored !== null && settings.enabled,
+        recovered: 0, released: 0, due: 0, bought: 0, failed: 0, skipped: 0, blocked: 0, spentCents: 0, capReached: false,
     };
     const writeLabel = (auto: boolean, label: Label, id: string) =>
         env.DB.prepare(save(auto)).bind(label.carrier + ' ' + label.tracking, JSON.stringify(label), now, now, id).run();
@@ -143,19 +176,21 @@ export async function runAutoLabels(env: AutoLabelEnvironment, now = Date.now())
     }
 
     // --- Buying. ---
-    if (!settings.enabled) return health;
+    // Settings we could not read are not permission to spend money.
+    if (stored === null) { await saveHealth(env, health, 'settings_unreadable'); return health; }
+    if (!settings.enabled) { await saveHealth(env, health, 'disabled'); return health; }
     // The rule cannot be judged here without today's catalog, so the job stands down rather than guess.
-    if (COA_REQUIRED_TO_SHIP) return health;
+    if (COA_REQUIRED_TO_SHIP) { await saveHealth(env, health, 'coa_rule_on'); return health; }
 
     try {
         const spent = await env.DB.prepare(SPENT).bind(now - DAY).first<{ cents: number }>();
         health.spentCents = Number(spent?.cents) || 0;
-    } catch { return health; }
-    if (health.spentCents >= settings.dailyCapCents) { health.capReached = true; return health; }
+    } catch { await saveHealth(env, health, 'spend_unreadable'); return health; }
+    if (health.spentCents >= settings.dailyCapCents) { health.capReached = true; await saveHealth(env, health, 'cap_reached'); return health; }
 
     let due: DueRow[] = [];
     try { due = (await env.DB.prepare(DUE).bind(now - settings.delayMs, settings.perRunLimit).all<DueRow>()).results || []; }
-    catch { return health; }
+    catch { await saveHealth(env, health, 'queue_unreadable'); return health; }
     health.due = due.length;
 
     const shippingOptions = normalizeShippingOptions(stored.shippingOptions, env as Record<string, string | undefined>);
@@ -178,12 +213,21 @@ export async function runAutoLabels(env: AutoLabelEnvironment, now = Date.now())
         try {
             label = await buyLabel(env as never, data.address, data.items || [], 'BIOMOD ' + row.id.slice(0, 8), selected || { shippingService: data.shippingService }, shippingOptions, {
                 resumeShipmentId: typeof data.pendingShipmentId === 'string' ? data.pendingShipmentId : undefined,
+                maxCents: settings.maxLabelCents,
                 onShipment: async shipmentId => { await env.DB.prepare(`UPDATE orders SET data=json_set(data,'$.pendingShipmentId',?,'$.pendingAuto',json('true')),updated=? WHERE id=? AND status='labeling'`).bind(shipmentId, now, row.id).run(); },
             });
         } catch {
             // Release the claim and leave the recorded shipment: the next attempt resumes it.
             try { await env.DB.prepare(RELEASE).bind(now, row.id).run(); } catch { /* recovery will release it */ }
             health.failed += 1;
+            // An order the carrier will never accept must not be retried forever in silence.
+            try {
+                await env.DB.prepare(COUNT_ATTEMPT).bind(now, row.id).run();
+                if (Number(row.attempts) + 1 >= settings.maxAttempts) {
+                    const held = await env.DB.prepare(BLOCK).bind(JSON.stringify({ issue: 'website', note: 'Automatic label purchase failed ' + (Number(row.attempts) + 1) + ' times. Buy the label by hand, or fix the address.', by: 'Automatic label purchase', at: now }), now, row.id).run();
+                    if (held.meta.changes) health.blocked += 1;
+                }
+            } catch { /* the attempt count is bookkeeping; never fail the run over it */ }
             continue;
         }
         try { await writeLabel(true, label, row.id); }
@@ -202,5 +246,6 @@ export async function runAutoLabels(env: AutoLabelEnvironment, now = Date.now())
                 summary: trackingSent ? 'Tracking email accepted by the mail provider. Inbox delivery is unconfirmed.' : 'Tracking email acceptance was not confirmed. Review mail provider records before resending.' });
         } catch { /* history is best-effort here */ }
     }
+    await saveHealth(env, health, 'completed');
     return health;
 }
