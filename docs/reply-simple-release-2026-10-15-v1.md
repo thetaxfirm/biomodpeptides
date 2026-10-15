@@ -26,4 +26,8 @@ The real component and stylesheet were also server-rendered locally with synthet
 
 ## Release
 
-Recorded after deployment below.
+- Source: `4859cee` on shared main, fast-forward from `87abafd` (no intervening commits).
+- Deployment: Cloudflare Workers Builds `biomod-peptides` succeeded for `4859cee` at 2026-10-15 22:38:46 UTC; GitHub `release-check` succeeded at 22:37:44 UTC.
+- Live check (read-only, no login): the chunk the live admin loads, `/_next/static/chunks/experience-D_0M9T7b.js`, contains "You replied", "Write a new message to" and the More options label, and no longer contains "Last reply sent".
+- Changes page: `node scripts/change-history-import-v1.mjs --remote` run after deploy.
+- Gap: the authenticated Requests tab was not viewed live; no staff session was used. Layout was verified by local server render with synthetic data.
