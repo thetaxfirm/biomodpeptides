@@ -57,6 +57,18 @@ const APPLY = `UPDATE orders SET
  * One pass. Never throws for a single unreachable parcel: a carrier outage must not stop the rest,
  * and a parcel left unchecked is simply picked up on the next run.
  */
+const HEALTH_KEY = 'tracking_sweep_health_v1';
+/** Recorded where the admin can read it, so a sweep that quietly stops running is visible. */
+const saveHealth = async (env: SweepEnvironment, health: SweepHealth, status: string) => {
+    try { await env.DB.prepare(`INSERT INTO settings(key,value) VALUES('${HEALTH_KEY}',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).bind(JSON.stringify({ ...health, status })).run(); }
+    catch { /* health is a report, never the thing that fails a run */ }
+};
+export async function readTrackingSweepHealth(env: SweepEnvironment) {
+    try {
+        const row = await env.DB.prepare(`SELECT value FROM settings WHERE key='${HEALTH_KEY}'`).first<{ value: string }>();
+        return row?.value ? JSON.parse(row.value) : null;
+    } catch { return null; }
+}
 export async function runTrackingSweep(env: SweepEnvironment, now = Date.now()): Promise<SweepHealth> {
     const { staleMs, limit } = sweepSettings(env);
     const health: SweepHealth = { checkedAt: now, due: 0, read: 0, changed: 0, failed: 0, skipped: 0 };
@@ -65,6 +77,7 @@ export async function runTrackingSweep(env: SweepEnvironment, now = Date.now()):
         due = (await env.DB.prepare(DUE).bind(now - staleMs, limit).all<Row>()).results || [];
     } catch {
         health.failed += 1;
+        await saveHealth(env, health, 'queue_unreadable');
         return health;
     }
     health.due = due.length;
@@ -86,5 +99,6 @@ export async function runTrackingSweep(env: SweepEnvironment, now = Date.now()):
             health.failed += 1;
         }
     }
+    await saveHealth(env, health, 'completed');
     return health;
 }
