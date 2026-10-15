@@ -10,6 +10,8 @@ export type ShippingOptionsConfig = {
     services?: ShippingServiceSetting[];
     /** Catalog key of the slowest service the store will hand to a carrier. Upgrades only; the customer is never charged more. */
     minimumServiceKey?: string;
+    /** Delivery confirmation asked of the carrier when a label is bought. The store pays for it. */
+    signatureConfirmation?: string;
 };
 /** One carrier service the owner chose to offer: the extra charged on top of the carrier price and the customer wording. */
 export type ShippingServiceSetting = { key: string; enabled: boolean; markupCents: number; label: string; note: string };
@@ -54,6 +56,25 @@ export const noMinimumService = 'none';
 export const minimumService = (settings: Pick<ShippingOptionsConfig, 'minimumServiceKey'>) =>
     settings.minimumServiceKey === noMinimumService ? null
         : catalogService(settings.minimumServiceKey || defaultMinimumServiceKey) || catalogService(defaultMinimumServiceKey);
+/**
+ * Delivery confirmation, as EasyPost names it. Applied when the label is bought, never when
+ * checkout is quoted, so the fee is the store's and no customer sees a price change.
+ * INDIRECT_SIGNATURE is USPS only; the carrier simply ignores an option it does not offer.
+ */
+export const signatureOptions = [
+    { key: 'SIGNATURE', name: 'Signature required', detail: 'Someone at the address must sign' },
+    { key: 'ADULT_SIGNATURE', name: 'Adult signature (21+)', detail: 'An adult must sign, with ID. Costs more and fails delivery more often' },
+    { key: 'INDIRECT_SIGNATURE', name: 'Indirect signature', detail: 'A neighbour may sign. USPS only' },
+] as const;
+/** Stored to mean "no signature asked for". Distinct from an absent key, which takes the default. */
+export const noSignature = 'none';
+export const defaultSignatureConfirmation = 'SIGNATURE';
+/** The confirmation in force, or null when the store has turned it off. */
+export const signatureConfirmation = (settings: Pick<ShippingOptionsConfig, 'signatureConfirmation'>) => {
+    const value = settings.signatureConfirmation;
+    if (value === noSignature) return null;
+    return signatureOptions.some(o => o.key === value) ? value as string : defaultSignatureConfirmation;
+};
 const plainText = (v: unknown, max: number) => typeof v === 'string' ? v.replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, max) : '';
 function normalizeServices(value: unknown): ShippingServiceSetting[] | undefined {
     if (!Array.isArray(value)) return undefined;
@@ -91,6 +112,9 @@ const floor = (v: Record<string, unknown>) => ({
     minimumServiceKey: v.minimumServiceKey === noMinimumService ? noMinimumService
         : typeof v.minimumServiceKey === 'string' && catalogService(v.minimumServiceKey) ? v.minimumServiceKey
         : defaultMinimumServiceKey,
+    signatureConfirmation: v.signatureConfirmation === noSignature ? noSignature
+        : typeof v.signatureConfirmation === 'string' && signatureOptions.some(o => o.key === v.signatureConfirmation) ? v.signatureConfirmation
+        : defaultSignatureConfirmation,
 });
 export function normalizeShippingOptions(value?: unknown, env: Record<string, string | undefined> = {}): ShippingOptionsConfig {
     const v = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
