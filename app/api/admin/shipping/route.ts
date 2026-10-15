@@ -7,19 +7,30 @@ import { savedShippingOption } from '@/lib/shipping-options';
 import { catalog, config } from '@/lib/commerce';
 import { coaBlockedItems, coaBlockMessage } from '@/lib/coa-shipping';
 import { readCoaConfig } from '@/lib/coa-outbox';
+import { readTrackingSweepHealth } from '@/lib/tracking-sweep';
 export const dynamic = 'force-dynamic';
 const j = (value: unknown, status = 200) => NextResponse.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
 const auditWarning = ' Change history could not record the final result. Do not repeat this action just to update history.';
 // Label creation does not confirm dispatch. All provider calls require administrator access.
 export async function GET() {
-    try { await requireStaff('orders:read'); return j(await shippingConnection(runtime())); }
+    // The sweep report rides along: the webhook can be registered and the backup sweep still be dead,
+    // and that combination is exactly what nobody would notice on their own.
+    try {
+        await requireStaff('orders:read');
+        const env = runtime();
+        return j({ ...await shippingConnection(env), trackingSweep: await readTrackingSweepHealth(env as never) });
+    }
     catch { return j({ error: 'Administrator sign-in required.' }, 403); }
 }
 export async function POST(req: NextRequest) {
+    if (req.headers.get('origin') !== req.nextUrl.origin)
+        return j({ error: 'Please refresh the page and try again.' }, 403);
+    // Outside the try: an authentication failure must not be relayed as a 400 with its own message,
+    // which would tell any signed-in customer whether they are staff and which permission they lack.
+    let actor;
+    try { actor = await requireStaff('orders:fulfill'); }
+    catch { return j({ error: 'Administrator sign-in required.' }, 403); }
     try {
-        if (req.headers.get('origin') !== req.nextUrl.origin)
-            return j({ error: 'Please refresh the page and try again.' }, 403);
-        const actor = await requireStaff('orders:fulfill');
         const env = runtime();
         const context = { source: 'admin' as const, actor: actor.email, actorType: 'staff' as const };
         const run = (sql: string, ...values: (string | number | null)[]) => auditRun(env.DB, context, sql, ...values);
