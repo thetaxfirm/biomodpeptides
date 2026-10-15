@@ -26,7 +26,7 @@ function load(file) {
  mod._compile(ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText, file);
  return mod.exports;
 }
-const { AdminShippingSettings, shippingServicesPayload } = load(path.join(root, 'components/store/admin-shipping-settings.tsx'));
+const { AdminShippingSettings, shippingServicesPayload, autoLabelReport } = load(path.join(root, 'components/store/admin-shipping-settings.tsx'));
 const { shippingServiceCatalog } = load(path.join(root, 'lib/shipping-options.ts'));
 const requests = [];
 let reply;
@@ -113,6 +113,28 @@ const settle = () => new Promise(r => setTimeout(r, 0));
  assert.throws(() => shippingServicesPayload({ ...autoDraft, autoCap: '-1' }), /daily automatic postage limit/);
  assert.equal(shippingServicesPayload({ ...draft, rows: [{ ...draft.rows[0], markup: '2' }] }).autoLabel, undefined, 'a save that never collected them leaves the stored settings alone');
 
+ // The per-label ceiling: the limit that catches one wrong address quoting a freight rate.
+ assert.equal(shippingServicesPayload({ ...autoDraft, autoMax: '50' }).autoLabel.maxLabelCents, 5000);
+ assert.equal(shippingServicesPayload({ ...autoDraft, autoMax: '12.50' }).autoLabel.maxLabelCents, 1250, 'cents are kept exactly');
+ assert.equal(shippingServicesPayload(autoDraft).autoLabel.maxLabelCents, undefined, 'a page that never collected it leaves the saved ceiling alone');
+ assert.throws(() => shippingServicesPayload({ ...autoDraft, autoMax: '0' }), /at least \$1\.00/, 'a ceiling of zero would buy nothing');
+ assert.throws(() => shippingServicesPayload({ ...autoDraft, autoMax: '-5' }), /most to spend on one label/);
+ assert.throws(() => shippingServicesPayload({ ...autoDraft, autoMax: '5000' }), /most to spend on one label/);
+ assert.throws(() => shippingServicesPayload({ ...autoDraft, autoMax: 'lots' }), /most to spend on one label/);
+
+ // The health line: an owner must be able to tell "working", "switched off" and "stopped running" apart.
+ const RUN = Date.parse('2026-10-15T12:00:00Z');
+ assert.match(autoLabelReport(null, RUN), /No automatic run has reported yet/);
+ assert.match(autoLabelReport({ checkedAt: RUN - 60000, status: 'completed', enabled: true, bought: 2, failed: 0, blocked: 0, due: 2, recovered: 0, released: 0, capReached: false }, RUN), /2 labels bought/);
+ assert.match(autoLabelReport({ checkedAt: RUN - 60000, status: 'completed', enabled: true, bought: 1, failed: 1, blocked: 1, due: 2, recovered: 0, released: 0, capReached: false }, RUN), /1 label bought, 1 attempt failed, 1 order handed to you/);
+ assert.match(autoLabelReport({ checkedAt: RUN - 60000, status: 'disabled', enabled: false, bought: 0, failed: 0, blocked: 0, due: 0, recovered: 0, released: 0, capReached: false }, RUN), /Automatic buying is off/);
+ assert.match(autoLabelReport({ checkedAt: RUN - 60000, status: 'cap_reached', enabled: true, bought: 0, failed: 0, blocked: 0, due: 0, recovered: 0, released: 0, capReached: true }, RUN), /daily limit is reached/);
+ assert.match(autoLabelReport({ checkedAt: RUN - 60000, status: 'settings_unreadable', enabled: false, bought: 0, failed: 0, blocked: 0, due: 0, recovered: 0, released: 0, capReached: false }, RUN), /Nothing was charged/);
+ // A report much older than the five-minute cron means the job itself stopped, which is the silent failure.
+ const stale = autoLabelReport({ checkedAt: RUN - 7200000, status: 'completed', enabled: true, bought: 9, failed: 0, blocked: 0, due: 9, recovered: 0, released: 0, capReached: false }, RUN);
+ assert.match(stale, /may have stopped/);
+ assert(!stale.includes('9 labels bought'), 'a stale report never reads as a healthy run');
+
  // Saved per-service settings load as saved, including zero extras and custom wording.
  h = mount({ shippingCents: null, freeShippingAt: 0, shippingOptions: { freeStandardEnabled: false, services: [{ key: 'UPS:GROUND', enabled: true, markupCents: 0, label: 'Ground', note: 'Tracked' }] } });
  assert(!text(h.tree).includes('Not set up yet'));
@@ -120,5 +142,5 @@ const settle = () => new Promise(r => setTimeout(r, 0));
  assert.equal(input(h, 'Name customers see for UPS Ground').props.value, 'Ground'); assert.equal(input(h, 'Extra charge for UPS Ground').props.value, '0');
  assert.equal(button(h, 'Save shipping and check it').props.disabled, true, 'Nothing to save until something changes');
  assert(requests.every(r => r.url === '/api/admin/shipping-services'));
- console.log('PASS: per-service shipping admin: every carrier service listed, legacy starting point, live carrier price + extra = customer price, custom names/notes, exact save payload, read-back green light, warn/fail never green, validation. Synthetic fetch only.');
+ console.log('PASS: per-service shipping admin: every carrier service listed, legacy starting point, live carrier price + extra = customer price, custom names/notes, exact save payload, per-label ceiling, automatic-run health line, read-back green light, warn/fail never green, validation. Synthetic fetch only.');
 })().catch(e => { console.error(e); process.exit(1); });
