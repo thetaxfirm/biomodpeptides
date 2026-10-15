@@ -17,7 +17,11 @@ export function orderPreorderNotice(data: { items?: unknown } | undefined): stri
 }
 
 /** Payment status is not proof of physical dispatch. Shared by admin and customer views. */
-export type FulfillmentOrder = { status: string; data?: { items?: unknown; internalTest?: boolean; shipment?: { status?: string; checkedAt?: number }; tracking?: string; hold?: unknown; labelCreatedAt?: number } };
+export type FulfillmentOrder = { status: string; data?: { items?: unknown; internalTest?: boolean; shipment?: { status?: string; checkedAt?: number }; tracking?: string; hold?: unknown; labelCreatedAt?: number; labelApproval?: { cents?: number; limitCents?: number; at?: number } } };
+/** A label quoted above the automatic ceiling, waiting for a person to approve the cost. */
+export function awaitingLabelApproval(order: FulfillmentOrder): boolean {
+    return Boolean(order.data?.labelApproval && !order.data?.shipment);
+}
 /** A label the carrier has not scanned in this long was probably never handed over. */
 export const STALLED_LABEL_MS = 48 * 3600000;
 /**
@@ -42,6 +46,7 @@ export function fulfillmentLabel(order: FulfillmentOrder): string {
     if (carrier && problems.has(carrier)) return 'Carrier reports ' + carrier.replaceAll('_', ' ') + ': review required';
     if (order.status === 'delivered') return 'Marked delivered by store; carrier delivery unconfirmed';
     if (order.data?.shipment) return 'Label created: awaiting carrier acceptance';
+    if (awaitingLabelApproval(order)) return 'Label costs more than the automatic limit: your approval required';
     if (order.status === 'shipped') return 'Marked dispatched by store; carrier acceptance unconfirmed';
     if (order.status === 'paid') return orderPreorderNotice(order.data) ? 'Payment confirmed. ' + orderPreorderNotice(order.data) : 'Payment confirmed: awaiting packing and dispatch';
     if (order.status === 'labeling') return 'Preparing shipment: label purchase in progress';
@@ -89,6 +94,9 @@ export function orderBucket(order: FulfillmentOrder, now = Date.now()): OrderBuc
     // A reported problem (for example, the item is not in stock yet) holds the order in Needs review
     // until cleared. It does not hide a delivery that already happened.
     if (order.data?.hold) return 'review';
+    // A label priced above the automatic ceiling waits for a person, in the same place they already
+    // look for work that needs them. Unlike a hold, every manual action stays available.
+    if (awaitingLabelApproval(order)) return 'review';
     // A label nobody ever handed to the carrier needs a human, not another day of waiting.
     if (stalledLabel(order, now)) return 'review';
     if (carrier && moving.has(carrier)) return 'shipped';
