@@ -29,13 +29,18 @@ export function routeMetadata(path: string, query: URLSearchParams = new URLSear
   const canonical = config.origin + canonicalPath(path);
   const title = path === '/' ? info.title : info.title + ' | Biomod Peptides';
   const p = productAt(path);
+  // Public editorial/store pages use the current brand mark. Product previews keep
+  // their own catalog images; private, held and preview routes get no new artwork.
+  const shareImage = !p && index ? { url: config.origin + '/brand/logo-navy-tm-v36.png',
+    width: 1320, height: 381, type: 'image/png', alt: 'Biomod Peptides logo' } : null;
   return {
     title: { absolute: title }, description: info.description,
     alternates: { canonical },
     robots: { index, follow, googleBot: { index, follow, 'max-image-preview': index ? 'large' : 'none' } },
     openGraph: { type: 'website', locale: 'en_US', siteName: 'Biomod Peptides', title, description: info.description, url: canonical,
-      ...(p ? { images: [{ url: config.origin + imagePath(p), alt: p.image.alt || p.name }] } : {}) },
-    twitter: { card: 'summary', title, description: info.description },
+      ...(p ? { images: [{ url: config.origin + imagePath(p), alt: p.image.alt || p.name }] } : shareImage ? { images: [shareImage] } : {}) },
+    twitter: { card: 'summary', title, description: info.description,
+      ...(shareImage ? { images: [{ url: shareImage.url, alt: shareImage.alt }] } : {}) },
   };
 }
 const faqPage = (url: string, items: { question: string; answer: string }[]) => ({ '@type': 'FAQPage', '@id': url + '#faq', url,
