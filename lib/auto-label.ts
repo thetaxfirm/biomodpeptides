@@ -22,6 +22,8 @@ export type AutoLabelHealth = {
     due: number; bought: number; failed: number; skipped: number;
     /** Orders that failed too many times and were handed to a person. */
     blocked: number;
+    /** Orders whose label costs more than the ceiling, now waiting for a person to approve the price. */
+    needsApproval: number;
     spentCents: number; capReached: boolean;
 };
 
@@ -44,7 +46,7 @@ export const autoLabelSettings = (stored: Record<string, unknown> | null | undef
         perRunLimit: int(pick('perRunLimit', 'AUTO_LABEL_PER_RUN'), 10, 1, 50),
         stuckMs: int(pick('stuckMinutes', 'AUTO_LABEL_STUCK_MINUTES'), 5, 2, 120) * 60000,
         /** No single automatic label may cost more than this. Above it, a person decides. */
-        maxLabelCents: int(pick('maxLabelCents', 'AUTO_LABEL_MAX_LABEL_CENTS'), 5000, 100, 100000),
+        maxLabelCents: int(pick('maxLabelCents', 'AUTO_LABEL_MAX_LABEL_CENTS'), 7500, 100, 100000),
         /** After this many failed attempts the order stops being retried and asks for a human. */
         maxAttempts: int(pick('maxAttempts', 'AUTO_LABEL_MAX_ATTEMPTS'), 3, 1, 20),
     };
@@ -78,7 +80,7 @@ const RELEASE = `UPDATE orders SET status='paid',updated=? WHERE id=? AND status
  */
 const save = (auto: boolean) => `UPDATE orders SET
         status=CASE WHEN status='labeling' THEN 'paid' ELSE status END,
-        data=json_remove(json_set(data,'$.tracking',?,'$.shipment',json(?),'$.labelCreatedAt',?${auto ? ",'$.labelAuto',json('true')" : ''}),'$.pendingShipmentId','$.pendingAuto','$.labelAttempts'),
+        data=json_remove(json_set(data,'$.tracking',?,'$.shipment',json(?),'$.labelCreatedAt',?${auto ? ",'$.labelAuto',json('true')" : ''}),'$.pendingShipmentId','$.pendingAuto','$.labelAttempts','$.labelApproval'),
         updated=?
     WHERE id=?`;
 /** Only labels this job bought count against the cap; the owner's own purchases are never blocked by it. */
@@ -86,12 +88,19 @@ const SPENT = `SELECT coalesce(sum(json_extract(data,'$.shipment.costCents')),0)
     FROM orders
     WHERE json_extract(data,'$.labelAuto') IS NOT NULL
       AND coalesce(json_extract(data,'$.labelCreatedAt'),0) >= ?`;
-/** Paid, unlabelled, not held, not a test, and untouched for the grace period. Oldest order first. */
+/**
+ * Paid, unlabelled, not held, not a test, and untouched for the grace period. Oldest order first.
+ *
+ * An order already quoted above the ceiling is left out, so an expensive label is never retried in a
+ * loop. The comparison is against today's ceiling rather than the marker's presence: raise the limit
+ * past what was quoted and the order simply becomes due again, with no extra step.
+ */
 const DUE = `SELECT id, data, coalesce(json_extract(data,'$.labelAttempts'),0) AS attempts FROM orders
     WHERE status='paid'
       AND json_extract(data,'$.shipment') IS NULL
       AND json_extract(data,'$.hold') IS NULL
       AND json_extract(data,'$.internalTest') IS NULL
+      AND coalesce(json_extract(data,'$.labelApproval.cents'),0) <= ?
       AND updated <= ?
     ORDER BY created ASC
     LIMIT ?`;
@@ -103,6 +112,12 @@ const COUNT_ATTEMPT = `UPDATE orders SET data=json_set(data,'$.labelAttempts',co
  * it is cleared, which is exactly right for an address or service the carrier keeps refusing.
  */
 const BLOCK = `UPDATE orders SET data=json_set(data,'$.hold',json(?)),updated=? WHERE id=? AND json_extract(data,'$.hold') IS NULL`;
+/**
+ * A label that costs more than the ceiling. Deliberately not a hold: a hold blocks the Buy button,
+ * and buying it by hand is exactly the approval being asked for. This marker moves the order into
+ * Needs review and out of the automatic queue, while leaving every manual action available.
+ */
+const NEEDS_APPROVAL = `UPDATE orders SET data=json_set(data,'$.labelApproval',json(?)),updated=? WHERE id=?`;
 /** The same claim the admin button takes, so the two can never buy for one order at the same time. */
 const CLAIM = `UPDATE orders SET status='labeling',updated=? WHERE id=? AND status='paid'
     AND json_extract(data,'$.shipment') IS NULL AND json_extract(data,'$.hold') IS NULL`;
@@ -150,7 +165,7 @@ export async function runAutoLabels(env: AutoLabelEnvironment, now = Date.now())
     const settings = autoLabelSettings(stored?.autoLabel, env as Record<string, unknown>);
     const health: AutoLabelHealth = {
         checkedAt: now, enabled: stored !== null && settings.enabled,
-        recovered: 0, released: 0, due: 0, bought: 0, failed: 0, skipped: 0, blocked: 0, spentCents: 0, capReached: false,
+        recovered: 0, released: 0, due: 0, bought: 0, failed: 0, skipped: 0, blocked: 0, needsApproval: 0, spentCents: 0, capReached: false,
     };
     const writeLabel = (auto: boolean, label: Label, id: string) =>
         env.DB.prepare(save(auto)).bind(label.carrier + ' ' + label.tracking, JSON.stringify(label), now, now, id).run();
@@ -189,7 +204,7 @@ export async function runAutoLabels(env: AutoLabelEnvironment, now = Date.now())
     if (health.spentCents >= settings.dailyCapCents) { health.capReached = true; await saveHealth(env, health, 'cap_reached'); return health; }
 
     let due: DueRow[] = [];
-    try { due = (await env.DB.prepare(DUE).bind(now - settings.delayMs, settings.perRunLimit).all<DueRow>()).results || []; }
+    try { due = (await env.DB.prepare(DUE).bind(settings.maxLabelCents, now - settings.delayMs, settings.perRunLimit).all<DueRow>()).results || []; }
     catch { await saveHealth(env, health, 'queue_unreadable'); return health; }
     health.due = due.length;
 
@@ -216,9 +231,19 @@ export async function runAutoLabels(env: AutoLabelEnvironment, now = Date.now())
                 maxCents: settings.maxLabelCents,
                 onShipment: async shipmentId => { await env.DB.prepare(`UPDATE orders SET data=json_set(data,'$.pendingShipmentId',?,'$.pendingAuto',json('true')),updated=? WHERE id=? AND status='labeling'`).bind(shipmentId, now, row.id).run(); },
             });
-        } catch {
+        } catch (e) {
             // Release the claim and leave the recorded shipment: the next attempt resumes it.
             try { await env.DB.prepare(RELEASE).bind(now, row.id).run(); } catch { /* recovery will release it */ }
+            // A price above the ceiling is not a failure, and retrying would only quote the same
+            // price again. Record what it would cost and let the order wait for a person's decision.
+            const quoted = e as { code?: string; cents?: number };
+            if (quoted?.code === 'label_above_limit') {
+                try {
+                    await env.DB.prepare(NEEDS_APPROVAL).bind(JSON.stringify({ cents: Number(quoted.cents) || 0, limitCents: settings.maxLabelCents, at: now }), now, row.id).run();
+                    health.needsApproval += 1;
+                } catch { /* the marker is bookkeeping; never fail the run over it */ }
+                continue;
+            }
             health.failed += 1;
             // An order the carrier will never accept must not be retried forever in silence.
             try {
