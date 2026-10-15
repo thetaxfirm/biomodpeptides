@@ -46,6 +46,8 @@ m.filename = filename; m.require = name => {
   if (name === '@/lib/coa-outbox') return { readCoaConfig: async () => ({ enabled: true, replyTo: 'reply@example.invalid', notifyTo: null }) };
   if (name === '@/lib/change-history') return history;
   if (name === '@/lib/easypost') return shipping;
+  // The connection check reports the backup sweep's health; this route test never runs the sweep.
+  if (name === '@/lib/tracking-sweep') return { readTrackingSweepHealth: async () => null };
   if (name === '@/lib/commerce') return {config: async()=>({shippingOptions:{}}), catalog: async()=>[]};
   // The COA shipping rule has its own suite (coa-shipping-v1); here every order is cleared to ship.
   if (name === '@/lib/coa-shipping') return {coaBlockedItems: () => [], coaBlockMessage: names => 'blocked ' + names.join(',')};
@@ -62,7 +64,12 @@ const checkSafe = () => {
 };
 (async () => {
   reset(); assert.equal((await post({}, 'https://bad.invalid')).status, 403); assert.equal(events.length, 0); assert.equal(calls.length, 0);
-  allowed = false; assert.equal((await post()).status, 400); assert.equal(events.length, 0); assert.equal(calls.length, 0);
+  // An authentication failure is a generic 403: it must not reveal whether the caller is staff,
+  // nor which permission they are missing, and must do no work.
+  allowed = false; const denied = await post();
+  assert.equal(denied.status, 403); assert.equal(denied.body.error, 'Administrator sign-in required.');
+  assert(!JSON.stringify(denied).includes('Unauthorized'), 'the internal reason is never relayed');
+  assert.equal(events.length, 0); assert.equal(calls.length, 0);
 
   reset(); let r = await post(); assert.equal(r.status, 200); assert.equal(row().status, 'paid'); assert.equal(row().data.shipment.tracking, label.tracking);
   assert.deepEqual(events.map(e => e.action + ':' + e.status), ['shipping.label_purchase:attempted', 'shipping.label_purchase:succeeded', 'shipping.tracking_email:attempted', 'shipping.tracking_email:succeeded']);
