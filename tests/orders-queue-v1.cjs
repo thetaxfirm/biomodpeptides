@@ -50,6 +50,18 @@ assert.equal(q.orderBucket(order('rts1', 'delivered', { shipment: { status: 'ret
 assert.equal(q.orderBucket(order('rts2', 'shipped', { shipment: { status: 'failure' } })), 'review');
 assert.equal(q.orderBucket(order('rts3', 'paid', { shipment: { status: 'delivered' } })), 'delivered', 'a clean delivery still reads as delivered');
 
+// A label quoted above the automatic ceiling waits for a person, in Needs review. Unlike a hold it
+// never blocks the manual purchase, because buying it by hand is the approval being asked for.
+const quoted = { cents: 9240, limitCents: 7500, at: 1 };
+assert.equal(q.orderBucket(order('appr1', 'paid', { labelApproval: quoted })), 'review');
+assert.equal(fulfillment.awaitingLabelApproval(order('appr1', 'paid', { labelApproval: quoted })), true);
+assert.equal(q.orderBucket(order('appr2', 'paid', { labelApproval: quoted, shipment: { status: 'pre_transit' } })), 'label', 'once the label exists the question is answered');
+assert.equal(fulfillment.awaitingLabelApproval(order('appr3', 'paid', { labelApproval: quoted, shipment: { status: 'pre_transit' } })), false);
+assert.equal(q.orderBucket(order('appr4', 'paid', { labelApproval: quoted, internalTest: true })), 'test');
+assert.equal(q.orderBucket(order('appr5', 'refunded', { labelApproval: quoted })), 'closed');
+assert.equal(fulfillment.awaitingLabelApproval(order('appr6', 'paid', {})), false);
+assert.match(fulfillment.fulfillmentLabel(order('appr7', 'paid', { labelApproval: quoted })), /approval required/);
+
 // A label bought but never scanned by the carrier is a parcel still on the bench. Automatic purchase
 // makes that likelier, because nobody handled the order by hand and noticed.
 const stale = Date.now() - fulfillment.STALLED_LABEL_MS - 60000, fresh = Date.now() - 3600000;
