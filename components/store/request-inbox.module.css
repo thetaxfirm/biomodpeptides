@@ -136,3 +136,12 @@
 
 .alarm { font-size: 14px; margin: 12px 0; padding: 10px 14px; border-radius: 6px; background: #fbeceb; color: #842a22; border: 1px solid #ecc3bf; font-weight: 600; line-height: 1.5; }
 .vialLot { font-size: 14px; margin: 4px 0 10px; color: #3d2a44; }
+
+/* Simple reply box (owner, Oct 15 2026: "if I want to write a message just make it easy. if we replied, let me know").
+   Replied state uses the same green as sent bubbles in the thread; tools live under one quiet toggle. */
+.replied { margin: 4px 0 10px; padding: 9px 12px; border-radius: 6px; background: #eef3ee; color: #2f6b45; font-size: 14px; font-weight: 600; }
+.more { margin-top: 14px; padding: 10px 12px; border-radius: 8px; background: var(--soft); font-size: 14px; }
+.more > summary { cursor: pointer; color: var(--muted); font-weight: 600; }
+.more[open] > summary { margin-bottom: 8px; }
+.moreLabel { margin: 12px 0 6px; font-size: 13px; font-weight: 600; color: var(--ink); }
+.more .templates { padding: 0; background: none; }
