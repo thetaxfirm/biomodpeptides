@@ -47,6 +47,15 @@ try {
   assert.equal(label.tracking, '9400TEST');
   assert.equal(label.costCents, 645);
   assert.equal(calls.at(-1)[3].rate.id, 'rate_usps');
+  // The ceiling the unattended buyer passes: checked before the buy call, so no money moves.
+  const buysBefore = calls.filter(c => String(c[0]).endsWith('/buy')).length;
+  await assert.rejects(() => e.buyLabel(env, to, [vial], 'BIOMOD 1234', undefined, undefined, { maxCents: 500 }), /above the automatic limit/);
+  assert.equal(calls.filter(c => String(c[0]).endsWith('/buy')).length, buysBefore, 'a refused label never reaches the buy endpoint');
+  const underCeiling = await e.buyLabel(env, to, [vial], 'BIOMOD 1234', undefined, undefined, { maxCents: 1000 });
+  assert.equal(underCeiling.costCents, 645, 'a rate under the ceiling is bought as usual');
+  const noCeiling = await e.buyLabel(env, to, [vial], 'BIOMOD 1234');
+  assert.equal(noCeiling.costCents, 645, 'a person buying by hand is never stopped by the automatic limit');
+
   assert.equal(await e.sendTrackingEmail({}, 'a@b.co', 'order-1', label), false, 'no key: no email');
   assert.equal(await e.sendTrackingEmail({ RESEND_API_KEY: 're_test' }, 'a@b.co', 'order-1', label, 'Ada Lovelace', 'current-reply@example.invalid'), true);
   assert.match(calls.at(-1)[3].html, /Carrier acceptance has not been confirmed/);
@@ -92,5 +101,5 @@ try {
   assert.equal(e.verifyEasypostWebhook(body + ' ', sig, 'whsec-12345'), false);
   assert.equal(e.verifyEasypostWebhook(body, null, 'whsec-12345'), false);
   assert.equal(e.verifyEasypostWebhook(body, sig, 'other-secret'), false);
-  console.log('PASS: parcel estimate, carrier filter (USPS/UPS, UPSDAP), cheapest rate, handling fee, label purchase, tracking email, error messages, webhook signatures');
+  console.log('PASS: parcel estimate, carrier filter (USPS/UPS, UPSDAP), cheapest rate, handling fee, label purchase, the automatic per-label ceiling, tracking email, error messages, webhook signatures');
 } finally { await fs.rm(temp, { recursive: true, force: true }); }
