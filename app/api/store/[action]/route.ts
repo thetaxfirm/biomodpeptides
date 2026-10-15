@@ -41,7 +41,7 @@ import { adminOverview } from '@/lib/admin-overview';
 export const dynamic = 'force-dynamic';
 // What each admin write needs. An admin action missing here requires the owner.
 const adminActionPermission: Record<string, StaffPermission> = {
-    'admin-order': 'orders:fulfill', 'admin-reconcile': 'orders:reconcile',
+    'admin-orders': 'orders:read', 'admin-order': 'orders:fulfill', 'admin-reconcile': 'orders:reconcile',
     'admin-request': 'requests:write', 'admin-request-reply': 'requests:write', 'admin-reply-desk': 'requests:write', 'admin-request-replies': 'requests:write', 'admin-reply-rule': 'requests:write', 'admin-request-forward': 'requests:write', 'admin-order-conversation': 'requests:write', 'admin-order-hold': 'requests:write', 'admin-win-back': 'requests:write', 'admin-mark-replied': 'requests:write', 'admin-win-back-preview': 'requests:write', 'admin-request-issue': 'requests:write', 'admin-case-log': 'requests:write', 'admin-coa-process': 'requests:write',
     'admin-config': 'store:write', 'admin-product': 'store:write', 'admin-campaign': 'store:write', 'admin-reward': 'store:write', 'admin-coa-config': 'store:write',
     'admin-staff': 'team:manage',
@@ -226,17 +226,9 @@ export async function GET(req: NextRequest, { params }: {
                 access: { orders: true, requests: allowed('requests:write'), reports: allowed('reports:read'), store: allowed('store:write') } }));
         }
         if (action === 'admin-orders') {
-            // Paged, searchable order queue. Counts cover the whole scanned history, not just one page.
-            await requireStaff('orders:read');
-            const p = req.nextUrl.searchParams;
-            const rows = (await all<{ id: string; owner: string; status: string; total: number; data: string; created: number }>('SELECT id,owner,status,total,data,created FROM orders ORDER BY created DESC LIMIT ?', scanLimit + 1)).map(o => ({ ...o, data: adminOrderView(parse(o.data, {})) }));
-            const result = queryOrders(rows, { tab: p.get('tab'), q: p.get('q'), offset: p.get('offset'), id: p.get('id') });
-            // Products without a COA for the current lot cannot be mailed; flag waiting orders and list the products.
-            const products = await catalog(false, true);
-            const waiting = rows.filter(o => o.status === 'paid' && !o.data?.shipment).map(o => ({ items: o.data?.items }));
-            // Who was emailed and when, for each order on this page (owner, Oct 15 2026).
-            const messages = await orderMessageLogs(runtime() as any, result.orders as any);
-            return j({ ...result, orders: result.orders.map((o: any) => ({ ...o, messages: messages[o.id] || { count: 0, last: null, items: [] }, coaMissing: ['paid', 'labeling'].includes(o.status) && !o.data?.shipment ? coaBlockedItems(o.data?.items, products) : [] })), noCoa: noCoaProducts(products, waiting) });
+            // Moved to POST: the search term is a customer's email, phone or address, and a query string
+            // is recorded by every proxy and log in front of this app. See the POST branch.
+            return j({ error: 'Use POST for the order queue.' }, 405);
         }
         if (action === 'admin') {
             // Every role sees orders; other sections are sent only to roles that hold them.
@@ -500,6 +492,20 @@ export async function POST(req: NextRequest, { params }: {
             const auditActor: AuditActor = { source: 'admin', actor: actor.email, actorType: 'staff', action };
             const auditEnv = () => ({ ...runtime(), DB: withAuditDb(database(), auditActor) } as ReturnType<typeof runtime>);
             const run = (sql: string, ...values: (string | number | null)[]) => auditRun(database(), auditActor, sql, ...values);
+            if (action === 'admin-orders') {
+                // Paged, searchable order queue. Counts cover the whole scanned history, not just one page.
+                // A POST so the search term — an email, phone or street address — stays out of the URL,
+                // and therefore out of every request log and browser history in front of this app.
+                const rows = (await all<{ id: string; owner: string; status: string; total: number; data: string; created: number }>('SELECT id,owner,status,total,data,created FROM orders ORDER BY created DESC LIMIT ?', scanLimit + 1)).map(o => ({ ...o, data: adminOrderView(parse(o.data, {})) }));
+                const text = (v: unknown) => typeof v === 'string' ? v.slice(0, 200) : null;
+                const result = queryOrders(rows, { tab: text(b.tab), q: text(b.q), offset: text(b.offset) ?? (typeof b.offset === 'number' ? String(b.offset) : null), id: text(b.id) });
+                // Products without a COA for the current lot cannot be mailed; flag waiting orders and list the products.
+                const products = await catalog(false, true);
+                const waiting = rows.filter(o => o.status === 'paid' && !o.data?.shipment).map(o => ({ items: o.data?.items }));
+                // Who was emailed and when, for each order on this page (owner, Oct 15 2026).
+                const messages = await orderMessageLogs(runtime() as any, result.orders as any);
+                return j({ ...result, orders: result.orders.map((o: any) => ({ ...o, messages: messages[o.id] || { count: 0, last: null, items: [] }, coaMissing: ['paid', 'labeling'].includes(o.status) && !o.data?.shipment ? coaBlockedItems(o.data?.items, products) : [] })), noCoa: noCoaProducts(products, waiting) });
+            }
             if (action === 'admin-staff') {
                 const member = z.object({ email: z.string().trim().min(3).max(254), name: z.string().trim().max(100).optional(), role: z.enum(['manager', 'fulfillment', 'support']), active: z.boolean() }).parse(b);
                 return j(await saveStaffMember(auditEnv(), actor.email, member));
@@ -708,10 +714,13 @@ export async function POST(req: NextRequest, { params }: {
             }
             if (action === 'admin-order') {
                 const status = z.enum(['shipped', 'delivered']).parse(b.status);
+                // One id for both statements. Reading with a trimmed value and writing with the raw one
+                // let a padded id report success while matching no row at all.
+                const orderId = str(b.id, 50);
                 const o = await one<{
                     data: string;
                     status: string;
-                }>('SELECT data,status FROM orders WHERE id=?', str(b.id, 50));
+                }>('SELECT data,status FROM orders WHERE id=?', orderId);
                 if (!o || !['paid', 'shipped'].includes(o.status))
                     throw new Error('Only verified paid orders may be fulfilled.');
                 if (parse<Record<string, any>>(o.data, {}).hold)
@@ -720,8 +729,10 @@ export async function POST(req: NextRequest, { params }: {
                     const blocked = coaBlockedItems(parse<Record<string, any>>(o.data, {}).items, await catalog(false, true));
                     if (blocked.length) throw new Error(coaBlockMessage(blocked));
                 }
-                const data = { ...parse(o.data, {}), tracking: str(b.tracking, 200) };
-                await run('UPDATE orders SET status=?,data=?,updated=? WHERE id=?', status, JSON.stringify(data), timestamp(), b.id);
+                // Targeted write, guarded on the status we read. A carrier update or a bought label that
+                // landed in between is preserved, and a lost race is reported rather than announced as success.
+                const saved = await run("UPDATE orders SET status=?,data=json_set(data,'$.tracking',?),updated=? WHERE id=? AND status=?", status, str(b.tracking, 200), timestamp(), orderId, o.status);
+                if (!saved.meta.changes) throw new Error('This order changed while you were working on it. Refresh and try again.');
                 return j({ message: 'Order updated.' });
             }
             if (action === 'admin-reward') {
