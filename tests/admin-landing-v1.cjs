@@ -30,6 +30,25 @@ function nodes(t,out=[]){if(Array.isArray(t))t.forEach(x=>nodes(x,out));else if(
  user=null; await assert.rejects(visit('admin'),e=>e.destination==='/admin/login?returnTo=%2Fadmin');
  await visit('admin/login');
  await assert.rejects(visit('admin',{tab:'promos'}),e=>e.destination==='/admin/login?returnTo=%2Fadmin%3Ftab%3Dpromos');
+ // An alert's exact request survives the server sign-in gate and the authenticated return.
+ const requestId='f0e1d2c3-b4a5-4678-9abc-def012345678';
+ const destinations=[{tab:'requests',request:requestId},{request:requestId.toUpperCase()},{tab:['requests','orders'],request:[requestId,'invalid']}];
+ for(const query of destinations){
+  user=null;let login;
+  await assert.rejects(visit('admin',query),e=>{login=e.destination;return login?.startsWith('/admin/login?returnTo=');});
+  const returnTo=new URL(login,'https://example.invalid').searchParams.get('returnTo');
+  const parsed=new URL(returnTo,'https://example.invalid');
+  assert.equal(parsed.pathname,'/admin');assert.equal(parsed.searchParams.get('request'),requestId);
+  assert.equal(parsed.searchParams.get('tab'),query.tab?'requests':null);
+  const signIn=await visit('admin/login',{returnTo});
+  assert(nodes(signIn).some(n=>n.props?.query?.returnTo===returnTo),'The sign-in form preserves the safe exact destination');
+  user={id:'isolated-admin',email:'ash@biomodcompounds.com'};
+  await assert.rejects(visit('admin/login',{returnTo}),e=>e.destination===returnTo);
+ }
+ user=null;
+ for(const request of ['invalid',requestId+'?tab=orders','https://evil.example',requestId+'\nBcc:other@example.invalid','']){
+  await assert.rejects(visit('admin',{tab:'requests',request}),e=>e.destination==='/admin/login?returnTo=%2Fadmin%3Ftab%3Drequests');
+ }
  for(const email of ['ash@biomodcompounds.com','chris@biomodcompounds.com']){user={email};await assert.rejects(visit('admin/login'),e=>e.destination==='/admin');await visit('admin');}
  // Staff an owner added in the Team tab land in the backend exactly like owners.
  user={id:'packer',email:'Packer@Example.invalid'};await assert.rejects(visit('account'),e=>e.destination==='/admin');await assert.rejects(visit('admin/login'),e=>e.destination==='/admin');

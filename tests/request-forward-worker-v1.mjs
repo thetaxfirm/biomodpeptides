@@ -74,6 +74,16 @@ try {
   await db.prepare('INSERT INTO sessions(id,cart,wishlist,updated) VALUES(?,?,?,?)').bind(sessionId, '[]', '[]', Date.now()).run();
   await db.prepare('INSERT INTO staff(email,name,role,active,created,updated,updated_by) VALUES(?,?,?,?,?,?,?)').bind(recipient, 'Synthetic recipient', 'manager', 1, Date.now(), Date.now(), user.email).run();
   const lostId = await seed();
+  const beforeRead = attempts.length;
+  const snapshot = await post('admin-request-replies', { ids: [], refreshRequests: true, focusId: lostId });
+  assert.equal(snapshot.status, 200); assert.equal(snapshot.body.requests[0].id, lostId);
+  assert.equal(snapshot.body.requests[0].data.subject, 'Fixture question');
+  const nextId = await seed();
+  const updatedSnapshot = await post('admin-request-replies', { ids: [lostId], refreshRequests: true });
+  assert.equal(updatedSnapshot.body.requests.length, 2); assert(updatedSnapshot.body.requests.some(row => row.id === nextId));
+  assert.equal(attempts.length, beforeRead, 'Refreshing the compiled inbox does not send mail');
+  const deniedSnapshot = await post('admin-request-replies', { ids: [], refreshRequests: true }, guestHeaders);
+  assert.equal(deniedSnapshot.status, 400); assert.equal(deniedSnapshot.body.requests, undefined);
   let result = await forward(lostId, guestHeaders); assert.equal(result.status, 400); assert.match(result.body.error, /sign in/i);
   result = await post('admin-request-replies', { ids: [lostId] }, guestHeaders); assert.equal(result.status, 400); assert.match(result.body.error, /sign in/i);
   assert.equal(attempts.length, 0); assert.equal((await rows(lostId)).length, 0, 'Anonymous access cannot create a send');

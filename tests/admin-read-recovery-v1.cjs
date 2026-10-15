@@ -98,11 +98,58 @@ const productNames=h=>String(Boolean(productPanel(h).props.edited));
  }
  const experienceFile=path.join(root,'components/store/experience.tsx');
  const experienceModule=new Module(experienceFile,module);experienceModule.filename=experienceFile;experienceModule.paths=Module._nodeModulePaths(root);
- experienceModule.require=id=>id==='react/jsx-runtime'?projectRequire(id):id==='./admin'?{Admin}:new Proxy({}, {get:()=>noop});
+ experienceModule.require=id=>id==='react/jsx-runtime'?projectRequire(id):id==='./admin'?{Admin}:id==='./account'?new Proxy({}, {get:(_,name)=>name==='AuthPage'?AuthPage:noop}):new Proxy({}, {get:()=>noop});
  experienceModule._compile(ts.transpileModule(fs.readFileSync(experienceFile,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,experienceFile);
  const routed=experienceModule.exports.Experience({path:'admin',query:{tab:'promos'}});assert.equal(routed.type,Admin);assert.equal(routed.props.initialTab,'promos');
  reset();h=mount(routed.props);await flush(h);assert.equal(find(h,n=>n.type===Tabs).props.value,'promos');
  h.props={initialTab:'orders'};h.render();assert.equal(find(h,n=>n.type===Tabs).props.value,'orders');
+
+ // Notification links retain the exact request through sign-in/reset routes and
+ // force Requests only for a valid identifier. Invalid query text cannot alter returnTo.
+ const linkedId='abcdef01-0000-4000-8000-000000000001',nextLinkedId='abcdef02-0000-4000-8000-000000000002';
+ const linkedRoute=experienceModule.exports.Experience({path:'admin',query:{tab:'orders',request:linkedId.toUpperCase()}});
+ assert.equal(linkedRoute.type,Admin);assert.equal(linkedRoute.props.initialRequest,linkedId.toUpperCase());
+ reset({store:{admin:false,customer:null}});h=mount(linkedRoute.props);
+ assert.equal(h.tree.type,AuthPage);assert.equal(h.tree.props.returnTo,'/admin?tab=requests&request='+linkedId);assert.equal(reads(),0);
+ const exactReturn=h.tree.props.returnTo;
+ for(const path of ['admin/login','login','forgot-password','reset-password']) {
+  const routedAuth=experienceModule.exports.Experience({path,query:{returnTo:exactReturn}});
+  assert.equal(routedAuth.type,AuthPage);assert.equal(routedAuth.props.returnTo,exactReturn,'Authentication routing preserves the exact request destination');
+ }
+ for(const initialRequest of ['not-a-request',linkedId+'&tab=team','../requests',linkedId+'|email','https://example.invalid/']) {
+  reset({store:{admin:false,customer:null}});h=mount({initialTab:'orders',initialRequest});
+  assert.equal(h.tree.props.returnTo,'/admin?tab=orders');assert.equal(reads(),0);
+ }
+ reset();h=mount(linkedRoute.props);await flush(h);
+ assert.equal(find(h,n=>n.type===Tabs).props.value,'requests');
+ assert.equal(find(h,n=>n.type===RequestInbox).props.focusId,linkedId);assert.equal(find(h,n=>n.type===RequestInbox).props.activeTab,true);
+ h.props={initialTab:'orders',initialRequest:nextLinkedId};h.render();
+ assert.equal(find(h,n=>n.type===RequestInbox).props.focusId,nextLinkedId,'A new notification link selects its own request');
+ const navigation=[];global.window={location:{href:'https://example.invalid/admin?tab=requests&request='+nextLinkedId+'&measurement=off#desk'},history:{replaceState:(_state,_title,url)=>{navigation.push(url);global.window.location.href=new URL(url,'https://example.invalid').href;}}};
+ find(h,n=>n.type===Tabs).props.onValueChange('orders');h.render();
+ assert.equal(navigation.at(-1),'/admin?tab=orders&measurement=off#desk');assert.equal(find(h,n=>n.type===RequestInbox).props.focusId,null);assert.equal(find(h,n=>n.type===RequestInbox).props.activeTab,false);
+ find(h,n=>n.type===Tabs).props.onValueChange('requests');h.render();
+ assert.equal(navigation.at(-1),'/admin?tab=requests&measurement=off#desk');assert.equal(find(h,n=>n.type===RequestInbox).props.focusId,null,'Returning to Requests must not reopen a previously consumed email link');
+ find(h,n=>n.type===Tabs).props.onValueChange('orders');h.render();const refreshedUrl=new URL(global.window.location.href);delete global.window;
+ reset();h=mount(experienceModule.exports.Experience({path:'admin',query:Object.fromEntries(refreshedUrl.searchParams)}).props);await flush(h);
+ assert.equal(find(h,n=>n.type===Tabs).props.value,'orders','Refreshing after leaving an email link stays on the selected tab');
+
+ // A lightweight inbox read asks for new requests even with no known IDs, includes
+ // the exact linked request and every delivery/activity map, and never resets parent forms.
+ reset();h=mount({initialTab:'requests',initialRequest:linkedId});await flush(h);
+ const reader=find(h,n=>n.type===RequestInbox).props.onRefreshReplies;
+ const deskResult={requests:[{id:linkedId,kind:'contact',status:'new',created:0,data:{subject:'Synthetic linked request'}}],replies:{[linkedId]:{status:'ready',revision:2}},forwards:{[linkedId]:[]},activity:{[linkedId]:[{at:0,text:'Synthetic activity'}]},issues:{[linkedId]:{issue:'other'}},external:{[linkedId]:[]}};
+ allowedMutation='admin-request-replies';apiImpl=async action=>{assert.equal(action,'admin-request-replies');return deskResult;};
+ const parentKey=settingsForm(h).key,parentToken=queue(h).reloadToken;
+ settingsForm(h).props.onChangeCapture();h.render();const parentWrites=h.writes;
+ assert.deepEqual(await reader([],linkedId),deskResult);
+ assert.deepEqual(calls.at(-1),{action:'admin-request-replies',body:{ids:[],refreshRequests:true,focusId:linkedId}});
+ const knownIds=Array.from({length:205},(_,i)=>'synthetic-request-'+i);
+ assert.deepEqual(await reader(knownIds,nextLinkedId),deskResult);
+ assert.deepEqual(calls.at(-1).body,{ids:knownIds.slice(0,200),refreshRequests:true,focusId:nextLinkedId});
+ h.render();assert.equal(h.writes,parentWrites);assert.equal(settingsForm(h).key,parentKey);assert.equal(queue(h).reloadToken,parentToken);assert(button(h,'Refresh administration').props.disabled,'Snapshot reads retain unsaved parent settings');
+ assert.equal(reads(),1);assert.deepEqual(calls.map(c=>c.action),['admin','admin-request-replies','admin-request-replies'],'These callbacks only read; they never prepare, send, forward or mark a request');
+ assert.equal(find(h,n=>n.type===RequestInbox).props.onRefreshReplies,reader,'The reader stays stable across parent rerenders');
  const changesRoute=experienceModule.exports.Experience({path:'admin',query:{tab:'changes'}});assert.equal(changesRoute.type,Admin);assert.equal(changesRoute.props.initialTab,'changes');
  const permissionModule=require('./staff-module-fixture.cjs').loadStaffModule();
  for(const role of ['owner','manager','support','fulfillment']) {
@@ -266,22 +313,22 @@ const productNames=h=>String(Boolean(productPanel(h).props.edited));
   // Radix mounts selected content; forceMount explicitly retains inactive content.
   const present=panel&&(panel.props.forceMount||tab==='requests');
   if(!present){child?.unmount();child=null;childKey=null;return null;}
-  const key=h.tree.key;
-  if(child&&childKey!==key){child.unmount();child=null;}
   const item=nodes(panel).find(n=>n.type===RequestInbox);assert(item);
+  const key=item.key;
+  if(child&&childKey!==key){child.unmount();child=null;}
   if(!child){child=mount(item.props,RequestInbox);childKey=key;}else{child.props=item.props;child.render();}
   return panel;
  };
- let panel=reconcileInbox();assert.equal(panel.props.forceMount,true);assert.equal(panel.props.hidden,false);
+ let panel=reconcileInbox();assert.equal(panel.props.forceMount,true);assert.equal(panel.props.hidden,false);assert.equal(child.props.activeTab,true);
  find(child,n=>n.type==='button'&&n.props['aria-controls']==='request-reply-reply-roundtrip').props.onClick();child.render();
  const replyField=name=>find(child,n=>n.type==='textarea'&&n.props.name===name);
  replyField('replyBody').props.onChange({target:{value:'Synthetic unsaved reply'}});child.render();
  replyField('replyInstruction').props.onChange({target:{value:'Synthetic unsaved instruction'}});child.render();
  const sameChild=child;
  find(h,n=>n.type===Tabs).props.onValueChange('orders');h.render();panel=reconcileInbox();
- assert.equal(panel.props.hidden,true,'Inactive content stays hidden');assert.equal(child,sameChild,'Tab switch retains the editor instance');
+ assert.equal(panel.props.hidden,true,'Inactive content stays hidden');assert.equal(child.props.activeTab,false,'Hidden Requests must suspend its poller');assert.equal(child,sameChild,'Tab switch retains the editor instance');
  find(h,n=>n.type===Tabs).props.onValueChange('requests');h.render();panel=reconcileInbox();
- assert.equal(panel.props.hidden,false);assert.equal(replyField('replyBody').props.value,'Synthetic unsaved reply');assert.equal(replyField('replyInstruction').props.value,'Synthetic unsaved instruction');assert.equal(mutations(),0);
+ assert.equal(panel.props.hidden,false);assert.equal(child.props.activeTab,true,'Returning to Requests resumes its poller');assert.equal(replyField('replyBody').props.value,'Synthetic unsaved reply');assert.equal(replyField('replyInstruction').props.value,'Synthetic unsaved instruction');assert.equal(mutations(),0);
  // Changing administrators immediately removes the protected subtree and its local draft.
  state.store.customer=ownerB;h.render();assert.equal(reconcileInbox(),null);await flush(h);reconcileInbox();
  assert.notEqual(child,sameChild);find(child,n=>n.type==='button'&&n.props['aria-controls']==='request-reply-reply-roundtrip').props.onClick();child.render();assert.equal(replyField('replyBody').props.value,'');assert.equal(replyField('replyInstruction').props.value,'');
@@ -354,5 +401,5 @@ const productNames=h=>String(Boolean(productPanel(h).props.edited));
  state.store.customer=ownerB;apiImpl=async()=>fixture('Owner B active');h.render();await flush(h);const newAction=deferred();apiImpl=()=>newAction.promise;const newSave=settingsForm(h).props.onSubmit(event());h.render();assert(button(h,'Save store settings').props.disabled);const before=calls.length;
  oldAction.resolve({message:'Old owner save'});await oldSave;await flush(h);assert.equal(calls.length,before);assert.equal(successes.length,0);assert.equal(refreshCalls,0);assert(button(h,'Save store settings').props.disabled);
  apiImpl=async()=>fixture('Owner B refreshed');newAction.resolve({message:'Current save'});await newSave;h.render();assert.deepEqual(successes,['Current save']);assert.equal(refreshCalls,1);assert.equal(button(h,'Save store settings').props.disabled,false);assert(text(h.tree).includes('Owner B refreshed'));
- hosts.forEach(x=>x.unmount());console.log('Admin discovery/read recovery passed: actual routing/default tabs, healthy empty-to-two-order GET refresh, draft protection/read races, independent saves, failure retention, owner/role/tenure/unmount/replay and stale handler boundaries. All fixtures isolated; no live I/O.');
+ hosts.forEach(x=>x.unmount());console.log('Admin discovery/read recovery passed: actual routing/default tabs, exact email destinations/sign-in retention/tab exit, bounded read-only inbox snapshots, healthy empty-to-two-order GET refresh, draft protection/read races, independent saves, failure retention, owner/role/tenure/unmount/replay and stale handler boundaries. All fixtures isolated; no live I/O.');
 })().catch(error=>{console.error(error);process.exitCode=1});

@@ -30,7 +30,7 @@ const history = {
 const shipping = {
   easypostReady: () => true, shippingConnection: async () => ({ connected: true }),
   buyLabel: async () => { calls.push('buy'); timeline.push('provider:buy'); if (purchaseFail) throw Error('Provider response unavailable'); return label; },
-  sendTrackingEmail: async () => { calls.push('mail'); timeline.push('provider:mail'); return mailAccepted; },
+  sendTrackingEmail: async (_env, _to, _orderId, _label, _name, replyTo) => { assert.equal(replyTo, 'reply@example.invalid'); calls.push('mail'); timeline.push('provider:mail'); return mailAccepted; },
   readShipmentTracking: async () => { calls.push('read'); timeline.push('provider:read'); if (carrierFail) throw Error('PRIVATE_PROVIDER_DETAIL'); return 'in_transit'; },
 };
 const filename = path.join(root, 'app/api/admin/shipping/route.ts'), m = new Module(filename, module);
@@ -38,6 +38,7 @@ m.filename = filename; m.require = name => {
   if (name === 'next/server') return { NextResponse };
   if (name === '@/lib/auth') return { requireStaff: async permission => { assert.equal(permission, 'orders:fulfill'); if (!allowed) throw Error('Unauthorized'); return { email: 'staff@example.invalid', role: 'fulfillment' }; } };
   if (name === '@/lib/runtime') return runtime;
+  if (name === '@/lib/coa-outbox') return { readCoaConfig: async () => ({ enabled: true, replyTo: 'reply@example.invalid', notifyTo: null }) };
   if (name === '@/lib/change-history') return history;
   if (name === '@/lib/easypost') return shipping;
   if (name === '@/lib/commerce') return {config: async()=>({shippingOptions:{}}), catalog: async()=>[]};

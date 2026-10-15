@@ -53,7 +53,11 @@ export default async function Page({ params, searchParams }: Props) {
       if (user && await staffRole(user.email)) redirect(destination);
     } else if (!user) {
       const tab = Array.isArray(query.tab) ? query.tab[0] : query.tab;
-      const returnTo = '/admin' + (tab ? '?tab=' + encodeURIComponent(tab) : '');
+      const request = Array.isArray(query.request) ? query.request[0] : query.request;
+      const destinationQuery = new URLSearchParams();
+      if (tab) destinationQuery.set('tab', tab);
+      if (request && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(request)) destinationQuery.set('request', request.toLowerCase());
+      const returnTo = '/admin' + (destinationQuery.size ? '?' + destinationQuery.toString() : '');
       redirect('/admin/login?returnTo=' + encodeURIComponent(returnTo));
     }
   }

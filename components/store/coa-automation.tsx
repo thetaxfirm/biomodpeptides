@@ -8,6 +8,7 @@ export type CoaAutomationReport = CoaAutomationStatus;
 type RequestContext = { id: string; kind?: string; created?: number; data?: { name?: unknown; email?: unknown; subject?: unknown } };
 type Props = {
   report?: CoaAutomationReport | null;
+  checkoutRecovery?: { enabled: boolean; mailConfigured?: boolean } | null;
   requests?: readonly RequestContext[];
   busy: boolean;
   dirty: boolean;
@@ -56,33 +57,40 @@ function DeliveryState({ delivery, label, relatedName }: { delivery: DeliverySta
   </div>;
 }
 
-export function CoaAutomation({ report, requests = [], busy, dirty, refreshing, onDraft, onSave, onProcess }: Props) {
+export function CoaAutomation({ report, checkoutRecovery, requests = [], busy, dirty, refreshing, onDraft, onSave, onProcess }: Props) {
   if (!report || !report.config || !report.requests || typeof report.requests !== 'object') return <section className={styles.section} aria-labelledby="coa-automation-title">
-    <h2 id="coa-automation-title">Request alerts and previous COA activity</h2>
+    <h2 id="coa-automation-title">Email controls and delivery history</h2>
     <p role="status">Automation details are unavailable. Refresh administration to check the current configuration.</p>
   </section>;
   const savingDisabled = busy || refreshing;
   const entries = Object.entries(report.requests).filter(([, delivery]) => delivery?.coa || delivery?.alert);
   const requestById = new Map(requests.map(request => [request.id, request]));
   return <section className={styles.section} aria-labelledby="coa-automation-title">
-    <h2 id="coa-automation-title">Request alerts and previous COA activity</h2>
-    <p>Staff request alerts are <strong>{report.config.enabled ? 'enabled' : 'disabled'}</strong>. Customer replies are prepared from research@biomodpeptides.com and require Ash’s review and send approval in Jarvis. No COA is sent automatically.</p>
+    <h2 id="coa-automation-title">Email controls and delivery history</h2>
+    <p><strong>AI and staff replies: owner approval required.</strong> Drafts use research@biomodpeptides.com. An owner reviews the message and clicks Send in the website reply desk or Jarvis.</p>
+    <p><strong>Customer-requested COA links: automatic.</strong> When a customer chooses Request by email, a private link is sent only after the lot printed on their vial matches an approved original report. An unmatched lot goes to the reply desk for review.</p>
+    <p><strong>New-request alerts: {report.config.enabled ? 'enabled' : 'disabled'}.</strong> These notify staff about new contact and partner requests; they are not replies to customers.</p>
+    <p><strong>Overdue-request reminders: automatic internal emails.</strong> A daily reminder goes to the notification address, or an owner if that address is blank, when a customer has waited over a day for a reply.</p>
+    <p><strong>Unpaid-checkout reminders: {typeof checkoutRecovery?.enabled === 'boolean' ? checkoutRecovery.enabled ? 'enabled' : 'disabled' : 'status unavailable'}.</strong> When enabled, eligible unpaid checkouts receive one reminder after 24 hours without payment or payment-page activity, with an additional 7.5% off after existing discounts. Internal tests and payments under review are excluded.</p>
+    {checkoutRecovery?.enabled && checkoutRecovery.mailConfigured === false && <p className="notice" role="status">Checkout reminders are enabled, but their sending service is not configured.</p>}
     <p className={styles.note}>Accepted means the mail provider accepted the message. It does not confirm inbox delivery. Request review status remains separate below.</p>
     <dl className={styles.configuration}>
-      <div><dt>Staff alert sender</dt><dd>{report.sender || 'Not configured'}</dd></div>
-      <div><dt>Staff alert reply-to</dt><dd>{report.config.replyTo || 'Not configured'}</dd></div>
+      <div><dt>Request and COA sender</dt><dd>{report.sender || 'Not configured'}</dd></div>
+      <div><dt>Replies to automatic emails</dt><dd>{report.config.replyTo || 'Not configured'}</dd></div>
       <div><dt>Notification destination</dt><dd>{report.config.notifyTo || 'Not configured'}</dd></div>
     </dl>
-    {!report.mailConfigured && <p className="notice" role="status">Staff alert email is not configured. Customer drafts use the connected research mailbox in Jarvis.</p>}
+    {!report.mailConfigured && <p className="notice" role="status">Request-alert and COA email is not configured. Customer drafts use the connected research mailbox in Jarvis.</p>}
     <form className={'store-form ' + styles.form} onChangeCapture={onDraft} onSubmit={event => { event.preventDefault(); if (!savingDisabled) void onSave(event); }}>
-      <label className={styles.checkbox}><input type="checkbox" name="enabled" defaultChecked={report.config.enabled} disabled={savingDisabled}/><span>Enable staff request alerts</span></label>
+      <label className={styles.checkbox}><input type="checkbox" name="enabled" defaultChecked={report.config.enabled} disabled={savingDisabled}/><span>Enable new-request alerts</span></label>
+      <p className={styles.note}>This switch controls new-request alerts only. Customer-requested COA links, overdue reminders and checkout reminders operate separately.</p>
       <div className={styles.fields}>
-        <label className="field"><span>Reply-to email</span><input type="email" name="replyTo" defaultValue={report.config.replyTo} required disabled={savingDisabled} autoComplete="off"/></label>
-        <label className="field"><span>Notification email (optional)</span><input type="email" name="notifyTo" defaultValue={report.config.notifyTo || ''} disabled={savingDisabled} autoComplete="off"/><small>For new contact and partner requests only; older requests do not trigger notifications. Leave blank to turn notifications off.</small></label>
+        <label className="field"><span>Reply-to for automatic emails</span><input type="email" name="replyTo" defaultValue={report.config.replyTo} required disabled={savingDisabled} autoComplete="off"/></label>
+        <label className="field"><span>Notification email (optional)</span><input type="email" name="notifyTo" defaultValue={report.config.notifyTo || ''} disabled={savingDisabled} autoComplete="off"/><small>For new contact and partner requests only; older requests do not trigger notifications. Leave blank to turn new-request alerts off. Overdue reminders then use an owner address.</small></label>
       </div>
       <button type="submit" className="button button-dark" disabled={savingDisabled}>Save alert settings</button>
     </form>
     <h3>Previous COA and alert activity</h3>
+    <p className={styles.note}>This history shows the earlier COA outbox and staff alerts. Customer-requested COA links and AI drafts appear with their requests in the reply desk.</p>
     <p className={styles.note}>Use Refresh administration above to load the latest send states. Existing messages are not resent by refreshing.</p>
     {dirty && <p className="notice" role="status">Save or discard your alert settings before preparing replies.</p>}
     {!entries.length ? <p>No COA automation records are shown for the loaded requests.</p> : <div className={styles.outbox}>{entries.map(([id, delivery]) => {

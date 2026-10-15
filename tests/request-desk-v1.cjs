@@ -5,7 +5,7 @@ const root=path.resolve(__dirname,'..'),projectRequire=Module.createRequire(path
 const ts=projectRequire('typescript'),React=projectRequire('react'),{renderToStaticMarkup}=projectRequire('react-dom/server');
 let active=null;
 const hooks={...React,
- useState(initial){if(!active)return React.useState(initial);const host=active,index=host.cursor++;if(!(index in host.slots))host.slots[index]=typeof initial==='function'?initial():initial;return[host.slots[index],value=>{const next=typeof value==='function'?value(host.slots[index]):value;if(next!==host.slots[index])host.changed=true;host.slots[index]=next;}];},
+ useState(initial){if(!active)return React.useState(initial);const host=active,index=host.cursor++;if(!(index in host.slots))host.slots[index]=typeof initial==='function'?initial():initial;return[host.slots[index],value=>{const next=typeof value==='function'?value(host.slots[index]):value;if(next!==host.slots[index]){host.changed=true;host.writes++;}host.slots[index]=next;}];},
  useRef(initial){if(!active)return React.useRef(initial);const host=active,index=host.cursor++;if(!(index in host.slots))host.slots[index]={current:initial};return host.slots[index];},
  useEffect(effect,deps){if(!active)return React.useEffect(effect,deps);const host=active,index=host.cursor++,prior=host.slots[index];if(!prior||deps.some((value,i)=>value!==prior.deps[i])){host.slots[index]={deps,cleanup:prior?.cleanup};host.effects.push(()=>{host.slots[index].cleanup?.();host.slots[index].cleanup=effect();});}}
 };
@@ -17,7 +17,8 @@ const {RequestInbox}=mod.exports;
 global.fetch=()=>{throw Error('Live I/O forbidden');};
 function nodes(tree,out=[]){if(Array.isArray(tree))tree.forEach(item=>nodes(item,out));else if(tree&&typeof tree==='object'&&tree.props){out.push(tree);nodes(tree.props.children,out);}return out;}
 function text(tree){if(tree==null||typeof tree==='boolean')return'';if(Array.isArray(tree))return tree.map(text).join(' ').replace(/\s+/g,' ').trim();return typeof tree==='object'?text(tree.props?.children):String(tree);}
-function mount(props){const host={props,slots:[],cursor:0,tree:null,effects:[],changed:false,render(){let iterations=0;do{assert(++iterations<10,'Render settles');this.cursor=0;this.effects=[];this.changed=false;active=this;try{this.tree=RequestInbox(this.props);}finally{active=null;}this.effects.forEach(effect=>effect());}while(this.changed);return this.tree;},unmount(){this.slots.forEach(slot=>slot?.cleanup?.());}};host.render();return host;}
+function mount(props){const host={props,slots:[],cursor:0,tree:null,effects:[],changed:false,writes:0,render(){let iterations=0;do{assert(++iterations<10,'Render settles');this.cursor=0;this.effects=[];this.changed=false;active=this;try{this.tree=RequestInbox(this.props);}finally{active=null;}this.effects.forEach(effect=>effect());}while(this.changed);return this.tree;},unmount(){this.slots.forEach(slot=>slot?.cleanup?.());}};host.render();return host;}
+const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return{promise,resolve,reject};};
 const render=props=>renderToStaticMarkup(React.createElement(RequestInbox,props));
 const controls=(tree,label)=>nodes(tree).filter(node=>node.type==='button'&&text(node)===label);
 const button=(tree,label)=>{const found=controls(tree,label)[0];assert(found,'Expected button '+label);return found;};
@@ -157,6 +158,88 @@ async function main(){
  assert.equal(nodes(host.tree).filter(n=>n.type==='article').length,0,'Replying to the newer request clears the older one too');
  for(const email of ['a@example.invalid\r\nBcc:x@example.invalid','a@example.invalid,b@example.invalid']){const h=mount({...props,requests:[request('bad','new','contact',{email})],requestReplies:{}});openRow(h,'bad');assert(text(h.tree).includes('no way to reply'));assert(!nodes(h.tree).some(n=>n.type==='textarea'));}
  const escaped=render({...props,requests:[request('escape','new','contact',{name:'<script>Fixture</script>',message:'<b>x</b>'})],requestReplies:{}});assert(!escaped.includes('<script>'));assert(!escaped.includes('<b>x'));
+
+ // Actual inbox polling with a deterministic browser clock: no real timer, network or send.
+ const savedBrowser={document:global.document,window:global.window,setTimeout:global.setTimeout,clearTimeout:global.clearTimeout};
+ const scheduled=new Map(),listeners={document:new Map(),window:new Map()};let sequence=0;
+ const events=surface=>({addEventListener:(name,fn)=>{if(!listeners[surface].has(name))listeners[surface].set(name,new Set());listeners[surface].get(name).add(fn);},removeEventListener:(name,fn)=>listeners[surface].get(name)?.delete(fn)});
+ global.document={visibilityState:'visible',...events('document')};global.window={...events('window')};
+ global.setTimeout=(fn,delay)=>{const id=++sequence;scheduled.set(id,{fn,delay});return id;};global.clearTimeout=id=>scheduled.delete(id);
+ const pulse=(surface,name)=>{for(const fn of [...(listeners[surface].get(name)||[])])fn();};
+ const nextTick=()=>{const entry=scheduled.entries().next().value;assert(entry,'Expected a scheduled inbox refresh');const[id,job]=entry;scheduled.delete(id);return job.fn();};
+ const currentDelay=()=>scheduled.values().next().value?.delay;
+ let liveHost=null,readCalls=[],sideEffects=0;
+ const readonlyProps={...props,onLoadOptions:undefined,requests:[],requestReplies:{},onStatus:()=>{sideEffects++;throw Error('Polling must never change a request');},onPrepareReply:async()=>{sideEffects++;throw Error('Polling must never prepare or send a reply');}};
+ try {
+  const incoming=request('incoming');let response={requests:[incoming],replies:{incoming:reply('incoming',{status:'ready',body:'Saved draft',revision:1})}};
+  let fail=false,gate=null;
+  const refresh=async(list,focus)=>{readCalls.push({ids:list,focus});if(fail)throw Error('Synthetic refresh unavailable');return gate?gate.promise:response;};
+  liveHost=mount({...readonlyProps,onRefreshReplies:refresh});
+  assert.equal(ids(liveHost).length,0);assert.equal(currentDelay(),2500);
+  await nextTick();await flush(liveHost);
+  assert.deepEqual(readCalls,[{ids:[],focus:null}],'An empty inbox still checks for new requests');assert.deepEqual(ids(liveHost),['incoming']);assert.equal(currentDelay(),30000);
+  openRow(liveHost,'incoming');assert.equal(field(liveHost,'replyBody').props.value,'Saved draft');
+  type(liveHost,'replyBody','My unsaved customer reply');type(liveHost,'replyInstruction','Keep this instruction');
+  response={requests:[incoming,request('arrived-later')],replies:{incoming:reply('incoming',{status:'ready',body:'Newer server draft',revision:2})}};
+  await nextTick();await flush(liveHost);
+  assert.deepEqual(ids(liveHost),['incoming','arrived-later']);assert.equal(field(liveHost,'replyBody').props.value,'My unsaved customer reply');assert.equal(field(liveHost,'replyInstruction').props.value,'Keep this instruction');
+  assert(text(liveHost.tree).includes('Requests checked '),'Successful read timestamp is visible');
+  fail=true;await nextTick();await flush(liveHost);assert(text(liveHost.tree).includes('Could not refresh requests. Showing the last loaded information; retrying automatically.'));assert.deepEqual(ids(liveHost),['incoming','arrived-later']);assert.equal(field(liveHost,'replyBody').props.value,'My unsaved customer reply');
+  fail=false;await nextTick();await flush(liveHost);assert(!text(liveHost.tree).includes('Could not refresh requests.'));assert.equal(field(liveHost,'replyBody').props.value,'My unsaved customer reply');
+  // Hidden browser tabs do not poll; focus/visibility resumption refreshes once, with one request in flight.
+  global.document.visibilityState='hidden';const beforeHidden=readCalls.length;await nextTick();await flush(liveHost);assert.equal(readCalls.length,beforeHidden);
+  pulse('window','focus');await flush(liveHost);assert.equal(readCalls.length,beforeHidden,'Focus while hidden does not poll');
+  global.document.visibilityState='visible';gate=deferred();pulse('document','visibilitychange');pulse('window','focus');await flush(liveHost);assert.equal(readCalls.length,beforeHidden+1,'Focus and visibility events share a single in-flight read');assert.equal(scheduled.size,0);
+  gate.resolve(response);gate=null;await flush(liveHost);assert.equal(scheduled.size,1);
+  // Leaving Requests pauses its retained component. Coming back resumes without losing the draft.
+  liveHost.props={...liveHost.props,activeTab:false};liveHost.render();assert.equal(scheduled.size,0);const inactiveReads=readCalls.length;
+  pulse('document','visibilitychange');pulse('window','focus');await flush(liveHost);assert.equal(readCalls.length,inactiveReads);
+  liveHost.props={...liveHost.props,activeTab:true};liveHost.render();await nextTick();await flush(liveHost);assert.equal(readCalls.length,inactiveReads+1);assert.equal(field(liveHost,'replyBody').props.value,'My unsaved customer reply');
+  liveHost.unmount();liveHost=null;assert.equal(scheduled.size,0);
+
+  // A linked supplier or deleted request opens after a fresh snapshot loads it, even outside the initial list.
+  for(const state of ['pitch','deleted','older']){
+   const linked=request('linked-'+state,state==='deleted'?'deleted':'new','contact',state==='pitch'?{subject:'Wholesale peptide offer',message:'We are a peptide manufacturer. Contact us for a wholesale price list.'}:{});
+   linked.created=now-40*day;
+   const recent=request('recent-'+state),other=request('other-'+state);
+   readCalls=[];let fresh={requests:[recent,linked],replies:{[linked.id]:reply(linked.id,{status:'ready',body:'Exact linked draft'})}};
+   liveHost=mount({...readonlyProps,requests:[recent],focusId:linked.id+'|email',onRefreshReplies:async(list,focus)=>{readCalls.push({ids:list,focus});return fresh;}});
+   assert(!nodes(liveHost.tree).some(n=>n.type==='textarea'),'Unknown linked request is not guessed');
+   await nextTick();await flush(liveHost);
+   assert.equal(readCalls[0].focus,linked.id,'The exact older link is passed to the read endpoint');
+   assert(nodes(liveHost.tree).some(n=>n.props.id==='request-reply-'+linked.id),'The exact linked conversation is open');
+   if(state==='deleted'){assert(text(liveHost.tree).includes('This request is deleted. Restore it to reply.'));assert(!nodes(liveHost.tree).some(n=>n.type==='textarea'));}
+   else assert.equal(field(liveHost,'replyBody').props.value,'Exact linked draft');
+   const pressed=nodes(liveHost.tree).find(n=>n.type==='button'&&n.props['aria-pressed']===true);assert(text(pressed).startsWith(state==='deleted'?'Deleted ':'All '));
+   if(state!=='deleted')type(liveHost,'replyBody','Unsaved exact-link reply');
+   filter(liveHost,'Needs reply');query(liveHost,recent.id);
+   fresh={requests:[recent,linked,other],replies:{[linked.id]:reply(linked.id,{status:'ready',body:'Later server draft',revision:2})}};
+   await nextTick();await flush(liveHost);
+   assert.deepEqual(ids(liveHost),[recent.id],'A later refresh does not reconsume a link or reset the chosen search/filter');
+   assert.equal(nodes(liveHost.tree).find(n=>n.type==='input'&&n.props.type==='search').props.value,recent.id);
+   filter(liveHost,state==='deleted'?'Deleted':'All');query(liveHost,'');
+   if(!nodes(liveHost.tree).some(n=>n.props.id==='request-reply-'+linked.id))openRow(liveHost,linked.id);
+   if(state!=='deleted')assert.equal(field(liveHost,'replyBody').props.value,'Unsaved exact-link reply');
+   else assert(text(liveHost.tree).includes('This request is deleted. Restore it to reply.'));
+   liveHost.unmount();liveHost=null;assert.equal(scheduled.size,0);
+  }
+  // A read started against an older prop snapshot cannot overwrite a parent's new snapshot.
+  const old=request('old-base'),fresh=request('new-base'),late=deferred();
+  liveHost=mount({...readonlyProps,requests:[old],onRefreshReplies:()=>late.promise});const oldFlight=nextTick();
+  liveHost.props={...liveHost.props,requests:[fresh]};liveHost.render();assert.deepEqual(ids(liveHost),['new-base']);
+  late.resolve({requests:[request('stale-from-old-read')],replies:{}});await oldFlight;await flush(liveHost);assert.deepEqual(ids(liveHost),['new-base']);assert(!text(liveHost.tree).includes('stale-from-old-read'));assert.equal(scheduled.size,1,'Only the new prop scope retains a timer');
+  liveHost.unmount();liveHost=null;
+  // Both successful and failed late reads are inert after unmount, with listeners and timers removed.
+  for(const rejects of [false,true]){
+   const lateRead=deferred();liveHost=mount({...readonlyProps,requests:[old],onRefreshReplies:()=>lateRead.promise});const pendingRead=nextTick();liveHost.unmount();const writes=liveHost.writes;
+   if(rejects)lateRead.reject(Error('Detached failure'));else lateRead.resolve({requests:[request('detached')],replies:{}});
+   await pendingRead;for(let i=0;i<4;i++)await Promise.resolve();assert.equal(liveHost.writes,writes);assert.equal(scheduled.size,0);liveHost=null;
+  }
+  for(const surface of Object.values(listeners))for(const handlers of surface.values())assert.equal(handlers.size,0,'Polling event handlers are removed on unmount');
+  assert.equal(sideEffects,0,'Polling, deep-link navigation and refresh recovery never send or mutate requests');
+ } finally {
+  liveHost?.unmount();global.document=savedBrowser.document;global.window=savedBrowser.window;global.setTimeout=savedBrowser.setTimeout;global.clearTimeout=savedBrowser.clearTimeout;
+ }
  console.log('PASS: reply desk queue order (oldest unanswered first, customer replies resurface), waiting/done/spam views, learning progress, code insert, COA pick, AI rewrite with draft+instruction+remembered rule, undo, single owner Send, staff draft-only, plain failure text, unsafe addresses blocked. Isolated fixtures, no I/O.');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

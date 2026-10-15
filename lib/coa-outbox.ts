@@ -1,6 +1,7 @@
 // Backend only: immutable original reports are read from private D1 at the send boundary.
 import { exactCoaReport, labelLotOf, reportForLabelLot, approvedCoaReportCount, coaReportByHash, readCoaOriginal, type OriginalCoaMetadata, type CoaBatchAssociation, coaEmail, coaSender, isCoaRequest, coaHash, verifiedCoaAttachment, coaMessage, COA_TEMPLATE_VERSION } from './coa-delivery';
 import { loadCoaBatchContext } from './product-batch';
+import { looksLikePitchText } from './request-issues';
 export type CoaEnvironment = Record<string, string | undefined> & { DB: D1Database };
 export type CoaConfig = { enabled: boolean; replyTo: string; notifyTo: string | null };
 type Purpose = 'coa' | 'request-alert';
@@ -34,6 +35,15 @@ async function requestById(env: CoaEnvironment,id:string):Promise<StoredRequest|
  if (!validId(id)) throw new Error('Choose an existing request.');
  return env.DB.prepare("SELECT id,kind,data,created FROM requests WHERE id=? AND kind IN ('contact','affiliate')").bind(id).first<StoredRequest>();
 }
+// Plain, bounded metadata only. Never copy the customer's message into an alert.
+const alertLine = (value: unknown, max: number) => typeof value === 'string'
+ ? value.replace(/<[^>]*>/g, ' ').replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max) : '';
+function requestAlert(request: StoredRequest, data: Record<string, unknown>) {
+ const name=alertLine(data.name,80)||'Name not provided',subject=alertLine(data.subject,150)||(request.kind==='affiliate'?'Partner application':'Website message');
+ const category=request.kind==='affiliate'?'Partner application':looksLikePitchText(typeof data.subject==='string'?data.subject:'',typeof data.message==='string'?data.message:'')?'Likely supplier pitch (automatic suggestion; review required)':isCoaRequest(subject)?'COA request':'Customer request';
+ const url='https://trybiomod.com/admin?tab=requests&request='+encodeURIComponent(request.id);
+ return {subject:'New BIOMOD '+request.kind+' request: '+name,text:'A new website request was saved in store administration.\n\nName: '+name+'\nSubject: '+subject+'\nCategory: '+category+'\nReference: '+request.id+'\n\nOpen this exact request:\n'+url+'\n\nThis staff alert is not a reply to the customer.\n\nBIOMOD'};
+}
 async function makePlan(env:CoaEnvironment,request:StoredRequest,config:CoaConfig,purpose:Purpose,now:number,originals:readonly OriginalCoaMetadata[],associations:readonly CoaBatchAssociation[]):Promise<Row|null> {
  const data=parse(request.data); if(!data||typeof data!=='object')return null;
  // Owner rule (Oct 14 2026): the lot printed on the customer's vial decides the report, never the subject alone.
@@ -43,10 +53,10 @@ async function makePlan(env:CoaEnvironment,request:StoredRequest,config:CoaConfi
  if(purpose==='request-alert'&&(!config.notifyTo||request.created<now-300000||request.created>now))return null;
  const recipient=purpose==='coa'?coaEmail(data.email):config.notifyTo;
  const sender=senderFor(env),recipientHash=recipient?await coaHash(recipient):null;
- const message=report?coaMessage(report):purpose==='request-alert'?{subject:'New BIOMOD '+request.kind+' request',text:'A new '+request.kind+' request is waiting in store administration.\n\nhttps://trybiomod.com/admin?tab=requests\n\nBIOMOD'}:null;
+ const message=report?coaMessage(report):purpose==='request-alert'?requestAlert(request,data):null;
  const reason=!recipient?'invalid_recipient':!report&&purpose==='coa'?'no_exact_original':!sender?'sender_unavailable':'ready';
  const id=request.id+':'+purpose;
- return {id,request_id:request.id,purpose,status:reason==='ready'?'queued':'manual_review',reason,recipient,recipient_hash:recipientHash,dedupe_key:report&&recipientHash?await coaHash(recipientHash+':'+report.sha256):null,duplicate_of:null,document_hash:report?.sha256||null,attachment_name:report?.filename||null,product_name:report?.productName||null,strength:report?.strength||null,lot:report?.lot||null,report_id:report?.reportId||null,template_version:purpose==='coa'?COA_TEMPLATE_VERSION:'request-alert-v1',sender,reply_to:config.replyTo,subject:message?.subject||null,body:message?.text||null,payload_hash:null,idempotency_key:'biomod-'+id+'-v1',attempts:0,first_attempt_at:null,next_attempt_at:now,lease_token:null,lease_until:null,provider_id:null,accepted_at:null,created:now,updated:now};
+ return {id,request_id:request.id,purpose,status:reason==='ready'?'queued':'manual_review',reason,recipient,recipient_hash:recipientHash,dedupe_key:report&&recipientHash?await coaHash(recipientHash+':'+report.sha256):null,duplicate_of:null,document_hash:report?.sha256||null,attachment_name:report?.filename||null,product_name:report?.productName||null,strength:report?.strength||null,lot:report?.lot||null,report_id:report?.reportId||null,template_version:purpose==='coa'?COA_TEMPLATE_VERSION:'request-alert-v2',sender,reply_to:config.replyTo,subject:message?.subject||null,body:message?.text||null,payload_hash:null,idempotency_key:'biomod-'+id+'-v1',attempts:0,first_attempt_at:null,next_attempt_at:now,lease_token:null,lease_until:null,provider_id:null,accepted_at:null,created:now,updated:now};
 }
 const payloadFingerprint = (row:Row) => JSON.stringify([row.recipient,row.sender,row.reply_to,row.subject,row.body,row.document_hash,row.attachment_name,row.template_version,row.idempotency_key,row.purpose]);
 const columns = ['id','request_id','purpose','status','reason','recipient','recipient_hash','dedupe_key','duplicate_of','document_hash','attachment_name','product_name','strength','lot','report_id','template_version','sender','reply_to','subject','body','payload_hash','idempotency_key','attempts','first_attempt_at','next_attempt_at','lease_token','lease_until','provider_id','accepted_at','created','updated'] as const;
@@ -129,7 +139,8 @@ export async function processCoaOutbox(env:CoaEnvironment,options:{requestId?:st
    if(row.purpose!=='request-alert')throw new Error('owner_review_required');
    if(!coaEmail(row.recipient)||!coaSender(row.sender)||!coaEmail(row.reply_to)||!row.subject||!row.body||await coaHash(payloadFingerprint(row))!==row.payload_hash)throw new Error('snapshot_integrity_failed');
    const payload:{from:string;to:string[];reply_to:string;subject:string;text:string;attachments?:{filename:string;content:string}[]}={from:row.sender!,to:[row.recipient!],reply_to:row.reply_to!,subject:row.subject,text:row.body};
-   if(row.template_version!=='request-alert-v1')throw new Error('snapshot_integrity_failed');
+   // Existing v1 snapshots retain their exact payload and idempotency key on retry.
+   if(!['request-alert-v1','request-alert-v2'].includes(row.template_version))throw new Error('snapshot_integrity_failed');
    const response=await (deps.fetch||fetch)('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+env.RESEND_API_KEY!.trim(),'Content-Type':'application/json','Idempotency-Key':row.idempotency_key},body:JSON.stringify(payload),redirect:'manual',signal:AbortSignal.timeout(10000)});
    if(response.ok){const data=await response.json() as {id?:unknown};if(typeof data.id!=='string'||!/^[a-f0-9-]{36}$/.test(data.id))throw new Error('provider_outcome_unknown');if(await mark(env,row,'accepted','accepted_by_email_provider',(deps.now||Date.now)(),data.id))accepted++;}
    else if(response.status===429||response.status>=500||response.status===409)throw new Error('provider_retry');

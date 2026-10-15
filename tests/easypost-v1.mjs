@@ -48,10 +48,22 @@ try {
   assert.equal(label.costCents, 645);
   assert.equal(calls.at(-1)[3].rate.id, 'rate_usps');
   assert.equal(await e.sendTrackingEmail({}, 'a@b.co', 'order-1', label), false, 'no key: no email');
-  assert.equal(await e.sendTrackingEmail({ RESEND_API_KEY: 're_test' }, 'a@b.co', 'order-1', label, 'Ada Lovelace'), true);
+  assert.equal(await e.sendTrackingEmail({ RESEND_API_KEY: 're_test' }, 'a@b.co', 'order-1', label, 'Ada Lovelace', 'current-reply@example.invalid'), true);
   assert.match(calls.at(-1)[3].html, /Carrier acceptance has not been confirmed/);
   assert.doesNotMatch(calls.at(-1)[3].html, /has shipped|is on its way/);
   assert.doesNotMatch(calls.at(-1)[3].subject, /has shipped/);
+  assert.equal(calls.at(-1)[3].reply_to, 'current-reply@example.invalid');
+  assert.match(calls.at(-1)[3].html, /Questions\? Reply to current-reply@example\.invalid/);
+  assert.doesNotMatch(JSON.stringify(calls.at(-1)[3]), /contact@trybiomod\.com/);
+  assert.equal(calls.at(-1)[3].from, 'BIOMOD <no-reply@trybiomod.com>', 'Reply routing preserves the existing sender');
+  assert.equal(await e.sendTrackingEmail({ RESEND_API_KEY: 're_test', SHIP_EMAIL_FROM: 'Fixture <shipping@example.invalid>' }, 'a@b.co', 'order-2', label, 'Ada', 'next-reply@example.invalid'), true);
+  assert.equal(calls.at(-1)[3].reply_to, 'next-reply@example.invalid', 'Later sends use the current reply address');
+  assert.equal(calls.at(-1)[3].from, 'Fixture <shipping@example.invalid>', 'Configured sender is unchanged');
+  const sentCount = calls.length;
+  for (const reply of ['', 'not-email', 'name@example.invalid\nBcc:other@example.invalid', 'a@example.invalid,b@example.invalid', 'x'.repeat(260)+'@example.invalid']) {
+    assert.equal(await e.sendTrackingEmail({ RESEND_API_KEY: 're_test' }, 'a@b.co', 'order-1', label, '', reply), false);
+  }
+  assert.equal(calls.length, sentCount, 'Missing or unsafe reply addresses never reach the mail provider');
   // Errors surface EasyPost's message.
   globalThis.fetch = async () => new Response(JSON.stringify({ error: { message: 'Invalid address' } }), { status: 422 });
   await assert.rejects(e.cheapestRate(env, to, [vial]), /Invalid address/);

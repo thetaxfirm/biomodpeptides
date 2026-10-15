@@ -23,14 +23,18 @@ const report={config:{enabled:true,replyTo:'reply@example.invalid',notifyTo:'not
 }};
 let drafts=0,saves=[],sends=[];
 const requestContext=[{id:'queued-request',kind:'contact',created:Date.parse('2026-10-11T08:00:00Z'),data:{name:'Fixture Queue',email:'queue@example.invalid',subject:'COA for queued original'}},{id:'ready-request',kind:'contact',created:Date.parse('2026-10-11T07:00:00Z'),data:{name:'<script>Fixture Ready</script>',subject:'Original <b>COA</b>'}},{id:'alert-only-request',kind:'affiliate',data:{email:'partner@example.invalid'}}];
-const props={report,requests:requestContext,busy:false,dirty:false,refreshing:false,onDraft:()=>drafts++,onSave:event=>saves.push(event),onProcess:id=>sends.push(id)};
+const props={report,checkoutRecovery:{enabled:true,mailConfigured:true},requests:requestContext,busy:false,dirty:false,refreshing:false,onDraft:()=>drafts++,onSave:event=>saves.push(event),onProcess:id=>sends.push(id)};
 function nodes(t,out=[]){if(Array.isArray(t))t.forEach(x=>nodes(x,out));else if(t&&typeof t==='object'&&t.props){out.push(t);nodes(t.props.children,out);}return out;}
 function text(t){if(t==null||typeof t==='boolean')return'';if(Array.isArray(t))return t.map(text).join(' ');return typeof t==='object'?text(t.props?.children):String(t);}
 const render=p=>renderToStaticMarkup(React.createElement(CoaAutomation,p));
 const sendButtons=p=>nodes(CoaAutomation(p)).filter(n=>n.type==='button'&&text(n)==='Send original COA');
 const form=p=>nodes(CoaAutomation(p)).find(n=>n.type==='form');
 const before=JSON.stringify(report),html=render(props);
-assert.match(html,/Request alerts and previous COA activity/);assert.match(html,/Staff request alerts are <strong>enabled/);assert(html.includes('No COA is sent automatically'));assert(html.includes('research@biomodpeptides.com'));assert(html.includes('review and send approval in Jarvis'));
+assert.match(html,/Email controls and delivery history/);
+assert(html.includes('AI and staff replies: owner approval required.'));assert(html.includes('research@biomodpeptides.com'));assert(html.includes('clicks Send in the website reply desk or Jarvis'));
+assert(html.includes('Customer-requested COA links: automatic.'));assert(html.includes('lot printed on their vial matches an approved original report'));assert(html.includes('An unmatched lot goes to the reply desk for review'));
+assert(!html.includes('No COA is sent automatically'));assert(html.includes('New-request alerts: enabled.'));assert(html.includes('Overdue-request reminders: automatic internal emails.'));assert(html.includes('Unpaid-checkout reminders: enabled.'));assert(html.includes('additional 7.5% off after existing discounts'));
+assert(html.includes('This switch controls new-request alerts only'));assert(html.includes('Customer-requested COA links and AI drafts appear with their requests'));
 for(const address of ['reply@example.invalid','notify@example.invalid','sender@example.invalid'])assert(html.includes(address));
 for(const label of ['Prepare for review','Held for owner review','Sending','Accepted by mail provider','Review needed','Duplicate request'])assert(html.includes(label));
 assert.match(html,/does not confirm inbox delivery/);assert.match(html,/Request review status remains separate/);
@@ -52,7 +56,13 @@ for(const restriction of [{busy:true},{dirty:true},{refreshing:true}]){
 for(const adjusted of [{...report,config:{...report.config,enabled:false}},{...report,mailConfigured:false}])assert.equal(sendButtons({...props,report:adjusted}).length,0);
 const unavailable=render({...props,report:null});assert.match(unavailable,/details are unavailable/);assert(!unavailable.includes('<form'));assert(!unavailable.includes('Send original COA'));
 const disabledHtml=render({...props,report:{...report,config:{enabled:false,replyTo:'',notifyTo:null},mailConfigured:false,sender:'',requests:{}}});
-assert.match(disabledHtml,/Staff request alerts are <strong>disabled/);assert.match(disabledHtml,/Staff alert email is not configured/);assert.match(disabledHtml,/No COA automation records/);assert(!disabledHtml.includes('notify@example.invalid'));
+assert.match(disabledHtml,/New-request alerts: disabled/);assert.match(disabledHtml,/Request-alert and COA email is not configured/);assert.match(disabledHtml,/No COA automation records/);assert(!disabledHtml.includes('notify@example.invalid'));
+assert(disabledHtml.includes('Customer-requested COA links: automatic.'),'The new-request alert switch does not control customer COA links');
+assert(disabledHtml.includes('Overdue-request reminders: automatic internal emails.'),'The new-request alert switch does not control overdue reminders');
+assert(disabledHtml.includes('Unpaid-checkout reminders: enabled.'),'The new-request alert switch does not control checkout reminders');
+const recoveryOff=render({...props,checkoutRecovery:{enabled:false,mailConfigured:true}});assert(recoveryOff.includes('Unpaid-checkout reminders: disabled.'));
+const recoveryUnknown=render({...props,checkoutRecovery:undefined});assert(recoveryUnknown.includes('Unpaid-checkout reminders: status unavailable.'));assert(!recoveryUnknown.includes('Unpaid-checkout reminders: disabled.'));
+const recoveryNoMail=render({...props,checkoutRecovery:{enabled:true,mailConfigured:false}});assert(recoveryNoMail.includes('Checkout reminders are enabled, but their sending service is not configured.'));
 const currentForm=form(props),event={prevented:0,preventDefault(){this.prevented++;},currentTarget:{}};
 currentForm.props.onChangeCapture();assert.equal(drafts,1);
 currentForm.props.onSubmit(event);assert.equal(event.prevented,1);assert.equal(saves.length,1);assert.equal(saves[0],event);
@@ -73,4 +83,4 @@ const duplicateReview=render({...props,report:{...report,requests:{duplicate:{co
 assert(!duplicateReview.includes('Earlier message accepted'));assert(!duplicateReview.includes('<time'),'Acceptance time only belongs to an actually accepted related message');
 const malformed=render({...props,report:{...report,requests:{unknown:{coa:status('unexpected',{canProcess:true}),alert:null},badDate:{coa:status('accepted',{acceptedAt:NaN}),alert:null}}}});
 assert(malformed.includes('Status unavailable'));assert(!malformed.includes('Invalid Date'));assert(!malformed.includes('Send original COA'));
-console.log('PASS: actual COA admin UI states/configuration, no direct customer-send controls or automatic COA sends, accepted-not-delivered copy, unavailable/disabled behavior, dirty/busy/read guards, delegated form callbacks, and no private source payload rendering. No live I/O.');
+console.log('PASS: actual COA admin UI states/configuration, accurate separate approval and automatic-email states, no direct customer-send controls, accepted-not-delivered copy, unavailable/disabled behavior, dirty/busy/read guards, delegated form callbacks, and no private source payload rendering. No live I/O.');

@@ -6,6 +6,7 @@ import { auditRun, recordChange } from '@/lib/change-history';
 import { savedShippingOption } from '@/lib/shipping-options';
 import { catalog, config } from '@/lib/commerce';
 import { coaBlockedItems, coaBlockMessage } from '@/lib/coa-shipping';
+import { readCoaConfig } from '@/lib/coa-outbox';
 export const dynamic = 'force-dynamic';
 const j = (value: unknown, status = 200) => NextResponse.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
 const auditWarning = ' Change history could not record the final result. Do not repeat this action just to update history.';
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest) {
         const trackingEmail = async (label: Parameters<typeof sendTrackingEmail>[3]) => {
             await record('shipping.tracking_email', 'attempted', 'Requested a tracking email.');
             let sent = false;
-            try { sent = await sendTrackingEmail(env, data.email || '', order.id, label, data.address?.name); }
+            try { sent = await sendTrackingEmail(env, data.email || '', order.id, label, data.address?.name, (await readCoaConfig(env)).replyTo); }
             catch { /* The provider outcome is unknown; do not repeat the send. */ }
             const recorded = await outcome('shipping.tracking_email', sent ? 'succeeded' : 'observed', sent
                 ? 'Tracking email accepted by the mail provider. Inbox delivery is unconfirmed.'

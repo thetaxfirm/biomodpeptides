@@ -26,6 +26,7 @@ export type CaseEntry = { requestId: string; issue: string; resolutions: string[
 export type DeskOptions = { team?: TeamMember[]; links?: { label: string; url: string }[]; coas: DeskCoa[]; codes: { code: string; percentOff: number }[]; rules: { id: string; rule: string; issue?: string | null }[]; learning: { recent: number; unchanged: number }; bridgeSeen: number | null };
 type Props = {
   requests: readonly CustomerRequest[];
+  activeTab?: boolean;
   automation?: CoaAutomationReport | null;
   requestReplies?: Record<string, ReplySummary>;
   busy: boolean;
@@ -34,7 +35,7 @@ type Props = {
   canSend?: boolean;
   onStatus: (request: CustomerRequest, status: string) => void | Promise<void>;
   onPrepareReply: (input: PrepareReplyInput) => Promise<ReplySummary>;
-  onRefreshReplies?: (ids: string[]) => Promise<{ replies: Record<string, ReplySummary>; forwards?: Record<string, RequestForward[]>; activity?: Record<string, { at: number; text: string }[]>; issues?: Record<string, RequestIssue>; external?: Record<string, ExternalReply[]> }>;
+  onRefreshReplies?: (ids: string[], focusId?: string | null) => Promise<{ requests?: CustomerRequest[]; replies: Record<string, ReplySummary>; forwards?: Record<string, RequestForward[]>; activity?: Record<string, { at: number; text: string }[]>; issues?: Record<string, RequestIssue>; external?: Record<string, ExternalReply[]> }>;
   onMarkReplied?: (input: { id: string; note: string }) => Promise<ExternalReply>;
   onSaveIssue?: (input: { id: string; issue: string; resolutions: string[]; note: string }) => Promise<RequestIssue>;
   onLoadCases?: () => Promise<CaseEntry[]>;
@@ -101,7 +102,7 @@ function stageOf(request: CustomerRequest, reply: ReplySummary | undefined, exte
   }
   // Plain answer to "did we reply?" first, then what is waiting.
   const base = customerReplied ? `Replied ${shortDate(lastOut)}, then they wrote again` : 'Not replied yet';
-  const state = base + (working(reply) ? ' · AI is writing a draft' : reply?.status === 'ready' ? ' · reply ready to send in Jarvis' : reply?.status === 'needs_review' ? ' · draft needs a look' : '');
+  const state = base + (working(reply) ? ' · AI is writing a draft' : reply?.status === 'ready' ? ' · draft ready for your approval' : reply?.status === 'needs_review' ? ' · draft needs a look' : '');
   const waited = now - lastIn;
   const days = Math.floor(waited / DAY);
   return { stage: 'todo', label: state, since: lastIn, when: (customerReplied ? 'Wrote ' : 'Received ') + shortDate(lastIn) + (days >= 1 ? ` · waiting ${days} day${days === 1 ? '' : 's'}` : ''), late: waited > DAY };
@@ -120,7 +121,12 @@ function speechRecognition(): (new () => Speech) | null {
   return w.SpeechRecognition || w.webkitSpeechRecognition || null;
 }
 
-export function RequestInbox({ requests, automation, requestReplies = noReplies, busy, dirty, refreshing, canSend = false, onStatus, onPrepareReply, onRefreshReplies, onLoadOptions, onSaveRule, onForward, onSaveIssue, onLoadCases, onLoadTemplates, focusId, onMarkReplied }: Props) {
+export function RequestInbox({ requests: initialRequests, activeTab = true, automation, requestReplies = noReplies, busy, dirty, refreshing, canSend = false, onStatus, onPrepareReply, onRefreshReplies, onLoadOptions, onSaveRule, onForward, onSaveIssue, onLoadCases, onLoadTemplates, focusId, onMarkReplied }: Props) {
+  const [snapshot, setSnapshot] = useState<{ base: readonly CustomerRequest[]; requests: readonly CustomerRequest[]; focus: string | null } | null>(null);
+  const requests = snapshot?.base === initialRequests ? snapshot.requests : initialRequests;
+  const [checkedAt, setCheckedAt] = useState<number | null>(null);
+  const [refreshError, setRefreshError] = useState('');
+  const consumedFocus = useRef<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [preparedReplies, setPreparedReplies] = useState<Record<string, ReplySummary>>({});
@@ -151,6 +157,8 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
   const replyRef = useRef(replyOf);
   replyRef.current = replyOf;
   const requestIds = requests.map(r => r.id).join(',');
+  const polling = useRef({ ids: [] as string[], focus: null as string | null });
+  polling.current = { ids: requests.map(r => r.id), focus: focusId && consumedFocus.current !== focusId ? focusId.split('|')[0] : selected };
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; speech.current?.abort(); }; }, []);
   useEffect(() => {
     if (!onLoadOptions) return;
@@ -158,32 +166,57 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
     onLoadOptions().then(value => { if (alive && mounted.current) setOptions(value); }, () => undefined);
     return () => { alive = false; };
   }, [onLoadOptions]);
-  // Live status: every few seconds while the AI writes or Jarvis sends, otherwise every 30 seconds.
+  // Refresh only the inbox snapshot. Unsaved drafts and other admin forms stay intact.
   useEffect(() => {
-    if (!onRefreshReplies) return;
-    let stopped = false, timer: ReturnType<typeof setTimeout> | undefined;
+    if (!onRefreshReplies || !activeTab) return;
+    let stopped = false, running = false, timer: ReturnType<typeof setTimeout> | undefined;
     const tick = async () => {
-      if (stopped) return;
-      const ids = requestIds ? requestIds.split(',') : [];
-      if (ids.length && typeof document !== 'undefined' && document.visibilityState !== 'hidden') {
-        try { const fresh = await onRefreshReplies(ids); if (!stopped && mounted.current) { setLiveReplies(fresh?.replies || {}); if (fresh?.forwards) setForwards(fresh.forwards); if (fresh?.activity) setActivity(fresh.activity); if (fresh?.issues) setIssues(fresh.issues); if (fresh?.external) setExternal(fresh.external); } } catch { /* keep the last loaded status */ }
+      if (stopped || running) return;
+      if (timer) clearTimeout(timer);
+      running = true;
+      if (typeof document !== 'undefined' && document.visibilityState !== 'hidden') {
+        try {
+          const { ids, focus } = polling.current;
+          const fresh = await onRefreshReplies(ids.slice(0, 200), focus);
+          if (!stopped && mounted.current) {
+            if (fresh.requests) setSnapshot({ base: initialRequests, requests: fresh.requests, focus });
+            setLiveReplies(fresh.replies || {});
+            if (fresh.forwards) setForwards(fresh.forwards);
+            if (fresh.activity) setActivity(fresh.activity);
+            if (fresh.issues) setIssues(fresh.issues);
+            if (fresh.external) setExternal(fresh.external);
+            setCheckedAt(Date.now()); setRefreshError('');
+          }
+        } catch { if (!stopped && mounted.current) setRefreshError('Could not refresh requests. Showing the last loaded information; retrying automatically.'); }
       }
+      running = false;
       if (stopped) return;
       if (mounted.current) setNow(Date.now());
-      const active = ids.some(id => { const reply = replyRef.current(id); return working(reply) || sendPending(reply); });
-      timer = setTimeout(tick, active ? 2500 : 30000);
+      const busyReply = polling.current.ids.some(id => { const reply = replyRef.current(id); return working(reply) || sendPending(reply); });
+      timer = setTimeout(tick, busyReply ? 2500 : 30000);
       (timer as any)?.unref?.();
     };
+    const resume = () => { if (document.visibilityState !== 'hidden') void tick(); };
+    if (typeof document !== 'undefined') document.addEventListener?.('visibilitychange', resume);
+    if (typeof window !== 'undefined') window.addEventListener?.('focus', resume);
     timer = setTimeout(tick, 2500);
     (timer as any)?.unref?.();
-    return () => { stopped = true; if (timer) clearTimeout(timer); };
-  }, [onRefreshReplies, requestIds]);
-  // Opened from an order: select that conversation once it is in the list.
-  // focusId is "requestId|token" so asking for the same conversation again reopens it.
+    return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+      if (typeof document !== 'undefined') document.removeEventListener?.('visibilitychange', resume);
+      if (typeof window !== 'undefined') window.removeEventListener?.('focus', resume);
+    };
+  }, [onRefreshReplies, initialRequests, activeTab, focusId]);
+  // Exact links also reveal archived, supplier and deleted requests. Consume once so
+  // subsequent refreshes never reset the person's chosen filter, search or draft.
   useEffect(() => {
-    const id = focusId?.split('|')[0];
-    if (!id || !requests.some(r => r.id === id)) return;
-    setFilter('all'); setSelected(id);
+    if (!focusId) { consumedFocus.current = null; return; }
+    const id = focusId.split('|')[0];
+    const request = requests.find(r => r.id === id);
+    if (!id || !request || consumedFocus.current === focusId) return;
+    consumedFocus.current = focusId!;
+    setFilter(request.status === 'deleted' ? 'deleted' : 'all'); setQuery(''); setSelected(id);
     setDrafts(previous => previous[id] ? previous : { ...previous, [id]: newDraft(replyOf(id)) });
   }, [focusId, requestIds]);
   // Order conversations get the win-back templates on the side.
@@ -387,6 +420,8 @@ export function RequestInbox({ requests, automation, requestReplies = noReplies,
     {bridgeQuiet && (bridgeStopped
       ? <p className={styles.alarm} role="alert">Jarvis stopped checking in at {when(options!.bridgeSeen!)}. Until it is back, AI drafts, your sends and customers' email replies are on hold. Check that your Mac is awake and Jarvis is running.</p>
       : <p className={styles.warning} role="status">Jarvis last checked in at {when(options!.bridgeSeen!)}. AI drafts and sends wait until your Mac is awake and Jarvis is running.</p>)}
+    {onRefreshReplies && <p className={styles.note} role="status">{refreshError || (checkedAt ? 'Requests checked ' + new Date(checkedAt).toLocaleString() + '. ' : '') + 'New requests refresh automatically every 30 seconds while this tab is open. Sales pitches appear in their own filter.'}</p>}
+    {focusId && snapshot?.base === initialRequests && snapshot.focus === focusId.split('|')[0] && !requests.some(request => request.id === snapshot.focus) && <p className={styles.warning} role="status">The linked request could not be found. You can search the loaded requests below.</p>}
     {dirty && <p role="status">Save or discard your unsaved admin edits before changing a request.</p>}
     <div className={styles.toolbar}>
       <div className={styles.filters} role="group" aria-label="Filter customer requests">{views.map(([value, label]) => <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)}>{label} <span>{counts[value]}</span></button>)}</div>

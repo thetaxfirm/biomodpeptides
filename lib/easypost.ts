@@ -189,10 +189,13 @@ export function verifyEasypostWebhook(raw: string, header: string | null, secret
     return received.length === expected.length && timingSafeEqual(received, expected);
 }
 const esc = (v: string) => v.replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
-/** Sends the tracking email through Resend. Returns false (without throwing) when email is not configured. */
-export async function sendTrackingEmail(env: Environment, to: string, orderId: string, label: Label, name = ''): Promise<boolean> {
+/** Sends the tracking email through Resend. Uses the current configured reply address supplied by the caller. Returns false when mail or that reply address is unavailable. */
+export async function sendTrackingEmail(env: Environment, to: string, orderId: string, label: Label, name = '', replyTo = ''): Promise<boolean> {
     const key = (env.RESEND_API_KEY || '').trim();
     if (!key || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to))
+        return false;
+    const reply = replyTo.trim();
+    if (replyTo.length > 254 || /[\x00-\x1f\x7f]/.test(replyTo) || !/^[^\s<>@,;]+@[^\s<>@,;]+\.[^\s<>@,;]+$/.test(reply))
         return false;
     const link = label.trackingUrl || 'https://trybiomod.com/account/orders';
     // Brand colors match the storefront: plum (#2b1030) and cream (#fbf1ea).
@@ -205,13 +208,13 @@ export async function sendTrackingEmail(env: Environment, to: string, orderId: s
         + '<p>' + esc(shipmentEmailText(label.status)) + '</p>'
         + '<p><strong>Tracking number:</strong> ' + esc(label.tracking) + '</p>'
         + '<p><a href="' + esc(link) + '" style="display:inline-block;background:#2b1030;color:#fbf1ea;padding:10px 16px;border-radius:6px;text-decoration:none;font-weight:bold">Track your package</a></p>'
-        + '<p style="font-size:12px;color:#5c5c5c">For laboratory research use only. Questions? Reply to contact@trybiomod.com.</p>'
+        + '<p style="font-size:12px;color:#5c5c5c">For laboratory research use only. Questions? Reply to ' + esc(reply) + '.</p>'
         + '</div></div></div>';
     try {
         const r = await fetch('https://api.resend.com/emails', {
             method: 'POST',
             headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ from: env.SHIP_EMAIL_FROM || 'BIOMOD <no-reply@trybiomod.com>', to: [to], reply_to: 'contact@trybiomod.com', subject: 'Your BIOMOD order ' + orderId.slice(0, 8) + ' tracking information', html }),
+            body: JSON.stringify({ from: env.SHIP_EMAIL_FROM || 'BIOMOD <no-reply@trybiomod.com>', to: [to], reply_to: reply, subject: 'Your BIOMOD order ' + orderId.slice(0, 8) + ' tracking information', html }),
             redirect: 'manual',
             signal: AbortSignal.timeout(10000),
         });

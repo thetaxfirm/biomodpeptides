@@ -518,8 +518,36 @@ export async function POST(req: NextRequest, { params }: {
             }
             if (action === 'admin-reply-desk') return j({ ...(await replyDeskOptions(runtime())), links: await publicCoaLinks(), team: await teamMembers(runtime()) });
             if (action === 'admin-request-replies') {
-                const ids = z.object({ ids: z.array(z.string().uuid()).max(200) }).parse(b).ids;
-                return j({ replies: await summarizeRequestReplies(runtime(), ids), forwards: await forwardsFor(runtime(), ids), activity: await activityFor(runtime(), ids), issues: await issuesFor(runtime(), ids), external: await externalRepliesFor(runtime(), ids) });
+                const input = z.object({ ids: z.array(z.string().uuid()).max(200), refreshRequests: z.boolean().optional(), focusId: z.string().uuid().nullable().optional() }).parse(b);
+                type RequestRow = { id: string; kind: string; status: string; data: string; created: number };
+                let requests: (Omit<RequestRow, 'data'> & { data: Record<string, unknown> })[] | undefined;
+                if (input.refreshRequests) {
+                    const rows = await all<RequestRow>("SELECT id,kind,status,data,created FROM requests WHERE kind IN ('contact','stock','affiliate') ORDER BY created DESC,id DESC LIMIT 200");
+                    const focusId = input.focusId?.toLowerCase();
+                    // An alert can refer to an older or deleted conversation. Its exact row
+                    // remains reachable without expanding the general request list.
+                    if (focusId && !rows.some(row => row.id === focusId)) {
+                        const focused = await one<RequestRow>("SELECT id,kind,status,data,created FROM requests WHERE id=? AND kind IN ('contact','stock','affiliate')", focusId);
+                        if (focused) rows.push(focused);
+                    }
+                    requests = rows.map(row => {
+                        const data = parse<unknown>(row.data, {});
+                        return { ...row, data: data && typeof data === 'object' && !Array.isArray(data) ? data as Record<string, unknown> : {} };
+                    });
+                }
+                const ids = [...new Set([...input.ids.map(id => id.toLowerCase()), ...(requests || []).map(row => row.id)])];
+                const env = runtime();
+                const replies: Awaited<ReturnType<typeof summarizeRequestReplies>> = {}, forwards: Awaited<ReturnType<typeof forwardsFor>> = {}, activity: Awaited<ReturnType<typeof activityFor>> = {}, issues: Awaited<ReturnType<typeof issuesFor>> = {}, external: Awaited<ReturnType<typeof externalRepliesFor>> = {};
+                // At most 401 IDs: 200 displayed IDs, 200 fresh rows and one focused row.
+                // Each helper intentionally accepts only 200, so never silently truncate one.
+                for (let offset = 0; offset < ids.length; offset += 200) {
+                    const chunk = ids.slice(offset, offset + 200);
+                    const [nextReplies, nextForwards, nextActivity, nextIssues, nextExternal] = await Promise.all([
+                        summarizeRequestReplies(env, chunk), forwardsFor(env, chunk), activityFor(env, chunk), issuesFor(env, chunk), externalRepliesFor(env, chunk),
+                    ]);
+                    Object.assign(replies, nextReplies); Object.assign(forwards, nextForwards); Object.assign(activity, nextActivity); Object.assign(issues, nextIssues); Object.assign(external, nextExternal);
+                }
+                return j({ replies, forwards, activity, issues, external, ...(requests ? { requests } : {}) });
             }
             if (action === 'admin-order-conversation') {
                 const input = z.object({ orderId: z.string().min(6).max(80) }).parse(b);
