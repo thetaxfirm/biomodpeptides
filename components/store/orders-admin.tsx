@@ -70,9 +70,10 @@ export function MarkShipped({ order, busy, change }: { order: QueueRow; busy: bo
     return <button type="button" className="text-button" disabled={busy} onClick={click}>Mark shipped</button>;
 }
 
+/** Sent as a body, never a query string: the search term is a customer's own contact details. */
 function query(params: Record<string, string | number>) {
-    const search = new URLSearchParams(Object.entries(params).filter(([, v]) => v !== '' && v !== undefined).map(([k, v]) => [k, String(v)]));
-    return api('admin-orders?' + search.toString()) as Promise<QueueResult>;
+    const body = Object.fromEntries(Object.entries(params).filter(([, v]) => v !== '' && v !== undefined).map(([k, v]) => [k, String(v)]));
+    return api('admin-orders', body) as Promise<QueueResult>;
 }
 
 /** Every message sent to this customer, newest first (owner, Oct 15 2026). */
