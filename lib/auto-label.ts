@@ -9,6 +9,7 @@
 // Recovery runs whether or not automatic buying is switched on, because a manual purchase can strand
 // an order the same way.
 import { buyLabel, readBoughtLabel, sendTrackingEmail, type Label } from './easypost';
+import { recordChange } from './change-history';
 import { normalizeShippingOptions, savedShippingOption } from './shipping-options';
 import { COA_REQUIRED_TO_SHIP } from './coa-shipping';
 
@@ -190,8 +191,16 @@ export async function runAutoLabels(env: AutoLabelEnvironment, now = Date.now())
         health.bought += 1;
         health.spentCents += label.costCents;
         // The customer is told the parcel exists. A mail failure never undoes a bought label.
-        try { await sendTrackingEmail(env as never, data.email || '', row.id, label, data.address?.name, await replyAddress(env)); }
+        let trackingSent = false;
+        try { trackingSent = await sendTrackingEmail(env as never, data.email || '', row.id, label, data.address?.name, await replyAddress(env)); }
         catch { /* The tracking email is not what this job guarantees. */ }
+        // Record the send so the Orders tab can show the customer was emailed and when
+        // (owner, Oct 15 2026). Same wording as the admin path. A failed record never undoes the label.
+        try {
+            await recordChange(env.DB as never, { source: 'system', actor: 'Automatic label purchase', actorType: 'system', action: 'shipping.tracking_email', entityType: 'order', entityId: row.id,
+                status: trackingSent ? 'succeeded' : 'observed', changes: [],
+                summary: trackingSent ? 'Tracking email accepted by the mail provider. Inbox delivery is unconfirmed.' : 'Tracking email acceptance was not confirmed. Review mail provider records before resending.' });
+        } catch { /* history is best-effort here */ }
     }
     return health;
 }

@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { issueTypes, issueLabel } from '@/lib/request-issues';
 import { winBackTemplates } from '@/lib/win-back';
+import { orderMessageLabel, type OrderMessageLog } from '@/lib/order-messages';
 import { api, report } from './provider';
 import { Field } from './primitives';
 import { money } from '@/lib/catalog';
@@ -74,6 +75,15 @@ function query(params: Record<string, string | number>) {
     return api('admin-orders?' + search.toString()) as Promise<QueueResult>;
 }
 
+/** Every message sent to this customer, newest first (owner, Oct 15 2026). */
+const messagesOf = (o: QueueRow): OrderMessageLog => (o as QueueRow & { messages?: OrderMessageLog }).messages || { count: 0, last: null, items: [] };
+const sentAt = (at: number) => new Date(at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+function MessagedCell({ order }: { order: QueueRow }) {
+    const log = messagesOf(order);
+    if (!log.last) return <span className={styles.notMessaged}>Not contacted</span>;
+    const all = log.items.map(m => orderMessageLabel[m.kind] + ' · ' + sentAt(m.at)).join('\n');
+    return <span title={all}>{orderMessageLabel[log.last.kind]}<span className={styles.sub}>{sentAt(log.last.at)}{log.count > 1 ? ' · ' + log.count + ' sent' : ''}</span></span>;
+}
 export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, formGeneration, change, submit, markDraft, reload, onEmailCustomer, onReportProblem, onClearHold, onWinBack }: Props) {
     const [problem, setProblem] = useState<{ issue: string; note: string }>({ issue: 'out_of_stock', note: '' });
     const [tab, setTab] = useState<QueueTab>('to_ship');
@@ -178,13 +188,14 @@ export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, form
         </p>}
         {!rows.length ? <p className={styles.empty}>{loading ? 'Loading orders…' : q ? 'No orders match this search in ' + current.label + '. Try All.' : 'No orders in ' + current.label + '.'}</p> :
             <table className={styles.table}>
-                <thead><tr><th>Order</th><th>Customer</th><th className={styles.number}>Items</th><th className={styles.number}>Total</th><th>Status</th><th>Next step</th></tr></thead>
+                <thead><tr><th>Order</th><th>Customer</th><th className={styles.number}>Items</th><th className={styles.number}>Total</th><th>Status</th><th>Messaged</th><th>Next step</th></tr></thead>
                 <tbody>{rows.map(o => <tr key={o.id}>
                     <td><button type="button" className={styles.orderButton} onClick={() => setSelected(o)}>{orderNumber(o.id)}</button><span className={styles.sub}>{new Date(o.created).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span></td>
                     <td>{o.data?.address?.name || 'Name not recorded'}<span className={styles.sub}>{[place(o), o.data?.email].filter(Boolean).join(' · ')}</span></td>
                     <td className={styles.number}>{units(o)}</td>
                     <td className={styles.number}>{money(Number(o.total) || 0)}</td>
                     <td><StatusBadge bucket={o.bucket}/>{o.data?.shipment?.status && <span className={styles.sub}>{carrierLine(o)}</span>}</td>
+                    <td className={styles.messaged}><MessagedCell order={o}/></td>
                     <td className={styles.next}>{nextStep(o)}</td>
                 </tr>)}</tbody>
             </table>}
@@ -206,6 +217,13 @@ export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, form
                     <div className={styles.panelHead}><SheetTitle asChild><h2>Order {orderNumber(selected.id)}</h2></SheetTitle><StatusBadge bucket={selected.bucket}/></div>
                     <SheetDescription className={styles.panelMeta}>{new Date(selected.created).toLocaleString()} · {money(Number(selected.total) || 0)}</SheetDescription>
                     <p className={styles.statusLine}>{fulfillmentLabel(selected)}</p>
+                    <div className={styles.messageLog}>
+                        <h3>Messages sent</h3>
+                        {messagesOf(selected).items.length
+                            ? <ul>{messagesOf(selected).items.map((m, i) => <li key={m.kind + m.at + i}><span>{orderMessageLabel[m.kind]}</span><span className={styles.sub}>{sentAt(m.at)}{m.by && m.kind !== 'auto_reminder' ? ' · ' + m.by : ''}</span></li>)}</ul>
+                            : <p className={styles.sub}>Nothing sent to this customer yet.</p>}
+                        <p className={styles.sub}>Times are when the mail provider accepted the email; inbox delivery is not confirmed.</p>
+                    </div>
                     <OrderDetails order={selected}/>
                     {selected.data?.recovery?.savings > 0 && <p>Additional 7.5% recovery savings: {money(selected.data.recovery.savings)}. Original promo attribution retained.</p>}
                     {recoveryJobs(selected.id).map((j: any) => <p key={j.order_id}>Recovery email: {j.status === 'accepted' ? 'Accepted by mail provider' : j.status === 'review' ? 'Needs manual review' : j.status}. {String(j.reason || '').replaceAll('_', ' ')}{j.accepted_at ? ' · ' + new Date(j.accepted_at).toLocaleString() : ''}</p>)}

@@ -4,6 +4,7 @@ import { publicCatalog } from '@/lib/public-catalog';
 import { batchRecordsFor, batchStatus, batchPath } from '@/lib/testing';
 import { externalRepliesFor, markReplied } from '@/lib/request-external';
 import { startOrderConversation, saveRequestIssue, issuesFor, caseLog, setOrderHold, startWinBack, winBackPreview } from '@/lib/request-cases';
+import { orderMessageLogs } from '@/lib/order-messages';
 import { forwardRequest, forwardsFor, teamMembers, activityFor } from '@/lib/request-forward';
 import { summarizeRequestReplies, prepareRequestReply, autoDraftNewRequest, replyDeskOptions, saveReplyRule } from '@/lib/request-replies';
 import { adminBatchRecords, validateBatchEdit } from '@/lib/product-batch';
@@ -233,7 +234,9 @@ export async function GET(req: NextRequest, { params }: {
             // Products without a COA for the current lot cannot be mailed; flag waiting orders and list the products.
             const products = await catalog(false, true);
             const waiting = rows.filter(o => o.status === 'paid' && !o.data?.shipment).map(o => ({ items: o.data?.items }));
-            return j({ ...result, orders: result.orders.map((o: any) => ({ ...o, coaMissing: ['paid', 'labeling'].includes(o.status) && !o.data?.shipment ? coaBlockedItems(o.data?.items, products) : [] })), noCoa: noCoaProducts(products, waiting) });
+            // Who was emailed and when, for each order on this page (owner, Oct 15 2026).
+            const messages = await orderMessageLogs(runtime() as any, result.orders as any);
+            return j({ ...result, orders: result.orders.map((o: any) => ({ ...o, messages: messages[o.id] || { count: 0, last: null, items: [] }, coaMissing: ['paid', 'labeling'].includes(o.status) && !o.data?.shipment ? coaBlockedItems(o.data?.items, products) : [] })), noCoa: noCoaProducts(products, waiting) });
         }
         if (action === 'admin') {
             // Every role sees orders; other sections are sent only to roles that hold them.

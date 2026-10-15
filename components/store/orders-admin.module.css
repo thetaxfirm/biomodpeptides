@@ -70,3 +70,11 @@
 .noCoa th { text-align:left; font-weight:600; padding:7px 10px; border-bottom:1px solid #f0d9cb; }
 .noCoa td { padding:7px 10px; border-bottom:1px solid #f7e8df; }
 .coaHold { color:#8a2f12; font-weight:600; font-size:13px; line-height:1.4; }
+
+/* Messaged column + detail log (owner, Oct 15 2026: "anyone we send a message to, show that and when") */
+.messaged { min-width:150px; font-size:13px; }
+.notMessaged { color:#8a7f8f; font-size:13px; }
+.messageLog { margin:12px 0 4px; }
+.messageLog h3 { margin:0 0 6px; font-size:14px; }
+.messageLog ul { list-style:none; margin:0 0 6px; padding:0; display:grid; gap:6px; }
+.messageLog li { font-size:13px; }
