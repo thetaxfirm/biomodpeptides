@@ -114,7 +114,7 @@ const settle = () => new Promise(r => setTimeout(r, 0));
  assert.equal(shippingServicesPayload({ ...draft, rows: [{ ...draft.rows[0], markup: '2' }] }).autoLabel, undefined, 'a save that never collected them leaves the stored settings alone');
 
  // The per-label ceiling: the limit that catches one wrong address quoting a freight rate.
- assert.equal(shippingServicesPayload({ ...autoDraft, autoMax: '50' }).autoLabel.maxLabelCents, 5000);
+ assert.equal(shippingServicesPayload({ ...autoDraft, autoMax: '75' }).autoLabel.maxLabelCents, 7500);
  assert.equal(shippingServicesPayload({ ...autoDraft, autoMax: '12.50' }).autoLabel.maxLabelCents, 1250, 'cents are kept exactly');
  assert.equal(shippingServicesPayload(autoDraft).autoLabel.maxLabelCents, undefined, 'a page that never collected it leaves the saved ceiling alone');
  assert.throws(() => shippingServicesPayload({ ...autoDraft, autoMax: '0' }), /at least \$1\.00/, 'a ceiling of zero would buy nothing');
@@ -127,6 +127,7 @@ const settle = () => new Promise(r => setTimeout(r, 0));
  assert.match(autoLabelReport(null, RUN), /No automatic run has reported yet/);
  assert.match(autoLabelReport({ checkedAt: RUN - 60000, status: 'completed', enabled: true, bought: 2, failed: 0, blocked: 0, due: 2, recovered: 0, released: 0, capReached: false }, RUN), /2 labels bought/);
  assert.match(autoLabelReport({ checkedAt: RUN - 60000, status: 'completed', enabled: true, bought: 1, failed: 1, blocked: 1, due: 2, recovered: 0, released: 0, capReached: false }, RUN), /1 label bought, 1 attempt failed, 1 order handed to you/);
+ assert.match(autoLabelReport({ checkedAt: RUN - 60000, status: 'completed', enabled: true, bought: 0, failed: 0, blocked: 0, needsApproval: 2, due: 2, recovered: 0, released: 0, capReached: false }, RUN), /2 labels waiting for your approval/);
  assert.match(autoLabelReport({ checkedAt: RUN - 60000, status: 'disabled', enabled: false, bought: 0, failed: 0, blocked: 0, due: 0, recovered: 0, released: 0, capReached: false }, RUN), /Automatic buying is off/);
  assert.match(autoLabelReport({ checkedAt: RUN - 60000, status: 'cap_reached', enabled: true, bought: 0, failed: 0, blocked: 0, due: 0, recovered: 0, released: 0, capReached: true }, RUN), /daily limit is reached/);
  assert.match(autoLabelReport({ checkedAt: RUN - 60000, status: 'settings_unreadable', enabled: false, bought: 0, failed: 0, blocked: 0, due: 0, recovered: 0, released: 0, capReached: false }, RUN), /Nothing was charged/);
