@@ -10,7 +10,7 @@ import { orderMessageLabel, type OrderMessageLog } from '@/lib/order-messages';
 import { api, report } from './provider';
 import { Field } from './primitives';
 import { money } from '@/lib/catalog';
-import { fulfillmentLabel } from '@/lib/fulfillment';
+import { fulfillmentLabel, awaitingLabelApproval } from '@/lib/fulfillment';
 import { bucketStatus, queueTabs, type QueueResult, type QueueRow, type QueueTab, type OrderBucket } from '@/lib/order-queue';
 import { CarrierConnection } from './fulfillment-admin';
 import { ShippingLabel } from './shipping-admin';
@@ -143,6 +143,11 @@ export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, form
     function mainStep(o: QueueRow, s: any) {
         const noCoa = (o as QueueRow & { coaMissing?: string[] }).coaMissing || [];
         if (noCoa.length && (o.bucket === 'to_ship' || o.bucket === 'label')) return <span className={styles.coaHold}>Can't ship: no COA for {noCoa.join(', ')}</span>;
+        // Buying it is the approval, so the button stays right next to the price that needs approving.
+        if (awaitingLabelApproval(o)) return <span className={styles.nextGroup}>
+            <span className={styles.coaHold}>{money(Number(o.data?.labelApproval?.cents) || 0)} label · over your {money(Number(o.data?.labelApproval?.limitCents) || 0)} limit</span>
+            {allowed('orders:fulfill') ? <ShippingLabel order={o} onDone={reload} compact/> : null}
+        </span>;
         if (o.bucket === 'to_ship' && allowed('orders:fulfill')) return <ShippingLabel order={o} onDone={reload} compact/>;
         if (o.bucket === 'label' && s?.labelUrl) return <span className={styles.nextGroup}>
             <a className="text-button" href={s.labelUrl} target="_blank" rel="noopener">Print label</a>
@@ -218,6 +223,7 @@ export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, form
                     <div className={styles.panelHead}><SheetTitle asChild><h2>Order {orderNumber(selected.id)}</h2></SheetTitle><StatusBadge bucket={selected.bucket}/></div>
                     <SheetDescription className={styles.panelMeta}>{new Date(selected.created).toLocaleString()} · {money(Number(selected.total) || 0)}</SheetDescription>
                     <p className={styles.statusLine}>{fulfillmentLabel(selected)}</p>
+                    {awaitingLabelApproval(selected) && <p className={styles.coaHold}>This label quotes {money(Number(selected.data?.labelApproval?.cents) || 0)}, above your {money(Number(selected.data?.labelApproval?.limitCents) || 0)} automatic limit, so it was not bought. Buying it below approves that cost. Nothing has been charged.</p>}
                     <div className={styles.messageLog}>
                         <h3>Messages sent</h3>
                         {messagesOf(selected).items.length
