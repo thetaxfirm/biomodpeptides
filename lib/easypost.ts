@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { shipmentEmailText } from './fulfillment';
-import { normalizeShippingOptions, shippingCarrier, shippingTier, shippingTierEnabled, shippingHandling, serviceKey, enabledServiceSetting, catalogService, shippingCarriers, type ShippingOptionsConfig, type ShippingOption, type ShippingCarrier, minimumService, tierRank } from './shipping-options';
+import { normalizeShippingOptions, shippingCarrier, shippingTier, shippingTierEnabled, shippingHandling, serviceKey, enabledServiceSetting, catalogService, shippingCarriers, type ShippingOptionsConfig, type ShippingOption, type ShippingCarrier, minimumService, tierRank, signatureConfirmation } from './shipping-options';
 // EasyPost shipping: live checkout rates, label purchase and tracking webhooks.
 // Everything stays off until EASYPOST_API_KEY is set; checkout then falls back to the flat rate in store settings.
 type Environment = Record<string, string | undefined>;
@@ -74,8 +74,12 @@ function rates(shipment: Record<string, any>, env: Environment, carriers = allow
         .filter((r: Rate) => /^rate_[a-zA-Z0-9_]+$/.test(r.id) && /^[a-zA-Z0-9_ -]{1,100}$/.test(r.service) && Number.isSafeInteger(r.cents) && r.cents > 0 && r.cents <= 10000000)
         .sort((a: Rate, b: Rate) => a.cents - b.cents || a.id.localeCompare(b.id));
 }
-async function createShipment(env: Environment, to: ShipAddress, items: ShipItem[], reference?: string) {
-    return call(env, '/shipments', { shipment: { to_address: toAddress(to), from_address: shipFrom(env), parcel: parcelFor(items, env), reference } });
+/**
+ * `options` is only ever passed when buying a label. Quoting deliberately leaves it off: delivery
+ * confirmation changes the rate, and the store pays for it rather than raising the customer's price.
+ */
+async function createShipment(env: Environment, to: ShipAddress, items: ShipItem[], reference?: string, options?: Record<string, string>) {
+    return call(env, '/shipments', { shipment: { to_address: toAddress(to), from_address: shipFrom(env), parcel: parcelFor(items, env), reference, ...(options ? { options } : {}) } });
 }
 export const serviceName = (r: Pick<Rate, 'carrier' | 'service'>) => r.carrier + ' ' + r.service.replaceAll('_', ' ').replace(/([a-z])([A-Z])/g, '$1 $2');
 /** Customer options from already-fetched rates. Checkout and the admin live check share this exact pricing. */
@@ -180,7 +184,9 @@ export async function buyLabel(env: Environment, to: ShipAddress, items: ShipIte
         const already = boughtLabel(shipment);
         if (already) return already;
     } else {
-        shipment = await createShipment(env, to, items, reference);
+        // Delivery confirmation is requested here, so it is priced into every rate we then choose from.
+        const signature = signatureConfirmation(settings);
+        shipment = await createShipment(env, to, items, reference, signature ? { delivery_confirmation: signature } : undefined);
         // Recorded before the buy, so an unknown outcome can be resolved instead of repeated.
         if (attempt.onShipment) await attempt.onShipment(String(shipment.id));
     }
