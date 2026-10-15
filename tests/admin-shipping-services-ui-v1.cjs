@@ -97,6 +97,11 @@ const settle = () => new Promise(r => setTimeout(r, 0));
  assert.throws(() => shippingServicesPayload({ ...draft, rows: [{ ...draft.rows[0], markup: '2' }], threshold: '10000.01' }), /Free shipping minimum/);
  assert.equal(shippingServicesPayload({ ...draft, rows: [{ ...draft.rows[0], markup: '2', enabled: false, label: ' ' }] }).services[0].label, 'USPS Ground Advantage', 'An off service keeps its default name');
 
+ // Delivery confirmation travels with the save, and defaults to a required signature.
+ assert.equal(shippingServicesPayload({ ...draft, rows: [{ ...draft.rows[0], markup: '2' }] }).signatureConfirmation, 'SIGNATURE', 'a signature is asked for unless the owner says otherwise');
+ assert.equal(shippingServicesPayload({ ...draft, rows: [{ ...draft.rows[0], markup: '2' }], signatureConfirmation: 'ADULT_SIGNATURE' }).signatureConfirmation, 'ADULT_SIGNATURE');
+ assert.equal(shippingServicesPayload({ ...draft, rows: [{ ...draft.rows[0], markup: '2' }], signatureConfirmation: 'none' }).signatureConfirmation, 'none', 'turning it off is saved verbatim');
+
  // Automatic label purchase: the switch, the grace period and the daily limit travel with the save.
  const autoDraft = { ...draft, rows: [{ ...draft.rows[0], markup: '2' }], autoEnabled: true, autoDelay: '20', autoCap: '500' };
  const autoPayload = shippingServicesPayload(autoDraft);
