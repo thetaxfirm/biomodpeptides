@@ -5,7 +5,7 @@ import { auditRun, recordChange, type AuditActor } from '@/lib/change-history';
 import { config } from '@/lib/commerce';
 import { easypostReady, liveShippingCheck, ShippingError, type ShipAddress, type ShipItem } from '@/lib/easypost';
 import { normalizeShippingOptions, shippingServiceCatalog, type ShippingServiceSetting } from '@/lib/shipping-options';
-import { autoLabelSettings } from '@/lib/auto-label';
+import { autoLabelSettings, readAutoLabelHealth } from '@/lib/auto-label';
 import { database, runtime } from '@/lib/runtime';
 export const dynamic = 'force-dynamic';
 const j = (value: unknown, status = 200) => NextResponse.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -37,6 +37,9 @@ const saveSchema = z.object({
         enabled: z.boolean(),
         delayMinutes: z.number().int().min(0).max(1440),
         dailyCapCents: z.number().int().min(0).max(10000000),
+        // A ceiling on any one automatic label. Bounded here as well as in autoLabelSettings so a
+        // saved value can never be a figure the job would silently reject and replace with a default.
+        maxLabelCents: z.number().int().min(100).max(100000).optional(),
     }).strict().optional(),
 }).strict();
 const DAY = 86400000;
@@ -78,6 +81,7 @@ export async function GET() {
     return j({
         catalog: shippingServiceCatalog, settings: current.shippingOptions, freeShippingAt: current.freeShippingAt, shippingCents: current.shippingCents,
         autoLabel: autoLabelSettings((current as Record<string, any>).autoLabel), automaticSpend: await automaticSpend(),
+        autoLabelHealth: await readAutoLabelHealth(runtime() as never),
         connected: easypostReady(runtime()),
         destinations: Object.entries(sampleDestinations).map(([id, d]) => ({ id, title: d.title })),
         packages: Object.entries(samplePackages).map(([id, p]) => ({ id, title: p.title })),
@@ -92,7 +96,9 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({})) as Record<string, unknown>;
     const sample = sampleSchema.safeParse({ destination: body.destination, sample: body.sample });
     if (!sample.success) return j({ error: 'Choose a sample address and package.' }, 400);
-    if (body.action === 'check') return j({ check: await runCheck(sample.data) });
+    // The health report rides along with the check: the owner opens this panel to ask "is it working",
+    // and a job that quietly stopped running is exactly what that question is about.
+    if (body.action === 'check') return j({ check: await runCheck(sample.data), autoLabelHealth: await readAutoLabelHealth(runtime() as never), automaticSpend: await automaticSpend() });
     if (body.action !== 'save') return j({ error: 'Unknown request.' }, 400);
     const parsed = saveSchema.safeParse(body.settings);
     if (!parsed.success) return j({ error: parsed.error.issues[0]?.message || 'Check the shipping settings and try again.' }, 400);
@@ -101,7 +107,13 @@ export async function POST(req: NextRequest) {
     // 'none' is the explicit opt-out; an absent key takes the store default, so the owner's choice is stored verbatim.
     const shippingOptions = { ...current.shippingOptions, freeStandardEnabled: next.freeStandardEnabled, services: next.services, minimumServiceKey: next.minimumServiceKey || undefined, signatureConfirmation: next.signatureConfirmation || undefined };
     // The scheduler reads these straight from the stored settings; an omitted block leaves them as they were.
-    const nextConfig = { ...current, freeShippingAt: next.freeShippingAt, shippingCents: next.shippingCents, shippingOptions, autoLabel: next.autoLabel ?? (current as Record<string, any>).autoLabel };
+    const savedAuto = (current as Record<string, any>).autoLabel as Record<string, unknown> | undefined;
+    // A submitted block that omits the per-label ceiling keeps the saved one, so an older admin page
+    // cannot silently reset a limit it does not know about.
+    const nextAuto = next.autoLabel
+        ? { ...next.autoLabel, ...(next.autoLabel.maxLabelCents === undefined && savedAuto?.maxLabelCents !== undefined ? { maxLabelCents: savedAuto.maxLabelCents } : {}) }
+        : savedAuto;
+    const nextConfig = { ...current, freeShippingAt: next.freeShippingAt, shippingCents: next.shippingCents, shippingOptions, autoLabel: nextAuto };
     const auditActor: AuditActor = { source: 'admin', actor: actor.email, actorType: 'staff', action: 'admin-shipping-services' };
     await auditRun(database(), auditActor, 'INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', 'store', JSON.stringify(nextConfig));
     try {
@@ -112,5 +124,5 @@ export async function POST(req: NextRequest) {
     const expected = normalizeShippingOptions(shippingOptions);
     const savedMatches = JSON.stringify(saved.shippingOptions.services) === JSON.stringify(expected.services)
         && saved.freeShippingAt === next.freeShippingAt && saved.shippingCents === next.shippingCents && saved.shippingOptions.freeStandardEnabled === next.freeStandardEnabled;
-    return j({ message: 'Shipping saved.', savedMatches, settings: saved.shippingOptions, freeShippingAt: saved.freeShippingAt, shippingCents: saved.shippingCents, autoLabel: autoLabelSettings((saved as Record<string, any>).autoLabel), automaticSpend: await automaticSpend(), check: await runCheck(sample.data) });
+    return j({ message: 'Shipping saved.', savedMatches, settings: saved.shippingOptions, freeShippingAt: saved.freeShippingAt, shippingCents: saved.shippingCents, autoLabel: autoLabelSettings((saved as Record<string, any>).autoLabel), automaticSpend: await automaticSpend(), autoLabelHealth: await readAutoLabelHealth(runtime() as never), check: await runCheck(sample.data) });
 }
