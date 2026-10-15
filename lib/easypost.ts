@@ -145,9 +145,45 @@ export async function cheapestRate(env: Environment, to: ShipAddress, items: Shi
 }
 export type Label = { shipmentId: string; carrier: string; service: string; costCents: number; tracking: string; trackingUrl: string; labelUrl: string; status: string };
 export type LabelSelection = Pick<ShippingOption, 'carrier' | 'carrierService' | 'tier' | 'source'> & { shippingService?: string };
+/**
+ * Idempotency hooks. A purchase that times out may already have been charged, so the caller records
+ * the shipment before the buy and hands it back on a retry: an already-bought shipment is adopted
+ * rather than replaced, which is the only thing standing between a slow carrier and double postage.
+ */
+export type LabelAttempt = { resumeShipmentId?: string; onShipment?: (shipmentId: string) => Promise<void> };
+/** A shipment EasyPost has already bought. Reading it is how a retry avoids paying twice. */
+export function boughtLabel(shipment: Record<string, any>): Label | null {
+    if (shipment?.mode !== 'production') return null;
+    const rate = shipment.selected_rate;
+    const tracking = String(shipment.tracking_code || '');
+    const labelUrl = String(shipment.postage_label?.label_url || '');
+    if (!rate || !tracking || !/^https:\/\//i.test(labelUrl)) return null;
+    const carrier = shippingCarrier(rate.carrier);
+    const service = String(rate.service || '');
+    const cents = typeof rate.rate === 'string' && /^\d+(?:\.\d{1,2})?$/.test(rate.rate) ? Math.round(Number(rate.rate) * 100) : NaN;
+    if (!carrier || !/^[a-zA-Z0-9_ -]{1,100}$/.test(service) || !Number.isSafeInteger(cents) || cents <= 0) return null;
+    return { shipmentId: String(shipment.id), carrier, service: serviceName({ carrier, service }), costCents: cents, tracking, trackingUrl: String(shipment.tracker?.public_url || ''), labelUrl, status: 'pre_transit' };
+}
+/** Read-only: has this shipment already been bought? Used to recover an attempt whose outcome was lost. */
+export async function readBoughtLabel(env: Environment, shipmentId: string): Promise<Label | null> {
+    if (!/^shp_[a-zA-Z0-9]+$/.test(shipmentId)) return null;
+    const shipment = await call(env, '/shipments/' + encodeURIComponent(shipmentId));
+    return shipment.id === shipmentId ? boughtLabel(shipment) : null;
+}
 /** Re-rate at packing time, but never replace the service the customer paid for with a cheaper one. */
-export async function buyLabel(env: Environment, to: ShipAddress, items: ShipItem[], reference: string, selected?: LabelSelection | { shippingService?: string }, settings = normalizeShippingOptions(undefined, env)): Promise<Label> {
-    const shipment = await createShipment(env, to, items, reference);
+export async function buyLabel(env: Environment, to: ShipAddress, items: ShipItem[], reference: string, selected?: LabelSelection | { shippingService?: string }, settings = normalizeShippingOptions(undefined, env), attempt: LabelAttempt = {}): Promise<Label> {
+    let shipment: Record<string, any>;
+    if (attempt.resumeShipmentId) {
+        // A previous attempt reached EasyPost. Never create a second shipment for the same order.
+        if (!/^shp_[a-zA-Z0-9]+$/.test(attempt.resumeShipmentId)) throw new ShippingError('The recorded carrier shipment reference is invalid. Review this order in EasyPost before retrying.');
+        shipment = await call(env, '/shipments/' + encodeURIComponent(attempt.resumeShipmentId));
+        const already = boughtLabel(shipment);
+        if (already) return already;
+    } else {
+        shipment = await createShipment(env, to, items, reference);
+        // Recorded before the buy, so an unknown outcome can be resolved instead of repeated.
+        if (attempt.onShipment) await attempt.onShipment(String(shipment.id));
+    }
     const precise = selected && 'carrier' in selected && selected.source === 'easypost';
     const carrier = precise ? shippingCarrier(selected.carrier) : null;
     if (precise && (!carrier || !selected.carrierService)) throw new ShippingError('The saved shipping service is invalid. Review this order before buying a label.');
@@ -189,15 +225,13 @@ export function verifyEasypostWebhook(raw: string, header: string | null, secret
     return received.length === expected.length && timingSafeEqual(received, expected);
 }
 const esc = (v: string) => v.replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
-/** Sends the tracking email through Resend. Uses the current configured reply address supplied by the caller. Returns false when mail or that reply address is unavailable. */
+/** Sends the tracking email through Resend. Returns false (without throwing) when email is not configured. */
 export async function sendTrackingEmail(env: Environment, to: string, orderId: string, label: Label, name = '', replyTo = ''): Promise<boolean> {
     const key = (env.RESEND_API_KEY || '').trim();
     if (!key || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to))
         return false;
-    const reply = replyTo.trim();
-    if (replyTo.length > 254 || /[\x00-\x1f\x7f]/.test(replyTo) || !/^[^\s<>@,;]+@[^\s<>@,;]+\.[^\s<>@,;]+$/.test(reply))
-        return false;
     const link = label.trackingUrl || 'https://trybiomod.com/account/orders';
+    const reply = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(replyTo.trim()) ? replyTo.trim() : 'contact@trybiomod.com';
     // Brand colors match the storefront: plum (#2b1030) and cream (#fbf1ea).
     const html = '<div style="background:#fbf1ea;padding:24px 16px">'
         + '<div style="font-family:Arial,sans-serif;color:#141414;max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e9d9ef;border-radius:8px;overflow:hidden">'
