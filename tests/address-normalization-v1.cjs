@@ -18,7 +18,7 @@ const runtime = {
   runtime: () => env, timestamp: () => now, uid: () => 'isolated-' + ++sequence,
   parse: (value, fallback) => value ? JSON.parse(value) : fallback,
   one: async query => {
-    if (query.startsWith('SELECT id,status,checkout_url,data FROM orders')) return oldOrder;
+    if (query.startsWith('SELECT id,status,checkout_url,data,total,checkout_ref,created,payment_ref,notification_id FROM orders')) return oldOrder;
     if (query.startsWith('SELECT data,created FROM requests')) return receipt;
     throw new Error('Unexpected isolated query');
   },

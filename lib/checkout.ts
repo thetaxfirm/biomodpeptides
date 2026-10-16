@@ -1,6 +1,7 @@
 import { savedBatch } from './batch-snapshot';
 import { withAuditDb, auditRun, type AuditActor } from './change-history';
 import { unavailableOrder } from './catalog-visibility';
+import { releaseUnpaidOrder, RELEASABLE } from './checkout-expiry';
 import inventorySql from './inventory-statements.json';
 import { sendOrderNotification } from './order-summary';
 import { quote, CartLine } from './commerce';
@@ -105,20 +106,34 @@ export async function checkout(owner: string, lines: CartLine[], body: Record<st
     const cartQuote = await quote(lines, promoCode);
     const current = addressSchema.parse(body.address);
     const fingerprint = JSON.stringify({ lines, address: current, ...(cartQuote.promo ? { promoCode: cartQuote.promo.code } : {}), ...(typeof body.shippingOptionId === 'string' ? { shippingOptionId: body.shippingOptionId } : {}) });
-    const old = await one<{
-        id: string;
-        status: string;
-        checkout_url: string;
-        data: string;
-    }>('SELECT id,status,checkout_url,data FROM orders WHERE owner=? AND (request_key=? OR status IN (?,?,?,?)) ORDER BY created DESC LIMIT 1', owner, body.requestKey, 'creating', 'awaiting_payment', 'pending', 'review');
-    if (old) {
+    // An earlier unresolved checkout blocks this one, because two live payment attempts for one
+    // customer is how somebody gets charged twice. An abandoned attempt is a different thing, and it
+    // used to block just as hard and forever: the customer could resume or verify that order, never
+    // clear it, so wanting anything else meant contacting us. Here each blocker is examined in turn.
+    // An exact repeat hands back the original order. Anything else is offered to the provider, and
+    // only a verified "no payment exists" releases it and frees its stock so this order can proceed.
+    // A real payment, a pending one, or an order held for review still blocks, exactly as before.
+    for (let attempt = 0; attempt < 5; attempt++) {
+        const old = await one<{
+            id: string;
+            status: string;
+            checkout_url: string;
+            data: string;
+            total: number;
+            checkout_ref: string;
+            created: number;
+            payment_ref: string | null;
+            notification_id: string | null;
+        }>('SELECT id,status,checkout_url,data,total,checkout_ref,created,payment_ref,notification_id FROM orders WHERE owner=? AND (request_key=? OR status IN (?,?,?,?)) ORDER BY created DESC LIMIT 1', owner, body.requestKey, 'creating', 'awaiting_payment', 'pending', 'review');
+        if (!old) break;
         const saved = parse<Record<string, any>>(old.data, {});
         if (unavailableOrder(saved)) throw new Error('This order contains an unavailable product and requires review.');
         if (saved.environment !== paymentEnvironment(runtime()))
             throw new Error('An existing payment requires review before a new checkout can begin.');
         if (old.checkout_url && ['awaiting_payment', 'pending'].includes(old.status) && saved.fingerprint === fingerprint && saved.total === body.expectedTotal)
             return { id: old.id, url: old.checkout_url };
-        throw new Error('You already have an unresolved checkout. Open your orders to verify payment before placing another order.');
+        const releasable = RELEASABLE.includes(old.status) && await releaseUnpaidOrder(withAuditDb(database(), auditActor), createPaymentAdapter(runtime()).verifyPayment, old, timestamp()).catch(() => false);
+        if (!releasable) throw new Error('You already have an unresolved checkout. Open your orders to verify payment before placing another order.');
     }
     const adapter = createPaymentAdapter(runtime());
     if (!adapter.getStatus().checkoutEnabled)

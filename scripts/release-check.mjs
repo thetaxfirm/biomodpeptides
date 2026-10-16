@@ -13,7 +13,7 @@ const tests = [
   "pack-price-admin-v1.cjs",
   "product-availability-v1.cjs", "admin-products-ui-v1.cjs", "sale-display-v1.cjs",
   "change-history-v1.cjs", "change-history-system-v1.cjs", "change-history-route-v1.cjs", "change-history-ui-v1.cjs", "change-history-shipping-v1.cjs", "change-history-import-v1.mjs",
-  "checkout-recovery-v1.cjs", "preorder-pricing-v1.cjs", "preorder-order-v1.cjs",
+  "checkout-recovery-v1.cjs", "checkout-expiry-v1.cjs", "preorder-pricing-v1.cjs", "preorder-order-v1.cjs",
   "admin-shipping-services-ui-v1.cjs", "shipping-services-v1.cjs", "coa-shipping-v1.cjs", "admin-overview-v1.cjs", "shipping-settings-route-v1.cjs", "shipping-options-v1.cjs",
   "shipping-policy-history-v1.cjs", "merchant-policies-v1.cjs", "shipping-minimum-service-v1.cjs",
   "fulfillment-v1.cjs", "orders-queue-v1.cjs", "order-messages-v1.cjs", "pick-list-v1.cjs", "label-sheet-v1.cjs", "tracking-sweep-v1.cjs", "auto-label-v1.cjs", "orders-mark-shipped-v1.cjs", "easypost-v1.mjs", "easypost-admin-ui-v1.cjs", "sales-v24.cjs", "address-normalization-v1.cjs",
