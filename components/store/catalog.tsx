@@ -11,6 +11,7 @@ import { useStore, report, api } from './provider';
 import { productSearchScore } from '@/lib/product-search';
 import { relatedResearchProducts, otherVialSizes, eligibleDiscovery } from '@/lib/product-discovery';
 import { VialSizeLinks, ProductResearchDetails } from './product-research-details';
+import { ResearchVialIndex, sizedVial, vialTitle } from './research-vial-index';
 import { Choice, Check, Blank } from './primitives';
 import { toast } from 'sonner';
 import { BatchPassport, CoaPopup } from './batch-record';
@@ -23,16 +24,6 @@ import { SaleNotice } from './sale-notice';
 import { shippingTerms } from '@/lib/shipping-terms';
 import { ProductStatus } from './product-status';
 import { productAvailability, productAvailabilityLabel } from '@/lib/availability';
-// Plain links to every published research vial, so each product page reaches the whole range.
-function ResearchVialIndex({ current, products }: { current: Product; products: Product[] }) {
-  const vials = products.filter(v => v.id !== current.id && v.categories.some(c => c.slug === 'research-compounds') && eligibleDiscovery(v))
-    .sort((a, b) => a.name.localeCompare(b.name) || (mass(a) || 0) - (mass(b) || 0));
-  if (!vials.length) return null;
-  return <nav className="research-vial-index" aria-labelledby="research-vial-index-heading"><h3 id="research-vial-index-heading">All research peptides</h3><ul>{vials.map(v => <li key={v.id}><a href={'/product/' + v.slug}>{sizedVial(v) ? vialTitle(v) : v.name}</a></li>)}</ul><a className="editorial-link" href="/shop">Shop research peptides <ArrowRight size={17}/></a></nav>;
-}
-// Research vials carry their strength in the heading ("BPC-157 10 mg"), matching how they are searched.
-const sizedVial = (product: Product) => product.categories.some(c => c.slug === 'research-compounds') && /\d\s*mg\b/i.test(packContents(product));
-const vialTitle = (product: Product) => product.name.replace(/\s+\d+(?:\.\d+)?\s*mg$/i, '') + ' ' + packContents(product).replace(/\s*\/\s*vial\b/i, '').replace(/(\d)\s*mg\b/gi, '$1 mg');
 function PackSelector({ product: p, value, onChange, compact = false }: { product: Product; value: number; onChange: (n: number) => void; compact?: boolean }) {
     const id = useId();
     if (compact) {

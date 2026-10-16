@@ -9,7 +9,7 @@
 .order-status-row{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px}
 /* Product page: plain index of every published research vial. */
 .research-vial-index{margin-top:44px;padding-top:28px;border-top:1px solid #e7e0d8}
-.research-vial-index h3{font-size:18px;font-weight:600;margin:0 0 14px;color:#12243a}
+.research-vial-index h2,.research-vial-index h3{font-size:18px;font-weight:600;margin:0 0 14px;color:#12243a}
 .research-vial-index ul{display:flex;flex-wrap:wrap;gap:10px 26px;list-style:none;margin:0 0 20px;padding:0}
 .research-vial-index li a{font-size:15px;color:#29435f;text-decoration:underline;text-decoration-color:#c9c0b4;text-underline-offset:4px;transition:color .15s,text-decoration-color .15s}
 .research-vial-index li a:hover{color:#12243a;text-decoration-color:#12243a}
