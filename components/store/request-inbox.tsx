@@ -113,7 +113,7 @@ function stageOf(request: CustomerRequest, reply: ReplySummary | undefined, exte
   if (request.status === 'spam') return { stage: 'spam', label: 'Spam', since: request.created, when: 'Received ' + shortDate(request.created), late: false };
   if (sendPending(reply)) return { stage: 'sending', label: 'Sending…', since: reply!.approvedAt || reply!.updated, when: 'Received ' + shortDate(request.created), late: false };
   if (issue === 'vendor' || (!issue && looksLikePitch(request))) return { stage: 'pitch', label: issue === 'vendor' ? 'Sales pitch' : 'Looks like a sales pitch', since: request.created, when: 'Received ' + shortDate(request.created), late: false };
-  if (lastOut && !customerReplied) return { stage: request.status === 'resolved' ? 'done' : 'waiting', label: replied, since: lastOut, when: replied, late: false };
+  if (lastOut && !customerReplied) return { stage: request.status === 'resolved' ? 'done' : 'waiting', label: (request.status === 'resolved' ? 'Done · ' : 'Waiting on them · ') + replied, since: lastOut, when: replied, late: false };
   if (request.status === 'resolved' && !customerReplied) {
     const closed = [...activity].reverse().find(a => a.text.startsWith('Archived'));
     return { stage: 'done', label: 'Closed without reply' + (closed ? ` · ${shortDate(closed.at)}${closed.text.includes(' by ') ? ' by ' + personName(closed.text.split(' by ').pop()!, team) : ''}` : ''), since: closed?.at || request.created, when: 'Received ' + shortDate(request.created), late: false };
@@ -573,6 +573,16 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
     else next = `${firstName} has not written back. Nothing to do unless they do.`;
     return { headline: parts.charAt(0).toUpperCase() + parts.slice(1) + '.' + last, next };
   })();
+  // The first thing on the screen: is this done, or does it need me? (owner, Oct 16: "why is he still here... what am I to do?")
+  const verdict = (() => {
+    if (request.status === 'deleted') return { tone: 'done', text: 'Deleted.', hint: 'Restore it if you need to answer.' };
+    if (request.status === 'spam') return { tone: 'done', text: 'Marked as spam.', hint: 'Nothing to do.' };
+    if (sending) return { tone: 'done', text: 'Sending now.', hint: 'Nothing else to do.' };
+    if (row.stage === 'pitch') return { tone: 'done', text: 'Sales pitch.', hint: 'No reply needed.' };
+    if (row.stage === 'todo') return { tone: 'todo', text: sentCount ? 'Needs your reply.' : fromOrder ? 'Needs your first email.' : 'Needs your reply.', hint: 'Write it in the box below, or archive it if no answer is needed.' };
+    if (request.status === 'resolved') return { tone: 'done', text: 'Done. Nothing to do.', hint: `Archived. If ${firstName} writes back, it moves to Needs reply on its own.` };
+    return { tone: 'done', text: `Waiting on ${firstName}.`, hint: `Nothing to do now. Archive it to clear it; if ${firstName} writes back, it moves to Needs reply on its own.` };
+  })();
   // More options stays out of the way unless it is in use: a COA request, the AI writing, dictation, or an instruction typed.
   const moreOpen = isCoaRequest || listening || writing || Boolean(draft?.instruction.trim());
   let status = '';
@@ -613,9 +623,10 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
       {panel.error && <p className={styles.error} role="alert">{panel.error}</p>}
       <div className={styles.sendRow}><button type="button" className={styles.send} disabled={panel.busy || !panel.to} onClick={onForward}>{panel.busy ? 'Forwarding…' : 'Forward'}</button><button type="button" className={styles.link} onClick={() => onPanel(null)}>Cancel</button><span className={styles.note}>The customer is not emailed. Replies to the forward come back to you.</span></div>
     </div>}
-    <div className={styles.summary} data-waiting={lastItem?.direction === 'incoming' ? 'true' : 'false'} role="status">
+    <div className={styles.summary} data-waiting={verdict.tone === 'todo' ? 'true' : 'false'} role="status">
+      <p className={styles.verdict}><strong>{verdict.text}</strong> {verdict.hint}</p>
       <p>{summary.headline}</p>
-      {summary.next && <p className={styles.summaryNext}>{summary.next}</p>}
+      {verdict.tone === 'todo' && summary.next && <p className={styles.summaryNext}>{summary.next}</p>}
     </div>
     {siblings.length > 0 && <p className={styles.note}>{siblings.length + 1} requests from this customer, shown as one conversation. One reply answers all of them.</p>}
     <p className={styles.subjectLine}><strong>{subject}</strong> <span className={styles.note}>· Ref {request.id.slice(0, 8)}</span></p>{typeof request.data?.labelLot === 'string' && <p className={styles.vialLot}>Lot on the customer's vial: <strong>{request.data.labelLot}</strong>. Only the report for this lot can be attached.</p>}

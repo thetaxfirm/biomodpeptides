@@ -29,3 +29,10 @@ Scope: trybiomod.com admin only. Author: Claude, at the owner's request: "super 
 ## Affected
 
 `/admin?tab=requests` only: `components/store/request-inbox.tsx`, `request-inbox.module.css`, `lib/request-replies.ts`. No customer-facing or email change.
+
+## Follow-up the same day: "is this done or not?"
+
+Owner, on an archived order conversation seen under All: "I replied to this person many times, why is he still here... did he reply? what am I to do?"
+
+- The summary now opens with a bold verdict: **Needs your reply.** / **Waiting on <name>.** / **Done. Nothing to do.** (archived) / Deleted / Spam / Sales pitch / Sending now, each with one line on what to do. Archived ones say they move back to Needs reply on their own if the customer writes.
+- List rows for answered conversations start with "Done ·" (archived) or "Waiting on them ·", so the All tab shows at a glance which ones are finished.

@@ -160,3 +160,5 @@
 .caseBox > summary { cursor: pointer; padding: 4px 0; font-weight: 600; }
 .caseBox > summary .note { font-weight: 400; }
 .caseBox .case { margin-top: 8px; }
+.verdict { font-size: 17px; margin-bottom: 6px !important; }
+.verdict strong { margin-right: 4px; }
