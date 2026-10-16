@@ -19,6 +19,7 @@ require.extensions['.css'] = module => { module.exports = new Proxy({ __esModule
 const { products, money } = require('../lib/catalog.ts');
 const { packContents, packSizes } = require('../lib/packs.ts');
 const { eligibleDiscovery } = require('../lib/product-discovery.ts');
+const { productQuestions } = require('../lib/product-questions.ts');
 const { productReviewBlocks } = require('../lib/seo-policy.ts');
 const { batchFor, batchPath, batchRecords, batchStatus, batchStatusLabel, certificateFor, matchingCertificateFor, laboratoryDocuments } = require('../lib/testing.ts');
 const { VialSizeLinks, ProductResearchDetails } = require('../components/store/product-research-details.tsx');
@@ -28,6 +29,9 @@ const { StoreProvider } = require('../components/store/provider.tsx');
 const render = (Component, props) => renderToStaticMarkup(React.createElement(Component, props));
 const escape = value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#x27;');
 const asText = html => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+// Tags stripped and entities decoded, so copy containing an apostrophe or an ampersand compares
+// against what a reader actually sees rather than against its escaped form.
+const plain = value => asText(String(value)).replace(/&#x27;|&#39;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').trim();
 const before = JSON.stringify(products);
 const documentsBefore = JSON.stringify({ batchRecords, laboratoryDocuments });
 const statusesBefore = batchRecords.map(record => [record.record_id, batchStatus(record)]);
@@ -61,13 +65,29 @@ for (const product of products) {
     continue;
   }
   eligibleCount++;
-  assert.equal((html.match(/<h3\b/g) || []).length, 2);
+  // One heading per question, counted from the questions themselves: adding a product question is a
+  // normal editorial change, while a question that renders without a heading is a real regression.
+  assert.equal((html.match(/<h3\b/g) || []).length, productQuestions(product).length, product.slug + ': every question gets a heading');
   assert(html.includes(escape(product.name)) && html.includes(escape(packContents(product))));
   if (product.sku) assert(html.includes(escape(product.sku)));
   assert(asText(html).includes('Pack sizes of ' + packSizes.slice(0, -1).join(', ') + ' or ' + packSizes.at(-1) + ' count complete vials.'));
-  assert(html.includes('href="/testing?product=' + product.id + '"'));
+  // The batch link points at this product's own record once it has one, and falls back to the filtered
+  // testing page until then. Either way it must reach this product's documentation, never a generic page.
+  const record = batchFor(product.id, product);
+  const documentation = record ? batchPath(record) : '/testing?product=' + product.id;
+  // The link lives in the study section, which only products with a published study have.
+  if (html.includes('id="product-research-heading"')) assert(html.includes('href="' + documentation + '"'), product.slug + ': links to its own batch documentation');
   assert(html.includes('href="/quality-standard#read-the-results"'));
-  assert(!/<(?:button|details|script)\b|\bhidden=|aria-hidden=/.test(html), 'answers remain readable in initial HTML');
+  // The guarantee is that the answers are readable without interacting: nothing may be collapsed
+  // behind <details>, hidden, or written by a script. A dialog trigger beside an answer is allowed,
+  // because the answer text is already in the markup next to it — asserted directly below.
+  // aria-hidden on a decorative icon is correct and deliberately allowed; the HTML `hidden`
+  // attribute, a collapsed <details>, inline display:none and script-written text are not.
+  assert(!/<(?:details|script)\b|(?<!aria-)\bhidden[=>\s]|style="[^"]*display:\s*none/.test(html), 'answers are not collapsed, hidden or script-written');
+  for (const item of productQuestions(product)) {
+    assert(plain(html).includes(plain(item.question)), product.slug + ': ' + item.id + ' question is in the initial HTML');
+    for (const paragraph of item.answer) assert(plain(html).includes(plain(paragraph)), product.slug + ': ' + item.id + ' answer is in the initial HTML');
+  }
   const status = batchStatus(batchFor(product.id));
   if (status === 'matched') assert(html.includes('published with this product'));
   else assert(html.includes('The lab report for this lot is being updated.') && !html.includes('published with this product'));
@@ -342,7 +362,7 @@ assert(!softgelHTML.includes('product-questions-heading') && !softgelHTML.includ
 const softgelRelated = softgelHTML.match(/<section class="related">([\s\S]*?)<\/section>/)?.[1];
 const expectedSoftgelSlugs = products.filter(product => product.id !== softgel.id && product.categories[0]?.slug === 'softgels').slice(0, 3).map(product => product.slug);
 assert.deepEqual([...new Set([...softgelRelated.matchAll(/href="\/product\/([^"]+)"/g)].map(match => match[1]))], expectedSoftgelSlugs, 'existing nonresearch recommendation order is preserved');
-for (const [query, heading] of [[{}, 'Research peptides &amp; compounds'], [{ category: 'softgels' }, 'Softgels'], [{ category: 'spray-products' }, 'Nasal &amp; spray products'], [{ q: 'MOTS' }, 'The BIOMOD collection.']]) {
+for (const [query, heading] of [[{}, 'Buy research peptides &amp; compounds'], [{ category: 'softgels' }, 'Softgels'], [{ category: 'spray-products' }, 'Nasal &amp; spray products'], [{ q: 'MOTS' }, 'The BIOMOD collection.']]) {
   const html = renderToStaticMarkup(React.createElement(StoreProvider, { initialCatalog: products }, React.createElement(Experience, { path: 'shop', query })));
   assert(html.includes('<h1>' + heading + '</h1>'), 'full shop route heading reflects current query/category');
 }
