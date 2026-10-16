@@ -1,5 +1,6 @@
 import { withAuditDb } from './lib/change-history';
 import { runCheckoutRecovery } from './lib/checkout-recovery';
+import { runCheckoutExpiry } from './lib/checkout-expiry';
 import storefront from 'vinext/server/fetch-handler';
 import { cleanupTraffic } from './lib/traffic-metrics-server';
 import { type CoaEnvironment } from './lib/coa-outbox';
@@ -26,7 +27,10 @@ export default {
       const trackingEnv = { ...env, DB: withAuditDb(env.DB, { source: 'system', actor: 'Carrier tracking sweep', actorType: 'system' }) } as TrafficWorkerEnvironment;
       // Buys postage for paid orders after the grace period, and recovers purchases whose outcome was lost.
       const labelEnv = { ...env, DB: withAuditDb(env.DB, { source: 'system', actor: 'Automatic label purchase', actorType: 'system' }) } as TrafficWorkerEnvironment;
-      const results=await Promise.allSettled([runScheduledCoaOutbox(coaEnv, controller.scheduledTime),runCheckoutRecovery(recoveryEnv),runOverdueDigest(digestEnv),runTrackingSweep(trackingEnv as never),runAutoLabels(labelEnv as never)]);
+      // Releases checkouts that were never paid, so their stock goes back on sale and their owner
+      // is not locked out of ordering. Only ever acts on a provider-verified absence of payment.
+      const expiryEnv = { ...env, DB: withAuditDb(env.DB, { source: 'system', actor: 'Unpaid checkout release', actorType: 'system' }) } as TrafficWorkerEnvironment;
+      const results=await Promise.allSettled([runScheduledCoaOutbox(coaEnv, controller.scheduledTime),runCheckoutRecovery(recoveryEnv),runOverdueDigest(digestEnv),runTrackingSweep(trackingEnv as never),runAutoLabels(labelEnv as never),runCheckoutExpiry(expiryEnv as never)]);
       if(results.some(result=>result.status==='rejected'))throw new Error('One or more scheduled correspondence tasks failed.');
     }
   },
