@@ -6,9 +6,15 @@ import assert from 'node:assert/strict';
 import ts from 'typescript';
 const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'biomod-receipt-v1-'));
 try {
-  for (const name of ['order-summary', 'private-presentation', 'fulfillment']) {
+  // Every sibling module the receipt builder reaches, rewritten generically. An import that is added
+  // later and not listed here fails with a named error below rather than a bare MODULE_NOT_FOUND.
+  const modules = ['order-summary', 'private-presentation', 'fulfillment', 'batch-snapshot'];
+  for (const name of modules) {
     const source = await fs.readFile(new URL('../lib/' + name + '.ts', import.meta.url), 'utf8');
-    const out = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText.replace(/from '\.\/private-presentation'/g, "from './private-presentation.mjs'").replace(/from '\.\/fulfillment'/g, "from './fulfillment.mjs'");
+    let out = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
+    for (const sibling of modules) out = out.replaceAll("from './" + sibling + "'", "from './" + sibling + ".mjs'");
+    const missing = [...out.matchAll(/from '\.\/([a-z0-9-]+)'/g)].map(match => match[1]);
+    assert.deepEqual(missing, [], name + ' imports a sibling this fixture does not copy: ' + missing.join(', '));
     await fs.writeFile(path.join(temp, name + '.mjs'), out);
   }
   const s = await import(path.join(temp, 'order-summary.mjs'));

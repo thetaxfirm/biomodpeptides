@@ -24,16 +24,33 @@ assert.equal(fs.readFileSync(path.join(__dirname, '../public', keyFiles[0]), 'ut
 assert(fs.readFileSync(path.join(__dirname, '../scripts/indexnow-submit-v1.mjs'), 'utf8').includes(`'${key}'`));
 const { certificateProperties } = require('../lib/certificate-schema.ts');
 const { products } = require('../lib/catalog.ts');
+const { batchFor, batchStatus } = require('../lib/testing.ts');
 const id = slug => products.find(p => p.slug === slug).id;
-const bpc = certificateProperties(id('bpc-157-10mg'));
-assert.equal(bpc.find(x => x.name === 'Certificate lot').value, '201-10-0001');
-assert.equal(bpc.find(x => x.name === 'Measured content (reported)').value, '10.51 mg');
-assert.match(bpc.find(x => x.name === 'Certificate of analysis').url, /^https:\/\//);
-for (const slug of ['nad-500mg', 'selank', 'semax', 'kpv-10mg', 'mots-c-40mg', 'ss-31-50mg']) assert.deepEqual(certificateProperties(id(slug)), [], 'unmatched lot must not publish results: ' + slug);
-const tesamorelin = certificateProperties(id('tesamorelin-10mg'));
-assert.equal(tesamorelin.find(x => x.name === 'Certificate lot').value, '301-10-0001');
-assert.equal(tesamorelin.find(x => x.name === 'Purity (reported)').value, '96.28% + 0.18%');
-assert.equal(tesamorelin.find(x => x.name === 'Measured content (reported)').value, '9.92 mg');
-assert.equal(tesamorelin.find(x => x.name === 'Certificate of analysis').value, 'V260304-6 012');
-assert.equal(tesamorelin.find(x => x.name === 'Certificate of analysis').url, 'https://alphagradepeptides.com/wp-content/uploads/2026/09/biomod-tesamorelin-10mg-coa.pdf');
+
+// The rule: a product publishes laboratory results only when the certificate's lot is the lot being
+// sold. Asserted against every product rather than a fixed list, and by comparing the published lot
+// with the selling lot rather than by repeating today's purity figures — a renewed certificate must
+// not turn this suite red, but publishing results for the wrong lot always must.
+let published = 0;
+for (const product of products) {
+  const record = batchFor(product.id, product);
+  const properties = certificateProperties(product.id);
+  if (!record || batchStatus(record) !== 'matched') {
+    assert.deepEqual(properties, [], 'only a matched lot may publish results: ' + product.slug);
+    continue;
+  }
+  published += 1;
+  const lot = properties.find(x => x.name === 'Certificate lot');
+  assert.equal(lot && lot.value, record.product_lot, 'the published certificate lot is the lot being sold: ' + product.slug);
+  const coa = properties.find(x => x.name === 'Certificate of analysis');
+  assert(coa, 'a matched product names its certificate: ' + product.slug);
+  if (coa.url) assert.match(coa.url, /^https:\/\//, 'certificate links are https: ' + product.slug);
+}
+assert(published >= 2, 'at least some products publish results, or this suite proves nothing');
+
+// Spot checks on the two long-standing matched lots. Lot identity only: purity and assay figures
+// belong to whichever certificate is current, and are reconciled against their source elsewhere.
+assert.equal(certificateProperties(id('bpc-157-10mg')).find(x => x.name === 'Certificate lot').value, '201-10-0001');
+assert.equal(certificateProperties(id('tesamorelin-10mg')).find(x => x.name === 'Certificate lot').value, '301-10-0001');
+assert.deepEqual(certificateProperties(id('selank')), [], 'a pending lot still publishes nothing');
 console.log('PASS: llms.txt lists exactly the sitemap-eligible pages, excludes held and private routes, keeps research-use language; certificate results are published in Product data only for matching lots; IndexNow key file matches the submit script');
