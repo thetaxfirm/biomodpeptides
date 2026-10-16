@@ -36,3 +36,9 @@ Owner, on an archived order conversation seen under All: "I replied to this pers
 
 - The summary now opens with a bold verdict: **Needs your reply.** / **Waiting on <name>.** / **Done. Nothing to do.** (archived) / Deleted / Spam / Sales pitch / Sending now, each with one line on what to do. Archived ones say they move back to Needs reply on their own if the customer writes.
 - List rows for answered conversations start with "Done ·" (archived) or "Waiting on them ·", so the All tab shows at a glance which ones are finished.
+
+## Release
+
+- Source: `e30d360` then `f301a14` on shared main (rebased over `628f8c0`, no conflicts). `npm run check:release` passed (87 suites) after the rebase.
+- Live check (read-only, no login): the chunk the live admin loads, `/_next/static/chunks/experience-DMc0ups4.js`, contains "Needs your first email", "Done. Nothing to do", "Emails in this conversation", "Sent by " and "Order behind this conversation".
+- Gap: the signed-in Requests tab was not viewed live; no staff session was used. Layout was checked with a local bundle of the real component and synthetic data.
