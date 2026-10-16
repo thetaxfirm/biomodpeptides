@@ -17,12 +17,22 @@ try{
   const record=product.resolvedBatch;if(!record?.certificate)continue;
   assert.equal(record.coa_available,true);assert.equal(record.lot_match,'matches');assert.equal(record.product_lot,record.certificate_lot);assert.equal(record.product_lot,record.certificate.batch_number);
  }
- for(const slug of ['klow-80mg','nad-500mg','run-gun-10mg','selank','semax']){
-  const product=initialState.products.find(p=>p.slug===slug);assert(product,slug);const record=product.resolvedBatch;
+ // Taken from the response rather than from a list of slugs: attaching a certificate to a lot is
+ // ordinary work, and this suite must not go red for it. What must hold is that a product without a
+ // matched certificate exposes no certificate, no document id, no lot and no PDF link.
+ const withoutCertificate=initialState.products.filter(p=>!p.resolvedBatch?.certificate);
+ assert(withoutCertificate.length,'some product is still awaiting its certificate, or this check proves nothing');
+ for(const product of withoutCertificate){
+  const record=product.resolvedBatch,slug=product.slug;
   assert.equal(record.certificate,undefined,slug);assert.equal(record.document_id,null,slug);assert.equal(record.certificate_lot,null,slug);assert.equal(record.coa_pdf_url,undefined,slug);assert.equal(record.coa_available,false,slug);
  }
- const oldProduct=initialState.products.find(p=>p.slug==='selank'),oldData=await raw(oldProduct.id),oldAdmin=await json('admin');
- const oldChoice=oldAdmin.batchRecords.find(b=>b.productId===oldProduct.id).choices[0];assert(oldChoice&&!oldChoice.eligible);
+ const oldAdmin=await json('admin');
+ // Any product still awaiting its certificate will do; it is used below to prove that pointing a
+ // product at an ineligible report does not publish that report's PDF.
+ const oldProduct=withoutCertificate.find(p=>(oldAdmin.batchRecords.find(b=>b.productId===p.id)?.choices||[]).some(c=>!c.eligible));
+ assert(oldProduct,'a product with an ineligible report choice exists');
+ const oldData=await raw(oldProduct.id);
+ const oldChoice=oldAdmin.batchRecords.find(b=>b.productId===oldProduct.id).choices.find(c=>!c.eligible);assert(oldChoice&&!oldChoice.eligible);
  await f.db.prepare('UPDATE product_overrides SET data=? WHERE id=?').bind(JSON.stringify({...JSON.parse(oldData),batch:{lot:oldProduct.resolvedBatch.product_lot,reportRef:oldChoice.ref,coaAvailable:true}}),oldProduct.id).run();
  const forged=(await json('state',guest)).products.find(p=>p.id===oldProduct.id).resolvedBatch;assert.equal(forged.certificate,undefined);assert.equal(forged.coa_available,false);assert.equal(forged.coa_pdf_url,undefined);
  await f.db.prepare('UPDATE product_overrides SET data=? WHERE id=?').bind(oldData,oldProduct.id).run();
