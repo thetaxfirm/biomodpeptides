@@ -123,7 +123,7 @@ async function main(){
  // Order conversation: internal order notes stay staff-only; tagging the case saves issue and resolutions.
  const savedIssues=[];const orderReq=request('from-order','new','contact',{subject:'Your BioMod order #ABC',message:'Order #ABC. INTERNAL items list.',origin:'order',startedBy:'owner@example.invalid'});
  host=mount({...props,requests:[orderReq],requestReplies:{},onSaveIssue:async input=>{savedIssues.push(input);return {issue:input.issue,resolutions:input.resolutions,note:input.note,updated:now,updatedBy:'owner@example.invalid'};}});await flush(host);
- openRow(host,'from-order');assert(text(host.tree).includes('Order details (only you see this)'));
+ openRow(host,'from-order');assert(text(host.tree).includes('Order behind this conversation (only you see this)'));
  assert(!nodes(host.tree).some(n=>n.type==='li'&&n.props['data-direction']==='incoming'),'Internal order context is not shown as a customer message');
  assert(text(host.tree).includes('Conversation started from the order by owner@example.invalid'));
  const issueSelect=nodes(host.tree).find(n=>n.type==='select'&&nodes(n).some(o=>o.type==='option'&&text(o)==='Item not in stock yet'));issueSelect.props.onChange({target:{value:'out_of_stock'}});await flush(host);
@@ -147,7 +147,7 @@ async function main(){
  nodes(host.tree).find(n=>n.type==='input'&&n.props.placeholder?.startsWith('e.g. Called')).props.onChange({target:{value:'Called him'}});host.render();
  nodes(host.tree).filter(n=>n.type==='button'&&text(n)==='Mark as replied').at(-1).props.onClick();await flush(host);
  assert.deepEqual(marked,[{id:'phone',note:'Called him'}]);assert.deepEqual(rowIds(),[],'Marked request leaves Needs reply');
- filter(host,'Replied & archive');assert.deepEqual(rowIds(),['phone']);assert(text(host.tree).includes('Replied'));assert(text(host.tree).includes('by phone/text · owner@'));
+ filter(host,'Replied & archive');assert.deepEqual(rowIds(),['phone']);assert(text(host.tree).includes('Replied'));assert(text(host.tree).includes('by phone or text (logged by owner@example.invalid)'));
  // One customer, one row: same email in any letter case groups; opening it shows every message; a reply to one answers the earlier ones.
  const a1=request('alb-1','new','contact',{name:'Albert A',email:'Albert@Example.invalid',subject:'Cart',message:'Cart will not load'});a1.created=now-6*day;
  const a2=request('alb-2','new','contact',{name:'Albert Alvarez',email:'albert@example.invalid',subject:'COA request',message:'Need the COA'});a2.created=now-4*day;

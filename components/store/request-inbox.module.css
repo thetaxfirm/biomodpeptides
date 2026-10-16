@@ -55,8 +55,8 @@
 .who a { text-decoration: underline; }
 .paneActions { display: flex; gap: 6px; align-items: center; }
 .subjectLine { margin: 12px 0 10px; font-size: 15px; }
-.thread { list-style: none; margin: 0 0 16px; padding: 0; display: grid; gap: 10px; max-height: 300px; overflow-y: auto; }
-.thread li { padding: 12px 14px; border-radius: 8px; background: var(--soft); max-width: 92%; }
+.thread { list-style: none; margin: 0 0 16px; padding: 0; display: grid; gap: 10px; }
+.thread li { padding: 12px 14px; border-radius: 8px; background: var(--soft); max-width: 88%; justify-self: start; }
 .thread li[data-direction="outgoing"] { background: #eef3ee; justify-self: end; }
 .meta { margin: 0 0 4px; font-size: 12px; color: var(--muted); }
 .message { margin: 0; white-space: pre-wrap; line-height: 1.55; font-size: 15px; }
@@ -145,3 +145,18 @@
 .more[open] > summary { margin-bottom: 8px; }
 .moreLabel { margin: 12px 0 6px; font-size: 13px; font-weight: 600; color: var(--ink); }
 .more .templates { padding: 0; background: none; }
+
+/* Conversation clarity (Oct 16 2026): a plain summary, then every email labelled with who, to whom and who sent it. */
+.summary { margin: 4px 0 14px; padding: 12px 14px; border-radius: 8px; background: #eef3ee; color: #23452f; font-size: 15px; line-height: 1.5; }
+.summary[data-waiting="true"] { background: #fbf1e3; color: #5e3b0c; }
+.summary p { margin: 0; }
+.summaryNext { margin-top: 2px !important; font-weight: 600; }
+.threadHead { margin: 16px 0 8px; font-size: 15px; font-weight: 600; }
+.threadHead .note { font-weight: 400; margin-left: 4px; }
+.mailTitle { margin: 0 0 2px; display: flex; justify-content: space-between; gap: 12px; font-size: 15px; }
+.mailTitle span { color: var(--muted); font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.mailAttachment { margin: 8px 0 0; font-size: 13px; color: var(--muted); }
+.caseBox { margin: 0 0 14px; font-size: 14px; }
+.caseBox > summary { cursor: pointer; padding: 4px 0; font-weight: 600; }
+.caseBox > summary .note { font-weight: 400; }
+.caseBox .case { margin-top: 8px; }

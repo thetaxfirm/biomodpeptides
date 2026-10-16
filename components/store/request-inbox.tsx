@@ -16,7 +16,7 @@ export type ReplySummary = {
   preparedBy: string; updated: number; readyId?: string; model?: string; reason?: string;
   instruction?: string; approvedAt?: number; approvedBy?: string; coaChoice?: string | null;
   coa: { state: 'matched' | 'needs_review' | 'already_sent' | 'not_requested'; reason: string; extras?: { productName?: string; strength?: string; lot?: string; sha256?: string }[]; productName?: string; strength?: string; lot?: string; reportId?: string; chemicalIdentity?: string; filename?: string; sha256?: string };
-  history: { id: string; direction: 'incoming' | 'outgoing'; body: string; created: number }[];
+  history: { id: string; direction: 'incoming' | 'outgoing'; body: string; created: number; from?: string; to?: string; subject?: string; sentBy?: string; attachment?: string }[];
 };
 export type PrepareReplyInput = { id: string; mode: 'ai' | 'staff'; body?: string; instruction?: string; expectedRevision: number | null; coaSha256?: string | null; send?: boolean };
 export type DeskCoa = { sha256: string; productName: string; strength: string; form: string; lot: string; reportId: string; current: boolean };
@@ -85,18 +85,30 @@ const sendPending = (reply?: ReplySummary) => reply?.status === 'sending' || Boo
 export type ExternalReply = { at: number; source: 'mailbox' | 'manual'; account: string; body: string; preview: boolean };
 const shortDate = (value: number) => new Date(value).toLocaleDateString([], { month: 'short', day: 'numeric' });
 const mailbox = (account: string) => account.split('@')[0] + '@';
+/** A staff email shown as the person's name when the team list knows it. */
+export function personName(email: string | undefined, team: readonly TeamMember[] = []) {
+  const value = text(email);
+  if (!value) return '';
+  const matches = team.filter(m => m.email.toLowerCase() === value.toLowerCase()), member = matches.find(m => m.name) || matches[0];
+  return member?.name || value;
+}
+type Outgoing = { created: number; sentBy?: string };
+const deskHow = (m: Outgoing, team: readonly TeamMember[]) => m.sentBy ? 'by ' + personName(m.sentBy, team) : 'from the reply desk';
+const outsideHow = (e: ExternalReply, team: readonly TeamMember[]) => e.source === 'manual' ? 'by phone or text (logged by ' + personName(e.account, team) + ')' : 'in Gmail from ' + e.account;
 export const looksLikePitch = (request: CustomerRequest) => request.data.origin !== 'order' && looksLikePitchText(text(request.data.subject), text(request.data.message));
 type StageInfo = { stage: Stage; label: string; since: number; when: string; late: boolean };
-function stageOf(request: CustomerRequest, reply: ReplySummary | undefined, external: ExternalReply[] = [], issue: string | null = null, activity: { at: number; text: string }[] = [], now = Date.now(), shared: { at: number; how: string }[] = []): StageInfo {
+function stageOf(request: CustomerRequest, reply: ReplySummary | undefined, external: ExternalReply[] = [], issue: string | null = null, activity: { at: number; text: string }[] = [], now = Date.now(), shared: { at: number; how: string }[] = [], team: readonly TeamMember[] = []): StageInfo {
   const history = reply?.history || [];
-  const desk = history.filter(m => m.direction === 'outgoing').map(m => ({ at: m.created, how: 'from research@' }));
-  const outside = external.map(e => ({ at: e.at, how: e.source === 'manual' ? 'by phone/text · ' + mailbox(e.account) : 'in Gmail from ' + mailbox(e.account) }));
+  const desk = history.filter(m => m.direction === 'outgoing').map(m => ({ at: m.created, how: deskHow(m, team) }));
+  const outside = external.map(e => ({ at: e.at, how: outsideHow(e, team) }));
   const replies = [...desk, ...outside, ...shared].sort((a, b) => a.at - b.at);
   const last = replies[replies.length - 1];
   const lastOut = last?.at || 0;
   const lastIn = Math.max(request.created, ...history.filter(m => m.direction === 'incoming').map(m => m.created));
   const customerReplied = lastOut > 0 && lastIn > lastOut;
-  const replied = last ? `Replied ${when(last.at)} ${last.how}` : '';
+  // An order conversation is started by us, so the first email is not a "reply".
+  const started = request.data.origin === 'order' && !history.some(m => m.direction === 'incoming' && !m.id.startsWith('original:'));
+  const replied = last ? `${started ? 'You emailed them' : 'Replied'} ${when(last.at)} ${last.how}` : '';
   if (request.status === 'deleted') return { stage: 'deleted', label: 'Deleted', since: request.created, when: 'Received ' + shortDate(request.created), late: false };
   if (request.status === 'spam') return { stage: 'spam', label: 'Spam', since: request.created, when: 'Received ' + shortDate(request.created), late: false };
   if (sendPending(reply)) return { stage: 'sending', label: 'Sending…', since: reply!.approvedAt || reply!.updated, when: 'Received ' + shortDate(request.created), late: false };
@@ -104,7 +116,7 @@ function stageOf(request: CustomerRequest, reply: ReplySummary | undefined, exte
   if (lastOut && !customerReplied) return { stage: request.status === 'resolved' ? 'done' : 'waiting', label: replied, since: lastOut, when: replied, late: false };
   if (request.status === 'resolved' && !customerReplied) {
     const closed = [...activity].reverse().find(a => a.text.startsWith('Archived'));
-    return { stage: 'done', label: 'Closed without reply' + (closed ? ` · ${shortDate(closed.at)}${closed.text.includes(' by ') ? ' by ' + mailbox(closed.text.split(' by ').pop()!) : ''}` : ''), since: closed?.at || request.created, when: 'Received ' + shortDate(request.created), late: false };
+    return { stage: 'done', label: 'Closed without reply' + (closed ? ` · ${shortDate(closed.at)}${closed.text.includes(' by ') ? ' by ' + personName(closed.text.split(' by ').pop()!, team) : ''}` : ''), since: closed?.at || request.created, when: 'Received ' + shortDate(request.created), late: false };
   }
   // Plain answer to "did we reply?" first, then what is waiting.
   const base = customerReplied ? `Replied ${shortDate(lastOut)}, then they wrote again` : 'Not replied yet';
@@ -255,11 +267,12 @@ export function RequestInbox({ requests: initialRequests, activeTab = true, auto
   const emailKey = (request: CustomerRequest) => text(request.data.email).toLowerCase() || request.id;
   const family: Record<string, CustomerRequest[]> = {};
   for (const request of requests) (family[emailKey(request)] ||= []).push(request);
+  const team = options?.team || [];
   const sharedReplies = (request: CustomerRequest) => (family[emailKey(request)] || []).filter(other => other.id !== request.id).flatMap(other => [
-    ...(replyOf(other.id)?.history || []).filter(m => m.direction === 'outgoing').map(m => ({ at: m.created, how: 'from research@' })),
-    ...(external[other.id] || []).map(e => ({ at: e.at, how: e.source === 'manual' ? 'by phone/text · ' + mailbox(e.account) : 'in Gmail from ' + mailbox(e.account) })),
+    ...(replyOf(other.id)?.history || []).filter(m => m.direction === 'outgoing').map(m => ({ at: m.created, how: deskHow(m, team) })),
+    ...(external[other.id] || []).map(e => ({ at: e.at, how: outsideHow(e, team) })),
   ]);
-  const rows = requests.map(request => ({ request, reply: replyOf(request.id), ...stageOf(request, replyOf(request.id), external[request.id], issues[request.id]?.issue || null, activity[request.id], now, sharedReplies(request)) }));
+  const rows = requests.map(request => ({ request, reply: replyOf(request.id), ...stageOf(request, replyOf(request.id), external[request.id], issues[request.id]?.issue || null, activity[request.id], now, sharedReplies(request), team) }));
   const counts = { todo: 0, waiting: 0, done: 0, spam: 0, deleted: 0, pitch: 0, all: rows.filter(row => row.stage !== 'deleted').length };
   const counted = new Set<string>();
   for (const row of rows) { const bucket = row.stage === 'sending' || row.stage === 'todo' ? 'todo' : row.stage === 'waiting' ? 'done' : row.stage; const key = bucket + ':' + emailKey(row.request); if (counted.has(key)) continue; counted.add(key); counts[bucket]++; }
@@ -522,6 +535,44 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
     ? { at: lastSent.created, how: '' }
     : lastExternal ? { at: lastExternal.at, how: lastExternal.source === 'manual' ? 'by phone or text' : 'from Gmail' } : null;
   const firstName = name.split(/\s+/)[0] || 'the customer';
+  // One list of every email in this conversation, each labelled in plain words: who wrote it, to whom, how, and who sent it.
+  type Item = { id: string; direction: 'incoming' | 'outgoing'; created: number; body: string; title: string; detail: string; by?: string; attachment?: string };
+  const deskItem = (m: ReplySummary['history'][number]): Item => ({ id: m.id, direction: 'outgoing', created: m.created, body: m.body, title: 'You emailed ' + firstName,
+    by: m.sentBy ? 'sent by ' + personName(m.sentBy, team) : 'sent from this reply desk',
+    detail: ['From ' + (m.from || sender) + ' to ' + (m.to || email), m.sentBy ? 'Sent by ' + personName(m.sentBy, team) : 'Sent from this reply desk', m.subject ? 'Subject: ' + m.subject : ''].filter(Boolean).join(' · '),
+    ...(m.attachment ? { attachment: m.attachment } : {}) });
+  const outsideItems = (list: ExternalReply[], tag: string): Item[] => list.map((e, i) => e.source === 'manual'
+    ? { id: 'ext-' + tag + i + '-' + e.at, direction: 'outgoing', created: e.at, body: e.body + (e.preview ? ' …' : ''), title: 'Answered outside email', by: 'by phone or text', detail: 'Logged as answered by phone or text by ' + personName(e.account, team) }
+    : { id: 'ext-' + tag + i + '-' + e.at, direction: 'outgoing', created: e.at, body: e.body + (e.preview ? ' …' : ''), title: 'You emailed ' + firstName, by: 'sent in Gmail from ' + e.account, detail: 'Sent in Gmail from ' + e.account + ' to ' + email });
+  const thread: Item[] = (() => {
+    const seen = new Set<string>();
+    const all: Item[] = [
+      ...history.map(m => m.direction === 'incoming' ? { id: m.id, direction: 'incoming' as const, created: m.created, body: m.body, title: firstName + ' wrote', detail: 'From ' + email } : deskItem(m)),
+      ...outsideItems(external, 'a'),
+      ...siblings.flatMap(sib => [
+        { id: 'original:' + sib.request.id, direction: 'incoming' as const, created: sib.request.created, body: [text(sib.request.data.subject), text(sib.request.data.message)].filter(Boolean).join('\n'), title: (text(sib.request.data.name).split(/\s+/)[0] || firstName) + ' wrote (earlier request)', detail: 'From ' + (text(sib.request.data.email) || email) },
+        ...(sib.reply?.history || []).filter(m => m.direction === 'outgoing').map(deskItem),
+        ...outsideItems(sib.external, sib.request.id),
+      ]),
+    ];
+    return all.filter(m => { if (seen.has(m.id)) return false; seen.add(m.id); return true; }).sort((a, b) => a.created - b.created);
+  })();
+  const sentCount = thread.filter(m => m.direction === 'outgoing').length;
+  const gotCount = thread.filter(m => m.direction === 'incoming').length;
+  const lastItem = thread[thread.length - 1];
+  const lastOutItem = [...thread].reverse().find(m => m.direction === 'outgoing');
+  const times = (n: number) => n === 1 ? 'once' : n === 2 ? 'twice' : n + ' times';
+  // The answer to "what happened here, and is anything waiting on us?" in two short sentences.
+  const summary = (() => {
+    if (!thread.length) return { headline: 'No emails yet.', next: canReply ? 'Write the first email below.' : '' };
+    const parts = [fromOrder && !gotCount ? '' : `${firstName} wrote ${times(gotCount)}`, sentCount ? `we emailed ${times(sentCount)}` : 'nobody has answered yet'].filter(Boolean).join(', ');
+    const last = lastOutItem ? ` Our last email: ${when(lastOutItem.created)}, ${lastOutItem.by}.` : '';
+    let next: string;
+    if (sending) next = 'Your new email is on its way.';
+    else if (lastItem?.direction === 'incoming') next = sentCount ? `${firstName} wrote again after our last email and is waiting for an answer.` : `${firstName} is waiting for an answer.`;
+    else next = `${firstName} has not written back. Nothing to do unless they do.`;
+    return { headline: parts.charAt(0).toUpperCase() + parts.slice(1) + '.' + last, next };
+  })();
   // More options stays out of the way unless it is in use: a COA request, the AI writing, dictation, or an instruction typed.
   const moreOpen = isCoaRequest || listening || writing || Boolean(draft?.instruction.trim());
   let status = '';
@@ -533,7 +584,7 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
   return <section key={request.id} className={styles.pane} id={`request-reply-${request.id}`} aria-label={`Reply to ${name}`} aria-busy={writing || sending}>
     <header className={styles.paneHead}>
       <button type="button" className={styles.back} onClick={onClose}>Back to list</button>
-      <div className={styles.who}><h3>{name}</h3><p>{email || 'No email address saved'}{website && <> · <a href={website} target="_blank" rel="noopener noreferrer">Website</a></>}</p><p className={styles.stateLine} data-stage={row.stage}>{row.label}{row.stage === 'todo' ? ' · ' + row.when : ''}</p></div>
+      <div className={styles.who}><h3>{name}</h3><p>{email || 'No email address saved'}{website && <> · <a href={website} target="_blank" rel="noopener noreferrer">Website</a></>}</p></div>
       <div className={styles.paneActions}>
         {canForward && request.status !== 'deleted' && <button type="button" className={styles.action} aria-expanded={panel?.kind === 'forward'} disabled={disabled} onClick={() => onPanel(panel?.kind === 'forward' ? null : { kind: 'forward', error: '' })}>Forward</button>}
         {request.status === 'deleted'
@@ -562,37 +613,33 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
       {panel.error && <p className={styles.error} role="alert">{panel.error}</p>}
       <div className={styles.sendRow}><button type="button" className={styles.send} disabled={panel.busy || !panel.to} onClick={onForward}>{panel.busy ? 'Forwarding…' : 'Forward'}</button><button type="button" className={styles.link} onClick={() => onPanel(null)}>Cancel</button><span className={styles.note}>The customer is not emailed. Replies to the forward come back to you.</span></div>
     </div>}
+    <div className={styles.summary} data-waiting={lastItem?.direction === 'incoming' ? 'true' : 'false'} role="status">
+      <p>{summary.headline}</p>
+      {summary.next && <p className={styles.summaryNext}>{summary.next}</p>}
+    </div>
     {siblings.length > 0 && <p className={styles.note}>{siblings.length + 1} requests from this customer, shown as one conversation. One reply answers all of them.</p>}
     <p className={styles.subjectLine}><strong>{subject}</strong> <span className={styles.note}>· Ref {request.id.slice(0, 8)}</span></p>{typeof request.data?.labelLot === 'string' && <p className={styles.vialLot}>Lot on the customer's vial: <strong>{request.data.labelLot}</strong>. Only the report for this lot can be attached.</p>}
-    {fromOrder && <p className={styles.orderNote}><strong>Order details (only you see this):</strong> {text(request.data.message)}</p>}
-    {canTag && <div className={styles.case}>
+    {fromOrder && <p className={styles.orderNote}><strong>Order behind this conversation (only you see this):</strong> {text(request.data.message)}</p>}
+    <h4 className={styles.threadHead}>Emails in this conversation <span className={styles.note}>oldest first</span></h4>
+    <ol className={styles.thread} aria-label="Emails in this conversation">
+      {thread.map(message => <li key={message.id} data-direction={message.direction}>
+        <p className={styles.mailTitle}><strong>{message.title}</strong><span>{when(message.created)}</span></p>
+        <p className={styles.meta}>{message.detail}</p>
+        <p className={styles.message}>{message.body || 'No message text was included.'}</p>
+        {message.attachment && <p className={styles.mailAttachment}>Attached: {message.attachment}</p>}
+      </li>)}
+    </ol>
+    {canTag && <details className={styles.caseBox}>
+      <summary>Case notes for the AI <span className={styles.note}>(only you see these){issue?.issue ? ' · ' + issueLabel(issue.issue) + (issue.resolutions.length ? ' · ' + issue.resolutions.map(resolutionLabel).join(', ') : '') : ' · not filled in'}</span></summary>
+      <div className={styles.case}>
       <label><span>What is this about?</span><select value={issue?.issue || ''} onChange={event => onIssue({ issue: event.target.value })}>
         <option value="" disabled>Choose an issue</option>{issueTypes.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
       </select></label>
       {issue?.issue && <fieldset><legend>How you handled it</legend>{resolutionTypes.map(([key, label]) => <label key={key} className={styles.check}><input type="checkbox" checked={issue.resolutions.includes(key)} onChange={event => onIssue({ resolutions: event.target.checked ? [...issue.resolutions, key] : issue.resolutions.filter(r => r !== key) })}/> {label}</label>)}</fieldset>}
       {issue?.issue && <label className={styles.caseNote}><span>Case note</span><input value={issueNote} maxLength={1000} onChange={event => onIssueNote(event.target.value)} onBlur={() => { if (issueNote !== (issue.note || '')) onIssue({ note: issueNote }); }} placeholder="e.g. Waiting on restock; offered 30% off next order"/></label>}
       {issue?.issue && <p className={styles.note}>The AI drafts with this decision and with your {issueLabel(issue.issue)} rules.</p>}
-    </div>}
-    <ol className={styles.thread} aria-label="Conversation">
-      {(() => {
-        const seen = new Set<string>();
-        const outside = (list: ExternalReply[], tag: string) => list.map((e, i) => ({ id: 'ext-' + tag + i + '-' + e.at, direction: 'outgoing' as const, created: e.at, body: e.body + (e.preview ? ' …' : ''), who: e.source === 'manual' ? 'Marked as replied by ' + e.account : 'You, from ' + e.account + ' (sent in Gmail)' }));
-        const all = [
-          ...history.map(m => ({ ...m, who: m.direction === 'incoming' ? name : 'You, from research@ (reply desk)' })),
-          ...outside(external, 'a'),
-          ...siblings.flatMap(sib => [
-            { id: 'original:' + sib.request.id, direction: 'incoming' as const, created: sib.request.created, body: [text(sib.request.data.subject), text(sib.request.data.message)].filter(Boolean).join('\n'), who: (text(sib.request.data.name) || name) + ' (earlier request)' },
-            ...(sib.reply?.history || []).filter(m => m.direction === 'outgoing').map(m => ({ ...m, who: 'You, from research@ (reply desk)' })),
-            ...outside(sib.external, sib.request.id),
-          ]),
-        ];
-        return all.filter(m => { if (seen.has(m.id)) return false; seen.add(m.id); return true; });
-      })()
-        .sort((a, b) => a.created - b.created).map(message => <li key={message.id} data-direction={message.direction}>
-        <p className={styles.meta}>{message.who} · {when(message.created)}</p>
-        <p className={styles.message}>{message.body || 'No message text was included.'}</p>
-      </li>)}
-    </ol>
+      </div>
+    </details>}
     {(() => {
       // The full record of this request: received, replies (and PDFs) sent, forwards, archive/spam/delete/restore.
       const local = forwards.filter(f => !activity.some(a => a.at === f.created)).map(f => ({ at: f.created, text: `${f.status === 'failed' ? 'Forward failed to' : f.status === 'accepted' ? 'Forwarded to' : 'Forward status unconfirmed to'} ${f.to} by ${f.by}` }));
@@ -606,7 +653,7 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
     {request.status === 'deleted' ? null : !canReply ? <p className={styles.warning}>No usable email address was saved, so there is no way to reply.</p> : !draft ? null : <div className={styles.composer}>
       <div className={styles.composeHead}><span>To {reply?.recipient || email}</span><span className={styles.note}>From {sender}</span></div>
       {lastReplied && <p className={styles.replied} role="status">
-        ✓ You replied {when(lastReplied.at)}{lastReplied.how ? ' ' + lastReplied.how : ''}{row.stage === 'todo' ? ' · they wrote back since' : ''}
+        Already emailed {when(lastReplied.at)}{lastReplied.how ? ' ' + lastReplied.how : ''}. {row.stage === 'todo' ? firstName + ' wrote back since. ' : ''}Anything you write here goes out as a new email.
       </p>}
       <label className={styles.hidden} htmlFor={`reply-body-${request.id}`}>Message</label>
       <textarea id={`reply-body-${request.id}`} ref={bodyField} name="replyBody" rows={9} maxLength={12000} value={draft.body} readOnly={writing} disabled={locked}

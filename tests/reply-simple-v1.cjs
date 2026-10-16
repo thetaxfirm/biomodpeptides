@@ -16,8 +16,8 @@ assert.equal(newDraft({status:'sent',body:'sent text',revision:4}).revision,4,'T
 assert.match(src,/draft\.body !== seedBody\(reply\)/);
 
 // Replied line from any channel, above the box; the old ambiguous status line is gone.
-assert.match(src,/✓ You replied \{when\(lastReplied\.at\)\}/);
-assert.match(src,/they wrote back since/);
+assert.match(src,/Already emailed \{when\(lastReplied\.at\)\}/);
+assert.match(src,/wrote back since/);
 assert.doesNotMatch(src,/'Sent ' \+ when\(reply\.updated\) \+ '\. Accepted by the mail provider\.'/);
 assert.doesNotMatch(src,/Last reply sent \{when/);
 assert.match(src,/Write a new message to \$\{firstName\}/);
