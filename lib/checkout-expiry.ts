@@ -72,6 +72,14 @@ export async function readCheckoutExpiryHealth(env: ExpiryEnvironment): Promise<
 }
 
 /**
+ * How many checkouts one run may verify. Each costs two Authorize.net calls, and this job shares a
+ * five-minute tick with five others that also talk to providers, so it takes the same small bite
+ * the recovery mailer does rather than the largest share of the tick's subrequest budget. Three a
+ * run still drains over eight hundred a day, and the oldest are always looked at first.
+ */
+export const PER_RUN = 3;
+
+/**
  * Five-minute sweep. Bounded work per run; the oldest silence is always looked at first, so a
  * backlog drains in order instead of starving the orders that have waited longest.
  */
@@ -91,7 +99,7 @@ export async function runCheckoutExpiry(env: ExpiryEnvironment, deps: { now?: ()
     // A checkout the recovery mailer may still act on is not due yet, however old it is.
     const due = now - (recovering ? RECOVERY_WINDOW_MS : UNPAID_HOLD_MS);
     let rows: UnpaidOrder[];
-    try { rows = (await env.DB.prepare(DUE).bind(due, 10).all<UnpaidOrder>()).results; }
+    try { rows = (await env.DB.prepare(DUE).bind(due, PER_RUN).all<UnpaidOrder>()).results; }
     catch { return write('queue_unreadable'); }
     counters.due = rows.length;
     if (!rows.length) return write('completed');

@@ -6,7 +6,7 @@ const { DatabaseSync } = require('node:sqlite');
 require.extensions['.ts'] = (m, f) => m._compile(ts.transpileModule(fs.readFileSync(f, 'utf8'), {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true },
 }).outputText, f);
-const { releaseUnpaidOrder, runCheckoutExpiry, readCheckoutExpiryHealth, UNPAID_HOLD_MS, RELEASABLE, HEALTH_KEY } = require('../lib/checkout-expiry.ts');
+const { releaseUnpaidOrder, runCheckoutExpiry, readCheckoutExpiryHealth, UNPAID_HOLD_MS, RELEASABLE, HEALTH_KEY, PER_RUN } = require('../lib/checkout-expiry.ts');
 
 const sql = new DatabaseSync(':memory:');
 sql.exec(`CREATE TABLE orders(id TEXT PRIMARY KEY,owner TEXT,request_key TEXT,status TEXT NOT NULL,data TEXT NOT NULL,total INTEGER NOT NULL,checkout_ref TEXT,checkout_url TEXT,payment_ref TEXT,notification_id TEXT,created INTEGER NOT NULL,updated INTEGER);
@@ -150,6 +150,22 @@ const heldFor = id => sql.prepare('SELECT COALESCE(SUM(quantity),0) q FROM inven
   assert.equal(statusOf(chased.id), 'cancelled', 'with no recovery programme the day-long hold applies');
   assert.equal(heldFor(chased.id), 0);
 
+  // One run takes a small, fixed bite. This job shares a five-minute tick with five others that
+  // also call providers, and each checkout here costs two Authorize.net calls, so a backlog must
+  // drain over many runs rather than spending the whole tick's subrequest budget in one.
+  sql.exec('DELETE FROM orders; DELETE FROM inventory_reservations; DELETE FROM settings;');
+  const backlog = [];
+  for (let i = 0; i < PER_RUN + 4; i++) backlog.push(seed({ created: OLD - i * 1000 }));
+  asked = [];
+  const bounded = await runCheckoutExpiry(env, { now: () => NOW, verify: verifier(unpaid()) });
+  assert.equal(bounded.due, PER_RUN, 'a run never takes more than its share');
+  assert.equal(bounded.released, PER_RUN);
+  assert.equal(asked.length, PER_RUN, 'and never asks the provider more often than that');
+  assert(PER_RUN <= 3, 'this job must not become the largest consumer of the tick');
+  // Oldest first, so a backlog drains in order rather than starving the longest wait.
+  assert.deepEqual(asked.map(a => a.id), backlog.slice(-PER_RUN).reverse().map(o => o.id));
+  assert.equal(backlog.filter(o => statusOf(o.id) === 'awaiting_payment').length, 4, 'the rest wait for the next run');
+
   // A provider that throws costs stock, never an order.
   sql.exec('DELETE FROM orders; DELETE FROM inventory_reservations;');
   const unreachable = seed({ created: OLD });
@@ -173,5 +189,5 @@ const heldFor = id => sql.prepare('SELECT COALESCE(SUM(quantity),0) q FROM inven
   assert.equal(unreadable.status, 'queue_unreadable');
   assert.equal(unreadable.released, 0);
 
-  console.log('PASS: an unpaid checkout is released only on a verified absence of payment; paid, pending, under-review, held, referenced and archived orders are never cancelled; races and provider failures lose stock rather than orders; the sweep respects the hold window, the recovery window and the payment environment, and reports its health.');
+  console.log('PASS: an unpaid checkout is released only on a verified absence of payment; paid, pending, under-review, held, referenced and archived orders are never cancelled; races and provider failures lose stock rather than orders; the sweep respects the hold window, the recovery window and the payment environment, takes a bounded bite per run, and reports its health.');
 })().catch(e => { console.error(e); process.exitCode = 1; });
