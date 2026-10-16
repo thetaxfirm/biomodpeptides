@@ -9,6 +9,14 @@ const transpile = file => ts.transpileModule(fs.readFileSync(file, 'utf8'), {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true, jsx: ts.JsxEmit.ReactJSX },
 }).outputText;
 require.extensions['.ts'] = (m, file) => m._compile(transpile(file), file);
+// lib/runtime reads the Cloudflare Workers environment binding, which has no equivalent under plain
+// Node. An empty binding set is the honest stand-in here: these aliases are public routes that must
+// resolve without any configured storage, and the cookie guard below still proves no identity is read.
+const originalModuleLoad = Module._load;
+Module._load = function(request, parent, isMain) {
+  if (request === 'cloudflare:workers') return { env: {} };
+  return originalModuleLoad.apply(this, arguments);
+};
 const { legacyRoutes } = require('../lib/legacy-routes.ts');
 const { seoConfig, mayIndex, sitemapPaths, productReviewBlocks, pageRecords } = require('../lib/seo-policy.ts');
 const release = require('../lib/seo-publication-v1.json');

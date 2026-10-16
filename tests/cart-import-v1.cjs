@@ -5,7 +5,7 @@ require.extensions['.ts'] = (m, f) => m._compile(ts.transpileModule(fs.readFileS
 const { createCartImports } = require('../lib/cart-import.ts');
 const { clearAuthSessionCookies, needsAnonymousSession, needsAccountSession } = require('../lib/auth-return.ts');
 const sql = new DatabaseSync(':memory:');
-sql.exec(`CREATE TABLE sessions(id TEXT PRIMARY KEY,cart TEXT NOT NULL DEFAULT '[]',updated INTEGER NOT NULL); CREATE TABLE customer_carts(id TEXT PRIMARY KEY,cart TEXT NOT NULL DEFAULT '[]',updated INTEGER NOT NULL); CREATE TABLE requests(id TEXT PRIMARY KEY,owner TEXT,kind TEXT NOT NULL,data TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'new',created INTEGER NOT NULL); CREATE TABLE transaction_guards(id TEXT PRIMARY KEY,valid INTEGER NOT NULL CHECK(valid=1)); CREATE TABLE product_overrides(id INTEGER PRIMARY KEY,data TEXT NOT NULL); CREATE TABLE settings(key TEXT PRIMARY KEY,value TEXT NOT NULL); CREATE TABLE campaigns(id TEXT PRIMARY KEY,data TEXT,active INTEGER);`);
+sql.exec(`CREATE TABLE sessions(id TEXT PRIMARY KEY,cart TEXT NOT NULL DEFAULT '[]',updated INTEGER NOT NULL); CREATE TABLE customer_carts(id TEXT PRIMARY KEY,cart TEXT NOT NULL DEFAULT '[]',updated INTEGER NOT NULL); CREATE TABLE requests(id TEXT PRIMARY KEY,owner TEXT,kind TEXT NOT NULL,data TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'new',created INTEGER NOT NULL); CREATE TABLE transaction_guards(id TEXT PRIMARY KEY,valid INTEGER NOT NULL CHECK(valid=1)); CREATE TABLE product_overrides(id INTEGER PRIMARY KEY,data TEXT NOT NULL); CREATE TABLE settings(key TEXT PRIMARY KEY,value TEXT NOT NULL); CREATE TABLE campaigns(id TEXT PRIMARY KEY,data TEXT,active INTEGER); CREATE TABLE coa_original_reports(sha256 TEXT PRIMARY KEY,data TEXT,enabled INTEGER);`);
 class Statement {
   constructor(query, values = []) { this.query = query; this.values = values; }
   bind(...values) { return new Statement(this.query, values); }
@@ -22,6 +22,12 @@ Module._load = function(request, parent, isMain) {
     one: async (query, ...args) => db.prepare(query).bind(...args).first(),
     setting: async (key, fallback) => { const row = await db.prepare('SELECT value FROM settings WHERE key=?').bind(key).first(); return row ? JSON.parse(row.value) : fallback; },
     parse: (value, fallback) => { try { return value ? JSON.parse(value) : fallback; } catch { return fallback; } },
+    // commerce reads product overrides straight from the database, so hand it the same isolated
+    // SQLite the rest of this fixture writes to rather than a second, empty one.
+    database: () => db,
+    // config() normalises shipping options against the environment; this fixture has no carrier
+    // bindings, which is the state in which checkout falls back to the stored flat rate.
+    runtime: () => ({}),
   };
   return originalLoad.call(this, request, parent, isMain);
 };

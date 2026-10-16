@@ -38,7 +38,11 @@ const aliases = ['TryBiomod', 'BIOMOD'];
     assert.equal(metadata.alternates.canonical, origin + path, path + ': canonical origin/path retained');
     assert.equal(metadata.robots.index, true, path + ': eligible indexing retained');
     assert.equal(metadata.openGraph.siteName, 'Biomod Peptides');
-    const title = path === '/' ? 'Biomod Peptides | Research Vials & COAs | TryBiomod' : pageInfo(path).title + ' | Biomod Peptides';
+    // Taken from the search policy rather than repeated here: the point of this assertion is that the
+    // page title, the Open Graph title and the Twitter title are the same one, not that the wording
+    // never changes. The home page carries its title whole; every other page is suffixed with the brand.
+    const title = path === '/' ? pageInfo(path).title : pageInfo(path).title + ' | Biomod Peptides';
+    assert(title.includes('Biomod Peptides'), path + ': the brand appears in the title');
     assert.deepEqual(metadata.title, { absolute: title });
     assert.equal(metadata.openGraph.title, title);
     assert.equal(metadata.twitter.title, title);

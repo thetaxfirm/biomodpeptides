@@ -25,7 +25,7 @@ const before = JSON.stringify(savedOrder);
 const expectedOrder = { id: orderId, totalCents: savedOrder.total, currency: 'USD' };
 const form = { action: 'https://payments.example.invalid/hosted', token: 'ISOLATED_TOKEN<&"' };
 const uncertain = 'The payment page could not be opened. We could not confirm the payment status. Check your orders or contact Biomod before paying again.';
-let scenario = {}, calls = [], logs = [], networkCalls = 0;
+let scenario = {}, calls = [], logs = [], networkCalls = 0, locks = 0;
 const originalLoad = Module._load, originalFetch = global.fetch, originalError = console.error;
 const forbidden = name => () => { throw new Error('Unexpected isolated dependency: ' + name); };
 class TestResponse extends Response {
@@ -44,7 +44,16 @@ const dependencies = {
       assert.deepEqual(values, [orderId, user.id], 'The saved order is read only for the signed-in owner');
       return scenario.order === null ? null : { ...savedOrder, ...scenario.order };
     },
-    all: forbidden('database all'), run: forbidden('database write'), database: forbidden('database connection'),
+    // Exactly one write is expected before a payment form is issued: the lock that stamps the attempt
+    // and refuses to hand over a form if the order's total or contents changed underneath it. Every
+    // other write is still forbidden, which is what keeps a failed attempt from touching the order.
+    all: forbidden('database all'), database: forbidden('database connection'),
+    run: async (query, ...values) => {
+      assert.match(query, /^UPDATE orders SET data=\?,updated=\? WHERE id=\? AND data=\? AND total=\? AND status IN \('awaiting_payment','pending'\)$/, 'the only write is the payment-form lock');
+      assert.deepEqual(values.slice(2), [orderId, savedOrder.data, savedOrder.total], 'the lock matches on the exact order it read');
+      locks += 1;
+      return { meta: { changes: scenario.lockLost ? 0 : 1 } };
+    },
   },
   '@/lib/payments': { paymentProvider: () => 'authorizenet', paymentEnvironment: () => 'isolated' },
   '@/lib/catalog-visibility': visibility,
@@ -80,7 +89,7 @@ Module._load = function(name, parent, isMain) {
 (async () => {
   const { GET } = require('../app/api/store/[action]/route.ts');
   async function pay(options = {}) {
-    scenario = options; calls = []; logs = [];
+    scenario = options; calls = []; logs = []; locks = 0;
     const req = new Request('https://store.example.invalid/api/store/pay?id=' + orderId);
     req.nextUrl = new URL(req.url);
     const response = await GET(req, { params: Promise.resolve({ action: 'pay' }) });
@@ -97,6 +106,7 @@ Module._load = function(name, parent, isMain) {
     assert(result.html.includes('href="/account/orders"'));
     assert(!result.html.includes('No payment has been taken') && !result.html.includes('<form') && !result.html.includes('ISOLATED_TOKEN'));
     assert.deepEqual(calls, expectedCalls);
+    assert.equal(locks, expectedCalls.includes('form') ? 1 : 0, 'A failed verification writes nothing to the order');
     assert.equal(logs.length, 1, 'Existing diagnostic logging remains in place');
   }
 
@@ -134,9 +144,18 @@ Module._load = function(name, parent, isMain) {
   const ready = await pay();
   assert.equal(ready.status, 200);
   assert.deepEqual(calls, ['customer', 'order', 'verify', 'form']);
+  assert.equal(locks, 1, 'One form means exactly one lock write');
   assert(ready.html.includes('method="post" action="' + form.action + '"'));
   assert(ready.html.includes('value="ISOLATED_TOKEN&#60;&#38;&#34;"') && !ready.html.includes(uncertain));
   assert.equal(logs.length, 0);
+  // A total or basket that moved between the read and the lock loses the race, and the customer is
+  // sent back to their orders rather than being handed a form priced on a figure that no longer holds.
+  const raced = await pay({ lockLost: true });
+  assert.equal(raced.status, 400);
+  assert(raced.html.includes('The order changed. Review your current total in My orders before paying.'));
+  assert(!raced.html.includes('<form') && !raced.html.includes('ISOLATED_TOKEN'));
+  assert.deepEqual(calls, ['customer', 'order', 'verify'], 'A lost lock never reaches the provider form');
+  assert.equal(locks, 1);
   for (const order of [null, { status: 'paid' }, { status: 'review' }, { data: JSON.stringify({ ...data, environment: 'wrong-environment' }) }, { data: JSON.stringify({ ...data, items: [] }) }]) {
     const result = await pay({ order });
     assert.equal(result.status, 400);
@@ -147,7 +166,7 @@ Module._load = function(name, parent, isMain) {
   assert.deepEqual(calls, ['customer'], 'Signed-out requests do not read saved orders or contact a provider');
   assert.equal(JSON.stringify(savedOrder), before, 'The saved order fixture remains unchanged');
   assert.equal(networkCalls, 0);
-  console.log('PASS: actual GET pay handler reports uncertainty for verification/form errors; no form after failed verification or paid/review status; escaped provider detail, owner checks, receipt arguments and security headers preserved; no network or order writes');
+  console.log('PASS: actual GET pay handler reports uncertainty for verification/form errors; no form after failed verification or paid/review status; no form when the order changed under the payment-form lock; escaped provider detail, owner checks, receipt arguments and security headers preserved; no network and no writes beyond that single lock');
 })().catch(error => { originalError(error); process.exitCode = 1; }).finally(() => {
   Module._load = originalLoad; global.fetch = originalFetch; console.error = originalError;
 });
