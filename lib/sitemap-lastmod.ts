@@ -13,10 +13,16 @@ export const pageLastmod: Record<string, string> = {
   '/': '2026-10-14',
   // fb54b09: batch status wording on shop cards, the FAQ, batch library and COA guide.
   '/shop': '2026-10-13',
-  '/faq': '2026-10-13',
   '/testing': '2026-10-13',
-  '/quality-standard': '2026-10-13',
   '/news/biomod-peptides-online-store-trybiomod': '2026-10-13',
+  // 9595696 (October 14): separate-checkout preorder wording; 1ef1cb4 added the vial lot field.
+  '/shipping-policy': '2026-10-14',
+  '/contact': '2026-10-14',
+  // 628f8c0 (October 16): these four pages now end with the research vial index.
+  '/faq': '2026-10-16',
+  '/about': '2026-10-16',
+  '/quality-standard': '2026-10-16',
+  '/choosing-a-research-supplier': '2026-10-16',
 };
 
 export function lastmodFor(path: string) {

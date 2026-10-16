@@ -39,8 +39,19 @@ loaded._compile(transpile(filename), filename);
   for (const r of pressReleases) assert(lastmodFor('/news/' + r.slug) >= r.date, r.slug + ' lastmod before publication');
   for (const slug of release.productSlugs) assert.equal(lastmodFor('/product/' + slug), productLastmod);
   for (const route of Object.keys(pageLastmod)) assert(paths.includes(route), route + ' dated but not in the sitemap');
+  // A page whose visible content changed must not keep an older date, or Bing has no reason to
+  // recrawl it. The guide pages ContentPage ends with the research vial index (628f8c0, October 16)
+  // are read from the component itself, so a page added to that list later is covered too.
+  const contentSource = fs.readFileSync(path.join(root, 'components/store/content.tsx'), 'utf8');
+  const guideExpr = contentSource.match(/const guide = (.*?); if \(guide\)/s);
+  assert(guideExpr && /ResearchVialIndex/.test(contentSource.slice(guideExpr.index, guideExpr.index + guideExpr[0].length + 200)), 'guide pages render the research vial index');
+  const guidePages = [...guideExpr[1].matchAll(/path === '([a-z-]+)'/g)].map(m => '/' + m[1]);
+  assert.deepEqual(guidePages.slice().sort(), ['/about', '/choosing-a-research-supplier', '/faq', '/quality-standard']);
+  for (const route of guidePages) assert(lastmodFor(route) >= '2026-10-16', route + ' gained the vial index on 2026-10-16 but is dated ' + lastmodFor(route));
+  // 9595696 changed preorder wording on the shipping policy; 1ef1cb4 added the vial lot field to contact.
+  for (const route of ['/shipping-policy', '/contact']) assert(lastmodFor(route) >= '2026-10-14', route + ' changed on 2026-10-14 but is dated ' + lastmodFor(route));
   // Honest by construction: not every page shares one date.
   assert(new Set(entries.map(e => e[1])).size > 1, 'lastmod must not stamp every URL with the same date');
   assert.equal(sitemapPaths(seoConfig()).length, 0);
-  console.log('PASS: ' + entries.length + ' sitemap URLs carry valid lastmod dates between launch and today; press and product pages are never dated before their content');
+  console.log('PASS: ' + entries.length + ' sitemap URLs carry valid lastmod dates between launch and today; press, product and recently changed pages are never dated before their content');
 })().catch(error => { console.error(error); process.exit(1); });
