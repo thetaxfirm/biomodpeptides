@@ -113,7 +113,10 @@ export async function checkout(owner: string, lines: CartLine[], body: Record<st
     // An exact repeat hands back the original order. Anything else is offered to the provider, and
     // only a verified "no payment exists" releases it and frees its stock so this order can proceed.
     // A real payment, a pending one, or an order held for review still blocks, exactly as before.
-    for (let attempt = 0; attempt < 5; attempt++) {
+    // Two passes is provably enough: orders_owner_active is a partial unique index over exactly the
+    // statuses selected here, so one customer can have at most one such order. The second pass finds
+    // nothing, and a checkout therefore costs at most one provider verification.
+    for (let attempt = 0; attempt < 2; attempt++) {
         const old = await one<{
             id: string;
             status: string;
