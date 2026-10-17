@@ -16,7 +16,7 @@ const navClass = (path: string) => featuredNav.has(path) ? 'nav-feature' : undef
 function OfferBar({ packDiscount, shipping }: { packDiscount: number | null | undefined; shipping: string | null }) {
   const offers = [
     { href: '/multi-pack?size=10', lead: packDiscount ? `Save ${packDiscount}% with a 10-pack` : 'Build a 10-pack', rest: 'Mix and match any vials' },
-    ...(shipping ? [{ href: '/shipping-policy', lead: shipping.replace(/^U\.S\. shipping · /, ''), rest: 'U.S. orders' }] : []),
+    ...(shipping ? [{ href: '/shipping-policy', lead: shipping.replace(/^U\.S\. shipping · /, '').replace(/\.$/, ''), rest: 'U.S. orders' }] : []),
     { href: '/shipping-policy', lead: 'Order by 2 p.m. Pacific', rest: 'In-stock weekday orders process the same business day' },
     { href: '/testing', lead: 'Check the lot', rest: 'Batch records and lab reports in our library' },
   ];
