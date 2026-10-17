@@ -44,6 +44,7 @@ const {RequestInbox}=inboxModule.exports;
 const filename=path.join(root,'components/store/admin.tsx');
 const mod=new Module(filename,module);mod.filename=filename;mod.paths=Module._nodeModulePaths(root);
 mod.require=id=>{
+ if(id==='./affiliate-program')return {AffiliateProgram:()=>null}; /* Affiliate behavior has separate tests. */
  if(id==='@/lib/fulfillment'){const m={exports:{}};new Function('exports',require('typescript').transpileModule(require('node:fs').readFileSync(require('node:path').join(root,'lib/fulfillment.ts'),'utf8'),{compilerOptions:{module:1,target:9}}).outputText)(m.exports);return m.exports;}
  if(id==='./fulfillment-admin')return {FulfillmentQueue:()=>null,CarrierConnection:()=>null};
  if(id==='react')return hooks;if(id==='react/jsx-runtime')return projectRequire('react/jsx-runtime');if(id==='./provider')return provider;

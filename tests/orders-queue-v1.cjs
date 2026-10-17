@@ -6,7 +6,8 @@ const root = path.resolve(__dirname, '..');
 function load(relative, deps = {}) {
   const filename = path.join(root, relative), m = new Module(filename, module);
   m.filename = filename;
-  m.require = id => { if (deps[id]) return deps[id]; throw Error('Unexpected dependency ' + id); };
+  m.require = id => {
+ if(id==='./affiliate-program')return {AffiliateProgram:()=>null}; /* Affiliate behavior has separate tests. */ if (deps[id]) return deps[id]; throw Error('Unexpected dependency ' + id); };
   m._compile(ts.transpileModule(fs.readFileSync(filename, 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText, filename);
   return m.exports;
 }

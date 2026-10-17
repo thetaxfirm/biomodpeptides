@@ -1,0 +1,62 @@
+// Real program functions and migrations in isolated SQLite; no network or customer data.
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),Module=require('node:module'),ts=require('typescript');
+const {DatabaseSync}=require('node:sqlite');
+const root=path.resolve(__dirname,'..');
+function load(file){const m=new Module(path.join(root,file),module);m.filename=path.join(root,file);m.paths=Module._nodeModulePaths(root);m.require=id=>id==='./promotions'?load('lib/promotions.ts'):require(id);m._compile(ts.transpileModule(fs.readFileSync(m.filename,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,m.filename);return m.exports;}
+const p=load('lib/affiliate-program.ts'),sql=new DatabaseSync(':memory:');
+for(const f of fs.readdirSync(path.join(root,'drizzle')).filter(f=>f.endsWith('.sql')).sort())sql.exec(fs.readFileSync(path.join(root,'drizzle',f),'utf8'));
+function stmt(query,args=[]){return{bind:(...a)=>stmt(query,a),first:async()=>sql.prepare(query).get(...args)||null,all:async()=>({results:sql.prepare(query).all(...args)}),run:async()=>({meta:sql.prepare(query).run(...args)})};}
+const db={prepare:q=>stmt(q),batch:async list=>{sql.exec('BEGIN');try{const results=[];for(const s of list)results.push(await s.run());sql.exec('COMMIT');return results;}catch(e){sql.exec('ROLLBACK');throw e;}}};
+(async()=>{
+ assert.equal((await p.affiliateState(db)).open,false);
+ await assert.rejects(p.setAffiliateOpen(db,'owner',true),/Publish/);
+ const terms={version:'fixture-v1',title:'Isolated fixture terms',body:'Synthetic testing terms only. '.repeat(8),commissionBps:1250,holdDays:30,minimumPayoutCents:5000,company:"Isolated Fixture LLC",contact:"fixture@example.invalid",payoutSchedule:"Monthly after hold",payoutMethods:"Test only",confirmed:true};
+ await p.publishAgreement(db,'owner',terms,100);
+ const a=(await p.affiliateState(db)).agreement;
+ assert.equal(a.commission_bps,0);assert.equal(a.minimum_payout_cents,50000);assert.throws(()=>sql.prepare('UPDATE affiliate_agreements SET body=?').run('changed'),/new agreement/);
+ await p.setAffiliateOpen(db,'owner',true,101);
+ const user={id:'partner-fixture',email:'partner@example.invalid'};
+ const input={agreementId:a.id,accepted:true,guidelinesAccepted:true,name:'Isolated partner',website:'https://example.invalid',audience:'Isolated test audience description.'};
+ await assert.rejects(p.applyAffiliate(db,user,{...input,accepted:false},102));
+ await assert.rejects(p.applyAffiliate(db,user,{...input,website:'javascript:alert(1)'},102));
+ await p.applyAffiliate(db,user,input,102);
+ await assert.rejects(p.applyAffiliate(db,user,input,103),/already/);
+ assert.equal((await p.affiliatePortal(db,'unrelated')).member,null);
+ await assert.rejects(p.reviewAffiliate(db,user.id,{owner:user.id,status:'approved',expectedUpdated:102,code:'ANNA20',note:'Test review'},104),/Another administrator/);
+ await assert.rejects(p.reviewAffiliate(db,'reviewer',{owner:user.id,status:'approved',expectedUpdated:102,code:'anna20',note:'Test review'},104),/individual financial schedule/);
+ await p.offerAffiliateSchedule(db,'owner',{owner:user.id,commissionBps:1250,holdDays:30,payoutMethods:'Test method'},103);
+ let schedule=await p.affiliateSchedule(db,user.id);
+ await assert.rejects(p.acceptAffiliateSchedule(db,'unrelated',{scheduleId:schedule.id,accepted:true},103),/changed/);
+ await p.acceptAffiliateSchedule(db,user.id,{scheduleId:schedule.id,accepted:true},103);
+ await p.reviewAffiliate(db,'reviewer',{owner:user.id,status:'approved',expectedUpdated:102,code:'anna20',note:'Test review'},104);
+ await assert.rejects(p.reviewAffiliate(db,'reviewer',{owner:user.id,status:'suspended',expectedUpdated:102,note:'Stale review'},105),/changed/);
+ const order=(id,owner,email,env='authorizenet:live')=>sql.prepare('INSERT INTO orders(id,owner,request_key,status,data,total,payment_ref,notification_id,created,updated) VALUES(?,?,?,?,?,?,?,?,?,?)').run(id,owner,id,'paid',JSON.stringify({email,environment:env,promo:{code:'ANNA20'},subtotal:10000,discount:2000}),9500,'payment-'+id,'notification-'+id,200,200);
+ order('eligible','shopper','buyer@example.invalid');order('self',user.id,user.email);order('sandbox','shopper','buyer@example.invalid','sandbox');
+ assert.equal(sql.prepare('SELECT COUNT(*) n FROM affiliate_order_terms').get().n,1);
+ assert.equal((await p.affiliateEarnings(db,user.id,201))[0].state,'held');
+ assert.equal((await p.affiliateEarnings(db,user.id,31*86400000))[0].commissionCents,1000);
+ assert.equal((await p.affiliateEarnings(db,'unrelated')).length,0);
+ await p.reviewCommission(db,'reviewer',{orderId:'eligible',state:'held',netCents:8000,reason:'Isolated dispute'},205);
+ assert.equal((await p.affiliateEarnings(db,user.id,31*86400000))[0].state,'held');
+ await p.reviewCommission(db,'reviewer',{orderId:'eligible',state:'released',netCents:4000,reason:'Isolated partial refund'},206);
+ assert.equal((await p.affiliateEarnings(db,user.id,31*86400000))[0].commissionCents,500);
+ await assert.rejects(p.reviewCommission(db,user.id,{orderId:'eligible',state:'released',netCents:8000,reason:'Self review'},207),/Another administrator/);
+
+ sql.prepare("UPDATE orders SET status='refunded' WHERE id='eligible'").run();
+ assert.equal((await p.affiliateEarnings(db,user.id,31*86400000))[0].state,'excluded');
+ await p.publishAgreement(db,'owner',{...terms,version:'fixture-v2',commissionBps:1500},300);
+ order('outdated','shopper','buyer@example.invalid');assert.equal(sql.prepare('SELECT COUNT(*) n FROM affiliate_order_terms').get().n,1);
+ const next=(await p.affiliateState(db)).agreement;
+ await assert.rejects(p.acceptAffiliateAgreement(db,user.id,{agreementId:a.id,accepted:true},301),/changed/);
+ await p.acceptAffiliateAgreement(db,user.id,{agreementId:next.id,accepted:true},302);
+ assert.equal(sql.prepare('SELECT COUNT(*) n FROM affiliate_acceptances').get().n,2);
+ order('no-new-schedule','shopper','buyer@example.invalid');
+ assert.equal(sql.prepare('SELECT COUNT(*) n FROM affiliate_order_terms').get().n,1);
+ await p.offerAffiliateSchedule(db,'owner',{owner:user.id,commissionBps:1500,holdDays:0,payoutMethods:'Another test method'},303);
+ schedule=await p.affiliateSchedule(db,user.id);
+ await p.acceptAffiliateSchedule(db,user.id,{scheduleId:schedule.id,accepted:true},304);
+ order('new-terms','shopper','buyer@example.invalid');
+ assert.equal(sql.prepare("SELECT commission_bps FROM affiliate_order_terms WHERE order_id='new-terms'").get().commission_bps,1500);
+ assert.equal(sql.prepare("SELECT commission_bps FROM affiliate_order_terms WHERE order_id='eligible'").get().commission_bps,1250);
+ console.log('Affiliate lifecycle, immutable agreements, ownership, self-referral, live-only attribution, refund exclusion and historical terms passed.');
+})().catch(e=>{console.error(e);process.exit(1);});

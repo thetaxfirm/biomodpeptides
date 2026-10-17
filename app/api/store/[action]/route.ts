@@ -442,14 +442,7 @@ export async function POST(req: NextRequest, { params }: {
                 await run('INSERT INTO addresses(id,owner,data,created) VALUES(?,?,?,?)', id, u.id, JSON.stringify(data), timestamp());
             return j({ message: 'Address saved.' });
         }
-        if (action === 'affiliate') {
-            const u = await requireCustomer();
-            const id = uid();
-            await run('INSERT INTO requests(id,owner,kind,data,created) VALUES(?,?,?,?,?)', id, u.id, 'affiliate', JSON.stringify({ email: u.email, website: str(b.website, 500), message: str(b.message, 3000) }), timestamp());
-            await Promise.allSettled([enqueueRequestAlert(runtime(), id)]);
-            scheduleInquiryDelivery(runtime(), id, 'affiliate');
-            return j({ message: 'Your partner application has been saved.' });
-        }
+        if (action === 'affiliate') return j({ error: 'Please reload the affiliate program to review the current agreement before applying.' }, 409);
         if (action === 'delivery') {
             const u = await requireCustomer();
             // A choice refers only to a rate in this customer's stored quote.

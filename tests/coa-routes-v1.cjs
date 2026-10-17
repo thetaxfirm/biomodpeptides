@@ -228,7 +228,7 @@ async function request(action, data, headers = {}) {
     result = await request('contact', contact); assert.equal(result.status, 200);
     await assert.doesNotReject(() => drainAfter()); assertBackground('contact'); assert(!JSON.stringify(result).includes('PRIVATE_'));
   }
-  for (const kind of ['contact', 'affiliate']) {
+  for (const kind of ['contact']) {
     reset({ role: 'customer', publicRequest: true, registrationFailure: true });
     result = await request(kind, kind === 'contact' ? contact : { website: 'https://partner.example.invalid', message: 'Isolated partner request' });
     assert.equal(result.status, 200); assert.match(result.body.message, /saved/); assert.equal(saved.size, 1);
@@ -240,25 +240,20 @@ async function request(action, data, headers = {}) {
     { kind: 'contact', options: { persistFailure: true }, body: contact, status: 400 },
     { kind: 'contact', options: {}, body: { ...contact, website: 'honeypot' }, status: 200 },
     { kind: 'contact', options: {}, body: { ...contact, email: 'invalid' }, status: 400 },
-    { kind: 'affiliate', options: { persistFailure: true }, body: { website: 'https://partner.example.invalid', message: 'Isolated partner request' }, status: 400 },
-    { kind: 'affiliate', options: { role: 'signedout' }, body: { website: 'https://partner.example.invalid', message: 'Isolated partner request' }, status: 400 },
-    { kind: 'affiliate', options: {}, body: { website: '', message: '' }, status: 400 },
+    { kind: 'affiliate', options: { persistFailure: true }, body: { website: 'https://partner.example.invalid', message: 'Isolated partner request' }, status: 409 },
+    { kind: 'affiliate', options: { role: 'signedout' }, body: { website: 'https://partner.example.invalid', message: 'Isolated partner request' }, status: 409 },
+    { kind: 'affiliate', options: {}, body: { website: '', message: '' }, status: 409 },
   ]) {
     reset({ role: 'customer', publicRequest: true, ...example.options }); result = await request(example.kind, example.body);
     assert.equal(result.status, example.status); assert.equal(saved.size, 0);
     assert.equal(called('enqueue-coa').length, 0); assert.equal(called('enqueue-alert').length, 0);
     assert.equal(called('after-register').length, 0); assert.equal(afterJobs.length, 0);
   }
-  // Partner alerts bind the authenticated account email and generated request ID.
-  // They never process a COA, even if arbitrary subject/recipient fields are sent.
-  for (const failures of [{}, { alertFailure: true }, { backgroundFailure: 'request-alert' }]) {
-    reset({ role: 'customer', publicRequest: true, ...failures });
-    result = await request('affiliate', { id: '99999999-0000-4000-8000-000000000001', website: 'https://partner.example.invalid', message: 'Isolated partner request', email: 'intruder@example.invalid', subject: contact.subject });
-    assert.equal(result.status, 200); assert.equal(saved.get(requestId).owner, account.id); assert.equal(JSON.parse(saved.get(requestId).data).email, account.email);
-    assert.equal(called('enqueue-coa').length, 0); assert.equal(called('enqueue-alert').length, 1); assert.equal(afterJobs.length, 1);
-    assert.equal(called('process-coa').length, 0); assert(!calls.some(call => call.name.startsWith('background-')));
-    await assert.doesNotReject(() => drainAfter()); assertBackground('affiliate');
-  }
+  // Legacy partner forms cannot bypass the versioned agreement workflow.
+  reset({ role: 'customer', publicRequest: true });
+  result = await request('affiliate', { website: 'https://partner.example.invalid', message: 'Isolated partner request' });
+  assert.equal(result.status,409); assert.equal(saved.size,0);
+  assert.equal(called('enqueue-alert').length,0); assert.equal(afterJobs.length,0);
 
   // Old tabs cannot bypass owner review through the retired direct-send action.
   reset(); result=await request('admin-coa-process',{id:requestId});assert.equal(result.status,409);

@@ -59,12 +59,14 @@ authReturnModule._compile(ts.transpileModule(fs.readFileSync(authReturnFilename,
 const {authLink}=authReturnModule.exports;
 function loadShippingPure(relative) {
   const filename=path.join(root,relative),m=new Module(filename,module);m.filename=filename;m.paths=Module._nodeModulePaths(root);
-  m.require=id=>{if(id==='./shipping-options')return loadShippingPure('lib/shipping-options.ts');throw Error('Unexpected pure shipping dependency '+id);};
+  m.require=id=>{
+ if(id==='./affiliate-program')return {AffiliateProgram:()=>null}; /* Affiliate behavior has separate tests. */if(id==='./shipping-options')return loadShippingPure('lib/shipping-options.ts');throw Error('Unexpected pure shipping dependency '+id);};
   m._compile(ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,filename);return m.exports;
 }
 const filename=path.join(root,'components/store/account.tsx');
 const mod=new Module(filename,module);mod.filename=filename;mod.paths=Module._nodeModulePaths(root);
 mod.require=id=>{
+ if(id==='./affiliate-program')return {AffiliateProgram:()=>null}; /* Affiliate behavior has separate tests. */
  if(id==='@/lib/shipping-terms')return loadShippingPure('lib/shipping-terms.ts');
  if(id==='@/lib/preorders'||id==='./preorder-notice'){const m={exports:{}};const filename=require('node:path').join(root,id==='@/lib/preorders'?'lib/preorders.ts':'components/store/preorder-notice.tsx');new Function('exports','require',require('typescript').transpileModule(require('node:fs').readFileSync(filename,'utf8'),{compilerOptions:{module:1,target:9,jsx:4}}).outputText)(m.exports,require);return m.exports;}
  if(id==='@/lib/fulfillment'){const m={exports:{}};new Function('exports',require('typescript').transpileModule(require('node:fs').readFileSync(require('node:path').join(root,'lib/fulfillment.ts'),'utf8'),{compilerOptions:{module:1,target:9}}).outputText)(m.exports);return m.exports;}
@@ -192,7 +194,7 @@ const submitProfile=host=>find(host,n=>n.type==='form').props.onSubmit({preventD
     assert.equal(text(find(host,n=>n.type==='aside')).includes('My purchases'),true);
     if(section==='orders') {assert.equal(text(find(host,n=>n.type==='h2'&&text(n)==='My purchases')),'My purchases');assert.equal(records(host).length,1);assert(text(host.tree).includes('aaaaaaaa'));}
     if(section==='')assert.equal(text(find(host,n=>n.type==='a'&&n.props.href==='/account/orders'&&nodes(n).some(child=>child.type==='strong'))),'1 My purchases');
-    if(section==='affiliate')assert(text(host.tree).includes('Applications are reviewed before program access is granted.'),'Personal affiliate application behavior is retained');
+    if(section==='affiliate')assert(nodes(host.tree).some(n=>typeof n.type==='function' && n.type.name==='AffiliateProgram'),'Personal account mounts the versioned affiliate program; its lifecycle is tested separately');
     assert(apiCalls.every(c=>c.action==='account'&&c.body===undefined),'Management links never fetch store-wide data');
     state.store.admin=false;host.render();assert(!nodes(host.tree).some(n=>n.type==='a'&&n.props.href?.startsWith('/admin')),'Removing admin status removes every management link immediately');
     assert(!text(host.tree).includes('Store management'));assert(!text(host.tree).includes('My purchases'));
