@@ -7,7 +7,8 @@ const call=async(body,admin=false)=>{const r=await f.mf.dispatchFetch(origin+'/a
 try {
  let r=await call(null,true);assert.equal(r.status,200);assert.equal(r.body.open,false);
  r=await call({action:'publish',version:'worker-fixture',title:'Synthetic isolated terms',body:'Synthetic isolated contract fixture only. '.repeat(10),commissionBps:0,holdDays:0,minimumPayoutCents:50000,company:'Fixture Company',contact:'fixture@example.invalid',payoutSchedule:'Every 30 days',payoutMethods:'Individual schedule',confirmed:true});assert.equal(r.status,200,JSON.stringify(r.body));
- await call({action:'open',open:true});const agreement=(await call()).body.agreement;
+ await call({action:'open',open:true});const agreement=(await call(null,true)).body.agreement;
+ await call({action:'invite',email:'partner@example.invalid',active:true});
  const partner='00000001-0000-4000-8000-000000000099';f.authUser.id=partner;f.authUser.email='partner@example.invalid';
  r=await call({action:'apply',agreementId:agreement.id,accepted:true,guidelinesAccepted:true,name:'Synthetic partner',website:'https://example.invalid',audience:'Synthetic test audience for isolated testing.'});assert.equal(r.status,200,JSON.stringify(r.body));
  assert.equal((await call({action:'schedule',owner:partner,commissionBps:1200,holdDays:0,payoutMethods:'Test'})).status,400);

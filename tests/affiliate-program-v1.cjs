@@ -2,7 +2,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),Module=require('node:module'),ts=require('typescript');
 const {DatabaseSync}=require('node:sqlite');
 const root=path.resolve(__dirname,'..');
-function load(file){const m=new Module(path.join(root,file),module);m.filename=path.join(root,file);m.paths=Module._nodeModulePaths(root);m.require=id=>id==='./promotions'?load('lib/promotions.ts'):require(id);m._compile(ts.transpileModule(fs.readFileSync(m.filename,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,m.filename);return m.exports;}
+function load(file){const m=new Module(path.join(root,file),module);m.filename=path.join(root,file);m.paths=Module._nodeModulePaths(root);m.require=id=>id==='./promotions'?load('lib/promotions.ts'):id==='../content/affiliate-agreement-v1.json'?JSON.parse(fs.readFileSync(path.join(root,'content/affiliate-agreement-v1.json'),'utf8')):require(id);m._compile(ts.transpileModule(fs.readFileSync(m.filename,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,m.filename);return m.exports;}
 const p=load('lib/affiliate-program.ts'),sql=new DatabaseSync(':memory:');
 for(const f of fs.readdirSync(path.join(root,'drizzle')).filter(f=>f.endsWith('.sql')).sort())sql.exec(fs.readFileSync(path.join(root,'drizzle',f),'utf8'));
 function stmt(query,args=[]){return{bind:(...a)=>stmt(query,a),first:async()=>sql.prepare(query).get(...args)||null,all:async()=>({results:sql.prepare(query).all(...args)}),run:async()=>({meta:sql.prepare(query).run(...args)})};}
@@ -19,9 +19,11 @@ const db={prepare:q=>stmt(q),batch:async list=>{sql.exec('BEGIN');try{const resu
  const input={agreementId:a.id,accepted:true,guidelinesAccepted:true,name:'Isolated partner',website:'https://example.invalid',audience:'Isolated test audience description.'};
  await assert.rejects(p.applyAffiliate(db,user,{...input,accepted:false},102));
  await assert.rejects(p.applyAffiliate(db,user,{...input,website:'javascript:alert(1)'},102));
+ await assert.rejects(p.applyAffiliate(db,user,input,102),/invitation-only/);
+ await p.inviteAffiliate(db,'owner',{email:user.email,active:true},101);
  await p.applyAffiliate(db,user,input,102);
  await assert.rejects(p.applyAffiliate(db,user,input,103),/already/);
- assert.equal((await p.affiliatePortal(db,'unrelated')).member,null);
+ await assert.rejects(p.affiliatePortal(db,'unrelated','other@example.invalid'),/invitation-only/);
  await assert.rejects(p.reviewAffiliate(db,user.id,{owner:user.id,status:'approved',expectedUpdated:102,code:'ANNA20',note:'Test review'},104),/Another administrator/);
  await assert.rejects(p.reviewAffiliate(db,'reviewer',{owner:user.id,status:'approved',expectedUpdated:102,code:'anna20',note:'Test review'},104),/individual financial schedule/);
  await p.offerAffiliateSchedule(db,'owner',{owner:user.id,commissionBps:1250,holdDays:30,payoutMethods:'Test method'},103);

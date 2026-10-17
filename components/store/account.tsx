@@ -362,7 +362,7 @@ export function Checkout() {
         </div>
     </>;
 }
-const accountNav = [['Overview', ''], ['Orders', 'orders'], ['Addresses', 'addresses'], ['Wishlist', 'wishlist'], ['Rewards', 'rewards'], ['Affiliate', 'affiliate'], ['Notifications', 'notifications'], ['Profile', 'profile']];
+const accountNav = [['Overview', ''], ['Orders', 'orders'], ['Addresses', 'addresses'], ['Wishlist', 'wishlist'], ['Rewards', 'rewards'], ['Notifications', 'notifications'], ['Profile', 'profile']];
 export function Account({ section = '' }: {
     section?: string;
 }) {

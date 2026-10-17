@@ -4,7 +4,7 @@ const m=new Module(filename,module);m.filename=filename;m.require=id=>{
  if(id==='next/server')return{NextResponse:{json:(data,init)=>Response.json(data,init)}};
  if(id==='@/lib/auth')return{requireCustomer:async()=>{if(!user)throw Error('no account');return user;},requireStaff:async()=>{if(!user||!['owner','manager'].includes(role))throw Error('forbidden');return{...user,role};}};
  if(id==='@/lib/runtime')return{database:()=>({})};
- if(id==='@/lib/affiliate-program')return Object.fromEntries(['affiliatePortal','affiliateAdmin','publishAgreement','setAffiliateOpen','applyAffiliate','acceptAffiliateAgreement','reviewAffiliate','reviewCommission','offerAffiliateSchedule','acceptAffiliateSchedule'].map(name=>[name,async(...args)=>{calls.push([name,...args]);return{ok:true};}]));
+ if(id==='@/lib/affiliate-program')return Object.fromEntries(['affiliatePortal','affiliateAdmin','publishAgreement','setAffiliateOpen','applyAffiliate','acceptAffiliateAgreement','reviewAffiliate','reviewCommission','offerAffiliateSchedule','acceptAffiliateSchedule','inviteAffiliate'].map(name=>[name,async(...args)=>{calls.push([name,...args]);return{ok:true};}]));
  throw Error(id);
 };m._compile(ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,filename);
 function req(body,admin=false,origin='https://example.invalid'){const r=new Request('https://example.invalid/api/affiliates'+(admin?'?admin=1':''),body?{method:'POST',headers:{origin,'Content-Type':'application/json'},body:JSON.stringify(body)}:{});r.nextUrl=new URL(r.url);return r;}
@@ -16,6 +16,7 @@ function req(body,admin=false,origin='https://example.invalid'){const r=new Requ
  role='manager';assert.equal((await m.exports.POST(req({action:'publish'}))).status,403);
  assert.equal((await m.exports.POST(req({action:'open',open:true}))).status,403);
  assert.equal((await m.exports.POST(req({action:'schedule'}))).status,403);
+ assert.equal((await m.exports.POST(req({action:'invite'}))).status,403);
  role='owner';assert.equal((await m.exports.POST(req({action:'publish'}))).status,200);assert.equal(calls.pop()[0],'publishAgreement');
  assert.equal((await m.exports.POST(req({action:'schedule'}))).status,200);assert.equal(calls.pop()[0],'offerAffiliateSchedule');
  await m.exports.POST(req({action:'acceptSchedule',owner:'forged'}));assert.equal(calls.pop()[2],'one');

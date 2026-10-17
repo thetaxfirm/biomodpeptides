@@ -1,11 +1,10 @@
 'use client';
 import { useEffect, useState, type FormEvent } from 'react';
-import agreementDocument from '@/content/affiliate-agreement-v1.json';
 import type { Agreement, Member, AffiliateSchedule } from '@/lib/affiliate-program';
 import { useStore } from './provider';
 import { Field } from './primitives';
 type Earning={originalBasisCents:number;orderId:string;code:string;created:number;basisCents:number;commissionCents:number;state:string;availableAt:number};
-type Model={schedule?:AffiliateSchedule|null;schedules?:AffiliateSchedule[];canPublish?:boolean;earnings:Earning[];open:boolean;agreement:Agreement|null;acceptedAgreement?:Agreement|null;needsAcceptance?:boolean;member?:Pick<Member,'name'|'website'|'audience'|'status'|'code'|'agreement_id'|'accepted'|'created'>|null;members?:Member[];codes?:string[];events?:{id:string;action:string;created:number}[];guide:{do:string[];avoid:string[];disclosure:string}};
+type Model={agreementDocument?:{version:string;title:string;body:string};invitations?:{email:string;active:number}[];schedule?:AffiliateSchedule|null;schedules?:AffiliateSchedule[];canPublish?:boolean;earnings:Earning[];open:boolean;agreement:Agreement|null;acceptedAgreement?:Agreement|null;needsAcceptance?:boolean;member?:Pick<Member,'name'|'website'|'audience'|'status'|'code'|'agreement_id'|'accepted'|'created'>|null;members?:Member[];codes?:string[];events?:{id:string;action:string;created:number}[];guide:{do:string[];avoid:string[];disclosure:string}};
 async function request(admin:boolean,body?:unknown) {
  const response=await fetch('/api/affiliates'+(admin?'?admin=1':''),{method:body?'POST':'GET',credentials:'same-origin',cache:'no-store',headers:body?{'Content-Type':'application/json'}:undefined,body:body?JSON.stringify(body):undefined});
  const data=await response.json() as Model & {error?:string;message?:string};if(!response.ok) throw Error(data.error||'Unable to load the affiliate program.');return data;
@@ -26,18 +25,19 @@ function AffiliateProgramView({admin=false}:{admin?:boolean}) {
  {!data&&!error&&<p role="status">Loading affiliate program…</p>}
  {data&&<>
  {admin?<>
- <p>Enrollment: <strong>{data.open?'Open':'Paused'}</strong>. Applications require the published agreement and manual approval.</p>
- {data.canPublish&&<button className="button button-dark" disabled={busy||!data.agreement} onClick={()=>save({action:'open',open:!data.open})}>{data.open?'Pause applications':'Open applications'}</button>}
+ <p>Enrollment: <strong>{data.open?'Open':'Paused'}</strong>. Only invited email addresses can apply. Applications require the published agreement and manual approval.</p>
+ {data.canPublish&&<button className="button button-dark" disabled={busy||!data.agreement} onClick={()=>save({action:'open',open:!data.open})}>{data.open?'Pause invited applications':'Open invited applications'}</button>}
  {data.agreement?<AgreementText agreement={data.agreement}/>:<p>No approved agreement has been published. Demo terms and rates have not been imported.</p>}
  {data.canPublish&&<details><summary>Publish a new agreement and financial terms</summary><form className="store-form" onSubmit={e=>{e.preventDefault();const f=e.currentTarget,v=Object.fromEntries(new FormData(f));void save({action:'publish',version:v.version,title:v.title,body:v.body,commissionBps:0,holdDays:0,minimumPayoutCents:50000,company:v.company,contact:v.contact,payoutSchedule:v.payoutSchedule,payoutMethods:"Specified in your individual schedule",confirmed:v.confirmed==='on'},f);}}>
  <p>Each version is permanent. Publishing pauses new applications and requires existing partners to accept the new version before new commissions accrue. Previous order terms remain unchanged.</p>
- <Field label="Version (unique)" name="version" defaultValue={agreementDocument.version}/><Field label="Agreement title" name="title" defaultValue={agreementDocument.title}/><Field label="Contracting company legal name" name="company"/><Field label="Program contact email" name="contact" type="email"/><Field label="Payment schedule" name="payoutSchedule" defaultValue="Every 30 days"/>
- <label className="field">Approved agreement text<textarea name="body" defaultValue={agreementDocument.body} required minLength={100} maxLength={24000} rows={12}/></label>
+ <Field label="Version (unique)" name="version" defaultValue={data.agreementDocument?.version||''}/><Field label="Agreement title" name="title" defaultValue={data.agreementDocument?.title||''}/><Field label="Contracting company legal name" name="company" defaultValue="BM Trade LLC"/><Field label="Program contact email" name="contact" type="email"/><Field label="Payment schedule" name="payoutSchedule" defaultValue="Every 30 days"/>
+ <label className="field">Approved agreement text<textarea name="body" defaultValue={data.agreementDocument?.body||''} required minLength={100} maxLength={24000} rows={12}/></label>
 
 
  <p>Minimum payout: $500. Each affiliate receives a separate commission rate, hold and payment method set by the owner.</p>
  <label><input name="confirmed" type="checkbox" required/> I confirm these are the approved program terms and rates, ready to publish.</label>
  <button className="button button-dark" disabled={busy}>Publish agreement version</button></form></details>}
+ {data.canPublish&&<section><h3>Private invitations</h3><p>Authorize the recipient's email here, then send them https://trybiomod.com/account/affiliate. They must sign in with that verified email. A forwarded link does not grant access. Nothing is emailed automatically.</p><form className="store-form" onSubmit={e=>submit(e,'invite',{active:true})}><Field label="Affiliate email to invite" name="email" type="email"/><button className="button button-dark" disabled={busy}>Authorize invitation</button></form>{data.invitations?.map(i=><p key={i.email}>{i.email} · {i.active?'Invited':'Revoked'} {Boolean(i.active)&&<button disabled={busy} onClick={()=>save({action:'invite',email:i.email,active:false})}>Revoke invitation</button>}</p>)}</section>}
  <h3>Applications and partners</h3><p>Earlier applications remain in <a href="/admin?tab=requests">Requests</a>. Applicants must accept the published agreement through their account; old inquiries are never treated as accepted agreements.</p><p>Each partner receives one existing promotion code. Customer discounts remain controlled by the store’s promotion rules.</p>
  {!data.members?.length&&<p>No applications have been submitted through the upgraded program.</p>}
  {data.members?.map(m=><article className="account-record" key={m.owner}><h4>{m.name}</h4><p>{m.email} · {m.status}</p><p>{m.website}</p><p>{m.audience}</p><p>Accepted {new Date(m.accepted).toLocaleString()}{m.agreement_id!==data.agreement?.id?' · Latest agreement acceptance needed':''}</p>{m.review_note&&<p>Last review: {m.review_note}</p>}

@@ -3,6 +3,7 @@
  * Financial terms have no defaults: the owner publishes the actual agreement.
  */
 import { z } from 'zod';
+import agreementDocument from '../content/affiliate-agreement-v1.json';
 import { activePromotions } from './promotions';
 export const affiliateStatuses = ['pending', 'approved', 'rejected', 'suspended'] as const;
 export type Agreement = { company:string; contact:string; payout_schedule:string; payout_methods:string; id: string; version: string; title: string; body: string; commission_bps: number; hold_days: number; minimum_payout_cents: number; created: number };
@@ -31,16 +32,17 @@ export async function affiliateState(db: D1Database) {
  const agreement = state?.agreement_id ? await stmt(db,'SELECT id,version,title,body,commission_bps,hold_days,minimum_payout_cents,company,contact,payout_schedule,payout_methods,created FROM affiliate_agreements WHERE id=?',state.agreement_id).first<Agreement>() : null;
  return { open: Boolean(state?.open && agreement), agreement, guide: partnerGuide() };
 }
-export async function affiliatePortal(db: D1Database, owner: string) {
+export async function affiliatePortal(db: D1Database, owner: string, email = '') {
  const state = await affiliateState(db);
  const member = await stmt(db,'SELECT * FROM affiliate_members WHERE owner=?',owner).first<Member>();
+ if(!member && !await invitedAffiliate(db,email)) throw Error('This program is invitation-only. Sign in using the email address Biomod invited.');
  const schedule=await affiliateSchedule(db,owner);
  const acceptedAgreement = member ? await stmt(db,'SELECT id,version,title,body,commission_bps,hold_days,minimum_payout_cents,company,contact,payout_schedule,payout_methods,created FROM affiliate_agreements WHERE id=?',member.agreement_id).first<Agreement>() : null;
  return { ...state, schedule, earnings: await affiliateEarnings(db,owner), member: member ? { name:member.name,website:member.website,audience:member.audience,status:member.status,code:member.code,agreement_id:member.agreement_id,accepted:member.accepted,created:member.created } : null,
  acceptedAgreement, needsAcceptance: Boolean(member && state.agreement && member.agreement_id !== state.agreement.id) };
 }
 export async function affiliateAdmin(db: D1Database) {
- return { ...await affiliateState(db), earnings: await affiliateEarnings(db), schedules:(await db.prepare('SELECT f.*,fa.accepted FROM affiliate_schedule_state ss JOIN affiliate_schedules f ON f.id=ss.schedule_id LEFT JOIN affiliate_schedule_acceptances fa ON fa.schedule_id=f.id').all()).results, members:(await db.prepare('SELECT * FROM affiliate_members ORDER BY updated DESC LIMIT 500').all<Member>()).results,
+ return { ...await affiliateState(db), agreementDocument, invitations:(await db.prepare('SELECT email,active,created,updated FROM affiliate_invitations ORDER BY updated DESC LIMIT 500').all()).results, earnings: await affiliateEarnings(db), schedules:(await db.prepare('SELECT f.*,fa.accepted FROM affiliate_schedule_state ss JOIN affiliate_schedules f ON f.id=ss.schedule_id LEFT JOIN affiliate_schedule_acceptances fa ON fa.schedule_id=f.id').all()).results, members:(await db.prepare('SELECT * FROM affiliate_members ORDER BY updated DESC LIMIT 500').all<Member>()).results,
  agreements:(await db.prepare('SELECT id,version,title,created FROM affiliate_agreements ORDER BY created DESC').all()).results,
  events:(await db.prepare('SELECT id,owner,actor,action,detail,created FROM affiliate_events ORDER BY created DESC LIMIT 100').all()).results,
  codes:activePromotions().map(p=>p.code) };
@@ -68,6 +70,7 @@ export async function setAffiliateOpen(db:D1Database,actor:string,open:boolean,n
 }
 export async function applyAffiliate(db:D1Database,user:{id:string;email:string},raw:unknown,now=Date.now()) {
  const input=applicationInput.parse(raw);
+ if(!await invitedAffiliate(db,user.email)) throw Error('This program is invitation-only. Sign in using the email address Biomod invited.');
  const current=await affiliateState(db);
  if(!current.open || current.agreement?.id!==input.agreementId) throw Error('Enrollment is closed or the agreement changed. Reload before applying.');
  const existing=await stmt(db,'SELECT owner FROM affiliate_members WHERE owner=?',user.id).first();
@@ -76,7 +79,7 @@ export async function applyAffiliate(db:D1Database,user:{id:string;email:string}
  // and audit insert depend on the member, so a concurrent program change saves nothing.
  await db.batch([
  stmt(db,`INSERT INTO affiliate_members(owner,email,name,website,audience,status,agreement_id,accepted,created,updated)
- SELECT ?,?,?,?,?,'pending',?,?,?,? FROM affiliate_program_state WHERE id=1 AND open=1 AND agreement_id=?`,user.id,user.email,input.name,input.website,input.audience,input.agreementId,now,now,now,input.agreementId),
+ SELECT ?,?,?,?,?,'pending',?,?,?,? FROM affiliate_program_state WHERE id=1 AND open=1 AND agreement_id=? AND EXISTS(SELECT 1 FROM affiliate_invitations WHERE email=? COLLATE NOCASE AND active=1)`,user.id,user.email,input.name,input.website,input.audience,input.agreementId,now,now,now,input.agreementId,user.email.trim()),
  stmt(db,`INSERT INTO affiliate_acceptances(owner,agreement_id,accepted) SELECT owner,agreement_id,accepted FROM affiliate_members WHERE owner=? AND accepted=?`,user.id,now),
  stmt(db,`INSERT INTO affiliate_events(id,owner,actor,action,detail,created) SELECT ?,owner,?,'application.submitted','{}',? FROM affiliate_members WHERE owner=? AND accepted=?`,crypto.randomUUID(),user.id,now,user.id,now),
  ]);
@@ -169,4 +172,17 @@ export async function acceptAffiliateSchedule(db:D1Database,owner:string,raw:unk
  ]);
  if(!result[0].meta.changes) throw Error('The agreement or schedule changed or was already accepted. Reload before continuing.');
  return {message:'Your individual financial terms are accepted.'};
+}
+
+export async function invitedAffiliate(db:D1Database,email:string) {
+ return Boolean(await stmt(db,'SELECT email FROM affiliate_invitations WHERE email=? COLLATE NOCASE AND active=1',email.trim()).first());
+}
+export async function inviteAffiliate(db:D1Database,actor:string,raw:unknown,now=Date.now()) {
+ const input=z.object({email:z.string().trim().email().max(254),active:z.boolean()}).parse(raw);
+ const email=input.email.toLowerCase();
+ await db.batch([
+ stmt(db,`INSERT INTO affiliate_invitations(email,active,created,updated,actor) VALUES(?,?,?,?,?) ON CONFLICT(email) DO UPDATE SET active=excluded.active,updated=excluded.updated,actor=excluded.actor`,email,input.active?1:0,now,now,actor),
+ event(db,null,actor,input.active?'invitation.authorized':'invitation.revoked',{email},now)
+ ]);
+ return {message:input.active?'Invitation access saved. Send the private link to this email yourself; no email has been sent.':'Invitation access revoked. Existing members must be suspended separately.'};
 }

@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireCustomer, requireStaff } from '@/lib/auth';
 import { database } from '@/lib/runtime';
-import { affiliatePortal, affiliateAdmin, publishAgreement, setAffiliateOpen, applyAffiliate, acceptAffiliateAgreement, reviewAffiliate, reviewCommission, offerAffiliateSchedule, acceptAffiliateSchedule } from '@/lib/affiliate-program';
+import { affiliatePortal, affiliateAdmin, publishAgreement, setAffiliateOpen, applyAffiliate, acceptAffiliateAgreement, reviewAffiliate, reviewCommission, offerAffiliateSchedule, acceptAffiliateSchedule, inviteAffiliate } from '@/lib/affiliate-program';
 export const dynamic='force-dynamic';
 const json=(data:unknown,status=200)=>NextResponse.json(data,{status,headers:{'Cache-Control':'no-store'}});
 export async function GET(req:NextRequest) {
  try {
   if(req.nextUrl.searchParams.get('admin')==='1') { const staff=await requireStaff('store:write'); return json({...await affiliateAdmin(database()),canPublish:staff.role==='owner'}); }
-  const user=await requireCustomer(); return json(await affiliatePortal(database(),user.id));
- } catch { return json({error:'Affiliate information could not be loaded. Check your account access and try again.'},403); }
+  const user=await requireCustomer(); return json(await affiliatePortal(database(),user.id,user.email));
+ } catch(error) { return json({error:error instanceof Error && error.message.startsWith('This program is invitation-only.')?error.message:'Affiliate information could not be loaded. Check your account access and try again.'},403); }
 }
 export async function POST(req:NextRequest) {
  if(req.headers.get('origin')!==req.nextUrl.origin) return json({error:'Refresh the page and try again.'},403);
@@ -30,6 +30,10 @@ export async function POST(req:NextRequest) {
    if(staff.role!=='owner' || typeof body.open!=='boolean') return json({error:'An owner must change enrollment.'},403);
    return json(await setAffiliateOpen(db,staff.id,body.open));
   }
+  if(body.action==='invite') {
+   if(staff.role!=='owner') return json({error:'Only an owner can authorize invitations.'},403);
+   return json(await inviteAffiliate(db,staff.id,body));
+  }
   if(body.action==='schedule') {
    if(staff.role!=='owner') return json({error:'Only an owner can set individual financial terms.'},403);
    return json(await offerAffiliateSchedule(db,staff.id,body));
@@ -40,6 +44,6 @@ export async function POST(req:NextRequest) {
  } catch(error) {
   const message=error instanceof Error?error.message:'';
   // Never return database diagnostics or provider responses.
-  return json({error:/^(Publish |Enrollment |Your application|The agreement|The partner|Application changed|Another administrator|Select an existing|Submit an application)/.test(message)?message:'Could not save. Check the fields, agreement version, account access and whether the code is already assigned.'},400);
+  return json({error:/^(This program |Publish |Enrollment |Your application|The agreement|The partner|Application changed|Another administrator|Select an existing|Submit an application)/.test(message)?message:'Could not save. Check the fields, agreement version, account access and whether the code is already assigned.'},400);
  }
 }
