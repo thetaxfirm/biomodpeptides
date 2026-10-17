@@ -33,8 +33,8 @@ function AffiliateProgramView({admin=false}:{admin?:boolean}) {
  <p>Each version is permanent. Publishing pauses new applications and requires existing partners to accept the new version before new commissions accrue. Previous order terms remain unchanged.</p>
  <Field label="Version (unique)" name="version" defaultValue={agreementDocument.version}/><Field label="Agreement title" name="title" defaultValue={agreementDocument.title}/><Field label="Contracting company legal name" name="company"/><Field label="Program contact email" name="contact" type="email"/><Field label="Payment schedule" name="payoutSchedule" defaultValue="Every 30 days"/>
  <label className="field">Approved agreement text<textarea name="body" defaultValue={agreementDocument.body} required minLength={100} maxLength={24000} rows={12}/></label>
- 
- 
+
+
  <p>Minimum payout: $500. Each affiliate receives a separate commission rate, hold and payment method set by the owner.</p>
  <label><input name="confirmed" type="checkbox" required/> I confirm these are the approved program terms and rates, ready to publish.</label>
  <button className="button button-dark" disabled={busy}>Publish agreement version</button></form></details>}
