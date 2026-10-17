@@ -29,7 +29,8 @@ Commit 589ae41 shipped two changes; the Worker part was rolled back and reverted
 
 - `npm run check:release`: TypeScript and 93 isolated suites passed. `BIOMOD_DEPLOY=true npm run build` passed.
 - 589ae41: release check and Workers Builds passed (Workers Builds success 18:06:36 UTC, version a2db5062). Live: /shop referenced 33 WebP vial images and no SVG (0.91 MB of vial images, from 8.2 MB); hero 114,832 bytes `image/webp`; product og:image and Product JSON-LD image are WebP; canonical and `index, follow` unchanged. Homepage hero, /shop cards and the BPC-157 product page checked in a browser.
-- Live results for the follow-up commit are recorded below.
+- Follow-up commit b7ccc4c (wrapper removed): release check 92 suites and production build passed; Workers Builds success 18:24:43 UTC, version 74363978. Live: homepage hero is the WebP file; 119 of 120 sequential page fetches (/faq, /shop, two product pages) returned 200. Tailed: 148 ok, 1 "Worker exceeded CPU time limit" on /shop at 107 ms CPU (median page render 68 ms CPU, range 34 to 232 ms). So the old code is also killed for CPU at times; the wrapper made it frequent. No hang appeared in this sample; the hang depends on isolate state and remains open.
+- IndexNow: 200 OK, 31 URLs, 2026-10-17T18:24:59Z. `node scripts/change-history-import-v1.mjs --remote` ran.
 
 ## Owner actions
 
