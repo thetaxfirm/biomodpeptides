@@ -17,7 +17,7 @@ import { Blank, Choice } from './primitives';
 const formats = [
   { id: 'research-compounds', name: 'Research Compounds', unit: 'vials' },
   { id: 'softgels', name: 'Softgels', unit: 'bottles' },
-  { id: 'spray-products', name: 'Nasal sprays', unit: 'bottles' },
+  { id: 'spray-products', name: 'Sprays', unit: 'bottles' },
 ];
 
 export function PackBuilder({ initialSize = 3 }: { initialSize?: number }) {

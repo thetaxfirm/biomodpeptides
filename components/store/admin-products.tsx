@@ -10,7 +10,7 @@ import styles from './admin-products.module.css';
 
 const groups = [
     { id: 'research-compounds', label: 'Lyophilized', description: 'Research vials', color: 'vials' },
-    { id: 'spray-products', label: 'Nasal & spray', description: 'Nasal and spray bottles', color: 'sprays' },
+    { id: 'spray-products', label: 'Sprays', description: 'Spray bottles', color: 'sprays' },
     { id: 'softgels', label: 'Softgels', description: 'Softgel bottles', color: 'softgels' },
     { id: 'other', label: 'Other products', description: 'Remaining catalog items', color: 'other' },
 ];

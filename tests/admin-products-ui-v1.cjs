@@ -93,10 +93,10 @@ const status = (h, value) => { find(h, n => n.type === 'input' && n.props.type =
 const submit = h => { find(h, n => n.type === 'form').props.onSubmit({ preventDefault() {}, currentTarget: { fixture: true } }); h.render(); };
 try {
  let h = mount();
- assert.deepEqual(nodes(h.tree).filter(n => n.type === 'h3').map(text), ['Lyophilized', 'Nasal & spray', 'Softgels', 'Other products']);
+ assert.deepEqual(nodes(h.tree).filter(n => n.type === 'h3').map(text), ['Lyophilized', 'Sprays', 'Softgels', 'Other products']);
  assert.equal(new Set(nodes(h.tree).filter(n => n.type === 'section' && n.props['aria-labelledby']?.startsWith('product-group-')).map(n => n.props.className)).size, 4, 'Formats have separate visual treatments');
  assert(text(h.tree).includes('$79.99 with offer')); assert(text(h.tree).includes('Sale · 20% off')); assert(text(h.tree).includes('Preorder · 15% off')); assert(text(h.tree).includes('Coming soon')); assert(text(h.tree).includes('Sold out'));
- find(h, n => n.type === 'button' && text(n).startsWith('Nasal & spray')).props.onClick(); h.render();
+ find(h, n => n.type === 'button' && text(n).startsWith('Sprays')).props.onClick(); h.render();
  assert(text(h.tree).includes('Synthetic spray')); assert(!text(h.tree).includes('Synthetic vial')); assert(!text(h.tree).includes('Synthetic softgel'));
  find(h, n => n.type === 'input' && n.props.type === 'search').props.onChange({ target: { value: 'missing' } }); h.render();
  assert(text(h.tree).includes('No products match')); assert.equal(h.drafts, 0, 'Searching and format filters do not create product drafts');

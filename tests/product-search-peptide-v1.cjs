@@ -124,7 +124,7 @@ for (const [query, slug] of [['NAD 500mg research vial','nad-500mg'],['53-84-9',
   assert(matches(query).includes(slug), query);
 }
 assert(!matches('BPC157 10mg peptide').some(slug => /wolverine|glow|klow|softgel|spray/.test(slug)), 'Do not substitute blends or another form for the reviewed single-compound vial');
-assert.equal(productSearchScore({ ...product('bpc-157-10mg'), categories: [{ slug:'spray-products', name:'Nasal & spray products' }] }, 'bpc157 peptide'), 0);
+assert.equal(productSearchScore({ ...product('bpc-157-10mg'), categories: [{ slug:'spray-products', name:'Spray products' }] }, 'bpc157 peptide'), 0);
 // Additional review vocabulary must disappear immediately if a reviewed product is held.
 const epitalon = product('epitalon-50mg');
 try {

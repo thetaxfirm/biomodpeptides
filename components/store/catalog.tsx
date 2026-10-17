@@ -91,10 +91,10 @@ export function Presales() {
     const preorders = store.products.filter(product => product.activePreorder);
     const campaigns = store.config.presalesEnabled ? store.campaigns.filter(campaign => store.products.some(product => campaign.productIds.includes(product.id) && !product.activePreorder)) : [];
     return <>
-        <div className="page-heading"><h1>Preorders &amp; presales</h1><p>Reserve from the initial runs of BIOMOD softgels and nasal &amp; spray products.</p></div>
+        <div className="page-heading"><h1>Preorders &amp; presales</h1><p>Reserve from the initial runs of BIOMOD softgels and spray products.</p></div>
         {preorders.length > 0 && <>
             <section className="preorder-release-intro" aria-labelledby="preorder-release-heading"><div><h2 id="preorder-release-heading">The first run.<br/>Your preorder advantage.</h2><p>Limited initial quantities. Your preorder price is shown on every product.</p></div><PreorderNotice product={preorders[0]}/></section>
-            {[['softgels', 'Softgels'], ['spray-products', 'Nasal & spray products']].map(([category, title]) => {
+            {[['softgels', 'Softgels'], ['spray-products', 'Spray products']].map(([category, title]) => {
                 const selected = preorders.filter(product => product.categories.some(c => c.slug === category));
                 return selected.length > 0 ? <section className="presale" key={category}><h2>{title}</h2><div className="product-grid">{selected.map(product => <ProductCard key={product.id} product={product}/>)}</div></section> : null;
             })}
