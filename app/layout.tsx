@@ -14,6 +14,7 @@ import "./storefront-v24.css";
 import "./storefront-v25.css";
 import "./storefront-v34.css";
 import "./storefront-v35.css";
+import "./storefront-v36.css";
 import {StoreProvider} from "@/components/store/provider";
 import { publicCatalog } from '@/lib/public-catalog';
 import { TrafficMeasurement } from '@/components/store/traffic-measurement';
