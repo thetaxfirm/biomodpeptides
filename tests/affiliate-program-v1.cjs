@@ -8,6 +8,8 @@ for(const f of fs.readdirSync(path.join(root,'drizzle')).filter(f=>f.endsWith('.
 function stmt(query,args=[]){return{bind:(...a)=>stmt(query,a),first:async()=>sql.prepare(query).get(...args)||null,all:async()=>({results:sql.prepare(query).all(...args)}),run:async()=>({meta:sql.prepare(query).run(...args)})};}
 const db={prepare:q=>stmt(q),batch:async list=>{sql.exec('BEGIN');try{const results=[];for(const s of list)results.push(await s.run());sql.exec('COMMIT');return results;}catch(e){sql.exec('ROLLBACK');throw e;}}};
 (async()=>{
+ const launch=await p.affiliateState(db);assert.equal(launch.open,true);assert.equal(launch.agreement.company,'BM Trade LLC');assert.equal(sql.prepare('SELECT COUNT(*) n FROM affiliate_invitations').get().n,0);
+ sql.prepare('UPDATE affiliate_program_state SET open=0,agreement_id=NULL WHERE id=1').run();
  assert.equal((await p.affiliateState(db)).open,false);
  await assert.rejects(p.setAffiliateOpen(db,'owner',true),/Publish/);
  const terms={version:'fixture-v1',title:'Isolated fixture terms',body:'Synthetic testing terms only. '.repeat(8),commissionBps:1250,holdDays:30,minimumPayoutCents:5000,company:"Isolated Fixture LLC",contact:"fixture@example.invalid",payoutSchedule:"Monthly after hold",payoutMethods:"Test only",confirmed:true};

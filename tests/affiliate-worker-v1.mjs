@@ -5,7 +5,9 @@ const f=await shippingWorkerFixture();
 const origin='https://trybiomod.com',headers={origin,'content-type':'application/json',cookie:`bm_access=fixture-only; bm_session=${f.sessionId}`};
 const call=async(body,admin=false)=>{const r=await f.mf.dispatchFetch(origin+'/api/affiliates'+(admin?'?admin=1':''),{headers,...(body?{method:'POST',body:JSON.stringify(body)}:{})});return {status:r.status,body:await r.json()};};
 try {
- let r=await call(null,true);assert.equal(r.status,200);assert.equal(r.body.open,false);
+ let r=await call(null,true);assert.equal(r.status,200);assert.equal(r.body.open,true);assert.equal(r.body.agreement.company,'BM Trade LLC');assert.equal(r.body.invitations.length,0);
+ assert.equal((await call()).status,403,'Launch does not expose terms to uninvited accounts');
+ await f.db.prepare('UPDATE affiliate_program_state SET open=0,agreement_id=NULL WHERE id=1').run();
  r=await call({action:'publish',version:'worker-fixture',title:'Synthetic isolated terms',body:'Synthetic isolated contract fixture only. '.repeat(10),commissionBps:0,holdDays:0,minimumPayoutCents:50000,company:'Fixture Company',contact:'fixture@example.invalid',payoutSchedule:'Every 30 days',payoutMethods:'Individual schedule',confirmed:true});assert.equal(r.status,200,JSON.stringify(r.body));
  await call({action:'open',open:true});const agreement=(await call(null,true)).body.agreement;
  await call({action:'invite',email:'partner@example.invalid',active:true});
