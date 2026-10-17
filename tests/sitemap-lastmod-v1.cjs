@@ -37,7 +37,7 @@ loaded._compile(transpile(filename), filename);
     assert(date >= siteLastmod, route + ' predates the sitewide header/footer change');
   }
   for (const r of pressReleases) assert(lastmodFor('/news/' + r.slug) >= r.date, r.slug + ' lastmod before publication');
-  for (const slug of release.productSlugs) assert.equal(lastmodFor('/product/' + slug), productLastmod);
+  for (const slug of release.productSlugs) assert.equal(lastmodFor('/product/' + slug), productLastmod > siteLastmod ? productLastmod : siteLastmod);
   for (const route of Object.keys(pageLastmod)) assert(paths.includes(route), route + ' dated but not in the sitemap');
   // A page whose visible content changed must not keep an older date, or Bing has no reason to
   // recrawl it. The guide pages ContentPage ends with the research vial index (628f8c0, October 16)
@@ -50,8 +50,14 @@ loaded._compile(transpile(filename), filename);
   for (const route of guidePages) assert(lastmodFor(route) >= '2026-10-16', route + ' gained the vial index on 2026-10-16 but is dated ' + lastmodFor(route));
   // 9595696 changed preorder wording on the shipping policy; 1ef1cb4 added the vial lot field to contact.
   for (const route of ['/shipping-policy', '/contact']) assert(lastmodFor(route) >= '2026-10-14', route + ' changed on 2026-10-14 but is dated ' + lastmodFor(route));
-  // Honest by construction: not every page shares one date.
-  assert(new Set(entries.map(e => e[1])).size > 1, 'lastmod must not stamp every URL with the same date');
+  // 92d01ce (October 17) renamed a header menu item on every page, and da848db changed the
+  // shipping wording on every product page: no page may keep a date from before that.
+  for (const [route, date] of entries) assert(date >= '2026-10-17', route + ' shows the October 17 header change but is dated ' + date);
+  // A specific page date can never pull a page below the sitewide date.
+  for (const route of Object.keys(pageLastmod)) assert.equal(lastmodFor(route), pageLastmod[route] > siteLastmod ? pageLastmod[route] : siteLastmod, route);
+  // Honest by construction: every date is a hand-set constant tied to a release, never "today".
+  const lastmodSource = fs.readFileSync(path.join(root, 'lib/sitemap-lastmod.ts'), 'utf8');
+  assert(!/new Date|Date\.now|toISOString/.test(lastmodSource), 'lastmod dates must be fixed release dates, not computed from the clock');
   assert.equal(sitemapPaths(seoConfig()).length, 0);
   console.log('PASS: ' + entries.length + ' sitemap URLs carry valid lastmod dates between launch and today; press, product and recently changed pages are never dated before their content');
 })().catch(error => { console.error(error); process.exit(1); });

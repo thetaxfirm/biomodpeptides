@@ -4,10 +4,13 @@
 // that changes a page; never set every page to today by default.
 import { pressReleases } from './press-releases';
 
-// The sitewide header and footer last changed on October 12, 2026 (store-chrome).
-export const siteLastmod = '2026-10-12';
-// fb54b09 changed product questions and batch status wording on every product page.
-export const productLastmod = '2026-10-13';
+// The sitewide header last changed on October 17, 2026: 92d01ce renamed the "Nasal & spray"
+// menu item to "Sprays" on every page. A sitewide change dates every page, so no entry below
+// can be older than this (lastmodFor takes the later of the two).
+export const siteLastmod = '2026-10-17';
+// October 17: da848db added free USPS Priority Mail at $250 and the 2 p.m. Pacific same-day
+// wording to every product page; 589ae41 moved the product images to WebP.
+export const productLastmod = '2026-10-17';
 export const pageLastmod: Record<string, string> = {
   // October 14: initial homepage cards now include every publication-reviewed vial.
   '/': '2026-10-14',
@@ -25,9 +28,11 @@ export const pageLastmod: Record<string, string> = {
   '/choosing-a-research-supplier': '2026-10-16',
 };
 
+const later = (a: string, b: string) => (a > b ? a : b);
+
 export function lastmodFor(path: string) {
-  if (pageLastmod[path]) return pageLastmod[path];
-  if (path.startsWith('/product/')) return productLastmod;
+  if (pageLastmod[path]) return later(pageLastmod[path], siteLastmod);
+  if (path.startsWith('/product/')) return later(productLastmod, siteLastmod);
   const release = pressReleases.find(r => '/news/' + r.slug === path);
-  return release && release.date > siteLastmod ? release.date : siteLastmod;
+  return release ? later(release.date, siteLastmod) : siteLastmod;
 }
