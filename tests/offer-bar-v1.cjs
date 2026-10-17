@@ -20,7 +20,7 @@ assert.match(css, /\.offer-bar:hover \.offer-track,\.offer-bar:focus-within \.of
 assert.match(css, /prefers-reduced-motion:reduce\)\{\.offer-track\{animation:none/);
 assert.match(css, /prefers-reduced-motion:reduce\)\{\.main-nav a\.nav-feature,\.menu-sheet nav a\.nav-feature\{animation:none\}/);
 // Softgels and Sprays are the featured menu items, in both menus.
-assert.match(header, /featuredNav = new Set\(\['\/softgels', '\/shop\?category=spray-products'\]\)/);
+assert.match(header, /featuredNav = new Set\(\['\/softgels', '\/shop\?category=spray-products', '\/locations'\]\)/);
 assert.equal((header.match(/className=\{navClass\(p\)\}/g) || []).length, 2);
 assert.match(layout, /import "\.\/storefront-v36\.css";/);
-console.log('PASS: offer bar reads the live 10-pack discount and shipping threshold, pauses and respects reduced motion; Softgels and Sprays featured in both menus');
+console.log('PASS: offer bar reads the live 10-pack discount and shipping threshold, pauses and respects reduced motion; Softgels, Sprays and Locations featured in both menus');

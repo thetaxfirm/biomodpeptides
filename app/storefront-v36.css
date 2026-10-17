@@ -19,3 +19,7 @@
 @keyframes offer-scroll{to{transform:translateX(-50%)}}
 @media (max-width:640px){.announcement.offer-bar{font-size:13px}.offer-group{gap:40px}.offer-track{animation-duration:30s}}
 @media (prefers-reduced-motion:reduce){.offer-track{animation:none;width:auto}.offer-group{min-width:0;flex-wrap:wrap;justify-content:center;gap:4px 32px}.offer-group[aria-hidden]{display:none}}
+
+/* Locations: the newest store reads as new, not as one more beige card. */
+.locations-original .locations-grid .location-new{background:#f6e3cf;box-shadow:inset 0 0 0 2px #c98f5c}
+.locations-original .location-new .location-status{color:#7a3f17;font-weight:700}

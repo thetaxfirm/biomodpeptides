@@ -8,7 +8,7 @@ import { money } from "@/lib/catalog";
 import { useStore } from "./provider";
 export const nav = [['Home', '/'], ['Research Vials', '/shop'], ['Softgels', '/softgels'], ['Sprays', '/shop?category=spray-products'], ['Build a Pack', '/multi-pack'], ['Presales', '/presales'], ['COAs & testing', '/testing'], ['About Us', '/about'], ['Locations', '/locations'], ['Partners', '/international-partners'], ['Contact Us', '/contact']];
 // Owner request, October 17, 2026: make the softgel and spray lines stand out in the menu.
-const featuredNav = new Set(['/softgels', '/shop?category=spray-products']);
+const featuredNav = new Set(['/softgels', '/shop?category=spray-products', '/locations']);
 const navClass = (path: string) => featuredNav.has(path) ? 'nav-feature' : undefined;
 // Moving announcement bar (owner request, October 17, 2026). Every line reads live store settings
 // or published policy; the second copy exists only so the loop has no gap and is hidden from
