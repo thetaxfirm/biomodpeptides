@@ -14,7 +14,7 @@ const queryParams = (query: Record<string, string | string[]>) => new URLSearchP
 export async function generateMetadata({searchParams}: Props){return routeMetadata('/',queryParams(await searchParams),await requestSEO());}
 export default async function Home({searchParams}: Props){const data=queryParams(await searchParams).size?null:await routeStructuredData('/',await requestSEO());return <main id="main-content" data-traffic-path="/">{data&&<script type="application/ld+json" dangerouslySetInnerHTML={{__html:jsonLd(data)}}/>}
   <section className="research-campaign">
-    <img className="campaign-image" src="/brand/biomod-bpc-157-still-life-v37.svg" alt="BIOMOD BPC-157 research vial" width={1448} height={1086} fetchPriority="high"/>
+    <img className="campaign-image" src="/brand/biomod-bpc-157-still-life-v37.webp" alt="BIOMOD BPC-157 research vial" width={1448} height={1086} fetchPriority="high"/>
     <div className="campaign-copy"><h1>Buy research<br/>peptides.</h1><p>Biomod Peptides: lyophilized vials for laboratory research.<br/>Not for human or animal use.</p><a className="button button-gold" href="/shop">Shop research peptides <ArrowUpRight size={18}/></a></div>
   </section>
   <div className="brand-principles wrap"><span>U.S. Marine Corps veteran owned</span><span>1, 3, 5 & 10 packs</span><a href="/testing">Open batch documentation <ArrowUpRight size={16}/></a></div>
