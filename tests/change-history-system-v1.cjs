@@ -13,7 +13,6 @@ const write=async(database,id)=>database.prepare('INSERT INTO product_overrides(
 const worker=load('worker.ts',{
  './lib/change-history':history,
  'vinext/server/fetch-handler':{fetch:()=>new Response('fixture')},
- './lib/request-lifetime':load('lib/request-lifetime.ts'),
  './lib/traffic-metrics-server':{cleanupTraffic:async db=>{assert.notEqual(db,DB);jobs.push('traffic');await write(db,900003);}},
  './lib/coa-scheduler':{runScheduledCoaOutbox:async copy=>{assert.notEqual(copy,env);assert.notEqual(copy.DB,DB);jobs.push('coa');await write(copy.DB,900001);}},
  './lib/checkout-recovery':{runCheckoutRecovery:async copy=>{assert.notEqual(copy,env);assert.notEqual(copy.DB,DB);jobs.push('recovery');await write(copy.DB,900002);}},

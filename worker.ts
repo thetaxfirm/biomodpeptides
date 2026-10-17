@@ -9,15 +9,12 @@ import { runOverdueDigest } from './lib/reply-overdue';
 import { runTrackingSweep } from './lib/tracking-sweep';
 import { runAutoLabels } from './lib/auto-label';
 import { runParcelAlerts } from './lib/parcel-alerts';
-import { keepRequestAlive } from './lib/request-lifetime';
 
 type TrafficWorkerEnvironment = CoaEnvironment;
 
-// The framework's HTTP handler, kept alive until each render settles (see lib/request-lifetime.ts).
-// Retention also runs without visits.
+// Keep the framework's HTTP handler unchanged. Retention also runs without visits.
 export default {
   ...storefront,
-  fetch: keepRequestAlive(storefront.fetch.bind(storefront)),
   async scheduled(controller: ScheduledController, env: TrafficWorkerEnvironment) {
     // Await the sweep so failure reaches the platform's scheduled-event status.
     // The helper records nonidentifying cleanup health without logging request data.

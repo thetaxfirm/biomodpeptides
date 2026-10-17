@@ -138,8 +138,7 @@ function fixture(processor = async () => ({ processed: 0, accepted: 0, review: 0
     './lib/traffic-metrics-server': { cleanupTraffic: async db => { assert.equal(db, f.env.DB); cleanup++; } },
     './lib/coa-scheduler': { runScheduledCoaOutbox: (env, time) => f.helper.runScheduledCoaOutbox(env, time, f.deps) },
   }).default;
-  // HTTP still reaches the framework handler, wrapped by the request lifetime guard (tests/request-lifetime-v1.cjs).
-  assert.equal(await (await worker.fetch(new Request('https://trybiomod.com/'), {}, { waitUntil() {} })).text(), 'isolated fixture');
+  assert.equal(worker.fetch, http.fetch);
   await worker.scheduled({ cron: '0 9 * * *', scheduledTime: BASE }, f.env);
   assert.equal(cleanup, 1); assert.equal(f.health(), null); assert.equal(f.calls.length, 0);
   await worker.scheduled({ cron: '*/5 * * * *', scheduledTime: BASE - 1234 }, f.env);

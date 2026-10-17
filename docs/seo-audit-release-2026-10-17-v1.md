@@ -1,0 +1,41 @@
+# SEO audit and fixes, October 17, 2026 (v1)
+
+Author: Claude agent for the owner. Scope: trybiomod.com only; BiomodPro untouched. Publication holds, product names, prices, COA documents and the "research peptides" wording are unchanged.
+
+## What was audited
+
+Live site (https://trybiomod.com, fetched as Googlebot, Bingbot and a browser) and shared main at 92d01ce: titles, descriptions, canonicals, robots.txt, sitemap.xml, structured data, headings, internal links, indexability of product/category/softgel pages, redirects (www, http, trailing slash, biomodpeptides.com), image alt text, page weight, llms.txt and IndexNow. Worker behaviour was observed with `wrangler tail` on `biomod-peptides`.
+
+## What was hurting, ranked
+
+1. **About one page request in six never answered (not fixed; attempted fix rolled back, see below).** Repeated fetches of /faq, /shop and product pages returned nothing until the client gave up (15 to 60 s). Worker logs showed outcome `canceled`, about 25 s wall time and 4 ms CPU: the request was waiting on something that never settled. robots.txt, sitemap.xml and llms.txt were never affected; rendered pages were (2 of 14, 2 of 10, 1 of 14 in three tailed samples; one product URL failed four times in a row). This matches cloudflare/vinext#4012: the framework shares one promise per isolate (client-component preloads, lazy imports), and when the request that created it disconnects early (an aborted prefetch, a crawler timeout), workerd drops its continuations and every later page request on that isolate hangs. The fix upstream (#4024, merged Oct 16) is not in a release yet, and this site runs vinext 1.0.0-beta.5. For crawlers this reads as timeouts, which slows crawling and keeps pages out of the index; it is the most likely technical reason product pages are still largely unindexed.
+2. **Very heavy images on the money pages (fixed).** Vial artwork was SVG files wrapping a base64 PNG (320 to 390 KB each) and the homepage hero, the largest contentful paint, was a 2 MB SVG (1.55 MB compressed on the wire). An SVG `<image>` cannot lazy-load, so /shop pulled about 8 MB of images and the homepage about 4.7 MB. That is a Core Web Vitals (LCP) problem on mobile.
+3. **Share images were SVG (fixed with 2).** Product og:image and Product JSON-LD image pointed at SVG files, which Facebook, X, LinkedIn and iMessage do not render. They now point at WebP.
+4. **Return policy markup is incomplete (owner decision, not changed).** The MerchantReturnPolicy has only `merchantReturnLink`. Google's merchant listings expect `returnPolicyCategory` and `applicableCountry`, and Search Console will report the object as incomplete. The returns page says sales are "generally final" with review of damaged or wrong items, which maps to `MerchantReturnNotPermitted`; Google would then show "No returns" beside the price. `tests/merchant-policies-v1.cjs` deliberately bans `returnPolicyCategory` as an unverified claim, so this waits for the owner.
+5. **Minor, unchanged:** 20 thumbnails on /testing have `alt=""` next to visible product names (acceptable as decorative); every page ships the full catalog in its HTML payload (160 to 370 KB HTML); brand and product images are served `max-age=0, must-revalidate` although their names are versioned; softgel bottle PNGs are about 1 MB each (on /softgels, which is held from indexing).
+
+Checked and fine: unique titles (32 to 75 characters) and descriptions on all 31 sitemap URLs; one h1 per page; self-referencing canonicals; robots.txt; sitemap with honest lastmod dates; Organization, WebSite, WebPage, BreadcrumbList, Product (with Offer), FAQPage and NewsArticle markup; www and http 301 to https://trybiomod.com in one hop; held pages (/softgels, /locations, /multi-pack, held products) correctly `noindex, follow`; 404s return 404 with `noindex`; llms.txt and the IndexNow key are live.
+
+## Changes
+
+Commit 589ae41 shipped two changes; the Worker part was rolled back and reverted in the follow-up commit. What remains live is the image change.
+
+- **Rolled back:** `lib/request-lifetime.ts` and `worker.ts` registered every request with `ctx.waitUntil` (the upstream fix's approach) and piped rendered bodies so a request stayed alive until its render finished. Live, with `wrangler tail`, it made things worse: 47 of 432 sampled requests were killed with "Worker exceeded CPU time limit" (503) at about 10 ms CPU, and hangs still occurred (24 probe requests canceled after 40 s or more). The previous version showed no CPU-limit kills in about 300 sampled requests. The run started with 30 deliberately aborted page requests to trigger the bug; keeping those renders alive spent CPU the old version abandons. Version a2db5062 was live 18:06 to 18:19 UTC; `wrangler rollback` restored defb3719 at 18:19:17 UTC, and the follow-up commit removes the wrapper from main so Workers Builds does not redeploy it.
+- `public/products/*-brand-v37.webp`, `*-brand-v38.webp` and `public/brand/biomod-bpc-157-still-life-v37.webp` (new): renders of the existing SVG artwork at the same pixel size (1080 x 1080, hero 1448 x 1086). Compared with Chrome's rendering of the SVGs: mean absolute difference 0.2 to 1.2 of 255 per channel; label and logo checked side by side. Sizes: 20 to 24 KB per vial (from 320 to 390 KB), hero 112 KB (from 2 MB). The SVG originals stay in place.
+- `lib/vial-branding-v37.json`, `app/page.tsx`, `lib/product-imagery.ts`: point at the WebP files. Every consumer (cards, shop, search, product gallery, pack builder, cart, og:image, Product JSON-LD) reads these through `imagePath`/`listingImage`.
+- Tests: `tests/vial-artwork-weight-v1.cjs` added to `scripts/release-check.mjs` (every mapped vial image is a raster at its original size, at most 150 KB; the hero is WebP, 1448 x 1086, at most 250 KB).
+
+## Verification
+
+- `npm run check:release`: TypeScript and 93 isolated suites passed. `BIOMOD_DEPLOY=true npm run build` passed.
+- 589ae41: release check and Workers Builds passed (Workers Builds success 18:06:36 UTC, version a2db5062). Live: /shop referenced 33 WebP vial images and no SVG (0.91 MB of vial images, from 8.2 MB); hero 114,832 bytes `image/webp`; product og:image and Product JSON-LD image are WebP; canonical and `index, follow` unchanged. Homepage hero, /shop cards and the BPC-157 product page checked in a browser.
+- Live results for the follow-up commit are recorded below.
+
+## Owner actions
+
+- **Workers plan (the page hangs and 503s).** The Worker was killed for CPU at about 10 ms, which is the Workers Free limit, while a normal page render here uses 45 to 170 ms of CPU. The site mostly works today on burst allowance, but it is fragile under crawler bursts, and it rules out the fix for the hang. Workers Paid ($5 a month, Cloudflare dashboard > Workers & Pages > Plans) raises the CPU limit to 30 s. After that, the waitUntil fix (commit 589ae41, or the upstream vinext release with #4024) can be shipped safely. This needs the owner because it is a billing change; the agents could not read the account's subscription.
+
+- **Google Search Console**: verify trybiomod.com (a domain property via DNS on Cloudflare is simplest), submit https://trybiomod.com/sitemap.xml, request indexing for /product/bpc-157-10mg and the other product pages, and run Change of Address from biomodpeptides.com. Search Console is the only way to see Google's own index, crawl errors and Core Web Vitals for this site; none of that is visible to agents.
+- **Bing Webmaster Tools** (from earlier logs, still open): prefer the apex property, resubmit the sitemap, URL Submission for product pages, Site Move from biomodpeptides.com.
+- **Return policy markup**: decide whether Google may show "No returns" (`MerchantReturnNotPermitted`, U.S.) for product listings, or leave it as is.
+- **biomodpeptides.com redirect rule** (Cloudflare dashboard, from earlier logs): send old URLs straight to their final page instead of 301 then 308 then 308.
