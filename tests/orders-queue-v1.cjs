@@ -12,7 +12,8 @@ function load(relative, deps = {}) {
   return m.exports;
 }
 const fulfillment = load('lib/fulfillment.ts');
-const q = load('lib/order-queue.ts', { './fulfillment': fulfillment });
+const shipCutoff = load('lib/ship-cutoff.ts', { './fulfillment': fulfillment });
+const q = load('lib/order-queue.ts', { './fulfillment': fulfillment, './ship-cutoff': shipCutoff });
 
 let t = 1000;
 const order = (id, status, data = {}) => ({ id: id.padEnd(12, '0'), owner: 'fixture', status, total: 1000, created: ++t, data: { address: { name: 'Fixture ' + id, city: 'Reno', state: 'NV' }, email: id + '@example.invalid', items: [{ quantity: 2, product: { name: 'Fixture vial' } }], ...data } });

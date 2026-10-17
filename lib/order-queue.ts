@@ -1,6 +1,7 @@
 // Admin order queue: one short status per order, status tabs with counts, search and paging.
 // Shared by the admin-orders route and the Orders tab, and the customer order list labels.
 import { orderBucket, type FulfillmentOrder, type OrderBucket } from './fulfillment';
+import { shipDue } from './ship-cutoff';
 export { orderBucket, bucketStatus, customerOrderStatus, type OrderBucket, type Tone } from './fulfillment';
 
 // Tab order is the order of work: what needs doing first comes first.
@@ -21,7 +22,7 @@ export const queueTabs: { id: QueueTab; label: string }[] = [
 export type QueueOrder = { id: string; owner?: string; status: string; total: number; created: number; data: Record<string, any> };
 export type QueueRow = QueueOrder & { bucket: OrderBucket };
 export type NoCoaRow = { id: number; name: string; lot: string | null; waitingOrders: number };
-export type QueueResult = { noCoa?: NoCoaRow[]; orders: (QueueRow & { coaMissing?: string[] })[]; counts: Record<QueueTab, number>; total: number; offset: number; limit: number; hasMore: boolean; scanned: number; truncated: boolean };
+export type QueueResult = { noCoa?: NoCoaRow[]; orders: (QueueRow & { coaMissing?: string[] })[]; counts: Record<QueueTab, number>; total: number; offset: number; limit: number; hasMore: boolean; scanned: number; truncated: boolean; mustGoOut: { today: number; late: number } };
 
 export const pageSize = 50;
 export const scanLimit = 5000;
@@ -61,14 +62,18 @@ export function isQueueTab(value: unknown): value is QueueTab {
  * rows: newest first, up to scanLimit + 1 (the extra row only signals truncation).
  * Counts ignore the search so the tabs keep showing the whole store; the list honours both.
  */
-export function queryOrders(rows: QueueOrder[], params: { tab?: unknown; q?: unknown; offset?: unknown; limit?: unknown; id?: unknown }): QueueResult {
+export function queryOrders(rows: QueueOrder[], params: { tab?: unknown; q?: unknown; offset?: unknown; limit?: unknown; id?: unknown }, now = Date.now()): QueueResult {
     const truncated = rows.length > scanLimit;
     const scannedRows = truncated ? rows.slice(0, scanLimit) : rows;
     const tagged: QueueRow[] = scannedRows.map(o => ({ ...o, bucket: orderBucket(o) }));
     const counts = Object.fromEntries(queueTabs.map(t => [t.id, 0])) as Record<QueueTab, number>;
     // An archived order counts only under Archived, so the working tabs show work.
+    // The 2 p.m. Pacific promise across the whole store, whichever tab is open (ship-cutoff.ts).
+    const mustGoOut = { today: 0, late: 0 };
     for (const o of tagged) {
         if (isArchived(o)) { counts.archived += 1; continue; }
+        const due = shipDue(o, now);
+        if (due?.state === 'today') mustGoOut.today += 1; else if (due?.state === 'late') mustGoOut.late += 1;
         counts[o.bucket] += 1; if (o.bucket !== 'test') counts.all += 1;
     }
     const tab: QueueTab = isQueueTab(params.tab) ? params.tab : 'to_ship';
@@ -84,5 +89,5 @@ export function queryOrders(rows: QueueOrder[], params: { tab?: unknown; q?: unk
     if (tab === 'to_ship' || tab === 'label') list = [...list].reverse();
     const limit = Math.min(Math.max(Number.parseInt(String(params.limit ?? pageSize), 10) || pageSize, 1), 100);
     const offset = Math.max(Number.parseInt(String(params.offset ?? 0), 10) || 0, 0);
-    return { orders: list.slice(offset, offset + limit), counts, total: list.length, offset, limit, hasMore: offset + limit < list.length, scanned: scannedRows.length, truncated };
+    return { orders: list.slice(offset, offset + limit), counts, total: list.length, offset, limit, hasMore: offset + limit < list.length, scanned: scannedRows.length, truncated, mustGoOut };
 }

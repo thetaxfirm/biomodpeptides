@@ -212,5 +212,5 @@ if (!written[0]?.meta?.changes) {
  throw new Error('The order changed during verification. Check payment status again before paying.');
 }
 // Email the store a full copy of the order the first time it is marked paid (the status update only changes a row once).
-if (state === 'paid' && written[0]?.meta?.changes) await sendOrderNotification(runtime(), id, saved);
+if (state === 'paid' && written[0]?.meta?.changes) await sendOrderNotification(runtime(), id, saved, row.created);
 return { status: state, message: result.state === 'failed' ? 'The payment attempt failed. This order is held for review before inventory is released.' : result.message }; }

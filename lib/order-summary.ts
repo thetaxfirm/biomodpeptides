@@ -1,4 +1,5 @@
 import { savedBatch } from './batch-snapshot';
+import { dueDay, pacific } from './ship-cutoff';
 import { presentationText } from './private-presentation';
 import { savedPreorder, orderPreorderNotice } from './fulfillment';
 import type { AnetOrderDetails } from './authorizenet-payments';
@@ -42,7 +43,15 @@ export function anetOrderDetails(data: Record<string, any>): AnetOrderDetails {
 }
 const esc = (v: unknown) => String(v ?? '').replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
 /** Store copy of a paid order, with every item, for the addresses in STORE_ADMIN_EMAILS (or ORDER_NOTIFY_EMAILS). */
-export function orderEmailHtml(orderId: string, data: Record<string, any>): string {
+/** When a paid order has to go out under the 2 p.m. Pacific same-day promise; null for preorders. */
+export function shipByLine(data: Record<string, any>, placedAt: number, now = Date.now()): { today: boolean; text: string } | null {
+    if (orderPreorderNotice(data)) return null;
+    const due = dueDay(placedAt);
+    if (due <= pacific(now).day) return { today: true, text: 'Ship today: placed before the 2 p.m. Pacific cutoff.' };
+    return { today: false, text: 'Ship by ' + new Date(due + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' }) + ': placed after the 2 p.m. Pacific cutoff or outside business days.' };
+}
+export function orderEmailHtml(orderId: string, data: Record<string, any>, placedAt = Date.now()): string {
+    const ship = shipByLine(data, placedAt);
     const a = data.address || {};
     const row = (label: string, value: string, bold = false) => '<tr><td style="padding:4px 0;color:#5c5c5c">' + label + '</td><td style="padding:4px 0;text-align:right' + (bold ? ';font-weight:bold' : '') + '">' + value + '</td></tr>';
     const items = summaryItems(data).map(i => '<tr><td style="padding:8px 0;border-bottom:1px solid #eee">' + esc(i.name) + (i.detail ? '<br><span style="font-size:12px;color:#5c5c5c">' + esc(i.detail) + '</span>' : '') + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:center">' + i.quantity + '</td><td style="padding:8px 0;border-bottom:1px solid #eee;text-align:right">' + money(i.lineTotalCents) + '</td></tr>').join('');
@@ -50,6 +59,7 @@ export function orderEmailHtml(orderId: string, data: Record<string, any>): stri
         + '<div style="background:#2b1030;color:#fbf1ea;padding:16px 20px;font-size:20px;font-weight:bold;letter-spacing:2px">BIOMOD</div><div style="padding:20px">'
         + '<h2 style="margin:0 0 4px;color:#2b1030">New paid order ' + esc(orderId.slice(0, 8)) + '</h2>'
         + '<p style="margin:0 0 16px;color:#5c5c5c">' + esc(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })) + ' (Pacific)</p>'
+        + (ship ? '<p style="padding:12px;margin:0 0 12px;font-weight:bold;' + (ship.today ? 'background:#fbe4e0;color:#8a1c12' : 'background:#fbf1ea;color:#2b1030') + '">' + (ship.today ? '★ ' : '') + esc(ship.text) + '</p>' : '')
         + (orderPreorderNotice(data) ? '<p style="padding:12px;background:#fbf1ea;color:#2b1030">' + esc(orderPreorderNotice(data)) + '</p>' : '')
         + '<table style="width:100%;border-collapse:collapse;font-size:14px"><tr><th style="text-align:left;padding-bottom:6px">Item</th><th style="padding-bottom:6px">Qty</th><th style="text-align:right;padding-bottom:6px">Total</th></tr>' + items + '</table>'
         + '<table style="width:100%;border-collapse:collapse;font-size:14px;margin-top:12px">'
@@ -67,7 +77,7 @@ export function orderNotifyRecipients(env: Environment): string[] {
     return (env.ORDER_NOTIFY_EMAILS || env.STORE_ADMIN_EMAILS || '').split(',').map(s => s.trim()).filter(s => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s)).slice(0, 10);
 }
 /** Sends the store copy of a paid order. Never throws; returns false when email is not configured or Resend refuses it. */
-export async function sendOrderNotification(env: Environment, orderId: string, data: Record<string, any>): Promise<boolean> {
+export async function sendOrderNotification(env: Environment, orderId: string, data: Record<string, any>, placedAt = Date.now()): Promise<boolean> {
     const key = (env.RESEND_API_KEY || '').trim();
     const to = orderNotifyRecipients(env);
     if (!key || !to.length)
@@ -77,7 +87,7 @@ export async function sendOrderNotification(env: Environment, orderId: string, d
         const r = await fetch('https://api.resend.com/emails', {
             method: 'POST',
             headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ from: env.ORDER_EMAIL_FROM || 'BIOMOD Orders <contact@trybiomod.com>', to, ...(data.email ? { reply_to: String(data.email) } : {}), subject: 'New order ' + orderId.slice(0, 8) + ' - ' + money(int(data.total)) + ' - ' + count + ' item' + (count === 1 ? '' : 's'), html: orderEmailHtml(orderId, data) }),
+            body: JSON.stringify({ from: env.ORDER_EMAIL_FROM || 'BIOMOD Orders <contact@trybiomod.com>', to, ...(data.email ? { reply_to: String(data.email) } : {}), subject: (shipByLine(data, placedAt)?.today ? 'SHIP TODAY · ' : '') + 'New order ' + orderId.slice(0, 8) + ' - ' + money(int(data.total)) + ' - ' + count + ' item' + (count === 1 ? '' : 's'), html: orderEmailHtml(orderId, data, placedAt) }),
             redirect: 'manual',
             signal: AbortSignal.timeout(10000),
         });

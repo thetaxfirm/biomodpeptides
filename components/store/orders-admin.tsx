@@ -11,6 +11,7 @@ import { api, report } from './provider';
 import { Field } from './primitives';
 import { money } from '@/lib/catalog';
 import { fulfillmentLabel, awaitingLabelApproval, carrierWords, stalledLabel, stuckInTransit } from '@/lib/fulfillment';
+import { shipDue } from '@/lib/ship-cutoff';
 import { bucketStatus, queueTabs, canArchive, isArchived, closedReason, type QueueResult, type QueueRow, type QueueTab, type OrderBucket } from '@/lib/order-queue';
 import { CarrierConnection } from './fulfillment-admin';
 import { ShippingLabel } from './shipping-admin';
@@ -215,6 +216,15 @@ export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, form
             </div>;
         })()}
         {error && <div className="notice error"><p role="alert">{error}</p><button type="button" className="text-button" onClick={() => fetchPage(0)}>Retry</button></div>}
+        {result?.mustGoOut && (() => {
+            // The 2 p.m. Pacific same-day promise, counted across every tab (lib/ship-cutoff.ts).
+            const { today, late } = result.mustGoOut, total = today + late;
+            if (!total) return <p className={styles.cutoffClear}>Nothing has to go out today.</p>;
+            return <div className={styles.cutoff} data-late={late > 0 || undefined}>
+                <span className={styles.star} aria-hidden="true">★</span>
+                <p><strong>{total} {total === 1 ? 'order has' : 'orders have'} to go out today</strong>{late ? ` (${late} late)` : ''}. Paid in-stock orders placed before 2 p.m. Pacific on a business day go out that day; later orders go out the next business day. Hand them to USPS, then press Dropped off.</p>
+            </div>;
+        })()}
         {result && <p className={styles.summary} role="status">
             {result.total} {result.total === 1 ? 'order' : 'orders'} in {current.label}{q ? ' matching “' + q + '”' : ''}{tab === 'to_ship' || tab === 'label' ? ', oldest first' : ', newest first'}.
             {result.truncated ? ' Only the most recent ' + result.scanned.toLocaleString() + ' orders are included.' : ''}
@@ -222,15 +232,15 @@ export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, form
         {!rows.length ? <p className={styles.empty}>{loading ? 'Loading orders…' : q ? 'No orders match this search in ' + current.label + '. Try All.' : 'No orders in ' + current.label + '.'}</p> :
             <table className={styles.table}>
                 <thead><tr><th>Order</th><th>Customer</th><th className={styles.number}>Items</th><th className={styles.number}>Total</th><th>Status</th><th>Messaged</th><th>Next step</th></tr></thead>
-                <tbody>{rows.map(o => <tr key={o.id}>
-                    <td><button type="button" className={styles.orderButton} onClick={() => setSelected(o)}>{orderNumber(o.id)}</button><span className={styles.sub}>{new Date(o.created).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span></td>
+                <tbody>{rows.map(o => { const due = shipDue(o); const urgent = due && due.state !== 'upcoming'; return <tr key={o.id}>
+                    <td>{urgent && <span className={styles.star} role="img" aria-label={due.label} title={due.label}>★</span>}<button type="button" className={styles.orderButton} onClick={() => setSelected(o)}>{orderNumber(o.id)}</button>{due && <span className={urgent ? styles.dueUrgent : styles.sub}>{due.label}</span>}<span className={styles.sub}>{new Date(o.created).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span></td>
                     <td>{o.data?.address?.name || 'Name not recorded'}<span className={styles.sub}>{[place(o), o.data?.email].filter(Boolean).join(' · ')}</span></td>
                     <td className={styles.number}>{units(o)}</td>
                     <td className={styles.number}>{money(Number(o.total) || 0)}</td>
                     <td><StatusBadge bucket={o.bucket}/>{statusLine(o) && <span className={styles.sub}>{statusLine(o)}</span>}</td>
                     <td className={styles.messaged}><MessagedCell order={o}/></td>
                     <td className={styles.next}>{nextStep(o)}</td>
-                </tr>)}</tbody>
+                </tr>; })}</tbody>
             </table>}
         {result?.hasMore && <div className={styles.more}><button type="button" className="button button-dark" disabled={loading} onClick={() => fetchPage(rows.length)}>{loading ? 'Loading…' : 'Load more (' + (result.total - rows.length) + ' left)'}</button></div>}
 

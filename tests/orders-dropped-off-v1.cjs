@@ -16,6 +16,7 @@ function load(file){const name=path.join(root,file),m=new Module(name,module);m.
   if(id==='@/lib/catalog')return{money:n=>'$'+(n/100).toFixed(2)};
   if(id==='@/lib/fulfillment')return{fulfillmentLabel:()=>'',carrierWords:{},stalledLabel:()=>false,stuckInTransit:()=>false,awaitingLabelApproval:()=>false};
   if(id==='@/lib/order-queue')return{bucketStatus:{},queueTabs:[]};
+  if(id==='@/lib/ship-cutoff')return{shipDue:()=>null}; /* Cutoff tracker has its own suite (ship-cutoff-v1). */
   if(id==='@/lib/request-issues')return load('lib/request-issues.ts');
   if(id==='@/lib/win-back')return load('lib/win-back.ts');
   if(id==='@/lib/order-messages')return load('lib/order-messages.ts');
