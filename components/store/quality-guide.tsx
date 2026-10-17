@@ -4,7 +4,7 @@ import { batchFor, batchPath, matchingCertificateFor } from '@/lib/testing';
 import styles from './quality-guide.module.css';
 
 const checks = [
-  ['Identity', 'Check the stated compound and the method used to identify it. A product name in the heading alone does not establish a peptide sequence or chemical form.'],
+  ['Identity', 'Check the stated compound and the method used to identify it. A product name in the heading alone does not establish an amino-acid sequence or chemical form.'],
   ['Purity and assay', 'Read these separately. Chromatographic purity describes a method-specific result; the assay reports measured content with its own units. A purity percentage alone does not tell you the milligrams in a vial.'],
   ['Elemental impurities', 'Read each analyte, result, unit and reporting limit. Keep qualifiers such as ND (non-detect) with the result; do not turn them into a claim of zero impurities.'],
   ['Microbiological tests', 'Look for the actual methods and results for endotoxins or sterility, if tested. A purity result does not answer these questions. Read the laboratory’s limits and sample qualifications.'],
@@ -18,7 +18,7 @@ export function QualityGuide() {
   const certificate = matchingCertificateFor(example);
   return <article className={styles.guide}>
     <header className="page-heading">
-      <h1>How to read a peptide COA</h1>
+      <h1>How to read a COA</h1>
       <p>A Certificate of Analysis records laboratory results for a submitted sample. Start with the lot number, then read the methods, values and limitations in the original report.</p>
       <a className="button button-dark" href="/testing">Find a product or lot</a>
     </header>

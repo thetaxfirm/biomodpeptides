@@ -27,7 +27,7 @@ Module._load = function(request, parent, isMain) {
 };
 try {
   const { routeMetadata } = require('../lib/seo.ts');
-  const expectedImage = { url: origin + '/brand/logo-navy-tm-v36.png', width: 1320, height: 381, type: 'image/png', alt: 'Biomod Peptides logo' };
+  const expectedImage = { url: origin + '/brand/logo-navy-tm-v36.png', width: 1320, height: 381, type: 'image/png', alt: 'Biomod Research Supply Company logo' };
   const png = fs.readFileSync(path.join(__dirname, '../public/brand/logo-navy-tm-v36.png'));
   assert.deepEqual([...png.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10], 'Shared image is an existing PNG');
   assert.equal(png.toString('ascii', 12, 16), 'IHDR');
@@ -38,7 +38,7 @@ try {
   assert(editorialPaths.includes('/') && editorialPaths.includes('/shop') && editorialPaths.some(p => p.startsWith('/news/')));
   for (const route of editorialPaths) {
     const metadata = routeMetadata(route, new URLSearchParams(), config);
-    const info = pageInfo(route), title = route === '/' ? info.title : info.title + ' | Biomod Peptides';
+    const info = pageInfo(route), title = route === '/' ? info.title : info.title + ' | Biomod Research Supply Company';
     assert.deepEqual(metadata.openGraph.images, [expectedImage], route + ': branded Open Graph image');
     assert.deepEqual(metadata.twitter.images, [{ url: expectedImage.url, alt: expectedImage.alt }], route + ': explicit Twitter image');
     assert.equal(metadata.twitter.card, 'summary', route + ': existing card presentation retained');
@@ -55,7 +55,7 @@ try {
     const route = '/product/' + product.slug;
     const metadata = routeMetadata(route, new URLSearchParams(), config);
     assert.deepEqual(metadata.openGraph.images, [{ url: origin + imagePath(product), alt: product.image.alt || product.name }], product.slug + ': product artwork unchanged');
-    assert.deepEqual(metadata.twitter, { card: 'summary', title: pageInfo(route).title + ' | Biomod Peptides', description: pageInfo(route).description }, product.slug + ': product Twitter metadata unchanged');
+    assert.deepEqual(metadata.twitter, { card: 'summary', title: pageInfo(route).title + ' | Biomod Research Supply Company', description: pageInfo(route).description }, product.slug + ': product Twitter metadata unchanged');
   }
 
   for (const route of ['/admin', '/admin/login', '/account', '/checkout', '/softgels', '/locations', '/not-a-page', '/product/not-a-product', '/about-biomod']) {

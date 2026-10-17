@@ -27,17 +27,17 @@ export function routeMetadata(path: string, query: URLSearchParams = new URLSear
   const index = mayIndex(path, query, config);
   const follow = config.enabled && !privatePath(path);
   const canonical = config.origin + canonicalPath(path);
-  const title = path === '/' ? info.title : info.title + ' | Biomod Peptides';
+  const title = path === '/' ? info.title : info.title + ' | Biomod Research Supply Company';
   const p = productAt(path);
   // Public editorial/store pages use the current brand mark. Product previews keep
   // their own catalog images; private, held and preview routes get no new artwork.
   const shareImage = !p && index ? { url: config.origin + '/brand/logo-navy-tm-v36.png',
-    width: 1320, height: 381, type: 'image/png', alt: 'Biomod Peptides logo' } : null;
+    width: 1320, height: 381, type: 'image/png', alt: 'Biomod Research Supply Company logo' } : null;
   return {
     title: { absolute: title }, description: info.description,
     alternates: { canonical },
     robots: { index, follow, googleBot: { index, follow, 'max-image-preview': index ? 'large' : 'none' } },
-    openGraph: { type: 'website', locale: 'en_US', siteName: 'Biomod Peptides', title, description: info.description, url: canonical,
+    openGraph: { type: 'website', locale: 'en_US', siteName: 'Biomod Research Supply Company', title, description: info.description, url: canonical,
       ...(p ? { images: [{ url: config.origin + imagePath(p), alt: p.image.alt || p.name }] } : shareImage ? { images: [shareImage] } : {}) },
     twitter: { card: 'summary', title, description: info.description,
       ...(shareImage ? { images: [{ url: shareImage.url, alt: shareImage.alt }] } : {}) },
@@ -51,12 +51,12 @@ export async function routeStructuredData(path: string, config: SEOConfig = curr
   // Stable policies are defined on their own pages and repeated on eligible
   // products, so every Offer reference also resolves within its document.
   const policies = p || clean === '/shipping-policy' || clean === '/returns-refunds' ? await merchantPolicies(config.origin) : null;
-  const organization = { '@type': 'Organization', '@id': config.origin + '/#organization', name: 'Biomod Peptides', alternateName: ['TryBiomod', 'BIOMOD'], description: 'Biomod Peptides supplies lyophilized compound vials for laboratory research through TryBiomod.com. Not for human or animal use.', url: config.origin, logo: config.origin + '/brand/logo-navy-tm-v36.png', email: 'contact@trybiomod.com',
+  const organization = { '@type': 'Organization', '@id': config.origin + '/#organization', name: 'Biomod Research Supply Company', alternateName: ['TryBiomod', 'BIOMOD'], description: 'Biomod Research Supply Company supplies lyophilized compound vials for laboratory research through TryBiomod.com. Not for human or animal use.', url: config.origin, logo: config.origin + '/brand/logo-navy-tm-v36.png', email: 'contact@trybiomod.com',
     ...(policies ? { hasMerchantReturnPolicy: policies.hasMerchantReturnPolicy } : {}),
     ...(policies?.hasShippingService ? { hasShippingService: policies.hasShippingService } : {}),
   };
   const graph: Record<string, unknown>[] = [organization,
-    { '@type': 'WebSite', '@id': config.origin + '/#website', url: config.origin, name: 'Biomod Peptides', alternateName: ['TryBiomod', 'BIOMOD'], publisher: { '@id': organization['@id'] } },
+    { '@type': 'WebSite', '@id': config.origin + '/#website', url: config.origin, name: 'Biomod Research Supply Company', alternateName: ['TryBiomod', 'BIOMOD'], publisher: { '@id': organization['@id'] } },
     { '@type': 'WebPage', '@id': config.origin + clean + '#page', url: config.origin + clean, name: info.title, description: info.description, isPartOf: { '@id': config.origin + '/#website' } },
   ];
   if (p) graph.push({ '@type': 'BreadcrumbList', itemListElement: [

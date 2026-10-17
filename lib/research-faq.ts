@@ -7,14 +7,14 @@ const packOptions = packSizes.slice(0, -1).join(', ') + ' or ' + packSizes.at(-1
 export const researchFaqGroups = [
   {
     id: 'buying',
-    title: 'Buying research peptides',
+    title: 'Buying research compounds',
     questions: [
       {
         id: 'how-to-buy',
-        question: 'How do I buy research peptides from Biomod?',
+        question: 'How do I buy research compounds from Biomod?',
         answer: `Open the shop, choose a product such as BPC-157 10mg, MOTS-c or SS-31, and select a single vial or a ${packOptions.replace(/^1, /, '')}-pack. Each product lists its contents, price per vial and per mg, and its batch record. Add it to your cart and check out. Orders ship within the United States to adults age 21 and older purchasing for laboratory research.`,
         href: '/shop',
-        link: 'Shop research peptides',
+        link: 'Shop research compounds',
       },
     ],
   },

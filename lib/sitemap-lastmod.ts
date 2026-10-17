@@ -10,6 +10,7 @@ import { pressReleases } from './press-releases';
 export const siteLastmod = '2026-10-17';
 // October 17: da848db added free USPS Priority Mail at $250 and the 2 p.m. Pacific same-day
 // wording to every product page; 589ae41 moved the product images to WebP.
+// The same day the store was renamed Biomod Research Supply Company, changing every page's title.
 export const productLastmod = '2026-10-17';
 export const pageLastmod: Record<string, string> = {
   // October 14: initial homepage cards now include every publication-reviewed vial.
@@ -17,7 +18,6 @@ export const pageLastmod: Record<string, string> = {
   // fb54b09: batch status wording on shop cards, the FAQ, batch library and COA guide.
   '/shop': '2026-10-13',
   '/testing': '2026-10-13',
-  '/news/biomod-peptides-online-store-trybiomod': '2026-10-13',
   // 9595696 (October 14): separate-checkout preorder wording; 1ef1cb4 added the vial lot field.
   '/shipping-policy': '2026-10-14',
   '/contact': '2026-10-14',

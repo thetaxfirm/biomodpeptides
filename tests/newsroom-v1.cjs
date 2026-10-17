@@ -40,7 +40,7 @@ const { routeStructuredData } = require('../lib/seo.ts');
     assert(mayIndex(path, new URLSearchParams(), config));
     assert.equal(pressReleaseAt(path), release);
     assert.equal(pageInfo(path).title, release.headline);
-    assert((release.headline + ' | Biomod Peptides').length <= 70, 'Title fits a result line: ' + release.headline);
+    assert((release.headline + ' | Biomod Research Supply Company').length <= 70, 'Title fits a result line: ' + release.headline);
     assert(release.summary.length <= 160, 'Summary fits a snippet: ' + release.slug);
     assert(/^\d{4}-\d{2}-\d{2}$/.test(release.date));
     assert(!banned.test([release.headline, release.summary, ...release.body].join(' ').replace(/does not provide dosing or medical advice/i, '')), 'No medical, dosing, ranking or held-site claims: ' + release.slug);

@@ -23,7 +23,7 @@ type ResearchStudy = {
 const studies = {
   semax: {
     heading: 'Semax research context',
-    identity: 'Semax is described in the literature as a synthetic seven-amino-acid peptide. Medvedeva and colleagues studied its effects on gene expression in rat brain cortex.',
+    identity: 'Semax is described in the literature as a synthetic seven-amino-acid compound. Medvedeva and colleagues studied its effects on gene expression in rat brain cortex.',
     models: 'Rats following experimental focal ischemia, with analysis of frontoparietal cortex.',
     focus: 'Transcript levels and the immune and vascular processes associated with the affected genes.',
     citation: 'Medvedeva et al. (2014), BMC Genomics',
@@ -32,7 +32,7 @@ const studies = {
   },
   selank: {
     heading: 'Selank research context',
-    identity: 'Selank is described as a synthetic seven-amino-acid peptide related to tuftsin. Volkova and colleagues compared gene expression after exposure to Selank or GABA.',
+    identity: 'Selank is described as a synthetic seven-amino-acid compound related to tuftsin. Volkova and colleagues compared gene expression after exposure to Selank or GABA.',
     models: 'Rat frontal cortex, with samples pooled by experimental group and time point.',
     focus: 'Expression of neurotransmission-associated genes, measured using a targeted real-time PCR panel.',
     citation: 'Volkova et al. (2016), Frontiers in Pharmacology',
@@ -55,7 +55,7 @@ const studies = {
     heading: 'Tesamorelin research context',
     identity: 'Ferdinandi and colleagues studied tesamorelin as TH9507, a modified 44-residue growth hormone-releasing factor analogue.',
     models: 'Rat, dog and human plasma, alongside animal experiments in pigs, rats and dogs.',
-    focus: 'Peptide degradation, plasma stability, GH and IGF-1 biomarkers, pharmacokinetics and toxicity.',
+    focus: 'Degradation, plasma stability, GH and IGF-1 biomarkers, pharmacokinetics and toxicity.',
     citation: 'Ferdinandi et al. (2007), Basic & Clinical Pharmacology & Toxicology',
     url: 'https://pubmed.ncbi.nlm.nih.gov/17214611/',
     doi: '10.1111/j.1742-7843.2007.00008.x',
@@ -74,7 +74,7 @@ const studies = {
   },
   kisspeptin10: {
     heading: 'Kisspeptin-10 research context',
-    identity: 'Kisspeptin-10 is the peptide name in this catalog; 10 mg is the listed vial content. Pampillo and colleagues used kisspeptin-10 to study regulation of the GPR54 receptor.',
+    identity: 'Kisspeptin-10 is the compound name in this catalog; 10 mg is the listed vial content. Pampillo and colleagues used kisspeptin-10 to study regulation of the GPR54 receptor.',
     models: 'HEK 293 and genetically modified MDA-MB-231 cell cultures.',
     focus: 'Receptor internalization and desensitization, with GRK2, beta-arrestin and ERK1/2 signaling.',
     citation: 'Pampillo et al. (2009), Molecular Endocrinology',
@@ -92,7 +92,7 @@ const studies = {
   },
   kpv: {
     heading: 'KPV research context',
-    identity: 'KPV is the tripeptide Lys-Pro-Val. Dalmasso and colleagues examined its uptake and signaling in cell cultures and experimental mouse models.',
+    identity: 'KPV is the three-amino-acid sequence Lys-Pro-Val. Dalmasso and colleagues examined its uptake and signaling in cell cultures and experimental mouse models.',
     models: 'Intestinal epithelial cell cultures, Jurkat T cells and mouse models of intestinal inflammation.',
     focus: 'PepT1-mediated uptake, NF-κB and MAPK signaling, and inflammatory readouts.',
     citation: 'Dalmasso et al. (2008), Gastroenterology',
@@ -102,7 +102,7 @@ const studies = {
 
   epitalon: {
     heading: 'Epitalon research context',
-    identity: 'Khavinson and colleagues examined the peptide Epithalon in a 2003 cell-culture study.',
+    identity: 'Khavinson and colleagues examined Epithalon in a 2003 cell-culture study.',
     models: 'Cultured human fetal fibroblasts.',
     focus: 'Telomerase activity, expression of its catalytic subunit, and telomere length.',
     citation: 'Khavinson et al. (2003), Bulletin of Experimental Biology and Medicine',
@@ -112,9 +112,9 @@ const studies = {
   },
   dsip: {
     heading: 'DSIP research context',
-    identity: 'DSIP is described in research literature as a nine-amino-acid peptide.',
-    models: 'Rabbits, with comparisons of synthetic DSIP and related peptides.',
-    focus: 'Peptide characterization and comparison of delta and spindle electroencephalogram (EEG) patterns.',
+    identity: 'DSIP is described in research literature as a nine-amino-acid compound.',
+    models: 'Rabbits, with comparisons of synthetic DSIP and related compounds.',
+    focus: 'Characterization and comparison of delta and spindle electroencephalogram (EEG) patterns.',
     citation: 'Schoenenberger and Monnier (1977), Proceedings of the National Academy of Sciences',
     url: 'https://pubmed.ncbi.nlm.nih.gov/265572/',
     doi: '10.1073/pnas.74.3.1282',
@@ -132,9 +132,9 @@ const studies = {
   },
   thymosinAlpha1: {
     heading: 'Thymosin Alpha-1 research context',
-    identity: 'Goldstein and colleagues described thymosin alpha-1 as a 28-amino-acid peptide in their 1977 sequence study.',
+    identity: 'Goldstein and colleagues described thymosin alpha-1 as a 28-amino-acid compound in their 1977 sequence study.',
     materialLabel: 'Study material',
-    models: 'Peptide material isolated from calf thymus for the authors’ study.',
+    models: 'Material isolated from calf thymus for the authors’ study.',
     focus: 'Isolation and amino-acid sequence analysis.',
     citation: 'Goldstein et al. (1977), Proceedings of the National Academy of Sciences',
     url: 'https://pubmed.ncbi.nlm.nih.gov/265536/',
@@ -143,7 +143,7 @@ const studies = {
   },
   bpc157: {
     heading: 'BPC-157 research context',
-    identity: 'BPC-157 is described in research literature as a 15-amino-acid peptide.',
+    identity: 'BPC-157 is described in research literature as a 15-amino-acid compound.',
     models: 'Tendon fibroblasts cultured from rat Achilles tendon.',
     focus: 'Growth-hormone-receptor expression and related cell signaling.',
     citation: 'Chang et al. (2014), Molecules',
@@ -152,7 +152,7 @@ const studies = {
   },
   mots: {
     heading: 'MOTS-c research context',
-    identity: 'MOTS-c is a 16-amino-acid, mitochondrial-derived peptide described by Lee and colleagues in 2015.',
+    identity: 'MOTS-c is a 16-amino-acid, mitochondrial-derived compound described by Lee and colleagues in 2015.',
     models: 'Cultured cells and mice.',
     focus: 'Folate and purine metabolism, with a focus on AMPK-related signaling.',
     citation: 'Lee et al. (2015), Cell Metabolism',
@@ -161,7 +161,7 @@ const studies = {
   },
   ss31: {
     heading: 'SS-31 research context',
-    identity: 'SS-31 is a four-amino-acid peptide. Birk and colleagues examined its interactions with mitochondrial membranes in their 2014 paper.',
+    identity: 'SS-31 is a four-amino-acid compound. Birk and colleagues examined its interactions with mitochondrial membranes in their 2014 paper.',
     models: 'Artificial lipid membranes and mitochondria isolated from rat kidneys.',
     focus: 'Interaction with cardiolipin, a membrane lipid, alongside electron transfer, oxygen consumption and ATP synthesis.',
     citation: 'Birk et al. (2014), British Journal of Pharmacology',
@@ -219,7 +219,7 @@ export function ProductResearchDetails({ product }: { product: Product }) {
       {productQuestions(product).map(item => <article key={item.id}>
         <h3>{item.question}</h3>
         {item.answer.map(paragraph => <p key={paragraph}>{paragraph}</p>)}
-        {item.id === 'buy' && <p><Link href="/shop">Browse all research peptides</Link>.</p>}
+        {item.id === 'buy' && <p><Link href="/shop">Browse all research compounds</Link>.</p>}
         {item.id === 'documentation' && <p><CoaPopup product={product} label="Read this product's batch record and COA" className={styles.inlineCoa}/>. <Link href="/quality-standard#read-the-results">Understand purity and measured content</Link>.</p>}
       </article>)}
     </div>

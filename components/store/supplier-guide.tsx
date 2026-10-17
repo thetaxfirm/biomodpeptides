@@ -3,13 +3,13 @@ import styles from './quality-guide.module.css';
 export function SupplierGuide() {
   return <article className={styles.guide}>
     <header className="page-heading">
-      <h1>Choosing a research peptide supplier</h1>
+      <h1>Choosing a research compound supplier</h1>
       <p>Start with records you can check. A polished storefront or a high purity percentage does not establish what is in a vial. Evaluate the exact material, the documents for the supplied lot and the terms of sale before ordering for laboratory research.</p>
     </header>
 
     <section aria-labelledby="confirm-material" className={styles.section}>
       <h2 id="confirm-material">Confirm the exact material</h2>
-      <p>Match the product name, chemical or peptide identity, physical form and labeled contents. Check whether an amount applies to one container, one ingredient in a blend or the whole pack. A similar name does not establish the same sequence, salt or formulation. If a specification conflicts with the label, ask the supplier to resolve it before ordering.</p>
+      <p>Match the product name, chemical identity or amino-acid sequence, physical form and labeled contents. Check whether an amount applies to one container, one ingredient in a blend or the whole pack. A similar name does not establish the same sequence, salt or formulation. If a specification conflicts with the label, ask the supplier to resolve it before ordering.</p>
     </section>
 
     <section aria-labelledby="check-lot-evidence" className={styles.section}>

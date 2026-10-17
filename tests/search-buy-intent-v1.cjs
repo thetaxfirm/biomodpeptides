@@ -35,17 +35,17 @@ const node = (data, type) => data['@graph'].find(item => item['@type'] === type)
 
 (async () => {
   // Searched phrases appear in titles and descriptions where they are true.
-  assert.match(pageInfo('/').title, /^Buy Research Peptides/);
-  assert.match(pageInfo('/shop').title, /^Buy Peptides/);
-  assert.match(pageInfo('/faq').title, /Buy Research Peptides/);
+  assert.match(pageInfo('/').title, /^Buy Research Compounds/);
+  assert.match(pageInfo('/shop').title, /^Buy Research Compounds/);
+  assert.match(pageInfo('/faq').title, /Buy Research Compounds/);
   assert.match(pageInfo('/').description, /BPC-157 10mg/);
   const bpc = products.find(p => p.slug === 'bpc-157-10mg');
   assert.equal(productLabel(bpc), 'BPC-157 10mg');
   assert.equal(pageInfo('/product/bpc-157-10mg').title, 'Buy BPC-157 10mg Research Vial');
   assert.equal(pageInfo('/product/bpc-157-10mg').name, 'BPC-157 10mg Research Vial');
-  assert.equal(routeMetadata('/product/bpc-157-10mg', new URLSearchParams(), config).title.absolute, 'Buy BPC-157 10mg Research Vial | Biomod Peptides');
+  assert.equal(routeMetadata('/product/bpc-157-10mg', new URLSearchParams(), config).title.absolute, 'Buy BPC-157 10mg Research Vial | Biomod Research Supply Company');
   for (const path of sitemapPaths(config).filter(path => ['/', '/shop', '/faq'].includes(path) || path.startsWith('/product/'))) {
-    const info = pageInfo(path), title = path === '/' ? info.title : info.title + ' | Biomod Peptides';
+    const info = pageInfo(path), title = path === '/' ? info.title : info.title + ' | Biomod Research Supply Company';
     assert(title.length <= 70, 'Title fits a result line: ' + title);
     assert(info.description.length <= 160, 'Description fits a result snippet: ' + path);
     assert(!/\b(dos(e|ing)|treat|cure|heal|human use)\b/i.test(info.title + ' ' + info.description.replace(/not for human or animal use/i, '')), 'No dosing or medical claims: ' + path);
@@ -66,7 +66,7 @@ const node = (data, type) => data['@graph'].find(item => item['@type'] === type)
 
   const faqData = await routeStructuredData('/faq', config);
   const faq = node(faqData, 'FAQPage');
-  assert.equal(faq.mainEntity[0].name, 'How do I buy research peptides from Biomod?');
+  assert.equal(faq.mainEntity[0].name, 'How do I buy research compounds from Biomod?');
   assert.equal(faq.mainEntity.length, researchFaqSchemaItems().length);
   assert(!faq.mainEntity.some(q => q.name === 'Where does Biomod ship?'), 'Live-rendered shipping answer stays out of the markup');
   assert.equal(researchFaqGroups[0].questions[0].href, '/shop');

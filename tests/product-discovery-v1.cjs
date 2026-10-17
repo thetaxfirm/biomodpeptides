@@ -90,9 +90,9 @@ const homeCards = [...home.matchAll(/<article class="product-card">([\s\S]*?)<\/
 assert.equal(homeCards.length, reviewed.length, 'Every eligible vial is rendered before Load more');
 assert.deepEqual(homeCards.map(card => card.match(/<h3><a href="\/product\/([^"]+)"/)?.[1]), ordered.filter(eligibleDiscovery).map(product => product.slug));
 assert(initialLinks.every(slug => reviewed.includes(slug)), 'Initial cards and alternate-size links exclude held products');
-assert(home.includes(`Showing ${reviewed.length} of ${ordered.length} lyophilized peptides`));
+assert(home.includes(`Showing ${reviewed.length} of ${ordered.length} lyophilized vials`));
 assert(initialLinks.includes('thymosin-alpha-1-10mg'), 'Thymosin Alpha-1 has a crawlable homepage link without a click');
-assert(home.includes('Load more lyophilized peptides'), 'The remaining vial members retain the existing Load more control');
+assert(home.includes('Load more lyophilized vials'), 'The remaining vial members retain the existing Load more control');
 // Cover changing catalog sizes without promoting held products just to fill 16 slots.
 const eligibleVials = ordered.filter(eligibleDiscovery);
 const heldVials = ordered.filter(product => !eligibleDiscovery(product));
@@ -105,8 +105,8 @@ for (const count of [0, 1, 16, eligibleVials.length]) {
     const snapshot = JSON.stringify(catalog);
     const html = render(React.createElement(HomeVials, { products: catalog }), catalog);
     assert.deepEqual(cardSlugs(html), eligibleVials.slice(0, count).map(product => product.slug), `${count} eligible vials: no missing or held initial cards`);
-    assert(html.includes(`Showing ${count} of ${catalog.length} lyophilized peptides`));
-    assert.equal(html.includes('Load more lyophilized peptides'), held.length > 0, 'Load more exists exactly when undisplayed vials remain');
+    assert(html.includes(`Showing ${count} of ${catalog.length} lyophilized vials`));
+    assert.equal(html.includes('Load more lyophilized vials'), held.length > 0, 'Load more exists exactly when undisplayed vials remain');
     assert(!html.includes('Sale · 91%'), 'A sale never moves a held product into initial discovery');
     assert.equal(JSON.stringify(catalog), snapshot, 'Discovery leaves supplied runtime records untouched');
   }
@@ -181,7 +181,7 @@ pageModule._compile(ts.transpileModule(fs.readFileSync(pageFilename, 'utf8'), {
   const page = render(await pageModule.exports.default({ searchParams: Promise.resolve({}) }));
   const featured = [...new Set([...page.matchAll(/href="\/product\/([^"]+)"/g)].map(match => match[1]))].sort();
   assert(featured.every(slug => reviewed.includes(slug)), 'Actual homepage cards and size links remain reviewed');
-  assert(page.includes(`Showing ${reviewed.length} of ${ordered.length} lyophilized peptides`));
+  assert(page.includes(`Showing ${reviewed.length} of ${ordered.length} lyophilized vials`));
   const cards = [...page.matchAll(/<article class="product-card">([\s\S]*?)<\/article>/g)].map(match => match[1]);
   assert.equal(cards.length, reviewed.length, 'Actual homepage renders every reviewed vial before Load more');
   assert.deepEqual(cardSlugs(page).sort(), reviewed, 'Every eligible product has its own initial homepage card');

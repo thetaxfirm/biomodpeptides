@@ -6,18 +6,18 @@ import { pressReleases } from './press-releases';
 export const previewOrigin = 'https://trybiomod.com';
 export const reviewedOn = '2026-10-08';
 export const pageRecords: Record<string, { title: string; description: string; eligible: boolean; name?: string }> = {
-  '/': { title: 'Buy Research Peptides | Biomod Peptides | TryBiomod', description: 'Buy research peptides from Biomod Peptides: BPC-157 10mg, MOTS-c, SS-31 and more, with available batch COAs and 1, 3, 5 and 10-packs. Research use only.', eligible: true },
+  '/': { title: 'Buy Research Compounds | Biomod Research Supply Company', description: 'Buy research compounds from Biomod: BPC-157 10mg, MOTS-c, SS-31 and more, with available batch COAs and 1, 3, 5 and 10-packs. Research use only.', eligible: true },
   '/softgels': { title: 'The Original Peptide Softgel™ by BIOMOD', description: 'Explore BIOMOD softgel formulations, enteric design and California manufacturing. Browse full bottles in 1, 3, 5 and 10 packs.', eligible: false },
-  '/shop': { title: 'Buy Peptides for Research: Vials & Batch Records', description: 'Buy peptides for laboratory research: BPC-157, MOTS-c, SS-31, KPV and more. Compare vial sizes, per-mg pack prices and batch documentation.', eligible: true },
-  '/about': { title: 'About Biomod Peptides and TryBiomod', description: 'TryBiomod.com is the online storefront for Biomod Peptides, a U.S. Marine Corps veteran-owned company with research compound retail roots in Las Vegas.', eligible: true },
+  '/shop': { title: 'Buy Research Compounds Online', description: 'Buy research compounds for laboratory research: BPC-157, MOTS-c, SS-31, KPV and more. Compare vial sizes, per-mg pack prices and batch documentation.', eligible: true },
+  '/about': { title: 'About Biomod and TryBiomod', description: 'TryBiomod.com is the online storefront for Biomod Research Supply Company, a U.S. Marine Corps veteran-owned company with Las Vegas retail roots.', eligible: true },
   '/locations': { title: 'BIOMOD Locations', description: 'BIOMOD location information for Las Vegas, Nevada, and the St. George area in Utah. Contact the team to confirm visiting details.', eligible: false },
   '/contact': { title: 'Contact BIOMOD', description: 'Contact BIOMOD about product documentation, location details, existing orders and general questions.', eligible: true },
   '/testing': { title: 'Batch Documents and Certificates', description: 'Search BIOMOD product lots and original certificates. Matching lots, mismatches and missing documentation are identified separately.', eligible: true },
-  '/quality-standard': { title: 'How to Read a Peptide COA: Lot, Purity and Assay', description: 'Learn how to match a peptide COA to its product lot, distinguish purity from measured content, and read the laboratory’s methods and limitations.', eligible: true },
-  '/choosing-a-research-supplier': { title: 'Choosing a Research Peptide Supplier: Documents and Costs', description: 'Check product identity, supplied lots, original COA results and missing handling documents. Compare research peptide pack contents and total order costs.', eligible: true },
+  '/quality-standard': { title: 'Reading a COA: Lot, Purity, Assay', description: 'Learn how to match a research compound COA to its product lot, distinguish purity from measured content, and read the laboratory’s methods and limitations.', eligible: true },
+  '/choosing-a-research-supplier': { title: 'Choosing a Research Compound Supplier', description: 'Check product identity, supplied lots, original COA results and missing handling documents. Compare research compound pack contents and total order costs.', eligible: true },
   '/research-use-only': { title: 'Research Use Policy', description: 'BIOMOD products are supplied for laboratory research. Review purchasing restrictions and the policy on dosing and medical advice.', eligible: true },
-  '/news': { title: 'Biomod Peptides News and Press Releases', description: 'Press releases and announcements from Biomod Peptides and TryBiomod.com, the online store for lyophilized research peptide vials and batch records.', eligible: true },
-  '/faq': { title: 'How to Buy Research Peptides: COAs & Ordering', description: 'How to buy research peptides from Biomod, plus answers about peptide COAs, lot matching, purity versus measured content, pack sizes and U.S. shipping.', eligible: true },
+  '/news': { title: 'News and Press Releases', description: 'Press releases and announcements from Biomod Research Supply Company and TryBiomod.com, the online store for research compound vials and batch records.', eligible: true },
+  '/faq': { title: 'How to Buy Research Compounds', description: 'How to buy research compounds from Biomod, plus answers about COAs, lot matching, purity versus measured content, pack sizes and U.S. shipping.', eligible: true },
   '/shipping-policy': { title: 'Shipping Policy', description: 'BIOMOD U.S. shipping information, processing times and delivery support.', eligible: true },
   '/returns-refunds': { title: 'Returns and Refunds', description: 'How to contact BIOMOD about damaged, incorrect or missing items and request an order review.', eligible: true },
   '/terms-of-sale': { title: 'Terms of Sale', description: 'BIOMOD research purchasing terms, payment verification, order eligibility and policy references.', eligible: false },
@@ -68,7 +68,10 @@ export function pageInfo(path: string) {
     const contents = size(p).replace(/\s*\/\s*vial/i, '');
     const strength = contents && !p.name.toLowerCase().includes(contents.toLowerCase()) ? ' ' + contents : '';
     const name = `${p.name}${strength} ${productFormat(p) === 'Vial' ? 'Research Vial' : productFormat(p)}`;
-    return { title: 'Buy ' + name, name, description: `Buy ${p.name}${strength} (${compound(p)}): single vials or 3, 5 and 10-packs, batch records and U.S. shipping. For laboratory research only.`, eligible: !productReviewBlocks[p.slug] };
+    // Keep "Buy <product> Research Vial | <brand>" within a 70-character result line;
+    // a long product name drops the word Research from the title only.
+    const title = ('Buy ' + name + ' | Biomod Research Supply Company').length > 70 ? `Buy ${p.name}${strength} ${productFormat(p)}` : 'Buy ' + name;
+    return { title, name, description: `Buy ${p.name}${strength} (${compound(p)}): single vials or 3, 5 and 10-packs, batch records and U.S. shipping. For laboratory research only.`, eligible: !productReviewBlocks[p.slug] };
   }
   return pageRecords[path] || { title: privatePath(path) ? 'Customer Services' : 'Page Not Found', description: 'BIOMOD customer services and research products.', eligible: false };
 }

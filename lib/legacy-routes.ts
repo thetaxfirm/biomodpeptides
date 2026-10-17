@@ -13,6 +13,9 @@ export const legacyRoutes: Record<string, string> = {
   'product-category/spray-products': '/shop?category=spray-products',
   'product-category/aminos-liquids': '/shop?category=aminos-liquids',
   'my-account': '/account',
+  // Press releases renamed without the word peptide (owner, October 17, 2026).
+  'news/biomod-peptides-online-store-trybiomod': '/news/biomod-online-store-trybiomod',
+  'news/guide-to-reading-peptide-coa': '/news/guide-to-reading-coa',
   'peptide-store-las-vegas-near-me-biomod': '/locations',
   'las-vegas-medical-district-lab-supply-sourcing-high-purity-research-peptides': '/quality-standard',
   'research-peptide-supplier-las-vegas-evaluating-analytical-grade-standards': '/quality-standard',
