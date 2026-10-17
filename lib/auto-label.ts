@@ -10,7 +10,7 @@
 // an order the same way.
 import { buyLabel, readBoughtLabel, sendTrackingEmail, type Label } from './easypost';
 import { recordChange } from './change-history';
-import { normalizeShippingOptions, savedShippingOption } from './shipping-options';
+import { normalizeShippingOptions, savedShippingOption, goodsValueCents } from './shipping-options';
 import { COA_REQUIRED_TO_SHIP } from './coa-shipping';
 
 export type AutoLabelEnvironment = { DB: D1Database } & Record<string, unknown>;
@@ -229,6 +229,7 @@ export async function runAutoLabels(env: AutoLabelEnvironment, now = Date.now())
             label = await buyLabel(env as never, data.address, data.items || [], 'BIOMOD ' + row.id.slice(0, 8), selected || { shippingService: data.shippingService }, shippingOptions, {
                 resumeShipmentId: typeof data.pendingShipmentId === 'string' ? data.pendingShipmentId : undefined,
                 maxCents: settings.maxLabelCents,
+                valueCents: goodsValueCents(data),
                 onShipment: async shipmentId => { await env.DB.prepare(`UPDATE orders SET data=json_set(data,'$.pendingShipmentId',?,'$.pendingAuto',json('true')),updated=? WHERE id=? AND status='labeling'`).bind(shipmentId, now, row.id).run(); },
             });
         } catch (e) {

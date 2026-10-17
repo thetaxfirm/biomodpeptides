@@ -17,13 +17,19 @@ export function orderPreorderNotice(data: { items?: unknown } | undefined): stri
 }
 
 /** Payment status is not proof of physical dispatch. Shared by admin and customer views. */
-export type FulfillmentOrder = { status: string; data?: { items?: unknown; internalTest?: boolean; shipment?: { status?: string; checkedAt?: number }; tracking?: string; hold?: unknown; labelCreatedAt?: number; labelApproval?: { cents?: number; limitCents?: number; at?: number } } };
+export type FulfillmentOrder = { status: string; data?: { items?: unknown; internalTest?: boolean; shipment?: { status?: string; checkedAt?: number }; tracking?: string; hold?: unknown; labelCreatedAt?: number; handoff?: { at?: number; by?: string }; labelApproval?: { cents?: number; limitCents?: number; at?: number } } };
 /** A label quoted above the automatic ceiling, waiting for a person to approve the cost. */
 export function awaitingLabelApproval(order: FulfillmentOrder): boolean {
     return Boolean(order.data?.labelApproval && !order.data?.shipment);
 }
-/** A label the carrier has not scanned in this long was probably never handed over. */
-export const STALLED_LABEL_MS = 48 * 3600000;
+/**
+ * A label the carrier has not scanned in this long needs a person. USPS works six days a week, so a
+ * parcel handed over today is scanned by tomorrow; a day of silence means it is still on the bench,
+ * or it was dropped off without an acceptance scan. Either way someone should look (owner, Oct 17 2026).
+ */
+export const STALLED_LABEL_MS = 24 * 3600000;
+/** A parcel the carrier reported moving, then went quiet for this long, is probably stuck or lost. */
+export const STUCK_IN_TRANSIT_MS = 4 * 86400000;
 /**
  * Bought, but the carrier has never reported it moving. Automatic purchase makes this likelier:
  * nobody consciously handled the order, so nobody notices the parcel still sitting on the bench.
@@ -36,6 +42,18 @@ export function stalledLabel(order: FulfillmentOrder, now = Date.now()): boolean
     return now - created > STALLED_LABEL_MS;
 }
 const moving = new Set(['in_transit', 'out_for_delivery', 'available_for_pickup']);
+/** Moving, but the carrier's last event is days old. checkedAt is the carrier's own event time. */
+export function stuckInTransit(order: FulfillmentOrder, now = Date.now()): boolean {
+    const s = order.data?.shipment, last = s?.checkedAt;
+    if (!s?.status || !moving.has(s.status) || typeof last !== 'number' || !Number.isFinite(last)) return false;
+    return now - last > STUCK_IN_TRANSIT_MS;
+}
+/** Carrier status in plain words for staff. Never claims a scan the carrier has not reported. */
+export const carrierWords: Record<string, string> = {
+    unknown: 'Not scanned by carrier yet', pre_transit: 'Not scanned by carrier yet', in_transit: 'In transit',
+    out_for_delivery: 'Out for delivery', available_for_pickup: 'At the post office for pickup', delivered: 'Delivered',
+    return_to_sender: 'Returning to sender', failure: 'Delivery failed', cancelled: 'Label cancelled', error: 'Carrier error',
+};
 const problems = new Set(['return_to_sender', 'failure', 'cancelled', 'error']);
 export function fulfillmentLabel(order: FulfillmentOrder): string {
     if (order.data?.internalTest) return 'Internal test: not a customer sale';
@@ -99,6 +117,7 @@ export function orderBucket(order: FulfillmentOrder, now = Date.now()): OrderBuc
     if (awaitingLabelApproval(order)) return 'review';
     // A label nobody ever handed to the carrier needs a human, not another day of waiting.
     if (stalledLabel(order, now)) return 'review';
+    if (stuckInTransit(order, now)) return 'review';
     if (carrier && moving.has(carrier)) return 'shipped';
     if (order.status === 'labeling' || (order.data?.shipment && ['paid', 'shipped'].includes(order.status))) return 'label';
     if (order.status === 'shipped') return 'shipped';
@@ -109,7 +128,14 @@ export function orderBucket(order: FulfillmentOrder, now = Date.now()): OrderBuc
 
 /** Customer-facing short status. Never claims a carrier event the carrier has not reported. */
 export function customerOrderStatus(order: FulfillmentOrder): { label: string; tone: Tone } {
-    const bucket = orderBucket(order);
+    let bucket = orderBucket(order);
+    // Unscanned and stuck parcels are a flag for staff, not news for the customer.
+    if (bucket === 'review' && !order.data?.hold && !awaitingLabelApproval(order)) {
+        const carrier = order.data?.shipment?.status;
+        if (stuckInTransit(order)) bucket = 'shipped';
+        else if (stalledLabel(order)) bucket = order.status === 'shipped' ? 'shipped' : 'label';
+        else if (carrier && moving.has(carrier)) bucket = 'shipped';
+    }
     return ({
         to_ship: { label: 'Processing', tone: 'progress' },
         label: { label: 'Preparing shipment', tone: 'progress' },

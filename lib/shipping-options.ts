@@ -12,6 +12,10 @@ export type ShippingOptionsConfig = {
     minimumServiceKey?: string;
     /** Delivery confirmation asked of the carrier when a label is bought. The store pays for it. */
     signatureConfirmation?: string;
+    /** Ask for the signature only on orders whose goods are worth at least this. Null: every order. Owner-set. */
+    signatureOverCents?: number | null;
+    /** Insure the goods' value on orders worth at least this. Null: never insure. Owner-set. */
+    insureOverCents?: number | null;
 };
 /** One carrier service the owner chose to offer: the extra charged on top of the carrier price and the customer wording. */
 export type ShippingServiceSetting = { key: string; enabled: boolean; markupCents: number; label: string; note: string };
@@ -70,6 +74,26 @@ export const signatureOptions = [
 export const noSignature = 'none';
 export const defaultSignatureConfirmation = 'SIGNATURE';
 /** The confirmation in force, or null when the store has turned it off. */
+/**
+ * What one label asks of the carrier, given the goods' value. An unknown value keeps the signature
+ * (the safer default) and never buys insurance, since there would be no honest amount to declare.
+ */
+export function labelProtection(settings: Pick<ShippingOptionsConfig, 'signatureConfirmation' | 'signatureOverCents' | 'insureOverCents'>, valueCents?: number | null) {
+    const known = typeof valueCents === 'number' && Number.isSafeInteger(valueCents) && valueCents > 0;
+    const asked = signatureConfirmation(settings);
+    const over = settings.signatureOverCents;
+    const signature = asked && (over == null || !known || valueCents! >= over) ? asked : null;
+    const insureOver = settings.insureOverCents;
+    const insuredCents = known && insureOver != null && valueCents! >= insureOver ? valueCents! : null;
+    return { signature, insuredCents };
+}
+/** What the customer paid for the goods: subtotal less discounts. Shipping and tax are not insured value. */
+export function goodsValueCents(data: { subtotal?: unknown; discount?: unknown } | undefined): number | null {
+    const subtotal = Number(data?.subtotal), discount = Number(data?.discount) || 0;
+    if (!Number.isSafeInteger(subtotal) || subtotal <= 0) return null;
+    const value = subtotal - (Number.isSafeInteger(discount) && discount > 0 ? discount : 0);
+    return value > 0 ? value : null;
+}
 export const signatureConfirmation = (settings: Pick<ShippingOptionsConfig, 'signatureConfirmation'>) => {
     const value = settings.signatureConfirmation;
     if (value === noSignature) return null;
@@ -115,7 +139,13 @@ const floor = (v: Record<string, unknown>) => ({
     signatureConfirmation: v.signatureConfirmation === noSignature ? noSignature
         : typeof v.signatureConfirmation === 'string' && signatureOptions.some(o => o.key === v.signatureConfirmation) ? v.signatureConfirmation
         : defaultSignatureConfirmation,
+    signatureOverCents: threshold(v.signatureOverCents),
+    insureOverCents: threshold(v.insureOverCents),
 });
+/** An owner-entered dollar threshold, stored in cents. Anything else means "not set". */
+function threshold(v: unknown): number | null {
+    return typeof v === 'number' && Number.isSafeInteger(v) && v >= 0 && v <= 10000000 ? v : null;
+}
 export function normalizeShippingOptions(value?: unknown, env: Record<string, string | undefined> = {}): ShippingOptionsConfig {
     const v = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
     const legacyHandling = cents(Number(env.SHIP_HANDLING_CENTS || 0), 0);

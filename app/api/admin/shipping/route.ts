@@ -3,7 +3,7 @@ import { requireStaff } from '@/lib/auth';
 import { buyLabel, easypostReady, sendTrackingEmail, shippingConnection, readShipmentTracking } from '@/lib/easypost';
 import { one, parse, runtime, timestamp } from '@/lib/runtime';
 import { auditRun, recordChange } from '@/lib/change-history';
-import { savedShippingOption } from '@/lib/shipping-options';
+import { savedShippingOption, goodsValueCents } from '@/lib/shipping-options';
 import { catalog, config } from '@/lib/commerce';
 import { coaBlockedItems, coaBlockMessage } from '@/lib/coa-shipping';
 import { readCoaConfig } from '@/lib/coa-outbox';
@@ -102,6 +102,7 @@ export async function POST(req: NextRequest) {
             label = await buyLabel(env, data.address, data.items || [], 'BIOMOD ' + id.slice(0, 8), selected || { shippingService: data.shippingService }, (await config()).shippingOptions, {
                 // A shipment recorded before the buy turns an unknown outcome into a resumable one.
                 resumeShipmentId: typeof data.pendingShipmentId === 'string' ? data.pendingShipmentId : undefined,
+                valueCents: goodsValueCents(data),
                 onShipment: async shipmentId => { await run("UPDATE orders SET data=json_set(data,'$.pendingShipmentId',?),updated=? WHERE id=? AND status='labeling'", shipmentId, timestamp(), id); },
             });
         }

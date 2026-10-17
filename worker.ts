@@ -8,6 +8,7 @@ import { runScheduledCoaOutbox } from './lib/coa-scheduler';
 import { runOverdueDigest } from './lib/reply-overdue';
 import { runTrackingSweep } from './lib/tracking-sweep';
 import { runAutoLabels } from './lib/auto-label';
+import { runParcelAlerts } from './lib/parcel-alerts';
 
 type TrafficWorkerEnvironment = CoaEnvironment;
 
@@ -30,7 +31,9 @@ export default {
       // Releases checkouts that were never paid, so their stock goes back on sale and their owner
       // is not locked out of ordering. Only ever acts on a provider-verified absence of payment.
       const expiryEnv = { ...env, DB: withAuditDb(env.DB, { source: 'system', actor: 'Unpaid checkout release', actorType: 'system' }) } as TrafficWorkerEnvironment;
-      const results=await Promise.allSettled([runScheduledCoaOutbox(coaEnv, controller.scheduledTime),runCheckoutRecovery(recoveryEnv),runOverdueDigest(digestEnv),runTrackingSweep(trackingEnv as never),runAutoLabels(labelEnv as never),runCheckoutExpiry(expiryEnv as never)]);
+      // Once a day: one internal email naming parcels the carrier has not scanned, stuck ones and returns.
+      const parcelEnv = { ...env, DB: withAuditDb(env.DB, { source: 'system', actor: 'Parcel alert digest', actorType: 'system' }) } as TrafficWorkerEnvironment;
+      const results=await Promise.allSettled([runScheduledCoaOutbox(coaEnv, controller.scheduledTime),runCheckoutRecovery(recoveryEnv),runOverdueDigest(digestEnv),runTrackingSweep(trackingEnv as never),runAutoLabels(labelEnv as never),runCheckoutExpiry(expiryEnv as never),runParcelAlerts(parcelEnv as never)]);
       if(results.some(result=>result.status==='rejected'))throw new Error('One or more scheduled correspondence tasks failed.');
     }
   },

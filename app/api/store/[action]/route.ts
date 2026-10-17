@@ -41,7 +41,7 @@ import { adminOverview } from '@/lib/admin-overview';
 export const dynamic = 'force-dynamic';
 // What each admin write needs. An admin action missing here requires the owner.
 const adminActionPermission: Record<string, StaffPermission> = {
-    'admin-orders': 'orders:read', 'admin-order': 'orders:fulfill', 'admin-order-archive': 'orders:fulfill', 'admin-reconcile': 'orders:reconcile',
+    'admin-orders': 'orders:read', 'admin-order': 'orders:fulfill', 'admin-order-archive': 'orders:fulfill', 'admin-order-handoff': 'orders:fulfill', 'admin-reconcile': 'orders:reconcile',
     'admin-request': 'requests:write', 'admin-request-reply': 'requests:write', 'admin-reply-desk': 'requests:write', 'admin-request-replies': 'requests:write', 'admin-reply-rule': 'requests:write', 'admin-request-forward': 'requests:write', 'admin-order-conversation': 'requests:write', 'admin-order-hold': 'requests:write', 'admin-win-back': 'requests:write', 'admin-mark-replied': 'requests:write', 'admin-win-back-preview': 'requests:write', 'admin-request-issue': 'requests:write', 'admin-case-log': 'requests:write', 'admin-coa-process': 'requests:write',
     'admin-config': 'store:write', 'admin-product': 'store:write', 'admin-campaign': 'store:write', 'admin-reward': 'store:write', 'admin-coa-config': 'store:write',
     'admin-staff': 'team:manage',
@@ -516,6 +516,22 @@ export async function POST(req: NextRequest, { params }: {
                 await run("UPDATE orders SET data=json_set(data,'$.archivedAt',?,'$.archivedBy',?),updated=? WHERE id=?", Date.now(), actor.email, timestamp(), order.id);
                 return j({ message: number + ' archived.' });
             }
+            if (action === 'admin-order-handoff') {
+                // Records who handed the parcel to the carrier and when. Changes no status and emails
+                // nobody: the order moves to Shipped only when the carrier's own scan arrives.
+                const input = z.object({ orderId: z.string().min(6).max(80), undo: z.boolean().optional() }).parse(b);
+                const order = await one<{ id: string; status: string; data: string }>('SELECT id,status,data FROM orders WHERE id=?', input.orderId);
+                if (!order) return j({ error: 'Order not found.' }, 404);
+                const data = parse<Record<string, any>>(order.data, {});
+                const number = '#' + order.id.slice(0, 8).toUpperCase();
+                if (input.undo) {
+                    await run("UPDATE orders SET data=json_remove(data,'$.handoff'),updated=? WHERE id=?", timestamp(), order.id);
+                    return j({ message: 'Drop-off cleared for ' + number + '.' });
+                }
+                if (!data.shipment?.tracking || !['paid', 'shipped'].includes(order.status)) return j({ error: number + ' has no label to drop off.' }, 409);
+                await run("UPDATE orders SET data=json_set(data,'$.handoff',json(?)),updated=? WHERE id=? AND json_extract(data,'$.handoff') IS NULL", JSON.stringify({ at: Date.now(), by: actor.email }), timestamp(), order.id);
+                return j({ message: number + ' marked dropped off. It moves to Shipped when the carrier scans it.' });
+            }
             if (action === 'admin-staff') {
                 const member = z.object({ email: z.string().trim().min(3).max(254), name: z.string().trim().max(100).optional(), role: z.enum(['manager', 'fulfillment', 'support']), active: z.boolean() }).parse(b);
                 return j(await saveStaffMember(auditEnv(), actor.email, member));
@@ -735,6 +751,11 @@ export async function POST(req: NextRequest, { params }: {
                     throw new Error('Only verified paid orders may be fulfilled.');
                 if (parse<Record<string, any>>(o.data, {}).hold)
                     throw new Error('This order is on hold for a reported problem. Clear the hold before marking it shipped.');
+                // A tracked parcel is delivered when the carrier says so, never by hand: a store claim
+                // over a parcel the carrier never scanned is how a lost box goes unnoticed.
+                const carrierShipment = parse<Record<string, any>>(o.data, {}).shipment;
+                if (status === 'delivered' && carrierShipment?.tracking && carrierShipment.status !== 'delivered')
+                    throw new Error('The carrier has not confirmed delivery. Tracked orders move to Delivered by themselves when the carrier scans the delivery.');
                 if (status === 'shipped' && o.status === 'paid') {
                     const blocked = coaBlockedItems(parse<Record<string, any>>(o.data, {}).items, await catalog(false, true));
                     if (blocked.length) throw new Error(coaBlockMessage(blocked));

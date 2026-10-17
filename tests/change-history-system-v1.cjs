@@ -19,6 +19,7 @@ const worker=load('worker.ts',{
  './lib/reply-overdue':{runOverdueDigest:async copy=>{assert.notEqual(copy,env);assert.notEqual(copy.DB,DB);}},
  './lib/tracking-sweep':{runTrackingSweep:async copy=>{assert.notEqual(copy,env);assert.notEqual(copy.DB,DB);jobs.push('tracking');return{checkedAt:0,due:0,read:0,changed:0,failed:0,skipped:0};}},
  './lib/auto-label':{runAutoLabels:async copy=>{assert.notEqual(copy,env);assert.notEqual(copy.DB,DB);jobs.push('labels');return{checkedAt:0,enabled:false,recovered:0,released:0,due:0,bought:0,failed:0,skipped:0,spentCents:0,capReached:false};}},
+ './lib/parcel-alerts':{runParcelAlerts:async copy=>{assert.notEqual(copy,env);assert.notEqual(copy.DB,DB);jobs.push('parcels');return{sent:false,reason:'all_moving'};}},
  './lib/checkout-expiry':{runCheckoutExpiry:async copy=>{assert.notEqual(copy,env);assert.notEqual(copy.DB,DB);jobs.push('expiry');return{status:'completed',checkedAt:0,due:0,released:0,kept:0,failed:0};}},
 }).default;
 class NextResponse extends Response{}
@@ -40,7 +41,8 @@ async function shippingEvent(signature=true,mode='production'){
   const row=rows().find(r=>r.entity_id===id);assert(row);assert.equal(row.actor,name);assert.equal(row.actor_type,'system');assert.equal(row.source,'system');
  }
  assert.equal(rows().length,baseline+3);assert.equal(sql.prepare('SELECT COUNT(*) n FROM change_context').get().n,0);
- await worker.scheduled({cron:'unrecognized'},env);assert.equal(jobs.length,6,'the six scheduled jobs ran once; an unrecognized cron runs none');
+ await worker.scheduled({cron:'unrecognized'},env);assert.equal(jobs.length,7,'the seven scheduled jobs ran once; an unrecognized cron runs none');
+ assert(jobs.includes('parcels'),'the daily parcel alert runs on the five-minute cron under its own audit identity');
  assert(jobs.includes('tracking'),'the carrier tracking sweep runs on the five-minute cron');
  assert(jobs.includes('labels'),'automatic label purchase runs on the five-minute cron under its own audit identity');
  assert(jobs.includes('expiry'),'unpaid checkout release runs on the five-minute cron under its own audit identity');

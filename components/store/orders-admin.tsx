@@ -10,7 +10,7 @@ import { orderMessageLabel, type OrderMessageLog } from '@/lib/order-messages';
 import { api, report } from './provider';
 import { Field } from './primitives';
 import { money } from '@/lib/catalog';
-import { fulfillmentLabel, awaitingLabelApproval } from '@/lib/fulfillment';
+import { fulfillmentLabel, awaitingLabelApproval, carrierWords, stalledLabel, stuckInTransit } from '@/lib/fulfillment';
 import { bucketStatus, queueTabs, canArchive, isArchived, closedReason, type QueueResult, type QueueRow, type QueueTab, type OrderBucket } from '@/lib/order-queue';
 import { CarrierConnection } from './fulfillment-admin';
 import { ShippingLabel } from './shipping-admin';
@@ -44,37 +44,48 @@ export function StatusBadge({ bucket }: { bucket: OrderBucket }) {
 const orderNumber = (id: string) => '#' + id.slice(0, 8).toUpperCase();
 const units = (o: QueueRow) => (Array.isArray(o.data?.items) ? o.data.items : []).reduce((n: number, i: any) => n + (Number(i?.quantity) || 0), 0);
 const place = (o: QueueRow) => [o.data?.address?.city, o.data?.address?.state].filter(Boolean).join(', ');
-/** What the carrier last said, and when we last heard it. Empty until a label exists. */
+const shortTime = (at: number) => new Date(at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+/** What the carrier last said in plain words, and when it said it. Empty until a label exists. */
 function carrierLine(o: QueueRow) {
     const s = o.data?.shipment;
     if (!s?.status) return '';
-    const seen = Number.isFinite(s.checkedAt) ? ' · ' + new Date(s.checkedAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '';
-    return String(s.status).replaceAll('_', ' ') + seen;
+    const words = carrierWords[s.status] || String(s.status).replaceAll('_', ' ');
+    if (stuckInTransit(o)) return 'No carrier update since ' + shortTime(s.checkedAt);
+    if (s.status === 'unknown' || s.status === 'pre_transit') {
+        const handoff = Number.isFinite(o.data?.handoff?.at) ? 'Dropped off ' + shortTime(o.data.handoff.at) : stalledLabel(o) ? 'Not dropped off' : '';
+        return [stalledLabel(o) ? 'Not scanned 24h+' : words, handoff].filter(Boolean).join(' · ');
+    }
+    return words + (Number.isFinite(s.checkedAt) ? ' · ' + shortTime(s.checkedAt) : '');
+}
+/** Insurance and signature bought with the label, so staff know what the parcel carries. */
+function protectionLine(o: QueueRow) {
+    const s = o.data?.shipment;
+    return [s?.insuredCents ? 'Insured ' + money(s.insuredCents) : '', s?.signature ? 'Signature' : ''].filter(Boolean).join(' · ');
 }
 
 /** The line under the status: what the carrier said, why an order closed, and when it was archived. */
 function statusLine(o: QueueRow) {
     const archived = isArchived(o) ? 'Archived ' + new Date(o.data.archivedAt).toLocaleDateString([], { dateStyle: 'medium' }) : '';
     const why = o.bucket === 'closed' ? closedReason(o) : '';
-    return [o.data?.shipment?.status ? carrierLine(o) : why, archived].filter(Boolean).join(' · ');
+    return [o.data?.shipment?.status ? carrierLine(o) : why, protectionLine(o), archived].filter(Boolean).join(' · ');
 }
 
-/** A bought label can be confirmed as handed to the carrier straight from the queue. */
-export const canConfirmShipped = (o: QueueRow, allowed: (permission: string) => boolean) =>
-    allowed('orders:fulfill') && o.bucket === 'label' && ['paid', 'shipped'].includes(o.status);
+/** A bought label not yet handed over can be marked dropped off straight from the queue. */
+export const canMarkDroppedOff = (o: QueueRow, allowed: (permission: string) => boolean) =>
+    allowed('orders:fulfill') && o.bucket === 'label' && ['paid', 'shipped'].includes(o.status) && !o.data?.handoff;
 
 /**
- * Queue shortcut for the manual "handed to carrier" confirmation already in the order panel.
- * Keeps the tracking number recorded with the label; never buys or voids anything.
+ * Records that the parcel left the building. Changes no status and emails nobody: the order moves to
+ * Shipped only when the carrier scans it, so the queue never claims a shipment the carrier has not seen.
  */
-export function MarkShipped({ order, busy, change }: { order: QueueRow; busy: boolean; change: (action: string, body: any, onSaved?: (result: any) => void) => Promise<void> }) {
+export function DroppedOff({ order, busy, change }: { order: QueueRow; busy: boolean; change: (action: string, body: any, onSaved?: (result: any) => void) => Promise<void> }) {
     const number = orderNumber(order.id);
     function click() {
         const ask = typeof window === 'undefined' ? undefined : window.confirm;
-        if (ask && !ask('Mark ' + number + ' as shipped? This records a store confirmation that the parcel is with the carrier, and the customer is told it has shipped.')) return;
-        void change('order', { id: order.id, status: 'shipped', tracking: order.data?.tracking || '' }, () => toast.success(number + ' marked shipped.'));
+        if (ask && !ask('Mark ' + number + ' as dropped off with the carrier? The customer is not emailed. It moves to Shipped when the carrier scans it.')) return;
+        void change('order-handoff', { orderId: order.id }, r => toast.success(r?.message || number + ' marked dropped off.'));
     }
-    return <button type="button" className="text-button" disabled={busy} onClick={click}>Mark shipped</button>;
+    return <button type="button" className="text-button" disabled={busy} onClick={click}>Dropped off</button>;
 }
 
 /** Sent as a body, never a query string: the search term is a customer's own contact details. */
@@ -167,7 +178,7 @@ export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, form
         if (o.bucket === 'to_ship' && allowed('orders:fulfill')) return <ShippingLabel order={o} onDone={reload} compact/>;
         if (o.bucket === 'label' && s?.labelUrl) return <span className={styles.nextGroup}>
             <a className="text-button" href={s.labelUrl} target="_blank" rel="noopener">Print label</a>
-            {canConfirmShipped(o, allowed) && <MarkShipped order={o} busy={busy} change={change}/>}
+            {canMarkDroppedOff(o, allowed) && <DroppedOff order={o} busy={busy} change={change}/>}
         </span>;
         if ((o.bucket === 'shipped' || o.bucket === 'delivered') && s?.trackingUrl) return <a className="text-button" href={s.trackingUrl} target="_blank" rel="noopener">Track</a>;
         if ((o.bucket === 'unpaid' || o.bucket === 'review') && canReconcile(o)) return <button type="button" className="text-button" disabled={busy} onClick={() => reconcile(o)}>Check payment</button>;

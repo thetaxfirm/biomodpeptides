@@ -33,6 +33,9 @@ const saveSchema = z.object({
     freeStandardEnabled: z.boolean(), freeShippingAt: z.number().int().min(0).max(1000000), shippingCents: z.number().int().min(0).max(100000).nullable(),
     minimumServiceKey: z.string().max(80).optional(),
     signatureConfirmation: z.string().max(40).optional(),
+    // Owner-entered thresholds in cents; null clears. Omitted keeps what is saved.
+    signatureOverCents: z.number().int().min(0).max(10000000).nullable().optional(),
+    insureOverCents: z.number().int().min(0).max(10000000).nullable().optional(),
     autoLabel: z.object({
         enabled: z.boolean(),
         delayMinutes: z.number().int().min(0).max(1440),
@@ -105,7 +108,9 @@ export async function POST(req: NextRequest) {
     const next = parsed.data;
     const current = await config();
     // 'none' is the explicit opt-out; an absent key takes the store default, so the owner's choice is stored verbatim.
-    const shippingOptions = { ...current.shippingOptions, freeStandardEnabled: next.freeStandardEnabled, services: next.services, minimumServiceKey: next.minimumServiceKey || undefined, signatureConfirmation: next.signatureConfirmation || undefined };
+    const shippingOptions = { ...current.shippingOptions, freeStandardEnabled: next.freeStandardEnabled, services: next.services, minimumServiceKey: next.minimumServiceKey || undefined, signatureConfirmation: next.signatureConfirmation || undefined,
+        ...(next.signatureOverCents !== undefined ? { signatureOverCents: next.signatureOverCents } : {}),
+        ...(next.insureOverCents !== undefined ? { insureOverCents: next.insureOverCents } : {}) };
     // The scheduler reads these straight from the stored settings; an omitted block leaves them as they were.
     const savedAuto = (current as Record<string, any>).autoLabel as Record<string, unknown> | undefined;
     // A submitted block that omits the per-label ceiling keeps the saved one, so an older admin page

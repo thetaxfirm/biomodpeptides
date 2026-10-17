@@ -13,7 +13,7 @@ type LiveRate = { key: string; name: string; cents: number; days: number | null;
 type ServiceCheck = { key: string; label: string; status: 'ok' | 'missing' | 'wrong'; carrierCents: number | null; customerCents: number | null; message: string };
 type Check = { ok: true; checkedAt: string; destination: string; package: string; rates: LiveRate[]; options: { label: string; note: string; cents: number; days: number | null }[]; services: ServiceCheck[]; freeStandardLabel: string | null } | { ok: false; error: string };
 type Row = ShippingServiceSetting & { markup: string };
-type Draft = { rows: Row[]; freeStandardEnabled: boolean; threshold: string; fallback: string; minimumServiceKey: string; signatureConfirmation: string; autoEnabled?: boolean; autoDelay?: string; autoCap?: string; autoMax?: string };
+type Draft = { rows: Row[]; freeStandardEnabled: boolean; threshold: string; fallback: string; minimumServiceKey: string; signatureConfirmation: string; signatureOver?: string; insureOver?: string; autoEnabled?: boolean; autoDelay?: string; autoCap?: string; autoMax?: string };
 const ENDPOINT = '/api/admin/shipping-services';
 const carriers = ['USPS', 'UPS', 'FedEx'] as const;
 const groups = { standard: 'Standard', expedited: 'Faster', overnight: 'Overnight' } as const;
@@ -40,6 +40,7 @@ function draftFrom(config: ShippingSettingsConfig): Draft {
     const options = normalizeShippingOptions(config.shippingOptions);
     const auto = config.autoLabel;
     return { rows: startingRows(options), freeStandardEnabled: options.freeStandardEnabled, threshold: centsText(config.freeShippingAt), fallback: config.shippingCents == null ? '' : centsText(config.shippingCents), minimumServiceKey: options.minimumServiceKey || defaultMinimumServiceKey, signatureConfirmation: options.signatureConfirmation || defaultSignatureConfirmation,
+        signatureOver: options.signatureOverCents == null ? '' : centsText(options.signatureOverCents), insureOver: options.insureOverCents == null ? '' : centsText(options.insureOverCents),
         autoEnabled: auto ? auto.enabled : true, autoDelay: String(auto ? Math.round(auto.delayMs / 60000) : 20), autoCap: centsText(auto ? auto.dailyCapCents : 50000), autoMax: centsText(auto?.maxLabelCents ?? 7500) };
 }
 /** Validated save payload. Throws a message the owner can act on. */
@@ -51,6 +52,9 @@ export function shippingServicesPayload(draft: Draft) {
         return { key: row.key, enabled: row.enabled, markupCents: parseDollars(row.markup, `The extra charge for ${name}`), label: label || name, note: row.note.trim() };
     });
     return { services, freeStandardEnabled: draft.freeStandardEnabled, freeShippingAt: parseDollars(draft.threshold, 'Free shipping minimum', 1000000), shippingCents: draft.fallback.trim() === '' ? null : parseDollars(draft.fallback, 'Backup standard price'), minimumServiceKey: draft.minimumServiceKey || defaultMinimumServiceKey, signatureConfirmation: draft.signatureConfirmation || defaultSignatureConfirmation,
+        // Empty means not set: every order is signed for, and nothing is insured.
+        ...(draft.signatureOver === undefined ? {} : { signatureOverCents: draft.signatureOver.trim() === '' ? null : parseDollars(draft.signatureOver, 'The signature minimum', 10000000) }),
+        ...(draft.insureOver === undefined ? {} : { insureOverCents: draft.insureOver.trim() === '' ? null : parseDollars(draft.insureOver, 'The insurance minimum', 10000000) }),
         // Omitted rather than guessed when the caller did not collect them; the server then keeps what it has.
         ...(typeof draft.autoEnabled === 'boolean' ? { autoLabel: { enabled: draft.autoEnabled, delayMinutes: minutes(draft.autoDelay), dailyCapCents: parseDollars(draft.autoCap ?? '', 'The daily automatic postage limit', 10000000),
             // Omitted rather than guessed when the caller did not collect it; the server keeps the saved ceiling.
@@ -235,6 +239,10 @@ export function AdminShippingSettings({ config, busy = false }: { config: Shippi
                     </select>
                 </label>
                 <p className={styles.muted}>Asked for when the label is bought, so checkout prices never change and you pay the fee. Proof of delivery is what defeats a &ldquo;never arrived&rdquo; chargeback; the trade is a missed delivery when nobody is home.</p>
+                <label className={styles.field}><span>Only on orders of at least ($)</span><input type="number" min="0" max="100000" step="1" value={draft.signatureOver ?? ''} placeholder="Every order" disabled={locked || draft.signatureConfirmation === 'none'} onChange={e => setDraft(d => ({ ...d, signatureOver: e.target.value }))}/></label>
+                <p className={styles.muted}>Goods value after discounts, not shipping or tax. Empty asks for it on every order.</p>
+                <label className={styles.field}><span>Insure orders of at least ($)</span><input type="number" min="0" max="100000" step="1" value={draft.insureOver ?? ''} placeholder="No insurance" disabled={locked} onChange={e => setDraft(d => ({ ...d, insureOver: e.target.value }))}/></label>
+                <p className={styles.muted}>Insures the full goods value through EasyPost when the label is bought. You pay the fee. Empty buys no insurance.</p>
             </div>
             <div>
                 <label className={styles.check}><input type="checkbox" checked={draft.autoEnabled} disabled={locked} onChange={e => setDraft(d => ({ ...d, autoEnabled: e.target.checked }))}/><span>Buy labels automatically</span></label>

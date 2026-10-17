@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { shipmentEmailText } from './fulfillment';
-import { normalizeShippingOptions, shippingCarrier, shippingTier, shippingTierEnabled, shippingHandling, serviceKey, enabledServiceSetting, catalogService, shippingCarriers, type ShippingOptionsConfig, type ShippingOption, type ShippingCarrier, minimumService, tierRank, signatureConfirmation } from './shipping-options';
+import { normalizeShippingOptions, shippingCarrier, shippingTier, shippingTierEnabled, shippingHandling, serviceKey, enabledServiceSetting, catalogService, shippingCarriers, type ShippingOptionsConfig, type ShippingOption, type ShippingCarrier, minimumService, tierRank, labelProtection } from './shipping-options';
 // EasyPost shipping: live checkout rates, label purchase and tracking webhooks.
 // Everything stays off until EASYPOST_API_KEY is set; checkout then falls back to the flat rate in store settings.
 type Environment = Record<string, string | undefined>;
@@ -153,14 +153,14 @@ export async function cheapestRate(env: Environment, to: ShipAddress, items: Shi
     if (!best) throw new ShippingError('No allowed carrier rate is available for this address.');
     return { cents: best.cents + normalizeShippingOptions(undefined, env).standardHandlingCents, service: serviceName(best) };
 }
-export type Label = { shipmentId: string; carrier: string; service: string; costCents: number; tracking: string; trackingUrl: string; labelUrl: string; status: string };
+export type Label = { shipmentId: string; carrier: string; service: string; costCents: number; tracking: string; trackingUrl: string; labelUrl: string; status: string; signature?: string | null; insuredCents?: number | null };
 export type LabelSelection = Pick<ShippingOption, 'carrier' | 'carrierService' | 'tier' | 'source'> & { shippingService?: string };
 /**
  * Idempotency hooks. A purchase that times out may already have been charged, so the caller records
  * the shipment before the buy and hands it back on a retry: an already-bought shipment is adopted
  * rather than replaced, which is the only thing standing between a slow carrier and double postage.
  */
-export type LabelAttempt = { resumeShipmentId?: string; onShipment?: (shipmentId: string) => Promise<void>; maxCents?: number };
+export type LabelAttempt = { resumeShipmentId?: string; onShipment?: (shipmentId: string) => Promise<void>; maxCents?: number; valueCents?: number | null };
 /** A shipment EasyPost has already bought. Reading it is how a retry avoids paying twice. */
 export function boughtLabel(shipment: Record<string, any>): Label | null {
     if (shipment?.mode !== 'production') return null;
@@ -172,7 +172,13 @@ export function boughtLabel(shipment: Record<string, any>): Label | null {
     const service = String(rate.service || '');
     const cents = typeof rate.rate === 'string' && /^\d+(?:\.\d{1,2})?$/.test(rate.rate) ? Math.round(Number(rate.rate) * 100) : NaN;
     if (!carrier || !/^[a-zA-Z0-9_ -]{1,100}$/.test(service) || !Number.isSafeInteger(cents) || cents <= 0) return null;
-    return { shipmentId: String(shipment.id), carrier, service: serviceName({ carrier, service }), costCents: cents, tracking, trackingUrl: String(shipment.tracker?.public_url || ''), labelUrl, status: 'pre_transit' };
+    return { shipmentId: String(shipment.id), carrier, service: serviceName({ carrier, service }), costCents: cents, tracking, trackingUrl: String(shipment.tracker?.public_url || ''), labelUrl, status: 'pre_transit', ...protectionOf(shipment) };
+}
+/** What EasyPost says this shipment carries: the signature asked for and the insured amount. */
+function protectionOf(shipment: Record<string, any>) {
+    const signature = typeof shipment?.options?.delivery_confirmation === 'string' ? shipment.options.delivery_confirmation : null;
+    const insured = typeof shipment?.insurance === 'string' && /^\d+(?:\.\d{1,2})?$/.test(shipment.insurance) ? Math.round(Number(shipment.insurance) * 100) : null;
+    return { signature, insuredCents: insured && insured > 0 ? insured : null };
 }
 /** Read-only: has this shipment already been bought? Used to recover an attempt whose outcome was lost. */
 export async function readBoughtLabel(env: Environment, shipmentId: string): Promise<Label | null> {
@@ -191,7 +197,7 @@ export async function buyLabel(env: Environment, to: ShipAddress, items: ShipIte
         if (already) return already;
     } else {
         // Delivery confirmation is requested here, so it is priced into every rate we then choose from.
-        const signature = signatureConfirmation(settings);
+        const { signature } = labelProtection(settings, attempt.valueCents);
         shipment = await createShipment(env, to, items, reference, signature ? { delivery_confirmation: signature } : undefined);
         // Recorded before the buy, so an unknown outcome can be resolved instead of repeated.
         if (attempt.onShipment) await attempt.onShipment(String(shipment.id));
@@ -226,12 +232,14 @@ export async function buyLabel(env: Environment, to: ShipAddress, items: ShipIte
     // rather than treat an expensive label as an error to try again.
     if (typeof attempt.maxCents === 'number' && best.cents > attempt.maxCents)
         throw new ShippingError('This label would cost $' + (best.cents / 100).toFixed(2) + ', above the automatic limit of $' + (attempt.maxCents / 100).toFixed(2) + '. Buy it by hand to approve that cost.', 'label_above_limit', best.cents);
-    const bought = await call(env, '/shipments/' + encodeURIComponent(String(shipment.id)) + '/buy', { rate: { id: best.id } });
+    // Insurance is bought with the label, on the goods' value, at the store's expense.
+    const { insuredCents } = labelProtection(settings, attempt.valueCents);
+    const bought = await call(env, '/shipments/' + encodeURIComponent(String(shipment.id)) + '/buy', { rate: { id: best.id }, ...(insuredCents ? { insurance: (insuredCents / 100).toFixed(2) } : {}) });
     const tracking = String(bought.tracking_code || '');
     const labelUrl = String(bought.postage_label?.label_url || '');
     if (!tracking || !labelUrl)
         throw new ShippingError('EasyPost bought the label but did not return tracking. Check the EasyPost dashboard before retrying.');
-    return { shipmentId: String(bought.id), carrier: best.carrier, service: serviceName(best), costCents: best.cents, tracking, trackingUrl: String(bought.tracker?.public_url || ''), labelUrl, status: 'pre_transit' };
+    return { shipmentId: String(bought.id), carrier: best.carrier, service: serviceName(best), costCents: best.cents, tracking, trackingUrl: String(bought.tracker?.public_url || ''), labelUrl, status: 'pre_transit', ...protectionOf(bought) };
 }
 /** EasyPost signs webhooks with X-Hmac-Signature: hmac-sha256-hex=<HMAC-SHA256 of the raw body using the webhook secret>. */
 export function verifyEasypostWebhook(raw: string, header: string | null, secret: string): boolean {
