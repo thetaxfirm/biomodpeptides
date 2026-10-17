@@ -512,7 +512,7 @@ export async function POST(req: NextRequest, { params }: {
                 const input = z.object({ id: z.string().uuid(), mode: z.enum(['ai', 'staff']), body: z.string().max(12000).optional(), instruction: z.string().max(2000).optional(), expectedRevision: z.number().int().positive().nullable(), coaSha256: z.string().max(330).nullable().optional(), send: z.boolean().optional() }).parse(b);
                 try {
                     const reply = await prepareRequestReply(runtime(), { ...input, requestId: input.id }, actor);
-                    return j({ reply, message: input.send ? 'Sending from research@biomodpeptides.com through Jarvis.' : input.mode === 'ai' ? 'AI is writing the draft.' : 'Draft saved. Nothing was sent.' });
+                    return j({ reply, message: input.send ? 'Sending from contact@trybiomod.com through Jarvis.' : input.mode === 'ai' ? 'AI is writing the draft.' : 'Draft saved. Nothing was sent.' });
                 } catch (error) {
                     const status = (error as Error & { status?: number }).status;
                     return j({ error: status ? (error as Error).message : 'The reply could not be prepared. Refresh and try again.' }, status || 500);

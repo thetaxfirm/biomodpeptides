@@ -268,7 +268,7 @@ export async function sendTrackingEmail(env: Environment, to: string, orderId: s
         const r = await fetch('https://api.resend.com/emails', {
             method: 'POST',
             headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ from: env.SHIP_EMAIL_FROM || 'BIOMOD <no-reply@trybiomod.com>', to: [to], reply_to: reply, subject: 'Your BIOMOD order ' + orderId.slice(0, 8) + ' tracking information', html }),
+            body: JSON.stringify({ from: env.SHIP_EMAIL_FROM || 'BIOMOD <contact@trybiomod.com>', to: [to], reply_to: reply, subject: 'Your BIOMOD order ' + orderId.slice(0, 8) + ' tracking information', html }),
             redirect: 'manual',
             signal: AbortSignal.timeout(10000),
         });

@@ -56,11 +56,11 @@ const cases=require('../lib/request-cases.ts'),replies=require('../lib/request-r
  const ext=require('../lib/request-external.ts');
  const open=(await replies.handleReplyBridge(env,{action:'open_requests'})).requests;assert(open.some(r=>r.id===wb.requestId&&r.email==='cart@example.invalid'));
  const created=sql.prepare('SELECT created FROM requests WHERE id=?').get(wb.requestId).created;
- const found={requestId:wb.requestId,account:'research@biomodpeptides.com',messageId:'gmail-1',sentAt:created+1000,body:'Sent from Gmail',preview:false};
+ const found={requestId:wb.requestId,account:'contact@trybiomod.com',messageId:'gmail-1',sentAt:created+1000,body:'Sent from Gmail',preview:false};
  await replies.handleReplyBridge(env,{action:'external_replies',replies:[found,found,{...found,messageId:'gmail-old',sentAt:created-3600000}]});
- sql.prepare("INSERT INTO request_reply_messages(id,request_id,direction,body,created,provider_message_id,provider_thread_id,sender,recipient) VALUES('m1',?,'outgoing','desk',?,'gmail-desk',NULL,'research@biomodpeptides.com','cart@example.invalid')").run(wb.requestId,created+5);
+ sql.prepare("INSERT INTO request_reply_messages(id,request_id,direction,body,created,provider_message_id,provider_thread_id,sender,recipient) VALUES('m1',?,'outgoing','desk',?,'gmail-desk',NULL,'contact@trybiomod.com','cart@example.invalid')").run(wb.requestId,created+5);
  await replies.handleReplyBridge(env,{action:'external_replies',replies:[{...found,messageId:'gmail-desk'}]});
- let extList=(await ext.externalRepliesFor(env,[wb.requestId]))[wb.requestId];assert.equal(extList.length,1,'One per message; old mail and desk sends ignored');assert.equal(extList[0].account,'research@biomodpeptides.com');
+ let extList=(await ext.externalRepliesFor(env,[wb.requestId]))[wb.requestId];assert.equal(extList.length,1,'One per message; old mail and desk sends ignored');assert.equal(extList[0].account,'contact@trybiomod.com');
  await assert.rejects(()=>replies.handleReplyBridge(env,{action:'external_replies',replies:[{...found,requestId:'not-a-uuid'}]}),e=>e.status===400);
  await assert.rejects(()=>ext.markReplied(env,{requestId:wb.requestId},{email:'f@example.invalid',role:'fulfillment'}),e=>e.status===403);
  await ext.markReplied(env,{requestId:wb.requestId,note:'Called him'},owner);extList=(await ext.externalRepliesFor(env,[wb.requestId]))[wb.requestId];assert.equal(extList.find(e=>e.source==='manual').body,'Called him');

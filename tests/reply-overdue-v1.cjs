@@ -15,7 +15,7 @@ const {overdueCustomers,runOverdueDigest}=require('../lib/reply-overdue.ts');
  add({name:'Fresh',email:'fresh@example.invalid',subject:'Hi',message:'New today'},now-3600000);
  add({name:'Vendor',email:'vendor@example.invalid',subject:'High quality peptides',message:'We are a leading manufacturer'},now-5*day);
  const answered=add({name:'Answered',email:'done@example.invalid',subject:'Q',message:'q'},now-3*day);
- sql.prepare("INSERT INTO request_reply_messages(id,request_id,direction,body,created,provider_message_id,sender,recipient) VALUES('m',?,'outgoing','a',?,'p','research@biomodpeptides.com','done@example.invalid')").run(answered,now-2*day);
+ sql.prepare("INSERT INTO request_reply_messages(id,request_id,direction,body,created,provider_message_id,sender,recipient) VALUES('m',?,'outgoing','a',?,'p','contact@trybiomod.com','done@example.invalid')").run(answered,now-2*day);
  const phoned=add({name:'Phoned',email:'phone@example.invalid',subject:'Q',message:'q'},now-3*day);
  sql.prepare("INSERT INTO request_external_replies(id,request_id,source,account,sent_at,body,recorded_by,created) VALUES('e',?,'manual','owner@example.invalid',?,'Called','owner@example.invalid',?)").run(phoned,now-2*day,now);
  add({name:'Closed',email:'closed@example.invalid',subject:'Q',message:'q'},now-3*day,'resolved');

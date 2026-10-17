@@ -70,8 +70,8 @@ try {
   assert.doesNotMatch(calls.at(-1)[3].subject, /has shipped/);
   assert.equal(calls.at(-1)[3].reply_to, 'current-reply@example.invalid');
   assert.match(calls.at(-1)[3].html, /Questions\? Reply to current-reply@example\.invalid/);
-  assert.doesNotMatch(JSON.stringify(calls.at(-1)[3]), /contact@trybiomod\.com/);
-  assert.equal(calls.at(-1)[3].from, 'BIOMOD <no-reply@trybiomod.com>', 'Reply routing preserves the existing sender');
+  assert.doesNotMatch(calls.at(-1)[3].html, /contact@trybiomod\.com/);
+  assert.equal(calls.at(-1)[3].from, 'BIOMOD <contact@trybiomod.com>', 'Reply routing preserves the existing sender');
   assert.equal(await e.sendTrackingEmail({ RESEND_API_KEY: 're_test', SHIP_EMAIL_FROM: 'Fixture <shipping@example.invalid>' }, 'a@b.co', 'order-2', label, 'Ada', 'next-reply@example.invalid'), true);
   assert.equal(calls.at(-1)[3].reply_to, 'next-reply@example.invalid', 'Later sends use the current reply address');
   assert.equal(calls.at(-1)[3].from, 'Fixture <shipping@example.invalid>', 'Configured sender is unchanged');

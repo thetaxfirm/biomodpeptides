@@ -31,7 +31,7 @@ const request=(id,status='new',kind='contact',data={})=>({id,kind,status,created
 const status=(value,extra={})=>({status:value,reason:'fixture',acceptedAt:null,canProcess:false,productName:'Fixture material',strength:'10 mg',lot:'QA-LOT',reportId:'QA-ORIGINAL',...extra});
 const requests=[request('accepted'),request('duplicate'),request('review'),request('ordinary'),request('partner','resolved','affiliate',{website:'https://example.invalid/partner'}),request('vendor','spam','contact',{message:'Supplier catalog offer'}),request('progress','in_progress'),request('stock','reviewed','stock')];
 const automation={config:{enabled:true,replyTo:'owner@example.invalid',notifyTo:'owner@example.invalid'},mailConfigured:true,sender:'sender@example.invalid',requests:{accepted:{coa:status('accepted',{canProcess:true}),alert:null},duplicate:{coa:status('duplicate',{canProcess:true,relatedStatus:'accepted'}),alert:null},review:{coa:status('manual_review',{canProcess:true}),alert:null},ordinary:{coa:null,alert:status('accepted')}}};
-function reply(id,extra={}){return {id:'job-'+id,requestId:id,revision:1,status:'queued',mode:'ai',sender:'research@biomodpeptides.com',recipient:id+'@example.invalid',subject:'Re: Question '+id,body:'',preparedBy:'synthetic-staff@example.invalid',updated:Date.parse('2026-10-14T08:00:00Z'),coa:{state:'not_requested',reason:'No original COA requested.'},history:[],...extra};}
+function reply(id,extra={}){return {id:'job-'+id,requestId:id,revision:1,status:'queued',mode:'ai',sender:'contact@trybiomod.com',recipient:id+'@example.invalid',subject:'Re: Question '+id,body:'',preparedBy:'synthetic-staff@example.invalid',updated:Date.parse('2026-10-14T08:00:00Z'),coa:{state:'not_requested',reason:'No original COA requested.'},history:[],...extra};}
 const field=(host,name)=>{const node=nodes(host.tree).find(n=>n.type==='textarea'&&n.props.name===name);assert(node,'Expected '+name);return node;};
 const type=(host,name,value)=>{field(host,name).props.onChange({target:{value}});host.render();};
 const flush=async host=>{for(let i=0;i<4;i++)await Promise.resolve();host.render();};
@@ -59,7 +59,7 @@ async function main(){
  assert(text(host.tree).includes('3 of the last 4'),'Learning progress is visible');
  // Opening a conversation never sends; it shows the thread, pickers and an owner Send.
  openRow(host,'new-old');assert.equal(preparations.length,0);
- assert(text(host.tree).includes('Synthetic request body only'));assert(text(host.tree).includes('research@biomodpeptides.com'));
+ assert(text(host.tree).includes('Synthetic request body only'));assert(text(host.tree).includes('contact@trybiomod.com'));
  assert.equal(field(host,'replyBody').props.maxLength,12000);
  const send=()=>nodes(host.tree).find(n=>n.type==='button'&&text(n)==='Send');assert(send(),'Owner sees Send');assert.equal(send().props.disabled,true,'Empty reply cannot be sent');
  // Codes insert into the draft; the COA picker stages a chosen original.

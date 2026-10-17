@@ -5,7 +5,7 @@ import { withAuditDb, type AuditActor } from './change-history';
 import { activePromotions } from './promotions';
 import { openRequestsForBridge, recordMailboxReplies } from './request-external';
 import { isIssue, issueLabel, resolutionLabel, looksLikePitchText } from './request-issues';
-export const REPLY_SENDER = 'research@biomodpeptides.com';
+export const REPLY_SENDER = 'contact@trybiomod.com';
 type Env = { DB: D1Database };
 type Actor = { email: string; role: string };
 export type ReplyCoa = {state:'matched'|'needs_review'|'already_sent'|'not_requested';reason:string;extras?:ReplyCoa[];productName?:string;strength?:string;lot?:string;reportId?:string;chemicalIdentity?:string;sha256?:string;filename?:string};

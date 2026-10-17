@@ -1,24 +1,24 @@
 # Store contact address switch, 2026-10-16 (v1)
 
-Owner request: use contact@trybiomod.com in place of the owner's previous company address for every store and admin email.
+Owner request: customer-facing store email comes from contact@trybiomod.com. trybiomod.com now has Google Workspace MX records, so the mailbox receives mail.
 
-trybiomod.com now has Google Workspace MX records, so contact@trybiomod.com can receive mail.
+## Owner access (unchanged)
 
-## Changed (runtime only, no code change)
+The owner's existing sign-in address stays in `STORE_ADMIN_EMAILS`. For about an hour on Oct 16 it was replaced by contact@trybiomod.com in error; the owner reported it and the original list was restored the same evening. contact@trybiomod.com is not an owner sign-in.
+
+## Runtime settings
 
 | Where | Setting | Now |
 | --- | --- | --- |
-| Worker `biomod-peptides` | `STORE_ADMIN_EMAILS` (owners) | contact@trybiomod.com replaces the old owner address; other owners unchanged |
-| Worker `biomod-peptides` | `ORDER_NOTIFY_EMAILS` (paid-order copies) | contact@trybiomod.com replaces the old address |
-| D1 `settings.coa_delivery_v1` | COA, tracking and checkout-recovery reply-to, COA notify | contact@trybiomod.com |
+| Worker `biomod-peptides` | `STORE_ADMIN_EMAILS` | Original owner list, unchanged |
+| Worker `biomod-peptides` | `ORDER_NOTIFY_EMAILS` | Original recipients plus contact@trybiomod.com |
+| D1 `settings.coa_delivery_v1` | Customer reply-to (COA, tracking, checkout recovery) | contact@trybiomod.com |
+| D1 `settings.coa_delivery_v1` | COA staff notification | Owner address, unchanged |
 
-Other Worker bindings were sent as `inherit` and verified unchanged (28 bindings, 11 secrets).
+## Code (this release)
 
-## Owner sign-in
+- Default From for store email (orders, tracking, COA, checkout recovery, overdue alerts, forwards) is `BIOMOD <contact@trybiomod.com>` instead of no-reply@. No `*_EMAIL_FROM` override is set on the Worker.
+- Reply desk sender is contact@trybiomod.com (lib/request-replies.ts, desk labels). Jarvis sends desk replies from the connected contact@trybiomod.com mailbox.
+- Migration 0032 rebuilds `request_reply_drafts` so the sender check allows both mailboxes; sent history keeps research@biomodpeptides.com and unsent drafts move to contact@trybiomod.com. Triggers and index are recreated unchanged.
 
-The old owner address no longer has owner access. First admin sign-in with the new address: /admin/login > Forgot password? sends a set-up link to contact@trybiomod.com.
-
-## Not changed
-
-Test fixtures under `tests/` use the old address as an example owner; they do not send mail.
-The reply desk still sends customer replies from its existing Jarvis mailbox until the owner decides otherwise.
+Rollback: revert this commit's lib/components changes; the widened sender check is harmless to keep.

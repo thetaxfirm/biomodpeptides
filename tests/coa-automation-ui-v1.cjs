@@ -31,7 +31,7 @@ const sendButtons=p=>nodes(CoaAutomation(p)).filter(n=>n.type==='button'&&text(n
 const form=p=>nodes(CoaAutomation(p)).find(n=>n.type==='form');
 const before=JSON.stringify(report),html=render(props);
 assert.match(html,/Email controls and delivery history/);
-assert(html.includes('AI and staff replies: owner approval required.'));assert(html.includes('research@biomodpeptides.com'));assert(html.includes('clicks Send in the website reply desk or Jarvis'));
+assert(html.includes('AI and staff replies: owner approval required.'));assert(html.includes('contact@trybiomod.com'));assert(html.includes('clicks Send in the website reply desk or Jarvis'));
 assert(html.includes('Customer-requested COA links: automatic.'));assert(html.includes('lot printed on their vial matches an approved original report'));assert(html.includes('An unmatched lot goes to the reply desk for review'));
 assert(!html.includes('No COA is sent automatically'));assert(html.includes('New-request alerts: enabled.'));assert(html.includes('Overdue-request reminders: automatic internal emails.'));assert(html.includes('Unpaid-checkout reminders: enabled.'));assert(html.includes('additional 7.5% off after existing discounts'));
 assert(html.includes('This switch controls new-request alerts only'));assert(html.includes('Customer-requested COA links and AI drafts appear with their requests'));

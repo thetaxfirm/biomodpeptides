@@ -60,7 +60,7 @@ export async function sendCoaLink(env: CoaEnvironment, input: { productId: unkno
     // Owner rule (Oct 14): only the on-request HEAT products are emailed. Everything else is read on the page.
     if (!current) throw new CoaLinkError('This COA cannot be sent by email yet. Contact us and we will send it.', 404);
     if (!report) return queueLotReview(env, { email, productId, productName: current.productName, lot, currentLot: current.lot }, deps);
-    const sender = coaSender(env.COA_EMAIL_FROM || env.ORDER_EMAIL_FROM || 'BIOMOD <no-reply@trybiomod.com>');
+    const sender = coaSender(env.COA_EMAIL_FROM || env.ORDER_EMAIL_FROM || 'BIOMOD <contact@trybiomod.com>');
     if (!env.RESEND_API_KEY?.trim() || !sender) throw new CoaLinkError('COA email is not available right now. Contact us and we will send it.', 503);
     const now = (deps.now || Date.now)();
     const id = (deps.uuid || (() => crypto.randomUUID()))();

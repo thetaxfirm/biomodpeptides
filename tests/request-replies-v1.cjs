@@ -21,7 +21,7 @@ const ready=async(f,requestId,options={},body='Thanks for your question. We will
 const validate=(x,body=x.body)=>({action:'validate',id:x.job.id,revision:x.job.revision,readyId:x.readyId,recipient:x.job.recipient,sender:api.REPLY_SENDER,attachmentSha256:x.job.attachment?.sha256||null,body});
 const conflict=async(fn)=>assert.rejects(fn,e=>e.status===409);
 (async()=>{try{
- let f=setup(),request=f.request(),draft=await f.prepare(request);assert.equal(draft.status,'queued');assert.equal(draft.sender,'research@biomodpeptides.com');assert.equal(draft.recipient,'reply-fixture@example.invalid');assert(draft.history[0].body.includes('retatrutide'),'Original submission is not masked');assert.equal(draft.preparedBy,staff.email);
+ let f=setup(),request=f.request(),draft=await f.prepare(request);assert.equal(draft.status,'queued');assert.equal(draft.sender,'contact@trybiomod.com');assert.equal(draft.recipient,'reply-fixture@example.invalid');assert(draft.history[0].body.includes('retatrutide'),'Original submission is not masked');assert.equal(draft.preparedBy,staff.email);
  await conflict(()=>f.prepare(request));assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM request_reply_drafts').get().n,1);
  await assert.rejects(()=>api.prepareRequestReply(f.env,{requestId:request,mode:'ai',expectedRevision:1},{email:'attacker@example.invalid',role:'customer'}),e=>e.status===403);
  await assert.rejects(()=>f.prepare(f.request(),{mode:'staff',body:''}),e=>e.status===400);

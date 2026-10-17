@@ -38,7 +38,7 @@ export async function runScheduledCoaOutbox(env: CoaEnvironment, scheduledAt: nu
     health.phase = 'readiness';
     const config = await readCoaConfig(env);
     health.enabled = config.enabled;
-    health.mailConfigured = Boolean(env.RESEND_API_KEY?.trim() && coaSender(env.COA_EMAIL_FROM || env.ORDER_EMAIL_FROM || 'BIOMOD <no-reply@trybiomod.com>'));
+    health.mailConfigured = Boolean(env.RESEND_API_KEY?.trim() && coaSender(env.COA_EMAIL_FROM || env.ORDER_EMAIL_FROM || 'BIOMOD <contact@trybiomod.com>'));
     health.phase = 'processing';
     await update();
     const result = await processCoaOutbox(env, { limit: 5 });

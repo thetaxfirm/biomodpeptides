@@ -67,7 +67,7 @@ export function CoaAutomation({ report, checkoutRecovery, requests = [], busy, d
   const requestById = new Map(requests.map(request => [request.id, request]));
   return <section className={styles.section} aria-labelledby="coa-automation-title">
     <h2 id="coa-automation-title">Email controls and delivery history</h2>
-    <p><strong>AI and staff replies: owner approval required.</strong> Drafts use research@biomodpeptides.com. An owner reviews the message and clicks Send in the website reply desk or Jarvis.</p>
+    <p><strong>AI and staff replies: owner approval required.</strong> Drafts use contact@trybiomod.com. An owner reviews the message and clicks Send in the website reply desk or Jarvis.</p>
     <p><strong>Customer-requested COA links: automatic.</strong> When a customer chooses Request by email, a private link is sent only after the lot printed on their vial matches an approved original report. An unmatched lot goes to the reply desk for review.</p>
     <p><strong>New-request alerts: {report.config.enabled ? 'enabled' : 'disabled'}.</strong> These notify staff about new contact and partner requests; they are not replies to customers.</p>
     <p><strong>Overdue-request reminders: automatic internal emails.</strong> A daily reminder goes to the notification address, or an owner if that address is blank, when a customer has waited over a day for a reply.</p>

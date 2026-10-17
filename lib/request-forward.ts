@@ -33,7 +33,7 @@ export async function forwardRequest(env: Env, input: { requestId: string; to: s
   const to = coaEmail(input.to); if (!to) fail('Choose a team member.', 400);
   if (!(await teamMembers(env)).some(m => m.email === to)) fail('You can forward only to a current BioMod team member.', 403);
   const note = text(input.note).slice(0, 2000).trim();
-  const key = env.RESEND_API_KEY?.trim(), sender = coaSender(env.COA_EMAIL_FROM || env.ORDER_EMAIL_FROM || 'BIOMOD <no-reply@trybiomod.com>');
+  const key = env.RESEND_API_KEY?.trim(), sender = coaSender(env.COA_EMAIL_FROM || env.ORDER_EMAIL_FROM || 'BIOMOD <contact@trybiomod.com>');
   if (!key || !sender) fail('Team email is not configured on the website.', 503);
   const now = (deps.now || Date.now)();
   const today = await env.DB.prepare('SELECT COUNT(*) n FROM request_forwards WHERE created>?').bind(now - 86400000).first<{ n: number }>();

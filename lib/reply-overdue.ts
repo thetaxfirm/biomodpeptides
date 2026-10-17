@@ -44,7 +44,7 @@ async function digest(env: CoaEnvironment, now: number, deps: { fetch?: typeof f
   if (!waiting.length) return { sent: false, reason: 'nobody_waiting' };
   const owners = (env.STORE_ADMIN_EMAILS || '').split(',').map(v => coaEmail(v)).filter(Boolean) as string[];
   const to = (await readCoaConfig(env)).notifyTo || owners[0];
-  const from = coaSender(env.COA_EMAIL_FROM || env.ORDER_EMAIL_FROM || 'BIOMOD <no-reply@trybiomod.com>');
+  const from = coaSender(env.COA_EMAIL_FROM || env.ORDER_EMAIL_FROM || 'BIOMOD <contact@trybiomod.com>');
   if (!to || !from || !env.RESEND_API_KEY?.trim()) return { sent: false, reason: 'mail_unconfigured' };
   const days = (since: number) => Math.max(1, Math.floor((now - since) / DAY));
   const text = [`${waiting.length} ${waiting.length === 1 ? 'customer has' : 'customers have'} waited over a day for a reply:`, '',

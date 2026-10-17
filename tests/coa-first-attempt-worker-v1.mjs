@@ -104,7 +104,7 @@ try {
   assert.equal(calls.length, 1);
   await until(async()=>Boolean(await DB.prepare("SELECT id FROM request_reply_drafts WHERE request_id=? AND status='queued'").bind(firstId).first()), 'Saved inquiry did not create a review-only reply draft');
   const firstDraft=await DB.prepare('SELECT sender,recipient,request_id,status FROM request_reply_drafts WHERE request_id=?').bind(firstId).first();
-  assert.equal(firstDraft.sender,'research@biomodpeptides.com');assert.equal(firstDraft.recipient,'first-fixture@example.invalid');assert.equal(firstDraft.request_id,firstId);
+  assert.equal(firstDraft.sender,'contact@trybiomod.com');assert.equal(firstDraft.recipient,'first-fixture@example.invalid');assert.equal(firstDraft.request_id,firstId);
   assert.equal((await DB.prepare('SELECT COUNT(*) n FROM request_reply_messages').first()).n,0,'Preparing a reply does not record a sent customer message');
 
   // A repeated report inquiry preserves recipient/report deduplication without sending either COA.

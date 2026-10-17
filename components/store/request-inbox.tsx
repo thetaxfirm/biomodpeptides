@@ -49,7 +49,7 @@ type Props = {
 type Draft = { body: string; instruction: string; revision: number | null; edited: boolean; error: string; message: string; coa?: string | null; undo?: string; remember: boolean };
 type Stage = 'todo' | 'sending' | 'waiting' | 'done' | 'spam' | 'deleted' | 'pitch';
 const noReplies: Record<string, ReplySummary> = {};
-const sender = 'research@biomodpeptides.com';
+const sender = 'contact@trybiomod.com';
 const DAY = 86400000;
 const text = (value: unknown) => typeof value === 'string' ? value.trim() : '';
 function usableEmail(value: unknown) {

@@ -15,7 +15,7 @@ const CAPS = { coa: 100, 'request-alert': 50 };
 const DEFAULT_CONFIG: CoaConfig = { enabled: false, replyTo: 'contact@trybiomod.com', notifyTo: null };
 const parse = (value: string): any => { try { return JSON.parse(value); } catch { return null; } };
 const validId = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9-]{36}$/.test(value);
-const senderFor = (env: CoaEnvironment) => coaSender(env.COA_EMAIL_FROM || env.ORDER_EMAIL_FROM || 'BIOMOD <no-reply@trybiomod.com>');
+const senderFor = (env: CoaEnvironment) => coaSender(env.COA_EMAIL_FROM || env.ORDER_EMAIL_FROM || 'BIOMOD <contact@trybiomod.com>');
 const mailReady = (env: CoaEnvironment) => Boolean(env.RESEND_API_KEY?.trim() && senderFor(env));
 export async function readCoaConfig(env: CoaEnvironment): Promise<CoaConfig> {
  const row = await env.DB.prepare("SELECT value FROM settings WHERE key='coa_delivery_v1'").first<{value:string}>();

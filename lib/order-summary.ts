@@ -77,7 +77,7 @@ export async function sendOrderNotification(env: Environment, orderId: string, d
         const r = await fetch('https://api.resend.com/emails', {
             method: 'POST',
             headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ from: env.ORDER_EMAIL_FROM || 'BIOMOD Orders <no-reply@trybiomod.com>', to, ...(data.email ? { reply_to: String(data.email) } : {}), subject: 'New order ' + orderId.slice(0, 8) + ' - ' + money(int(data.total)) + ' - ' + count + ' item' + (count === 1 ? '' : 's'), html: orderEmailHtml(orderId, data) }),
+            body: JSON.stringify({ from: env.ORDER_EMAIL_FROM || 'BIOMOD Orders <contact@trybiomod.com>', to, ...(data.email ? { reply_to: String(data.email) } : {}), subject: 'New order ' + orderId.slice(0, 8) + ' - ' + money(int(data.total)) + ' - ' + count + ' item' + (count === 1 ? '' : 's'), html: orderEmailHtml(orderId, data) }),
             redirect: 'manual',
             signal: AbortSignal.timeout(10000),
         });

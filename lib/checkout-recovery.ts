@@ -49,7 +49,7 @@ export async function runCheckoutRecovery(env:CoaEnvironment,deps:Dependencies={
  try {
   const cfg=await env.DB.prepare("SELECT value FROM settings WHERE key='checkout_recovery_v1'").first<{value:string}>(),config=json(cfg?.value||'null');
   if(config?.enabled!==true){await health('disabled');return counters;}
-  const sender=coaSender(env.ORDER_EMAIL_FROM||'BIOMOD <no-reply@trybiomod.com>');
+  const sender=coaSender(env.ORDER_EMAIL_FROM||'BIOMOD <contact@trybiomod.com>');
   if(!Number.isSafeInteger(config.startsAt)||config.startsAt<=0||!sender||!env.RESEND_API_KEY?.trim()||getPaymentStatus(env).state!=='live'||!getPaymentStatus(env).checkoutEnabled||paymentEnvironment(env)!=='authorizenet:live'){await health('configuration_required');return counters;}
   const verify=deps.verify||createPaymentAdapter(env).verifyPayment;
   const {replyTo}=await readCoaConfig(env);
