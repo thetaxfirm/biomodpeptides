@@ -77,7 +77,7 @@ assert.equal(fulfillment.stalledLabel(order('stall8', 'paid', { shipment: { stat
 
 // Counts cover every bucket; All excludes internal tests.
 const all = q.queryOrders(rows, { tab: 'all' });
-assert.deepEqual(all.counts, { to_ship: 2, label: 2, shipped: 2, delivered: 2, unpaid: 2, review: 2, closed: 1, all: 13, test: 1 });
+assert.deepEqual(all.counts, { to_ship: 2, label: 2, shipped: 2, delivered: 2, unpaid: 2, review: 2, closed: 1, all: 13, test: 1, archived: 0 });
 assert.equal(all.total, 13);
 assert(all.orders.every(o => o.bucket !== 'test'), 'internal tests stay out of All');
 assert.equal(all.orders[0].id.startsWith('refund1'), true, 'All is newest first');
@@ -134,4 +134,23 @@ const admin = fs.readFileSync(path.join(root, 'components/store/admin.tsx'), 'ut
 assert.match(admin, /<OrdersAdmin /);
 const ui = fs.readFileSync(path.join(root, 'components/store/orders-admin.tsx'), 'utf8');
 assert.match(ui, /allowed\('orders:fulfill'\)/); assert.match(ui, /change\('reconcile', \{ id: o\.id \}, d => toast\.info\(d\.message \|\| d\.status\)\)/); assert.match(ui, /submit\(e, 'order', d => \(\{ \.\.\.d, id: order\.id \}\), key\)/); assert.match(ui, /onChangeCapture=\{\(\) => markDraft\(key\)\}/); assert.match(ui, /allowed\('orders:reconcile'\)/);
+
+// Archive files finished orders out of the working tabs without changing their status.
+assert.deepEqual(q.archivableBuckets, ['closed', 'delivered', 'test']);
+for (const b of ['to_ship', 'label', 'shipped', 'unpaid', 'review']) assert.equal(q.canArchive(b), false, b + ' still needs work');
+const filed = rows.map(o => o.id.startsWith('refund1') || o.id.startsWith('dlv2') ? { ...o, data: { ...o.data, archivedAt: 5, archivedBy: 'fixture' } } : o);
+const filedAll = q.queryOrders(filed, { tab: 'all' });
+assert.equal(filedAll.counts.archived, 2); assert.equal(filedAll.counts.closed, 0); assert.equal(filedAll.counts.delivered, 1); assert.equal(filedAll.counts.all, 11);
+assert(!filedAll.orders.some(o => o.id.startsWith('refund1')), 'archived orders leave All');
+assert.deepEqual(q.queryOrders(filed, { tab: 'archived' }).orders.map(o => o.id.slice(0, 7)).sort(), ['dlv2000', 'refund1']);
+assert.equal(q.queryOrders(filed, { tab: 'archived' }).orders.find(o => o.id.startsWith('refund1')).bucket, 'closed', 'archive keeps the real status');
+assert.equal(q.queryOrders(filed, { id: filed.find(o => o.id.startsWith('refund1')).id }).orders.length, 1, 'lookup still finds an archived order');
+assert.equal(q.closedReason({ status: 'cancelled', data: { releasedReason: 'unpaid_checkout_expired' } }), 'Never paid · checkout expired');
+assert.equal(q.closedReason({ status: 'refunded', data: {} }), 'Refunded');
+const archiveBlock = route.slice(route.indexOf("action === 'admin-order-archive'"), route.indexOf("action === 'admin-staff'"));
+assert.match(route, /'admin-order-archive': 'orders:fulfill'/, 'archiving needs fulfillment rights');
+assert.match(archiveBlock, /canArchive\(orderBucket/, 'the server refuses to archive open work');
+assert.match(archiveBlock, /json_set\(data,'\$\.archivedAt'/); assert.match(archiveBlock, /json_remove\(data,'\$\.archivedAt','\$\.archivedBy'\)/);
+assert(!/SET status|status=\?/.test(archiveBlock), 'archive never changes order status');
+assert.match(ui, /change\('order-archive', \{ orderId: o\.id \}/); assert.match(ui, /restore: true/);
 console.log('PASS: order queue buckets, counts, search, ordering, paging, lookup and wiring');

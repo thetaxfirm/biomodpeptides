@@ -11,7 +11,7 @@ import { api, report } from './provider';
 import { Field } from './primitives';
 import { money } from '@/lib/catalog';
 import { fulfillmentLabel, awaitingLabelApproval } from '@/lib/fulfillment';
-import { bucketStatus, queueTabs, type QueueResult, type QueueRow, type QueueTab, type OrderBucket } from '@/lib/order-queue';
+import { bucketStatus, queueTabs, canArchive, isArchived, closedReason, type QueueResult, type QueueRow, type QueueTab, type OrderBucket } from '@/lib/order-queue';
 import { CarrierConnection } from './fulfillment-admin';
 import { ShippingLabel } from './shipping-admin';
 import { OrderDetails } from './order-admin';
@@ -50,6 +50,13 @@ function carrierLine(o: QueueRow) {
     if (!s?.status) return '';
     const seen = Number.isFinite(s.checkedAt) ? ' · ' + new Date(s.checkedAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '';
     return String(s.status).replaceAll('_', ' ') + seen;
+}
+
+/** The line under the status: what the carrier said, why an order closed, and when it was archived. */
+function statusLine(o: QueueRow) {
+    const archived = isArchived(o) ? 'Archived ' + new Date(o.data.archivedAt).toLocaleDateString([], { dateStyle: 'medium' }) : '';
+    const why = o.bucket === 'closed' ? closedReason(o) : '';
+    return [o.data?.shipment?.status ? carrierLine(o) : why, archived].filter(Boolean).join(' · ');
 }
 
 /** A bought label can be confirmed as handed to the carrier straight from the queue. */
@@ -138,7 +145,16 @@ export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, form
         const winBack = onWinBack && o.bucket === 'unpaid' && o.data?.email ? <select className={styles.winBack} value="" disabled={busy} aria-label={'Send ' + (o.data?.address?.name || 'this customer') + ' a win-back email'} onChange={e => { if (e.target.value) onWinBack(o, e.target.value); }}>
             <option value="">Win back…</option>{winBackTemplates.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
         </select> : null;
-        return report || winBack ? <span className={styles.nextGroup}>{step}{winBack}{report}</span> : step;
+        const archive = archiveButton(o);
+        return report || winBack || archive ? <span className={styles.nextGroup}>{step}{winBack}{report}{archive}</span> : step;
+    }
+    /** Files a finished order away, or brings it back. Only for orders with nothing left to do. */
+    function archiveButton(o: QueueRow) {
+        if (!allowed('orders:fulfill')) return null;
+        const number = orderNumber(o.id);
+        if (isArchived(o)) return <button type="button" className="text-button" disabled={busy} onClick={() => void change('order-archive', { orderId: o.id, restore: true }, r => toast.success(r.message || number + ' restored.'))}>Restore</button>;
+        if (!canArchive(o.bucket)) return null;
+        return <button type="button" className="text-button" disabled={busy} onClick={() => void change('order-archive', { orderId: o.id }, r => toast.success(r.message || number + ' archived.'))}>Archive</button>;
     }
     function mainStep(o: QueueRow, s: any) {
         const noCoa = (o as QueueRow & { coaMissing?: string[] }).coaMissing || [];
@@ -200,7 +216,7 @@ export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, form
                     <td>{o.data?.address?.name || 'Name not recorded'}<span className={styles.sub}>{[place(o), o.data?.email].filter(Boolean).join(' · ')}</span></td>
                     <td className={styles.number}>{units(o)}</td>
                     <td className={styles.number}>{money(Number(o.total) || 0)}</td>
-                    <td><StatusBadge bucket={o.bucket}/>{o.data?.shipment?.status && <span className={styles.sub}>{carrierLine(o)}</span>}</td>
+                    <td><StatusBadge bucket={o.bucket}/>{statusLine(o) && <span className={styles.sub}>{statusLine(o)}</span>}</td>
                     <td className={styles.messaged}><MessagedCell order={o}/></td>
                     <td className={styles.next}>{nextStep(o)}</td>
                 </tr>)}</tbody>

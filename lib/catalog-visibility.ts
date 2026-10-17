@@ -42,5 +42,7 @@ export function adminOrderView(data: Record<string, any>) {
     shippedAt: data.shippedAt,
     labelCreatedAt: data.labelCreatedAt,
     ...(data.hold ? { hold: data.hold } : {}),
+    ...(Number.isFinite(data.archivedAt) ? { archivedAt: data.archivedAt, archivedBy: data.archivedBy } : {}),
+    ...(typeof data.releasedReason === 'string' ? { releasedReason: data.releasedReason, releasedAt: data.releasedAt } : {}),
   };
 }

@@ -68,7 +68,7 @@ export function shipmentEmailText(status: string): string {
 
 // Short status: one state per order for the admin queue and the customer order list.
 export type OrderBucket = 'to_ship' | 'label' | 'shipped' | 'delivered' | 'unpaid' | 'review' | 'closed' | 'test';
-export type QueueTab = OrderBucket | 'all';
+export type QueueTab = OrderBucket | 'all' | 'archived';
 export type Tone = 'action' | 'progress' | 'done' | 'waiting' | 'problem' | 'muted';
 
 export const bucketStatus: Record<OrderBucket, { label: string; tone: Tone }> = {

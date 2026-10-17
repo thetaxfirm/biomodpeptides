@@ -4,7 +4,7 @@ import { orderBucket, type FulfillmentOrder, type OrderBucket } from './fulfillm
 export { orderBucket, bucketStatus, customerOrderStatus, type OrderBucket, type Tone } from './fulfillment';
 
 // Tab order is the order of work: what needs doing first comes first.
-export type QueueTab = OrderBucket | 'all';
+export type QueueTab = OrderBucket | 'all' | 'archived';
 export const queueTabs: { id: QueueTab; label: string }[] = [
     { id: 'to_ship', label: 'To ship' },
     { id: 'label', label: 'Label bought' },
@@ -15,6 +15,7 @@ export const queueTabs: { id: QueueTab; label: string }[] = [
     { id: 'closed', label: 'Refunded / cancelled' },
     { id: 'all', label: 'All' },
     { id: 'test', label: 'Internal tests' },
+    { id: 'archived', label: 'Archived' },
 ];
 
 export type QueueOrder = { id: string; owner?: string; status: string; total: number; created: number; data: Record<string, any> };
@@ -36,6 +37,22 @@ function searchText(order: QueueOrder): string {
         .filter(Boolean).join(' ').toLowerCase();
 }
 
+/**
+ * Archive is a filing step, not a status: it only takes finished orders out of the working tabs.
+ * Never offered for anything that still needs money, a label, a parcel or a decision.
+ */
+export const archivableBuckets: OrderBucket[] = ['closed', 'delivered', 'test'];
+export const canArchive = (bucket: OrderBucket) => archivableBuckets.includes(bucket);
+export const isArchived = (order: { data?: Record<string, any> }) => Number.isFinite(order.data?.archivedAt);
+
+/** Why a closed order closed, in words, when the record says. */
+export function closedReason(order: { status: string; data?: Record<string, any> }): string {
+    if (order.data?.releasedReason === 'unpaid_checkout_expired') return 'Never paid · checkout expired';
+    if (order.status === 'refunded') return 'Refunded';
+    if (order.status === 'failed') return 'Payment unsuccessful';
+    return '';
+}
+
 export function isQueueTab(value: unknown): value is QueueTab {
     return queueTabs.some(t => t.id === value);
 }
@@ -49,13 +66,19 @@ export function queryOrders(rows: QueueOrder[], params: { tab?: unknown; q?: unk
     const scannedRows = truncated ? rows.slice(0, scanLimit) : rows;
     const tagged: QueueRow[] = scannedRows.map(o => ({ ...o, bucket: orderBucket(o) }));
     const counts = Object.fromEntries(queueTabs.map(t => [t.id, 0])) as Record<QueueTab, number>;
-    for (const o of tagged) { counts[o.bucket] += 1; if (o.bucket !== 'test') counts.all += 1; }
+    // An archived order counts only under Archived, so the working tabs show work.
+    for (const o of tagged) {
+        if (isArchived(o)) { counts.archived += 1; continue; }
+        counts[o.bucket] += 1; if (o.bucket !== 'test') counts.all += 1;
+    }
     const tab: QueueTab = isQueueTab(params.tab) ? params.tab : 'to_ship';
     const q = cleanQuery(params.q);
     const words = q ? q.split(/\s+/) : [];
     const id = typeof params.id === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(params.id) ? params.id : '';
     // A single-order lookup ignores the tab so the details panel follows an order that changed state.
-    let list = id ? tagged.filter(o => o.id === id) : tagged.filter(o => tab === 'all' ? o.bucket !== 'test' : o.bucket === tab);
+    let list = id ? tagged.filter(o => o.id === id)
+        : tab === 'archived' ? tagged.filter(isArchived)
+        : tagged.filter(o => !isArchived(o) && (tab === 'all' ? o.bucket !== 'test' : o.bucket === tab));
     if (words.length && !id) list = list.filter(o => { const t = searchText(o); return words.every(w => t.includes(w)); });
     // Work queues run oldest first so nothing waits behind newer orders; everything else is newest first.
     if (tab === 'to_ship' || tab === 'label') list = [...list].reverse();

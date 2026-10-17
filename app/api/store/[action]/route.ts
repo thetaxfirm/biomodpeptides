@@ -1,5 +1,5 @@
 import { replyBridgeRoute } from '@/lib/request-reply-route';
-import { queryOrders, scanLimit } from '@/lib/order-queue';
+import { queryOrders, scanLimit, orderBucket, canArchive, isArchived } from '@/lib/order-queue';
 import { publicCatalog } from '@/lib/public-catalog';
 import { batchRecordsFor, batchStatus, batchPath } from '@/lib/testing';
 import { externalRepliesFor, markReplied } from '@/lib/request-external';
@@ -41,7 +41,7 @@ import { adminOverview } from '@/lib/admin-overview';
 export const dynamic = 'force-dynamic';
 // What each admin write needs. An admin action missing here requires the owner.
 const adminActionPermission: Record<string, StaffPermission> = {
-    'admin-orders': 'orders:read', 'admin-order': 'orders:fulfill', 'admin-reconcile': 'orders:reconcile',
+    'admin-orders': 'orders:read', 'admin-order': 'orders:fulfill', 'admin-order-archive': 'orders:fulfill', 'admin-reconcile': 'orders:reconcile',
     'admin-request': 'requests:write', 'admin-request-reply': 'requests:write', 'admin-reply-desk': 'requests:write', 'admin-request-replies': 'requests:write', 'admin-reply-rule': 'requests:write', 'admin-request-forward': 'requests:write', 'admin-order-conversation': 'requests:write', 'admin-order-hold': 'requests:write', 'admin-win-back': 'requests:write', 'admin-mark-replied': 'requests:write', 'admin-win-back-preview': 'requests:write', 'admin-request-issue': 'requests:write', 'admin-case-log': 'requests:write', 'admin-coa-process': 'requests:write',
     'admin-config': 'store:write', 'admin-product': 'store:write', 'admin-campaign': 'store:write', 'admin-reward': 'store:write', 'admin-coa-config': 'store:write',
     'admin-staff': 'team:manage',
@@ -498,6 +498,23 @@ export async function POST(req: NextRequest, { params }: {
                 // Who was emailed and when, for each order on this page (owner, Oct 15 2026).
                 const messages = await orderMessageLogs(runtime() as any, result.orders as any);
                 return j({ ...result, orders: result.orders.map((o: any) => ({ ...o, messages: messages[o.id] || { count: 0, last: null, items: [] }, coaMissing: ['paid', 'labeling'].includes(o.status) && !o.data?.shipment ? coaBlockedItems(o.data?.items, products) : [] })), noCoa: noCoaProducts(products, waiting) });
+            }
+            if (action === 'admin-order-archive') {
+                // Files a finished order out of the working tabs, or puts it back. Changes nothing else:
+                // status, payment, label and customer record stay exactly as they were.
+                const input = z.object({ orderId: z.string().min(6).max(80), restore: z.boolean().optional() }).parse(b);
+                const order = await one<{ id: string; status: string; data: string }>('SELECT id,status,data FROM orders WHERE id=?', input.orderId);
+                if (!order) return j({ error: 'Order not found.' }, 404);
+                const data = parse<Record<string, any>>(order.data, {});
+                const number = '#' + order.id.slice(0, 8).toUpperCase();
+                if (input.restore) {
+                    if (!isArchived({ data })) return j({ message: number + ' is not archived.' });
+                    await run("UPDATE orders SET data=json_remove(data,'$.archivedAt','$.archivedBy'),updated=? WHERE id=?", timestamp(), order.id);
+                    return j({ message: number + ' restored.' });
+                }
+                if (!canArchive(orderBucket({ status: order.status, data }))) return j({ error: number + ' still needs work, so it cannot be archived.' }, 409);
+                await run("UPDATE orders SET data=json_set(data,'$.archivedAt',?,'$.archivedBy',?),updated=? WHERE id=?", Date.now(), actor.email, timestamp(), order.id);
+                return j({ message: number + ' archived.' });
             }
             if (action === 'admin-staff') {
                 const member = z.object({ email: z.string().trim().min(3).max(254), name: z.string().trim().max(100).optional(), role: z.enum(['manager', 'fulfillment', 'support']), active: z.boolean() }).parse(b);
