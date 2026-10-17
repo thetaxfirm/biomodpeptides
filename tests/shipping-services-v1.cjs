@@ -125,6 +125,33 @@ const rejected = async(fn,pattern)=>{const count=sql.prepare('SELECT COUNT(*) n 
  const paidStd=await issueQuote('svc-free',lines,address,undefined,{quoteId:freeFirst.quoteId,shippingOptionId:'rate_upsground'});
  assert.equal(paidStd.shipping,1150,'A second standard service keeps its price over the minimum');
  store({shippingOptions:{freeStandardEnabled:false,services}});q=await deliveryQuote(lines,address);assert(!q.shippingOptions.some(o=>o.free));
+ // Owner, Oct 17 2026: no standard service on, so USPS Priority Mail is the free service at the minimum; Express never is.
+ const usps=[{key:'USPS:GROUNDADVANTAGE',enabled:false,markupCents:0,label:'USPS Ground Advantage',note:''},{key:'USPS:PRIORITY',enabled:true,markupCents:0,label:'USPS Priority Mail',note:''},{key:'USPS:EXPRESS',enabled:true,markupCents:1000,label:'USPS Priority Mail Express',note:''}];
+ const ratesBefore=available;available=[rate('ground','USPS','GroundAdvantage','9.00',3),rate('priority','USPS','Priority','12.00',2),rate('express','USPS','Express','21.00',2)];
+ store({freeShippingAt:25000,shippingOptions:{freeStandardEnabled:true,services:usps}});seedProduct(24999);
+ q=await deliveryQuote(lines,address);
+ assert.deepEqual(q.shippingOptions.map(o=>[o.serviceKey,o.shipping,o.free]),[['USPS:PRIORITY',1200,false],['USPS:EXPRESS',3100,false]],'Below $250 nothing is free');
+ seedProduct(25000);
+ q=await deliveryQuote(lines,address);
+ assert.deepEqual(q.shippingOptions.map(o=>[o.serviceKey,o.shipping,o.free,o.shippingService]),[['USPS:PRIORITY',0,true,'Free · USPS Priority Mail'],['USPS:EXPRESS',3100,false,'USPS Priority Mail Express']]);
+ const freePriority=await issueQuote('svc-priority',lines,address);
+ assert.equal(freePriority.shipping,0);
+ const priorityOrder=await checkout('svc-priority',lines,requestBody(freePriority));
+ const prioritySaved=JSON.parse(sql.prepare('SELECT data FROM orders WHERE id=?').get(priorityOrder.id).data);
+ assert.deepEqual([prioritySaved.shipping,prioritySaved.shippingOption.serviceKey,prioritySaved.shippingOption.free],[0,'USPS:PRIORITY',true]);
+ assert(shipping.savedShippingOption(prioritySaved.shippingOption),'A free Priority snapshot is a valid saved option');
+ assert.equal(shipping.savedShippingOption({...prioritySaved.shippingOption,serviceKey:'USPS:EXPRESS',carrierService:'Express'}),null,'A free Express snapshot is refused');
+ const pendingFree=await issueQuote('svc-priority-2',lines,address);
+ store({freeShippingAt:25000,shippingOptions:{freeStandardEnabled:false,services:usps}});
+ await rejected(()=>issueQuote('svc-priority-2',lines,address,undefined,{quoteId:pendingFree.quoteId,shippingOptionId:'rate_priority'}),/shipping options changed/);
+ store({freeShippingAt:25000,shippingOptions:{freeStandardEnabled:true,services:usps.map(s=>s.key==='USPS:PRIORITY'?{...s,enabled:false}:s)}});
+ assert(!(await deliveryQuote(lines,address)).shippingOptions.some(o=>o.free),'Express alone is never free');
+ const { shippingTerms: terms }=require('../lib/shipping-terms.ts');
+ const t=terms({freeShippingAt:25000,shippingOptions:{freeStandardEnabled:true,services:usps}});
+ assert.equal(t.standard,'USPS Priority Mail is free on orders of $250 or more after discounts and before tax. Faster services are priced separately.');
+ assert.equal(t.banner,'U.S. shipping · Free USPS Priority Mail on orders of $250 or more.');
+ assert.equal(t.freeLabel,'USPS Priority Mail');
+ available=ratesBefore;
  seedProduct();
  // Everything off: checkout refuses rather than inventing a price (no backup price set).
  store({shippingCents:null,shippingOptions:{freeStandardEnabled:true,services:services.map(s=>({...s,enabled:false}))}});

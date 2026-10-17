@@ -220,7 +220,7 @@ export function AdminShippingSettings({ config, busy = false }: { config: Shippi
             <div>
                 <label className={styles.check}><input type="checkbox" checked={draft.freeStandardEnabled} disabled={locked} onChange={e => setDraft(d => ({ ...d, freeStandardEnabled: e.target.checked }))}/><span>Free shipping over a minimum</span></label>
                 <label className={styles.field}><span>Minimum order, after discounts ($)</span><input type="number" min="0" max="10000" step="0.01" value={draft.threshold} disabled={locked || !draft.freeStandardEnabled} onChange={e => setDraft(d => ({ ...d, threshold: e.target.value }))}/></label>
-                <p className={styles.muted}>The standard service that costs you the least becomes free. Faster services keep their price.</p>
+                <p className={styles.muted}>The standard service that costs you the least becomes free. With no standard service on, USPS Priority Mail becomes free instead. Faster services keep their price.</p>
             </div>
             <div>
                 <label className={styles.field}><span>Backup standard price if carriers do not answer ($)</span><input type="number" min="0" max="1000" step="0.01" value={draft.fallback} placeholder="None" disabled={locked} onChange={e => setDraft(d => ({ ...d, fallback: e.target.value }))}/></label>

@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { shipmentEmailText } from './fulfillment';
-import { normalizeShippingOptions, shippingCarrier, shippingTier, shippingTierEnabled, shippingHandling, serviceKey, enabledServiceSetting, catalogService, shippingCarriers, type ShippingOptionsConfig, type ShippingOption, type ShippingCarrier, minimumService, tierRank, labelProtection } from './shipping-options';
+import { normalizeShippingOptions, shippingCarrier, shippingTier, shippingTierEnabled, shippingHandling, serviceKey, enabledServiceSetting, catalogService, shippingCarriers, type ShippingOptionsConfig, type ShippingOption, type ShippingCarrier, minimumService, tierRank, labelProtection, freeEligible } from './shipping-options';
 // EasyPost shipping: live checkout rates, label purchase and tracking webhooks.
 // Everything stays off until EASYPOST_API_KEY is set; checkout then falls back to the flat rate in store settings.
 type Environment = Record<string, string | undefined>;
@@ -101,8 +101,8 @@ export function shippingOptionsFromRates(available: Rate[], settings: ShippingOp
             const tier = shippingTier(carrier, rate.service, rate.days);
             if (!chosen || !tier || seen.has(key)) continue;
             seen.add(key);
-            // Rates arrive in carrier-cost order, so free standard goes to the enabled standard service that costs the store least.
-            const free = freeStandard && tier === 'standard' && !freeUsed;
+            // Rates arrive in carrier-cost order, so the free service is the eligible one that costs the store least.
+            const free = freeStandard && freeEligible(settings, tier, key) && !freeUsed;
             if (free) freeUsed = true;
             result.push({ id: rate.id, tier, shippingService: free ? 'Free · ' + chosen.label : chosen.label, shipping: free ? 0 : rate.cents + chosen.markupCents, carrierCents: rate.cents, handlingCents: chosen.markupCents, days: rate.days, carrier, carrierService: rate.service, source: 'easypost', free, ...(chosen.note ? { note: chosen.note } : {}), serviceKey: key });
         }

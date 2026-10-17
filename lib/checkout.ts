@@ -12,12 +12,12 @@ import { savedPreorder } from './fulfillment';
 import { z } from 'zod';
 import { customer } from './auth';
 import { carrierShippingOptions, easypostReady } from './easypost';
-import { normalizeShippingOptions, savedShippingOption, shippingTierEnabled, enabledServiceSetting, type ShippingOption, type ShippingOptionsConfig } from './shipping-options';
+import { normalizeShippingOptions, savedShippingOption, shippingTierEnabled, enabledServiceSetting, freeEligible, type ShippingOption, type ShippingOptionsConfig } from './shipping-options';
 /** A quoted option is still payable only if the owner's current settings would produce the same charge. */
 function optionStillOffered(saved: ShippingOption, settings: ShippingOptionsConfig, freeStandard: boolean) {
     if (!shippingTierEnabled(settings, saved.tier) || (saved.carrier && !settings.carriers.includes(saved.carrier))) return false;
     if (!settings.services) return saved.free === (saved.tier === 'standard' && freeStandard);
-    if (saved.free && !(saved.tier === 'standard' && freeStandard)) return false;
+    if (saved.free && !(freeStandard && freeEligible(settings, saved.tier, saved.serviceKey))) return false;
     if (saved.source === 'flat') return true;
     const chosen = saved.serviceKey ? enabledServiceSetting(settings, saved.serviceKey) : null;
     return Boolean(chosen && chosen.markupCents === saved.handlingCents);

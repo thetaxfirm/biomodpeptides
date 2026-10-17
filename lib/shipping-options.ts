@@ -113,6 +113,23 @@ function normalizeServices(value: unknown): ShippingServiceSetting[] | undefined
     return result;
 }
 export const enabledServiceSetting = (settings: ShippingOptionsConfig, key: string) => settings.services?.find(s => s.key === key && s.enabled) || null;
+/** The one expedited service that may be free over the threshold when the owner offers no standard service (owner, Oct 17 2026). */
+export const freePriorityKey = 'USPS:PRIORITY';
+/** Which service the free-shipping threshold applies to: standard when any standard service is on, otherwise USPS Priority Mail in per-service mode. */
+export function freeShippingService(settings: ShippingOptionsConfig): { tier: ShippingTier; key: string | null; label: string } | null {
+    if (!settings.freeStandardEnabled) return null;
+    if (settings.standardEnabled) {
+        const on = settings.services?.filter(s => s.enabled && catalogService(s.key)?.group === 'standard') || [];
+        return { tier: 'standard', key: null, label: on.length === 1 ? on[0].label : 'Standard shipping' };
+    }
+    const priority = settings.services ? enabledServiceSetting(settings, freePriorityKey) : null;
+    return priority ? { tier: 'expedited', key: freePriorityKey, label: priority.label } : null;
+}
+/** True when this tier and service is the one the threshold makes free. */
+export function freeEligible(settings: ShippingOptionsConfig, tier: ShippingTier, key?: string | null) {
+    const free = freeShippingService(settings);
+    return Boolean(free && free.tier === tier && (free.key === null || free.key === key));
+}
 export const defaultShippingOptions: ShippingOptionsConfig = {
     standardEnabled: true, expeditedEnabled: true, overnightEnabled: true, freeStandardEnabled: true,
     standardHandlingCents: 0, expeditedHandlingCents: 0, overnightHandlingCents: 1000, carriers: ['USPS', 'UPS'],
@@ -211,7 +228,7 @@ export function savedShippingOption(raw: unknown): ShippingOption | null {
     const carrier = shippingCarrier(v.carrier);
     if (v.source === 'easypost' && (!carrier || typeof v.carrierService !== 'string' || !/^[a-zA-Z0-9_ -]{1,100}$/.test(v.carrierService) || v.carrierCents === null || shippingTier(carrier, v.carrierService, v.days) !== v.tier)) return null;
     if (v.source === 'flat' && (v.tier !== 'standard' || v.carrier !== null || v.carrierService !== null || v.carrierCents !== null)) return null;
-    if (v.free && (v.tier !== 'standard' || v.shipping !== 0)) return null;
+    if (v.free && (v.shipping !== 0 || !(v.tier === 'standard' || (v.tier === 'expedited' && v.serviceKey === freePriorityKey)))) return null;
     if (!v.free && v.source === 'easypost' && v.shipping !== v.carrierCents + v.handlingCents) return null;
     if (v.note !== undefined && (typeof v.note !== 'string' || v.note.length > 160)) return null;
     if (v.serviceKey !== undefined && (v.source !== 'easypost' || typeof v.serviceKey !== 'string' || v.serviceKey !== serviceKey(carrier!, v.carrierService))) return null;

@@ -55,9 +55,17 @@ function assertShippingPolicy(policy, threshold = 200) {
   }], 'Free shipping applies only to U.S. orders meeting the published threshold');
   if (threshold > 0) assert.match(policy.description, /after discounts and before tax/);
   assert.match(policy.description, /lower order totals.*checkout before payment/);
+  assertHandlingTime(policy.handlingTime);
+}
+// Published policy: weekday orders before 2 p.m. Pacific normally process the same business day.
+function assertHandlingTime(period) {
+  assert.equal(period['@type'], 'ServicePeriod');
+  assert.deepEqual(period.duration, { '@type': 'QuantitativeValue', minValue: 0, maxValue: 1, unitCode: 'DAY' });
+  assert.deepEqual(period.businessDays.dayOfWeek, ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map(day => 'https://schema.org/' + day));
+  assert.match(period.cutoffTime, /^14:00:00-0[78]:00$/);
 }
 function assertNoInventedClaims(value) {
-  const banned = new Set(['aggregateRating', 'review', 'ratingValue', 'reviewCount', 'transitTime', 'handlingTime', 'deliveryTime', 'merchantReturnDays', 'returnPolicyCategory', 'returnFees', 'returnMethod']);
+  const banned = new Set(['aggregateRating', 'review', 'ratingValue', 'reviewCount', 'deliveryTime', 'merchantReturnDays', 'returnPolicyCategory', 'returnFees', 'returnMethod']);
   function visit(node) {
     if (node && typeof node === 'object') for (const [key, child] of Object.entries(node)) { assert(!banned.has(key), 'No unsupported claim: ' + key); visit(child); }
   }
@@ -115,6 +123,21 @@ function assertNoInventedClaims(value) {
     assertShippingPolicy(organizationOf(data).hasShippingService, freeShippingAt / 100);
     assert.deepEqual(productOf(data).offers.shippingDetails.hasShippingService, { '@id': shippingId });
   }
+  // Owner, Oct 17 2026: with only USPS Priority and Express on, Priority is the free service at the threshold.
+  const service = (key, label, enabled = true) => ({ key, enabled, markupCents: key === 'USPS:EXPRESS' ? 1000 : 0, label, note: '' });
+  stored = { freeShippingAt: 25000, shippingOptions: { freeStandardEnabled: true, services: [service('USPS:GROUNDADVANTAGE', 'USPS Ground Advantage', false), service('USPS:PRIORITY', 'USPS Priority Mail'), service('USPS:EXPRESS', 'USPS Priority Mail Express')] } };
+  {
+    const policy = organizationOf(await routeStructuredData(productPath, live)).hasShippingService;
+    assert.equal(policy.name, 'USPS Priority Mail');
+    assert.match(policy.description, /^USPS Priority Mail is free on orders of \$250 or more after discounts and before tax\. Faster services are priced separately\./);
+    assertHandlingTime(policy.handlingTime);
+    const [condition] = policy.shippingConditions;
+    assert.deepEqual(condition.orderValue, { '@type': 'MonetaryAmount', minValue: 250, currency: 'USD' });
+    assert.deepEqual(condition.shippingRate, { '@type': 'MonetaryAmount', value: 0, currency: 'USD' });
+    assert.deepEqual(condition.transitTime.duration, { '@type': 'QuantitativeValue', minValue: 1, maxValue: 3, unitCode: 'DAY' }, 'Transit days come from the USPS Priority catalog estimate');
+  }
+  stored = { freeShippingAt: 25000, shippingOptions: { freeStandardEnabled: true, services: [service('USPS:EXPRESS', 'USPS Priority Mail Express')] } };
+  assert.equal(organizationOf(await routeStructuredData(productPath, live)).hasShippingService, undefined, 'Priority Mail Express is never the free service');
   for (const shippingOptions of [{freeStandardEnabled:false}, {standardEnabled:false}]) {
     stored = { freeShippingAt: 20000, shippingOptions };
     const data = await routeStructuredData(productPath, live);

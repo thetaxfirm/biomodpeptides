@@ -83,7 +83,8 @@ export function Cart() {
         setPromoState(previous => previous.scope === promoScope && previous[kind] === next ? previous : { scope: promoScope, busy: promoScope.busy, unapplied: promoScope.unapplied });
     }
     const q = store.totals;
-    const freeStandardThreshold = shippingTerms(ready ? store.config : null).freeThreshold;
+    const freeTerms = shippingTerms(ready ? store.config : null);
+    const freeStandardThreshold = freeTerms.freeThreshold;
     const packSavings = q?.packDiscount ?? q?.discount ?? 0;
     const promoSavings = q?.promoDiscount ?? q?.promo?.savings ?? 0;
     const locked = busy || promoBusy || cartUpdating || cartSync === 'uncertain' || Boolean(store.pricingStale);
@@ -143,11 +144,11 @@ export function Cart() {
                     <p><span>Subtotal</span><strong>{q ? money(q.subtotal) : 'Unavailable'}</strong></p>
                     {packSavings > 0 && <p><span>Pack savings</span><strong>−{money(packSavings)}</strong></p>}
                     {promoSavings > 0 && <p><span>Promo savings</span><strong>−{money(promoSavings)}</strong></p>}
-                    <p><span>Shipping</span><span>{q && freeStandardThreshold !== null && q.total >= freeStandardThreshold ? 'Standard free; upgrades at checkout' : 'At checkout'}</span></p>
+                    <p><span>Shipping</span><span>{q && freeStandardThreshold !== null && q.total >= freeStandardThreshold ? (freeTerms.freeLabel === 'standard shipping' ? 'Standard free' : freeTerms.freeLabel + ' free') + '; upgrades at checkout' : 'At checkout'}</span></p>
                     <p><span>Tax</span><span>At checkout</span></p>
                     <p className="total"><span>Items total</span><strong>{q ? money(q.total) : 'Unavailable'}</strong></p>
                 </div>
-                {q && freeStandardThreshold !== null && q.total < freeStandardThreshold && <p className="muted">Add {money(freeStandardThreshold - q.total)} for free standard shipping. Faster options are priced separately.</p>}
+                {q && freeStandardThreshold !== null && q.total < freeStandardThreshold && <p className="muted">Add {money(freeStandardThreshold - q.total)} for free {freeTerms.freeLabel}. Faster options are priced separately.</p>}
                 <a className="button button-gold" href={store.cartError || locked || promoUnapplied || mixed ? undefined : '/checkout'} aria-disabled={Boolean(store.cartError) || locked || promoUnapplied || mixed} onClick={e => { if (store.cartError || locked || mixed || promoScopeRef.current !== promoScope || promoScope.busy || promoScope.unapplied) e.preventDefault(); }}>Proceed to checkout</a>
                 {mixed && <p className="muted">Preorders and in-stock items check out separately. Remove one group above to continue.</p>}
                 <p className="muted">{store.payment.enabled ? store.payment.state === 'sandbox' ? 'Test checkout only. Real payments are not accepted.' : 'Secure card payment is available at checkout.' : 'Checkout is not accepting payments yet. Your cart stays saved.'}</p>
