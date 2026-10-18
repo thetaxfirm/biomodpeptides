@@ -1,7 +1,9 @@
 /* Featured menu items (Softgels, Sprays): copper type with a slow glint, like the foil on the vial labels. */
-.main-nav a.nav-feature,.menu-sheet nav a.nav-feature{font-weight:650;color:#b8561a;background-image:linear-gradient(100deg,#b8561a 0 42%,#e58a48 50%,#b8561a 58% 100%);background-size:300% 100%;background-position:100% 0;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:nav-feature-glint 3.6s ease-in-out infinite}
+.main-nav a.nav-feature,.menu-sheet nav a.nav-feature{font-weight:650;color:#b8561a;background-image:linear-gradient(100deg,#b8561a 0 42%,#e58a48 50%,#b8561a 58% 100%);background-size:300% 100%;background-position:100% 0;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;display:inline-block;transform-origin:50% 60%;animation:nav-feature-glint 3.6s ease-in-out infinite,nav-feature-shake 3.6s ease-in-out infinite}
 .menu-sheet nav a.nav-feature{width:fit-content}
 @keyframes nav-feature-glint{0%,50%{background-position:100% 0}85%,100%{background-position:0 0}}
+/* A short wiggle while the glint crosses the word (owner, October 17): about 0.6 s of every 3.6 s. */
+@keyframes nav-feature-shake{0%,58%{transform:none}62%{transform:rotate(-3deg)}66%{transform:rotate(3deg)}70%{transform:rotate(-2deg)}74%{transform:rotate(1.5deg)}78%,100%{transform:none}}
 .main-nav a.nav-feature:hover,.main-nav a.nav-feature:focus-visible{background-image:none;background-color:#3f1a4c;-webkit-text-fill-color:#fff;color:#fff;animation:none}
 @media (prefers-reduced-motion:reduce){.main-nav a.nav-feature,.menu-sheet nav a.nav-feature{animation:none}}
 
