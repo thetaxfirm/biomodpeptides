@@ -1,25 +1,25 @@
 /* Featured menu items (Softgels, Sprays): copper type with a slow glint, like the foil on the vial labels. */
-.main-nav a.nav-feature,.menu-sheet nav a.nav-feature{font-weight:650;color:#925b33;background-image:linear-gradient(100deg,#925b33 0 42%,#c98f5c 50%,#925b33 58% 100%);background-size:300% 100%;background-position:100% 0;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:nav-feature-glint 3.6s ease-in-out infinite}
+.main-nav a.nav-feature,.menu-sheet nav a.nav-feature{font-weight:650;color:#b8561a;background-image:linear-gradient(100deg,#b8561a 0 42%,#e58a48 50%,#b8561a 58% 100%);background-size:300% 100%;background-position:100% 0;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:nav-feature-glint 3.6s ease-in-out infinite}
 .menu-sheet nav a.nav-feature{width:fit-content}
 @keyframes nav-feature-glint{0%,50%{background-position:100% 0}85%,100%{background-position:0 0}}
 .main-nav a.nav-feature:hover,.main-nav a.nav-feature:focus-visible{background-image:none;background-color:#3f1a4c;-webkit-text-fill-color:#fff;color:#fff;animation:none}
 @media (prefers-reduced-motion:reduce){.main-nav a.nav-feature,.menu-sheet nav a.nav-feature{animation:none}}
 
-/* Moving offer bar: copper-gold strip between the menu and the plum hero. */
-.announcement.offer-bar{background:#dbb481;color:#2b1030;padding:0;min-height:0;overflow:hidden;text-align:left;font-size:14px}
+/* Moving offer bar: logo-copper strip between the menu and the plum hero (option A, October 17). */
+.announcement.offer-bar{background:#e8924a;color:#2b1030;padding:0;min-height:0;overflow:hidden;text-align:left;font-size:14px}
 .offer-track{display:flex;width:max-content;animation:offer-scroll 38s linear infinite}
 .offer-bar:hover .offer-track,.offer-bar:focus-within .offer-track{animation-play-state:paused}
 .offer-group{display:flex;flex:none;min-width:100vw;justify-content:space-around;gap:56px;margin:0;padding:0 28px;list-style:none}
 .offer-group li{display:flex;align-items:center;white-space:nowrap}
 .announcement.offer-bar a{display:flex;align-items:baseline;gap:9px;padding:10px 0;color:#2b1030;text-decoration:none}
 .offer-group strong{font-weight:700;letter-spacing:.01em}
-.offer-group span{color:#4a2a3a}
-.offer-group li::before{content:"";width:6px;height:6px;margin-right:18px;border-radius:2px;background:#925b33;transform:rotate(45deg)}
+.offer-group span{color:#3f1a28}
+.offer-group li::before{content:"";width:6px;height:6px;margin-right:18px;border-radius:2px;background:#2b1030;transform:rotate(45deg)}
 .announcement.offer-bar a:hover strong,.announcement.offer-bar a:focus-visible strong{text-decoration:underline;text-underline-offset:3px}
 @keyframes offer-scroll{to{transform:translateX(-50%)}}
 @media (max-width:640px){.announcement.offer-bar{font-size:13px}.offer-group{gap:40px}.offer-track{animation-duration:30s}}
 @media (prefers-reduced-motion:reduce){.offer-track{animation:none;width:auto}.offer-group{min-width:0;flex-wrap:wrap;justify-content:center;gap:4px 32px}.offer-group[aria-hidden]{display:none}}
 
 /* Locations: the newest store reads as new, not as one more beige card. */
-.locations-original .locations-grid .location-new{background:#f6e3cf;box-shadow:inset 0 0 0 2px #c98f5c}
+.locations-original .locations-grid .location-new{background:#f6e3cf;box-shadow:inset 0 0 0 2px #e8924a}
 .locations-original .location-new .location-status{color:#7a3f17;font-weight:700}
