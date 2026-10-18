@@ -29,4 +29,12 @@ export const legacyRoutes: Record<string, string> = {
   'alternative-to-gray-market-research-chemicals-verified-standards-for-analytical-labs': '/choosing-a-research-supplier',
   'reliable-peptide-source-in-las-vegas-a-researchers-buying-guide-2026': '/choosing-a-research-supplier',
   'product-tag/blends': '/shop',
+  // More old-domain URLs listed by Bing on October 18, 2026 that still ended in a 404.
+  // Tag archives point to the live page covering the same topic.
+  'tag/scientific-reproducibility': '/quality-standard',
+  'tag/reproducibility': '/quality-standard',
+  'tag/research-reproducibility': '/quality-standard',
+  'tag/spray-formulation': '/shop',
+  'tag/longevity-supplement-peptides': '/',
+  'longevity-peptide-stack': '/shop',
 };

@@ -41,6 +41,13 @@ const mappings = {
   '/alternative-to-gray-market-research-chemicals-verified-standards-for-analytical-labs': '/choosing-a-research-supplier',
   '/reliable-peptide-source-in-las-vegas-a-researchers-buying-guide-2026': '/choosing-a-research-supplier',
   '/product-tag/blends': '/shop',
+  // Listed by Bing on October 18, 2026 and still ending in a 404.
+  '/tag/scientific-reproducibility': '/quality-standard',
+  '/tag/reproducibility': '/quality-standard',
+  '/tag/research-reproducibility': '/quality-standard',
+  '/tag/spray-formulation': '/shop',
+  '/tag/longevity-supplement-peptides': '/',
+  '/longevity-peptide-stack': '/shop',
 };
 
 (async () => {
@@ -55,7 +62,7 @@ const mappings = {
       await assert.rejects(handler(props(form)), error => error.digest === `NEXT_REDIRECT;replace;${destination};308;`, form + ' must permanently redirect');
     }
   }
-  for (const unknown of ['/not-a-real-old-post', '/product-tag/not-a-tag', '/product-tag/blends/extra']) {
+  for (const unknown of ['/not-a-real-old-post', '/product-tag/not-a-tag', '/product-tag/blends/extra', '/tag/not-a-tag', '/tag/reproducibility/extra']) {
     for (const handler of [generateMetadata, Page]) {
       await assert.rejects(handler(props(unknown)), error => error.digest === 'NEXT_HTTP_ERROR_FALLBACK;404', unknown + ' must remain a genuine 404');
     }
