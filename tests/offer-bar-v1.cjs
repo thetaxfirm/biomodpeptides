@@ -22,7 +22,8 @@ assert.match(css, /prefers-reduced-motion:reduce\)\{\.main-nav a\.nav-feature,\.
 // The featured items wiggle briefly while the glint passes; mild (3 degrees at most) and still for reduced motion.
 assert.match(css, /animation:nav-feature-glint 3\.6s ease-in-out infinite,nav-feature-shake 3\.6s ease-in-out infinite/);
 assert.match(css, /@keyframes nav-feature-shake\{0%,58%\{transform:none\}/);
-assert(!/rotate\(-?([4-9]|\d{2})/.test(css), 'shake stays at 3 degrees or less');
+const shake = css.match(/@keyframes nav-feature-shake\{.*?\}\}/)[0];
+assert([...shake.matchAll(/rotate\((-?[\d.]+)deg\)/g)].every(m => Math.abs(Number(m[1])) <= 3), 'shake stays at 3 degrees or less');
 // Softgels and Sprays are the featured menu items, in both menus.
 assert.match(header, /featuredNav = new Set\(\['\/softgels', '\/shop\?category=spray-products', '\/locations'\]\)/);
 assert.equal((header.match(/className=\{navClass\(p\)\}/g) || []).length, 2);
