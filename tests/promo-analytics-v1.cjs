@@ -30,7 +30,7 @@ const all = async (query, ...values) => {
 const getRow = (report, code, environment = 'live') => report.codes.find(p => p.code === code)?.rows.find(r => r.environment === environment);
 (async () => {
  order({raw:JSON.stringify({environment:'authorizenet:live',internalTest:true,promo:{code:'ANNA20',savings:200}}),total:999999});
-  assert.deepEqual(activePromotions(), [{ code: 'BM10', percentOff: 10 }, { code: 'BIOMOD15', percentOff: 15 }, { code: 'BMOD20', percentOff: 20 }, { code: 'ANNA20', percentOff: 20 }, { code: 'KIMC15', percentOff: 15 }, { code: 'COMEBACK10', percentOff: 10 }, { code: 'COMEBACK15', percentOff: 15 }, { code: 'COMEBACK20', percentOff: 20 }, { code: 'COMEBACK25', percentOff: 25 }, { code: 'COMEBACK30', percentOff: 30 }]);
+  assert.deepEqual(activePromotions(), [{ code: 'BM10', percentOff: 10 }, { code: 'BIOMOD15', percentOff: 15 }, { code: 'BMOD20', percentOff: 20 }, { code: 'ANNA20', percentOff: 20 }, { code: 'KIMC15', percentOff: 15 }, { code: 'JENM20', percentOff: 20 }, { code: 'COMEBACK10', percentOff: 10 }, { code: 'COMEBACK15', percentOff: 15 }, { code: 'COMEBACK20', percentOff: 20 }, { code: 'COMEBACK25', percentOff: 25 }, { code: 'COMEBACK30', percentOff: 30 }]);
   assert.deepEqual(promotion(' anna20 '), { code: 'ANNA20', percentOff: 20 });
   for (const code of ['BIOMOD10', 'BIOMOD20', 'BIOM0D15']) assert.throws(() => promotion(code));
   assert.deepEqual(promoWindow('7', now), { days: 7, start, end: now + 1, timeZone: 'UTC', includesPartialToday: true });
@@ -43,7 +43,7 @@ const getRow = (report, code, environment = 'live') => report.codes.find(p => p.
   for (const value of ['', '0', '07', '365', '7 OR 1=1', '30.0']) assert.throws(() => promoWindow(value, now), /Choose/);
   for (const value of [NaN, Infinity, -1, .5, Number.MAX_SAFE_INTEGER]) assert.throws(() => promoWindow('7', value), /time/);
   const empty = await promoAnalytics({ requireAdmin: allow, all }, null, now);
-  assert.equal(empty.codes.length, 10);
+  assert.equal(empty.codes.length, 11);
   for (const code of empty.codes) {
     assert.equal(code.active, true); assert.equal(code.rows.length, 3);
     assert.deepEqual(code.rows.map(r => r.environment), ['live', 'sandbox', 'unknown']);
