@@ -7,6 +7,7 @@ import { publicCatalog } from './public-catalog';
 import { merchantPolicies } from './merchant-policies';
 import { certificateProperties } from './certificate-schema';
 import { productQuestions } from './product-questions';
+import { productDescription } from './product-description';
 import { researchFaqSchemaItems } from './research-faq';
 import { pressReleaseAt } from './press-releases';
 import { headers } from 'next/headers';
@@ -67,7 +68,8 @@ export async function routeStructuredData(path: string, config: SEOConfig = curr
     const snapshot = await publicCatalog();
     const live = snapshot.products.find(item => item.id === p.id);
     graph.push({ '@type': 'Product', '@id': config.origin + clean + '#product',
-      name: info.name || info.title, description: info.description, url: config.origin + clean,
+      // The listing facts the Description tab shows, after the searched phrase.
+      name: info.name || info.title, description: [info.description, ...productDescription(live ? { ...p, ...live } : p)].join(' '), url: config.origin + clean,
       image: config.origin + imagePath(p), ...(p.sku?.trim() ? { sku: p.sku.trim() } : {}),
       brand: { '@type': 'Brand', name: 'BIOMOD' }, category: p.categories[0]?.name,
       additionalProperty: [{ '@type': 'PropertyValue', name: 'Compound', value: p.identity },

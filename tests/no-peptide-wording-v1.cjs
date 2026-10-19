@@ -32,7 +32,7 @@ assert(!word.test(JSON.stringify(researchFaqGroups)), 'FAQ');
 // Visible copy in page components. The softgel story keeps the filed marks.
 const visible = ['app/layout.tsx', 'app/page.tsx', 'lib/seo.ts', 'lib/llms-text.ts', 'components/store/content.tsx', 'components/store/catalog.tsx',
   'components/store/home-vials.tsx', 'components/store/research-vial-index.tsx', 'components/store/supplier-guide.tsx', 'components/store/quality-guide.tsx',
-  'components/store/product-research-details.tsx', 'components/store/newsroom.tsx', 'components/store/brand-story.tsx'];
+  'components/store/product-research-details.tsx', 'components/store/newsroom.tsx', 'components/store/brand-story.tsx', 'lib/product-description.ts'];
 for (const file of visible) {
   let source = fs.readFileSync(path.join(root, file), 'utf8');
   if (file.endsWith('brand-story.tsx')) {

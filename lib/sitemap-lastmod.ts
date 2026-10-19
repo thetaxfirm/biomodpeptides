@@ -11,7 +11,9 @@ export const siteLastmod = '2026-10-17';
 // October 17: da848db added free USPS Priority Mail at $250 and the 2 p.m. Pacific same-day
 // wording to every product page; 589ae41 moved the product images to WebP.
 // The same day the store was renamed Biomod Research Supply Company, changing every page's title.
-export const productLastmod = '2026-10-17';
+// October 19: every product page's Description tab gained the listing, batch-record and pack
+// paragraphs from lib/product-description.ts (also in the Product structured data).
+export const productLastmod = '2026-10-19';
 export const pageLastmod: Record<string, string> = {
   // October 14: initial homepage cards now include every publication-reviewed vial.
   '/': '2026-10-14',
