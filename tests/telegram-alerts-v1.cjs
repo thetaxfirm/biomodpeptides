@@ -134,6 +134,18 @@ assert.equal(T,'telegram_bot_token_v1'); assert.equal(C,'telegram_chat_ids_v1');
   assert.match(routeText,/could not be reached/,'an outage says so');
   assert.match(routeText,/'\/start@' \+ probe\.username/,'and an empty queue names the exact command to send');
 
+  // --- Saving a chat id must never destroy the credential. ---
+  // The token box is blank on every load because the token is write-only, so an empty box meaning
+  // 'clear it' made every chat-id save quietly wipe the token. It bit the owner live (Oct 20 2026).
+  const saveRoute=fs.readFileSync(path.join(root,'app/api/admin/order-alerts/route.ts'),'utf8');
+  assert.match(saveRoute,/typeof body\.botToken === 'string' && body\.botToken\.trim\(\)/,'an empty token box is not a token change');
+  assert.match(saveRoute,/body\.clearToken === true/,'removing a token is its own explicit request');
+  assert(!/if \(body\.botToken !== undefined\) \{[\s\S]{0,200}validBotToken\(raw\)\);[\s\S]{0,80}bot token cleared/.test(saveRoute),'the old blank-clears-it branch is gone');
+  const savePanel=fs.readFileSync(path.join(root,'components/store/admin-order-alerts.tsx'),'utf8');
+  assert.match(savePanel,/\.\.\.\(token\.trim\(\) \? \{ botToken: token \} : \{\}\)/,'the panel omits the token entirely when the box is empty');
+  assert.match(savePanel,/clearToken: true/,'and offers an explicit way to remove it');
+  assert.match(savePanel,/leaving this box empty keeps it as it is/,'and says so where the owner reads it');
+
   // --- Wiring: the push rides the paid-order notification, and the token never leaves the server. ---
   const summary=fs.readFileSync(path.join(root,'lib/order-summary.ts'),'utf8');
   assert.match(summary,/await sendOrderPush\(env as never, orderId, data\)/,'a paid order posts to the group');
@@ -148,5 +160,5 @@ assert.equal(T,'telegram_bot_token_v1'); assert.equal(C,'telegram_chat_ids_v1');
   assert.match(panel,/@BotFather/,'the panel explains where a token comes from');
   assert.match(panel,/Find my chats/,'and finds the group id for you');
 
-  console.log('PASS: bot token and chat id validation, the exact lock-screen message (never the catalogue), one request per chat with correct URL and body, silence when unconfigured, refusals/outages/partial failures swallowed so an order is never blocked, an honest test message, chat discovery from a raw API response, a probe that tells a rejected token, a webhook and an outage apart from an empty queue, and a token that is written but never returned or logged. Telegram is always stubbed.');
+  console.log('PASS: bot token and chat id validation, the exact lock-screen message (never the catalogue), one request per chat with correct URL and body, silence when unconfigured, refusals/outages/partial failures swallowed so an order is never blocked, an honest test message, chat discovery from a raw API response, a probe that tells a rejected token, a webhook and an outage apart from an empty queue, a token that is written but never returned or logged, and an empty token box that leaves the saved credential alone rather than destroying it. Telegram is always stubbed.');
 })().catch(e=>{console.error(e);process.exitCode=1});
