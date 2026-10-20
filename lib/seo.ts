@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { runtime } from './runtime';
-import { canonicalPath, mayIndex, pageInfo, productAt, seoConfig, privatePath, type SEOConfig } from './seo-policy';
+import { canonicalPath, indexableProducts, mayIndex, pageInfo, productAt, seoConfig, privatePath, type SEOConfig } from './seo-policy';
 import { imagePath } from './catalog';
 import { schemaAvailability } from './availability';
 import { publicCatalog } from './public-catalog';
@@ -58,8 +58,15 @@ export async function routeStructuredData(path: string, config: SEOConfig = curr
   };
   const graph: Record<string, unknown>[] = [organization,
     { '@type': 'WebSite', '@id': config.origin + '/#website', url: config.origin, name: 'Biomod Research Supply Company', alternateName: ['TryBiomod', 'BIOMOD'], publisher: { '@id': organization['@id'] } },
-    { '@type': 'WebPage', '@id': config.origin + clean + '#page', url: config.origin + clean, name: info.title, description: info.description, isPartOf: { '@id': config.origin + '/#website' } },
+    { '@type': clean === '/shop' ? ['WebPage', 'CollectionPage'] : 'WebPage', '@id': config.origin + clean + '#page', url: config.origin + clean, name: info.title, description: info.description, isPartOf: { '@id': config.origin + '/#website' },
+      ...(clean === '/shop' ? { mainEntity: { '@id': config.origin + clean + '#products' } } : {}) },
   ];
+  // The shop grid links every product page; the list names the ones search engines may index,
+  // in the grid's order, so the catalog page states which product pages belong to it.
+  if (clean === '/shop') graph.push({ '@type': 'ItemList', '@id': config.origin + clean + '#products', name: 'Research compounds',
+    numberOfItems: indexableProducts(config).length,
+    itemListElement: indexableProducts(config).map((item, index) => ({ '@type': 'ListItem', position: index + 1,
+      name: pageInfo('/product/' + item.slug).name, url: config.origin + '/product/' + item.slug })) });
   if (p) graph.push({ '@type': 'BreadcrumbList', itemListElement: [
     { '@type': 'ListItem', position: 1, name: 'Shop', item: config.origin + '/shop' },
     { '@type': 'ListItem', position: 2, name: p.name, item: config.origin + clean },

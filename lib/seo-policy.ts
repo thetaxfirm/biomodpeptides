@@ -92,9 +92,14 @@ export function canonicalRedirect(url: URL, method: string, config: SEOConfig): 
   if (![canonical.hostname, 'www.' + canonical.hostname].includes(url.hostname)) return null;
   return canonical.origin + url.pathname + url.search;
 }
+// Products whose pages may be indexed: reviewed, approved for this origin and not held.
+// Catalog order, which is also the order the shop grid shows them in.
+export function indexableProducts(config: SEOConfig) {
+  return config.enabled ? products.filter(p => config.approvedProducts.has(p.slug) && !productReviewBlocks[p.slug]) : [];
+}
 export function sitemapPaths(config: SEOConfig) {
   if (!config.enabled) return [];
-  return [...Object.keys(pageRecords).filter(p => pageRecords[p].eligible), ...products.filter(p => config.approvedProducts.has(p.slug) && !productReviewBlocks[p.slug]).map(p => '/product/' + p.slug)];
+  return [...Object.keys(pageRecords).filter(p => pageRecords[p].eligible), ...indexableProducts(config).map(p => '/product/' + p.slug)];
 }
 export function searchReport(config: SEOConfig) {
   return {
