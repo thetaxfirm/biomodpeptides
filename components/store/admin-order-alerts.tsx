@@ -73,7 +73,7 @@ export function AdminOrderAlerts({ busy, onDraft }: { busy: boolean; onDraft?: (
             <ol className={styles.steps}>
                 <li>In Telegram, message <strong>@BotFather</strong>, send <code>/newbot</code>, and follow it. It replies with a token.</li>
                 <li>Paste that token below and save.</li>
-                <li>Make a group, add your bot to it, and send any message in that group.</li>
+                <li>Make a group and add your bot to it. Then send <code>/start@yourbotname</code> in that group — a bot cannot see ordinary messages in a group, only commands aimed at it.</li>
                 <li>Press <strong>Find my chats</strong>, pick the group, then save and send a test.</li>
             </ol>
             <label className="store-field">Bot token
@@ -91,7 +91,7 @@ export function AdminOrderAlerts({ busy, onDraft }: { busy: boolean; onDraft?: (
                     <button type="button" className="text-button" disabled={Boolean(chatBusy)} onClick={() => { setChats(c.id); onDraft?.(); }}>Use this</button>
                     {' '}<strong>{c.title}</strong> <span className={styles.sub}>{c.kind} · {c.id}</span>
                 </li>)}</ul>
-                : <p className="notice">No chats found yet. Add the bot to the group and send a message there, then look again.</p>)}
+                : <p className="notice">No chats found yet. Add the bot to the group, then send <code>/start@yourbotname</code> there and look again.</p>)}
             <div className={styles.row}>
                 <button type="button" className="button button-dark" disabled={!loaded || busy || Boolean(chatBusy)} onClick={() => chatAction('save', { botToken: token, chatIds: chats })}>{chatBusy === 'save' ? 'Saving…' : 'Save Telegram settings'}</button>
                 <button type="button" className="text-button" disabled={!loaded || busy || Boolean(chatBusy)} onClick={() => chatAction('find', { findChats: true, botToken: token })}>{chatBusy === 'find' ? 'Looking…' : 'Find my chats'}</button>

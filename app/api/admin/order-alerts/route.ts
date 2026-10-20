@@ -3,7 +3,7 @@ import { requireStaff } from '@/lib/auth';
 import { runtime, timestamp } from '@/lib/runtime';
 import { auditRun, recordChange } from '@/lib/change-history';
 import { cleanRecipients, orderAlertRecipients, orderNotifyRecipients, ORDER_ALERT_KEY } from '@/lib/order-summary';
-import { readTelegramConfig, validBotToken, cleanChatIds, findTelegramChats, sendTelegramTest, TELEGRAM_TOKEN_KEY, TELEGRAM_CHATS_KEY } from '@/lib/telegram';
+import { readTelegramConfig, validBotToken, cleanChatIds, probeTelegram, sendTelegramTest, TELEGRAM_TOKEN_KEY, TELEGRAM_CHATS_KEY } from '@/lib/telegram';
 export const dynamic = 'force-dynamic';
 const j = (value: unknown, status = 200) => NextResponse.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
 
@@ -45,10 +45,16 @@ export async function POST(req: NextRequest) {
             const typed = validBotToken(body.botToken);
             const token = typed || (await readTelegramConfig(env as never)).token;
             if (!token) return j({ error: 'Add the bot token first. BotFather gives it to you when you create the bot.' }, 400);
-            const chats = await findTelegramChats(token);
-            return j({ chats, message: chats.length
-                ? chats.length + (chats.length === 1 ? ' chat found.' : ' chats found.') + ' Pick the group you want and save it.'
-                : 'No chats yet. Add the bot to your group, send any message in that group, then look again. Telegram only reveals a group once somebody has posted in it.' });
+            const probe = await probeTelegram(token);
+            // Each failure gets its own sentence. An empty queue and a rejected token both produce no
+            // chats, and saying the wrong one sends the owner looking in entirely the wrong place.
+            if (probe.problem === 'unauthorized') return j({ error: 'Telegram rejected this token. If you revoked it in BotFather, paste the replacement it gave you.' }, 400);
+            if (probe.problem === 'unreachable') return j({ error: 'Telegram could not be reached just now. Try again in a moment.' }, 502);
+            if (probe.problem === 'webhook') return j({ error: 'This bot has a webhook registered, which takes its updates before anything else can read them. Remove the webhook, or use a bot that has none.' }, 409);
+            const who = probe.username ? '@' + probe.username : 'The bot';
+            return j({ chats: probe.chats, username: probe.username, message: probe.chats.length
+                ? probe.chats.length + (probe.chats.length === 1 ? ' chat found.' : ' chats found.') + ' Pick the group you want and save it.'
+                : who + ' is live, but Telegram has nothing for it yet. In the group, send ' + (probe.username ? '/start@' + probe.username : '/start') + ' exactly. A bot in a group cannot see ordinary messages, only commands aimed at it. Check the member list names this same bot.' });
         }
 
         if (body.test === true) {
