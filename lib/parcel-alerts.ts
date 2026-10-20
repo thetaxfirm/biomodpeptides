@@ -2,7 +2,7 @@
 // Labels the carrier has not scanned in a day, parcels with no carrier update in four days, and parcels
 // the carrier is returning or failed to deliver. Internal only; customers are never emailed. Nothing is
 // sent when every parcel is moving (owner, Oct 17 2026).
-import { stalledLabel, stuckInTransit, unshippedTooLong, unreadableParcel, paidAt, carrierWords, type FulfillmentOrder } from './fulfillment';
+import { stalledLabel, stuckInTransit, unshippedTooLong, unreadableParcel, flagDismissed, paidAt, carrierWords, type FulfillmentOrder } from './fulfillment';
 import { orderNotifyRecipients } from './order-summary';
 
 type Environment = { DB: D1Database } & Record<string, any>;
@@ -48,6 +48,9 @@ export async function parcelAlerts(env: Environment, now = Date.now()): Promise<
             : stalledLabel(order, now) ? 'unscanned'
             : unshippedTooLong(order, now) ? 'unshipped' : null;
         if (!kind || row.status === 'delivered' && kind !== 'problem') continue;
+        // A flag the owner has already accepted is not news. It comes back by itself if the carrier
+        // changes its mind, because the dismissal is tied to the status it was given for.
+        if (kind !== 'unshipped' && flagDismissed(order)) continue;
         const paid = paidAt(order);
         out.push({
             id: row.id, kind, name: String(data.address?.name || '').slice(0, 80),

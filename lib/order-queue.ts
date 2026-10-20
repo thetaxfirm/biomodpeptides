@@ -1,8 +1,8 @@
 // Admin order queue: one short status per order, status tabs with counts, search and paging.
 // Shared by the admin-orders route and the Orders tab, and the customer order list labels.
-import { orderBucket, type FulfillmentOrder, type OrderBucket } from './fulfillment';
+import { orderBucket, queueBucket, type FulfillmentOrder, type OrderBucket } from './fulfillment';
 import { shipDue } from './ship-cutoff';
-export { orderBucket, bucketStatus, customerOrderStatus, type OrderBucket, type Tone } from './fulfillment';
+export { orderBucket, queueBucket, dismissibleReview, flagDismissed, carrierState, bucketStatus, customerOrderStatus, type OrderBucket, type Tone } from './fulfillment';
 
 // Tab order is the order of work: what needs doing first comes first.
 //
@@ -94,7 +94,9 @@ export function requestedTab(value: unknown): QueueTab {
 export function queryOrders(rows: QueueOrder[], params: { tab?: unknown; q?: unknown; offset?: unknown; limit?: unknown; id?: unknown }, now = Date.now()): QueueResult {
     const truncated = rows.length > scanLimit;
     const scannedRows = truncated ? rows.slice(0, scanLimit) : rows;
-    const tagged: QueueRow[] = scannedRows.map(o => ({ ...o, bucket: orderBucket(o) }));
+    // queueBucket, not orderBucket: a carrier flag the owner has already accepted stands down here
+    // and nowhere else, so the customer's own order page is untouched by it.
+    const tagged: QueueRow[] = scannedRows.map(o => ({ ...o, bucket: queueBucket(o, now) }));
     const counts = Object.fromEntries(queueTabs.map(t => [t.id, 0])) as Record<QueueTab, number>;
     // An archived order counts only under Archived, so the working tabs show work.
     // The 2 p.m. Pacific promise across the whole store, whichever tab is open (ship-cutoff.ts).
