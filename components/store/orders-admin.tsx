@@ -10,7 +10,7 @@ import { orderMessageLabel, type OrderMessageLog } from '@/lib/order-messages';
 import { api, report } from './provider';
 import { Field } from './primitives';
 import { money } from '@/lib/catalog';
-import { fulfillmentLabel, awaitingLabelApproval, carrierWords, stalledLabel, stuckInTransit } from '@/lib/fulfillment';
+import { fulfillmentLabel, awaitingLabelApproval, carrierWords, stalledLabel, stuckInTransit, unreadableParcel } from '@/lib/fulfillment';
 import { shipDue } from '@/lib/ship-cutoff';
 import { bucketStatus, queueTabs, canArchive, isArchived, closedReason, type QueueResult, type QueueRow, type QueueTab, type OrderBucket } from '@/lib/order-queue';
 import { CarrierConnection } from './fulfillment-admin';
@@ -53,6 +53,9 @@ function carrierLine(o: QueueRow) {
     const words = carrierWords[s.status] || String(s.status).replaceAll('_', ' ');
     if (stuckInTransit(o)) return 'No carrier update since ' + shortTime(s.checkedAt);
     if (s.status === 'unknown' || s.status === 'pre_transit') {
+        // A parcel the carrier will not return tracking for is not the same as one it has not
+        // scanned, and sending staff to look for the box is the wrong instruction.
+        if (unreadableParcel(o)) return 'Carrier will not return tracking · check the label in EasyPost';
         const handoff = Number.isFinite(o.data?.handoff?.at) ? 'Dropped off ' + shortTime(o.data.handoff.at) : stalledLabel(o) ? 'Not dropped off' : '';
         return [stalledLabel(o) ? 'Not scanned 24h+' : words, handoff].filter(Boolean).join(' · ');
     }
