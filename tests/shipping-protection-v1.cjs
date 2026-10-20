@@ -47,6 +47,38 @@ assert.equal(f.UNREADABLE_AFTER,3);
 assert.equal(f.unreadableParcel(label({shipment:{status:'pre_transit',tracking:'T',readFails:3}})),true);
 assert.equal(f.unreadableParcel(label({shipment:{status:'pre_transit',tracking:'T',readFails:2}})),false);
 assert.equal(f.unreadableParcel(label()),false,'no count is not a verdict');
+// Dismissing a carrier flag: only the three the carrier owns, only while it says the same thing.
+const q=load('lib/order-queue.ts');
+const dismissedAt=now-H;
+const unscanned=label();
+assert.equal(f.dismissibleReview(unscanned,now),true,'not scanned is a carrier flag');
+assert.equal(f.dismissibleReview({...label(),data:{...label().data,hold:{issue:'x'}}},now),false,'a hold has its own button');
+assert.equal(f.dismissibleReview({status:'paid',data:{labelApproval:{cents:9240,limitCents:7500}}},now),false,'postage over the limit needs a real decision');
+assert.equal(f.dismissibleReview({status:'review',data:{}},now),false,'a payment that needs checking is not a carrier flag');
+assert.equal(f.dismissibleReview({status:'paid',data:{shipment:{status:'pre_transit'},labelCreatedAt:now-2*H}},now),false,'a parcel that is not flagged has nothing to dismiss');
+const returning={status:'shipped',data:{shipment:{status:'return_to_sender',tracking:'T'},labelCreatedAt:now-3*24*H}};
+assert.equal(f.dismissibleReview(returning,now),true,'a carrier problem is dismissible');
+assert.equal(f.dismissibleReview(stuck,now),true,'so is a stuck parcel');
+// Accepted: it leaves Needs review for Shipped, and only in the admin queue.
+const accept=(order,carrierStatus)=>({...order,data:{...order.data,dismissed:{at:dismissedAt,by:'owner@example.invalid',carrierStatus}}});
+const okUnscanned=accept(unscanned,'pre_transit');
+assert.equal(f.flagDismissed(okUnscanned),true);
+assert.equal(f.orderBucket(okUnscanned,now),'review','the underlying reason is untouched');
+assert.equal(f.queueBucket(okUnscanned,now),'shipped','the queue stands the flag down');
+assert.equal(f.queueBucket(accept(returning,'return_to_sender'),now),'shipped');
+assert.equal(f.customerOrderStatus(okUnscanned).label,'Preparing shipment','the customer view never consults a dismissal');
+// Tied to the status it was given for: a different carrier answer brings the flag straight back.
+assert.equal(f.flagDismissed(accept(returning,'in_transit')),false,'a stale dismissal does not match');
+assert.equal(f.queueBucket(accept(returning,'in_transit'),now),'review','so the order comes back');
+assert.equal(f.flagDismissed({...unscanned,data:{...unscanned.data,dismissed:{by:'x',carrierStatus:'pre_transit'}}}),false,'a dismissal with no time is not one');
+// A hold can never be stood down, even if a dismissal is somehow on the record.
+const heldAndDismissed={...label(),data:{...label().data,hold:{issue:'x'},dismissed:{at:dismissedAt,by:'o',carrierStatus:'pre_transit'}}};
+assert.equal(f.queueBucket(heldAndDismissed,now),'review','a hold outranks any dismissal');
+// The queue tags from queueBucket, so a dismissed order is counted and listed under Shipped.
+const queued=q.queryOrders([{id:'dddddddd-dddd',status:'paid',total:1,created:now-30*H,data:okUnscanned.data}],{tab:'shipped'},now);
+assert.equal(queued.counts.review,0); assert.equal(queued.counts.shipped,1); assert.equal(queued.orders.length,1);
+assert.equal(q.queryOrders([{id:'dddddddd-dddd',status:'paid',total:1,created:now-30*H,data:unscanned.data}],{tab:'review'},now).counts.review,1,'and under Needs review without one');
+
 // The 48-hour reminder measures from payment, never from the label (owner, Oct 20 2026).
 assert.equal(f.UNSHIPPED_REMINDER_MS,48*H);
 assert.equal(f.paidAt({status:'paid',data:{paidAt:now-10*H},created:now-9*24*H}),now-10*H,'the stamp wins over the order date');
@@ -76,6 +108,12 @@ assert(!/Mark shipped/.test(ui),'the queue no longer claims a shipment by hand')
 assert.match(ui,/change\('order-handoff', \{ orderId: order\.id \}/);
 assert.match(ui,/The customer is not emailed/);
 assert.match(ui,/unreadableParcel\(o\)\) return 'Carrier will not return tracking/,'the queue names a provider refusal for what it is');
+assert.match(ui,/send\(\{ dismiss: true \}/,'the queue offers a way to accept a carrier flag');
+assert.match(ui,/send\(\{ undoDismiss: true \}/,'and a way to put it back');
+const shipRoute=fs.readFileSync(path.join(root,'app/api/admin/shipping/route.ts'),'utf8');
+assert.match(shipRoute,/body\.dismiss === true/,'the endpoint exists');
+assert.match(shipRoute,/dismissibleReview\(\{ status: order\.status, data \}\)/,'and refuses anything that is not a carrier flag');
+assert.match(shipRoute,/WHERE id=\? AND coalesce\(json_extract\(data,'\$\.shipment\.status'\),''\)=\?/,'and only lands while the carrier still says the same thing');
 
 (async()=>{
   // --- The real buyLabel, EasyPost stubbed: insurance rides on the buy, the signature on the shipment. ---
@@ -131,15 +169,21 @@ assert.match(ui,/unreadableParcel\(o\)\) return 'Carrier will not return trackin
   add('pppppppp-1','paid',{address:addr,shipment:{status:'pre_transit',tracking:'TA',readFails:3},labelCreatedAt:now-30*H});
   // Two refusals is not yet a verdict: one provider wobble must not accuse a good parcel.
   add('qqqqqqqq-1','paid',{address:addr,shipment:{status:'pre_transit',tracking:'TB',readFails:2},labelCreatedAt:now-30*H});
+  // Dismissed by the owner: out of the daily email until the carrier says something different.
+  add('rrrrrrrr-1','paid',{address:addr,shipment:{status:'pre_transit',tracking:'TC'},labelCreatedAt:now-30*H,dismissed:{at:now-H,by:'owner@example.invalid',carrierStatus:'pre_transit'}});
+  // A dismissal that no longer matches what the carrier says is no dismissal at all.
+  add('ssssssss-1','shipped',{address:addr,shipment:{status:'return_to_sender',tracking:'TD',checkedAt:now-H},labelCreatedAt:now-3*24*H,dismissed:{at:now-H,by:'owner@example.invalid',carrierStatus:'in_transit'}});
   const alerts=load('lib/parcel-alerts.ts');
   const found=await alerts.parcelAlerts({DB},now);
   assert.deepEqual(found.map(a=>a.id.slice(0,1)+':'+a.kind).sort(),
-    ['a:unscanned','b:unscanned','c:stuck','d:problem','i:unshipped','j:unshipped','k:unshipped','l:unshipped','o:unshipped','p:unscanned','q:unscanned'],
+    ['a:unscanned','b:unscanned','c:stuck','d:problem','i:unshipped','j:unshipped','k:unshipped','l:unshipped','o:unshipped','p:unscanned','q:unscanned','s:problem'],
     'fresh, moving, test and archived parcels stay out; recently paid and recovered checkouts stay quiet');
   const byId=Object.fromEntries(found.map(a=>[a.id.slice(0,1),a]));
   assert.equal(byId.p.unreadable,true,'three refusals is a provider problem');
   assert.equal(byId.q.unreadable,false,'two is not');
   assert.equal(byId.a.unreadable,false,'a parcel the carrier answers about is not flagged');
+  assert(!found.some(a=>a.id.startsWith('r')),'a dismissed flag is out of the daily email');
+  assert.equal(byId.s.kind,'problem','a dismissal that no longer matches the carrier is ignored');
   const unreadableText=alerts.parcelAlertText(found,now);
   assert.match(unreadableText,/#PPPPPPPP.*will not return tracking for it\. Open the shipment in EasyPost/,'the line sends the team to the label');
   assert.doesNotMatch(unreadableText,/#PPPPPPPP.*Find the box/,'and not to the post office');
@@ -162,9 +206,9 @@ assert.match(ui,/unreadableParcel\(o\)\) return 'Carrier will not return trackin
   const early=new Date('2026-10-17T14:00:00Z').getTime();
   assert.equal((await alerts.runParcelAlerts(mailEnv,early,{fetch:fakeFetch})).reason,'too_early');
   const r1=await alerts.runParcelAlerts(mailEnv,now,{fetch:fakeFetch});
-  assert.equal(r1.sent,true); assert.equal(r1.count,11); assert.equal(sent.length,1);
-  assert.deepEqual(sent[0].body.to,['staff@example.invalid']); assert.equal(sent[0].body.subject,'11 parcels need a look'); assert.equal(sent[0].key,'parcel-alerts-2026-10-17');
+  assert.equal(r1.sent,true); assert.equal(r1.count,12); assert.equal(sent.length,1);
+  assert.deepEqual(sent[0].body.to,['staff@example.invalid']); assert.equal(sent[0].body.subject,'12 parcels need a look'); assert.equal(sent[0].key,'parcel-alerts-2026-10-17');
   assert.equal((await alerts.runParcelAlerts(mailEnv,now+60000,{fetch:fakeFetch})).reason,'already_today','one digest a day'); assert.equal(sent.length,1);
   assert.equal((await alerts.runParcelAlerts({DB:{prepare(){throw Error('down');}}},now)).reason,'failed','a broken database never fails the schedule');
-  console.log('PASS: owner-set insurance and signature thresholds (unset keeps today\'s behaviour), goods value, insurance on the buy, unscanned 24h, unreadable-at-the-provider and stuck 4-day staff flags hidden from customers, Dropped off handoff without status change or email, hand-marked delivery refused on tracked parcels, daily parcel alert once per day, and the 48-hour reminder for a paid order that never reached the carrier. Synthetic only.');
+  console.log('PASS: owner-set insurance and signature thresholds (unset keeps today\'s behaviour), goods value, insurance on the buy, unscanned 24h, unreadable-at-the-provider and stuck 4-day staff flags hidden from customers, Dropped off handoff without status change or email, hand-marked delivery refused on tracked parcels, daily parcel alert once per day, dismissing a carrier flag (and only a carrier flag, and only while the carrier says the same thing), and the 48-hour reminder for a paid order that never reached the carrier. Synthetic only.');
 })().catch(e=>{console.error(e);process.exit(1);});
