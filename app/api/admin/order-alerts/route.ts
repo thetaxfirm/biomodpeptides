@@ -3,6 +3,7 @@ import { requireStaff } from '@/lib/auth';
 import { runtime, timestamp } from '@/lib/runtime';
 import { auditRun, recordChange } from '@/lib/change-history';
 import { cleanRecipients, orderAlertRecipients, orderNotifyRecipients, ORDER_ALERT_KEY } from '@/lib/order-summary';
+import { readTelegramConfig, validBotToken, cleanChatIds, findTelegramChats, sendTelegramTest, TELEGRAM_TOKEN_KEY, TELEGRAM_CHATS_KEY } from '@/lib/telegram';
 export const dynamic = 'force-dynamic';
 const j = (value: unknown, status = 200) => NextResponse.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
 
@@ -17,7 +18,12 @@ export async function GET() {
         const env = runtime();
         const saved = await orderAlertRecipients(env as never);
         const fallback = orderNotifyRecipients(env as never);
-        return j({ recipients: saved, usingFallback: saved.length > 0 && saved.join() === fallback.join() && fallback.length > 0, deployed: fallback });
+        // The bot token is a credential: whether one is set is useful, the token itself is not.
+        const telegram = await readTelegramConfig(env as never);
+        return j({
+            recipients: saved, usingFallback: saved.length > 0 && saved.join() === fallback.join() && fallback.length > 0, deployed: fallback,
+            telegram: { configured: Boolean(telegram.token), chats: telegram.chats },
+        });
     }
     catch { return j({ error: 'Administrator sign-in required.' }, 403); }
 }
@@ -31,7 +37,53 @@ export async function POST(req: NextRequest) {
     try {
         const env = runtime();
         const context = { source: 'admin' as const, actor: actor.email, actorType: 'staff' as const };
-        const body = await req.json().catch(() => ({})) as { recipients?: unknown };
+        const body = await req.json().catch(() => ({})) as { recipients?: unknown; botToken?: unknown; chatIds?: unknown; findChats?: unknown; test?: unknown };
+
+        // Looks up the groups the bot can already see, so nobody reads a chat id out of raw JSON.
+        // The token may come from the form before it is saved, and is never written to history.
+        if (body.findChats === true) {
+            const typed = validBotToken(body.botToken);
+            const token = typed || (await readTelegramConfig(env as never)).token;
+            if (!token) return j({ error: 'Add the bot token first. BotFather gives it to you when you create the bot.' }, 400);
+            const chats = await findTelegramChats(token);
+            return j({ chats, message: chats.length
+                ? chats.length + (chats.length === 1 ? ' chat found.' : ' chats found.') + ' Pick the group you want and save it.'
+                : 'No chats yet. Add the bot to your group, send any message in that group, then look again. Telegram only reveals a group once somebody has posted in it.' });
+        }
+
+        if (body.test === true) {
+            const result = await sendTelegramTest(env as never);
+            if (!result.configured) return j({ error: 'Save a bot token and at least one chat first.' }, 400);
+            // Accepted by Telegram is not the same as read by a person, and the wording says so.
+            return j({ message: result.sent
+                ? 'Telegram accepted the test for ' + result.sent + ' of ' + result.chats + (result.chats === 1 ? ' chat.' : ' chats.') + ' Check the group to confirm it arrived.'
+                : 'Telegram refused the message for every chat. Check the bot is still in the group and the chat id is right.' }, result.sent ? 200 : 502);
+        }
+
+        // Telegram settings save on their own so the email list is never disturbed by them.
+        if (body.botToken !== undefined || body.chatIds !== undefined) {
+            const changed: string[] = [];
+            if (body.botToken !== undefined) {
+                const raw = String(body.botToken ?? '').trim();
+                if (raw && !validBotToken(raw)) return j({ error: 'That does not look like a bot token. BotFather gives you digits, a colon, then a long code.' }, 400);
+                await auditRun(env.DB, context, 'INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', TELEGRAM_TOKEN_KEY, validBotToken(raw));
+                changed.push(raw ? 'bot token set' : 'bot token cleared');
+            }
+            if (body.chatIds !== undefined) {
+                const chats = cleanChatIds(body.chatIds);
+                await auditRun(env.DB, context, 'INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', TELEGRAM_CHATS_KEY, chats.join(','));
+                changed.push(chats.length + (chats.length === 1 ? ' chat' : ' chats'));
+            }
+            try {
+                await recordChange(env.DB, {
+                    ...context, action: 'store.order_alerts_chat', entityType: 'setting', entityId: TELEGRAM_CHATS_KEY, status: 'succeeded', changes: [],
+                    summary: 'Telegram order alerts updated: ' + changed.join(', ') + '.',
+                });
+            } catch { /* the settings are saved; a missing history row must not suggest otherwise */ }
+            const now = await readTelegramConfig(env as never);
+            return j({ telegram: { configured: Boolean(now.token), chats: now.chats }, message: 'Telegram settings saved. Use Send a test message to prove it reaches the group.' });
+        }
+
         if (typeof body.recipients !== 'string') return j({ error: 'Send the list as text.' }, 400);
         const recipients = cleanRecipients(body.recipients);
         const dropped = String(body.recipients).split(/[,;\s]+/).map(s => s.trim()).filter(Boolean).length - recipients.length;

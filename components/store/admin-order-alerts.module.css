@@ -1,0 +1,6 @@
+.steps { margin: 8px 0 16px; padding-left: 20px; line-height: 1.6; }
+.steps li { margin-bottom: 4px; }
+.sub { color: #5c5c5c; font-size: 13px; margin: 4px 0 12px; }
+.found { list-style: none; margin: 8px 0 12px; padding: 0; }
+.found li { padding: 6px 0; border-bottom: 1px solid #e9d9ef; }
+.row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 12px; }
