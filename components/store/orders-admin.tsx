@@ -12,9 +12,9 @@ import { Field } from './primitives';
 import { money } from '@/lib/catalog';
 import { fulfillmentLabel, awaitingLabelApproval, carrierWords, stalledLabel, stuckInTransit, unreadableParcel } from '@/lib/fulfillment';
 import { shipDue } from '@/lib/ship-cutoff';
-import { bucketStatus, queueTabs, canArchive, isArchived, closedReason, type QueueResult, type QueueRow, type QueueTab, type OrderBucket } from '@/lib/order-queue';
+import { bucketStatus, queueTabs, canArchive, isArchived, dismissibleReview, flagDismissed, closedReason, type QueueResult, type QueueRow, type QueueTab, type OrderBucket } from '@/lib/order-queue';
 import { CarrierConnection } from './fulfillment-admin';
-import { ShippingLabel } from './shipping-admin';
+import { ShippingLabel, post as shippingPost } from './shipping-admin';
 import { OrderDetails } from './order-admin';
 import styles from './orders-admin.module.css';
 
@@ -71,7 +71,10 @@ function protectionLine(o: QueueRow) {
 function statusLine(o: QueueRow) {
     const archived = isArchived(o) ? 'Archived ' + new Date(o.data.archivedAt).toLocaleDateString([], { dateStyle: 'medium' }) : '';
     const why = o.bucket === 'closed' ? closedReason(o) : '';
-    return [o.data?.shipment?.status ? carrierLine(o) : why, protectionLine(o), archived].filter(Boolean).join(' · ');
+    // Says so when a flag was accepted, so a returning or unscanned parcel sitting under Shipped is
+    // never a mystery: the carrier words beside it are still the carrier's own.
+    const dismissed = flagDismissed(o) ? 'Flag dismissed ' + shortTime(Number(o.data.dismissed.at)) + ' by ' + String(o.data.dismissed.by || 'staff') : '';
+    return [o.data?.shipment?.status ? carrierLine(o) : why, protectionLine(o), dismissed, archived].filter(Boolean).join(' · ');
 }
 
 /** A bought label not yet handed over can be marked dropped off straight from the queue. */
@@ -161,7 +164,28 @@ export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, form
             <option value="">Win back…</option>{winBackTemplates.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
         </select> : null;
         const archive = archiveButton(o);
-        return report || winBack || archive ? <span className={styles.nextGroup}>{step}{winBack}{report}{archive}</span> : step;
+        const dismiss = dismissButton(o);
+        return report || winBack || archive || dismiss ? <span className={styles.nextGroup}>{step}{winBack}{report}{dismiss}{archive}</span> : step;
+    }
+    /**
+     * Accepts a carrier flag nobody can clear by hand: not scanned, no update in four days, or a
+     * carrier problem. The order leaves Needs review and the daily parcel email. Nothing about the
+     * order changes, and a different carrier status brings the flag back on its own.
+     */
+    function dismissButton(o: QueueRow) {
+        if (!allowed('orders:fulfill')) return null;
+        const number = orderNumber(o.id);
+        const send = (b: Record<string, unknown>, done: string) => {
+            shippingPost({ id: o.id, ...b }).then(r => { toast.success(r?.message || done); reload(); }).catch(e => toast.error(e instanceof Error ? e.message : 'Request failed.'));
+        };
+        if (flagDismissed(o)) return <button type="button" className="text-button" disabled={busy} onClick={() => send({ undoDismiss: true }, number + ' is back in Needs review.')}>Undo dismiss</button>;
+        if (!dismissibleReview(o)) return null;
+        function click() {
+            const ask = typeof window === 'undefined' ? undefined : window.confirm;
+            if (ask && !ask('Dismiss the carrier flag on ' + number + '? It moves to Shipped and stops appearing in the daily parcel email. The customer is not emailed, and nothing about the order changes. If the carrier later reports something different, the flag comes back.')) return;
+            send({ dismiss: true }, number + ' dismissed.');
+        }
+        return <button type="button" className="text-button" disabled={busy} onClick={click}>Dismiss flag</button>;
     }
     /** Files a finished order away, or brings it back. Only for orders with nothing left to do. */
     function archiveButton(o: QueueRow) {
