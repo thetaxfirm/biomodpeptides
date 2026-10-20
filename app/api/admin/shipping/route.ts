@@ -8,6 +8,7 @@ import { catalog, config } from '@/lib/commerce';
 import { coaBlockedItems, coaBlockMessage } from '@/lib/coa-shipping';
 import { readCoaConfig } from '@/lib/coa-outbox';
 import { readTrackingSweepHealth } from '@/lib/tracking-sweep';
+import { dismissibleReview, carrierState } from '@/lib/fulfillment';
 export const dynamic = 'force-dynamic';
 const j = (value: unknown, status = 200) => NextResponse.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
 const auditWarning = ' Change history could not record the final result. Do not repeat this action just to update history.';
@@ -36,7 +37,7 @@ export async function POST(req: NextRequest) {
         const run = (sql: string, ...values: (string | number | null)[]) => auditRun(env.DB, context, sql, ...values);
         if (!easypostReady(env))
             return j({ error: 'EasyPost is not connected. Add EASYPOST_API_KEY in Cloudflare.' }, 400);
-        const body = await req.json().catch(() => ({})) as { id?: unknown; resend?: unknown; refreshTracking?: unknown };
+        const body = await req.json().catch(() => ({})) as { id?: unknown; resend?: unknown; refreshTracking?: unknown; dismiss?: unknown; undoDismiss?: unknown; note?: unknown };
         const id = typeof body.id === 'string' && /^[a-f0-9-]{36}$/.test(body.id) ? body.id : '';
         if (!id)
             return j({ error: 'Order not found.' }, 404);
@@ -63,6 +64,35 @@ export async function POST(req: NextRequest) {
                 : 'Tracking email acceptance was not confirmed. Review mail provider records before resending.');
             return { sent, recorded };
         };
+        if (body.undoDismiss === true) {
+            if (!data.dismissed) return j({ message: 'This order has no dismissed flag.' });
+            await run("UPDATE orders SET data=json_remove(data,'$.dismissed'),updated=? WHERE id=?", timestamp(), id);
+            await outcome('shipping.dismiss_flag', 'succeeded', 'A dismissed carrier flag was put back. The order returns to Needs review.');
+            return j({ message: 'Flag restored. This order is back in Needs review.' });
+        }
+        if (body.dismiss === true) {
+            // Accepts a carrier flag nobody can clear by hand: not scanned, no update in four days,
+            // or a carrier problem. The order leaves Needs review and the daily parcel email and
+            // shows under Shipped, with its real carrier status still printed on the row. Nothing
+            // about the order, the parcel, the payment or the customer changes.
+            //
+            // The dismissal records the carrier status it was given for, and the write only lands
+            // while that is still what the carrier says. A different answer later -- including a new
+            // problem -- stops matching and the flag comes back on its own (owner, Oct 20 2026).
+            if (!dismissibleReview({ status: order.status, data }))
+                return j({ error: 'This is not a carrier flag. A hold, a label over your limit and a payment that needs checking each have their own button.' }, 409);
+            await record('shipping.dismiss_flag', 'attempted', 'Requested to accept a carrier flag on this order.');
+            const carrier = carrierState({ status: order.status, data });
+            const note = typeof body.note === 'string' ? body.note.trim().slice(0, 200) : '';
+            const saved = await run("UPDATE orders SET data=json_set(data,'$.dismissed',json(?)),updated=? WHERE id=? AND coalesce(json_extract(data,'$.shipment.status'),'')=?",
+                JSON.stringify({ at: Date.now(), by: actor.email, note, carrierStatus: carrier }), timestamp(), id, carrier);
+            if (!saved.meta.changes) {
+                await outcome('shipping.dismiss_flag', 'observed', 'The carrier status changed while the flag was being accepted. Nothing was saved.');
+                return j({ error: 'The carrier reported something new while you were dismissing this. Refresh and look again.' }, 409);
+            }
+            const recorded = await outcome('shipping.dismiss_flag', 'succeeded', 'Carrier flag accepted. The order leaves Needs review until the carrier says something different. No customer email was sent.');
+            return j({ message: 'Flag dismissed. This order moves to Shipped; its carrier status still shows on the row.' + (recorded ? '' : auditWarning) });
+        }
         if (body.refreshTracking === true) {
             if (!data.shipment?.tracking || !data.shipment?.shipmentId) return j({ error: 'This order has no carrier label to check.' }, 400);
             await record('shipping.refresh_tracking', 'attempted', 'Requested a read-only carrier tracking check.');

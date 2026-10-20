@@ -7,9 +7,9 @@ db.exec('CREATE TABLE orders(id TEXT PRIMARY KEY,status TEXT,data TEXT,updated I
 const id = '00000001-0000-4000-8000-000000000001';
 const env = { DB: {}, EASYPOST_API_KEY: 'fixture-only-do-not-log' };
 const label = { shipmentId: 'shp_fixture', carrier: 'USPS', service: 'GroundAdvantage', costCents: 500, tracking: 'PRIVATE_TRACKING', trackingUrl: 'https://example.invalid/private-tracking', labelUrl: 'https://example.invalid/private-label', status: 'pre_transit' };
-let events, writes, calls, timeline, failAudit, failSave, mailAccepted, carrierFail, purchaseFail, allowed, attempts, now = 1000;
+let events, writes, calls, timeline, failAudit, failSave, mailAccepted, carrierFail, purchaseFail, allowed, attempts, raceCarrier, now = 1000;
 function reset(extra = {}) {
-  events = []; writes = []; calls = []; timeline = []; attempts = []; failAudit = () => false; failSave = false; mailAccepted = true; carrierFail = false; purchaseFail = false; allowed = true;
+  events = []; writes = []; calls = []; timeline = []; attempts = []; failAudit = () => false; failSave = false; mailAccepted = true; carrierFail = false; purchaseFail = false; allowed = true; raceCarrier = false;
   db.prepare('INSERT OR REPLACE INTO orders VALUES(?,?,?,?)').run(id, 'paid', JSON.stringify({ email: 'private-customer@example.invalid', address: { name: 'Private Customer', line1: 'PRIVATE_ADDRESS' }, paymentReference: 'PRIVATE_PAYMENT', items: [], ...extra }), 0);
 }
 const row = () => { const r = db.prepare('SELECT * FROM orders WHERE id=?').get(id); return { ...r, data: JSON.parse(r.data) }; };
@@ -19,6 +19,9 @@ const history = {
   auditRun: async (database, context, sql, ...values) => {
     assert.equal(database, env.DB); assert.deepEqual(context, { source: 'admin', actor: 'staff@example.invalid', actorType: 'staff' });
     if (failSave && sql.includes("'$.labelCreatedAt'")) throw Error('Synthetic atomic audit failure');
+    // Lets a test land a carrier update in the gap between the route's read and its write, which is
+    // the only way to exercise a compare-and-set guard from outside the route.
+    if (raceCarrier && sql.includes("'$.dismissed'")) { raceCarrier = false; db.prepare("UPDATE orders SET data=json_set(data,'$.shipment.status','in_transit') WHERE id=?").run(id); }
     timeline.push('write'); writes.push({ context, sql }); return { meta: db.prepare(sql).run(...values) };
   },
   recordChange: async (database, event) => {
@@ -38,6 +41,13 @@ const shipping = {
   sendTrackingEmail: async (_env, _to, _orderId, _label, _name, replyTo) => { assert.equal(replyTo, 'reply@example.invalid'); calls.push('mail'); timeline.push('provider:mail'); return mailAccepted; },
   readShipmentTracking: async () => { calls.push('read'); timeline.push('provider:read'); if (carrierFail) throw Error('PRIVATE_PROVIDER_DETAIL'); return 'in_transit'; },
 };
+/** Compiles a real library module with no stubs. Used where faking the rule would test nothing. */
+function loadReal(file) {
+  const name = path.join(root, file), mod = new Module(name, module);
+  mod.filename = name; mod.paths = Module._nodeModulePaths(root);
+  mod._compile(ts.transpileModule(fs.readFileSync(name, 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText, name);
+  return mod.exports;
+}
 const filename = path.join(root, 'app/api/admin/shipping/route.ts'), m = new Module(filename, module);
 m.filename = filename; m.require = name => {
   if (name === 'next/server') return { NextResponse };
@@ -52,6 +62,8 @@ m.filename = filename; m.require = name => {
   // The COA shipping rule has its own suite (coa-shipping-v1); here every order is cleared to ship.
   if (name === '@/lib/coa-shipping') return {coaBlockedItems: () => [], coaBlockMessage: names => 'blocked ' + names.join(',')};
   if (name === '@/lib/shipping-options') return {savedShippingOption:()=>null,goodsValueCents:()=>null};
+  // The real rules, not a stub: whether a flag may be dismissed is the whole point of that branch.
+  if (name === '@/lib/fulfillment') return loadReal('lib/fulfillment.ts');
   throw Error('Unexpected import ' + name);
 };
 m._compile(ts.transpileModule(fs.readFileSync(filename, 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText, filename);
@@ -109,5 +121,33 @@ const checkSafe = () => {
   r = await post(); assert.equal(r.status, 200);
   assert.deepEqual(row().data.hold, { issue: 'out_of_stock' }, 'A hold placed while the carrier call was in flight is not erased');
   assert.equal(row().data.shipment.tracking, label.tracking, 'and the bought label is still recorded');
+  // Dismissing a carrier flag: audited like every other write, refused when it is not a carrier
+  // flag, and never saved once the carrier has moved on (owner, Oct 20 2026).
+  const old = { ...label, status: 'pre_transit' };
+  reset({ shipment: old, labelCreatedAt: -1 });
+  r = await post({ dismiss: true });
+  assert.equal(r.status, 200); assert.match(r.body.message, /moves to Shipped/);
+  assert.equal(row().data.dismissed.by, 'staff@example.invalid');
+  assert.equal(row().data.dismissed.carrierStatus, 'pre_transit');
+  assert.deepEqual(events.map(e => e.action + ':' + e.status), ['shipping.dismiss_flag:attempted', 'shipping.dismiss_flag:succeeded']);
+  assert.deepEqual(calls, [], 'dismissing calls no provider'); checkSafe();
+  // And back again.
+  r = await post({ undoDismiss: true });
+  assert.equal(r.status, 200); assert.equal(row().data.dismissed, undefined); assert.equal(events.at(-1).status, 'succeeded');
+  // A hold is not a carrier flag: it has its own button, so it is refused without touching anything.
+  reset({ shipment: old, labelCreatedAt: -1, hold: { issue: 'out_of_stock' } });
+  r = await post({ dismiss: true });
+  assert.equal(r.status, 409); assert.match(r.body.error, /has its own button|not a carrier flag/);
+  assert.equal(row().data.dismissed, undefined); assert.equal(events.length, 0); assert.deepEqual(calls, []);
+  // Nor is a parcel that is not flagged at all.
+  reset({ shipment: old, labelCreatedAt: Date.now() });
+  assert.equal((await post({ dismiss: true })).status, 409); assert.equal(row().data.dismissed, undefined);
+  // A carrier that moved while the owner was pressing the button loses the race, and says so.
+  reset({ shipment: old, labelCreatedAt: -1 }); raceCarrier = true;
+  r = await post({ dismiss: true });
+  assert.equal(r.status, 409); assert.match(r.body.error, /reported something new/);
+  assert.equal(row().data.dismissed, undefined);
+  assert.equal(events.at(-1).status, 'observed', 'the lost race is recorded, not hidden'); checkSafe();
+
   console.log('PASS: actual shipping route records authenticated staff, durable provider intent, safe outcomes without customer details, truthful acceptance/dispatch states, and no provider retry after an audit failure. Provider calls are mocked.');
 })().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => db.close());
