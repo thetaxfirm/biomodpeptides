@@ -39,6 +39,7 @@ const read=(db,id)=>{const r=db.raw.prepare('SELECT status,data FROM orders WHER
   assert.equal(read(db,'a').status,'shipped','paid becomes shipped once it is moving');
   assert.equal(read(db,'a').data.shipment.status,'in_transit');
   assert.equal(read(db,'a').data.shipment.checkedAt,NOW);
+  assert.equal(read(db,'a').data.shipment.sweptAt,NOW,'a real change records both the change and the ask');
 
   // Delivery closes it, from either paid or shipped.
   db=database(); add(db,'b','shipped',ship({status:'in_transit'})); add(db,'c','paid',ship({status:'in_transit'}));
@@ -50,6 +51,7 @@ const read=(db,id)=>{const r=db.raw.prepare('SELECT status,data FROM orders WHER
   // Nothing is asked about when it was checked recently, is already settled, or is an internal test.
   db=database();
   add(db,'recent','paid',{...ship(),shipment:{...ship().shipment,checkedAt:NOW-60000}});
+  add(db,'justasked','paid',{...ship(),shipment:{...ship().shipment,sweptAt:NOW-60000}});
   add(db,'done','shipped',ship({status:'delivered'}));
   add(db,'returned','shipped',ship({status:'return_to_sender'}));
   add(db,'test','paid',{...ship(),internalTest:true});
@@ -64,19 +66,68 @@ const read=(db,id)=>{const r=db.raw.prepare('SELECT status,data FROM orders WHER
   health=await sweep.runTrackingSweep({DB:db},NOW);
   assert.equal(health.failed,1); assert.equal(health.read,1); assert.equal(health.changed,1,'the reachable one still moved');
 
-  // An unchanged status costs no write.
+  // An unchanged status is still recorded as asked, but nothing else moves.
   db=database(); add(db,'same','paid',ship({status:'pre_transit'}));
   answer=()=>'pre_transit';
   health=await sweep.runTrackingSweep({DB:db},NOW);
-  assert.equal(health.read,1); assert.equal(health.changed,0,'no write when the carrier says nothing new');
+  assert.equal(health.read,1); assert.equal(health.changed,0,'no carrier change when it says nothing new');
   assert.equal(read(db,'same').status,'paid','pre_transit is not dispatch');
+  assert.equal(read(db,'same').data.shipment.sweptAt,NOW,'asking is recorded');
+  assert.equal(read(db,'same').data.shipment.checkedAt,undefined,'asking is not a carrier update');
+  assert.equal(read(db,'same').data.shipment.status,'pre_transit');
 
-  // A newer observation already stored is never overwritten by an older sweep.
-  db=database(); add(db,'newer','paid',ship({checkedAt:NOW+60000}));
-  answer=()=>'in_transit';
+  // The queue cannot deadlock. With more unchanging parcels than one run can hold, a second run
+  // reaches the ones the first could not: this is the bug that let a backlog starve new parcels.
+  db=database(); for(let i=0;i<8;i++) add(db,'q'+i,'paid',ship(),OLD+i);
+  reads=[]; answer=()=>'pre_transit';
+  await sweep.runTrackingSweep({DB:db,TRACKING_RECHECK_LIMIT:'4'},NOW);
+  const first=reads.map(r=>r.tracking); reads=[];
+  await sweep.runTrackingSweep({DB:db,TRACKING_RECHECK_LIMIT:'4'},NOW+1);
+  const second=reads.map(r=>r.tracking);
+  assert.equal(first.length,4); assert.equal(second.length,4);
+  assert.equal(first.filter(t=>second.includes(t)).length,0,'the second run reads the other four, not the same four again');
+
+  // A carrier that cannot be reached also backs off, so one broken parcel cannot hold a slot forever.
+  db=database(); add(db,'dead','paid',ship());
+  answer=()=>{throw Error('carrier timeout')};
   health=await sweep.runTrackingSweep({DB:db},NOW);
+  assert.equal(health.failed,1); assert.equal(read(db,'dead').data.shipment.sweptAt,NOW,'a failed read still backs off');
+
+  // Consecutive refusals are counted on the parcel, and one good read wipes the slate. This is what
+  // lets the digest say "check the label" instead of sending someone to look for a box.
+  db=database(); add(db,'refused','paid',ship());
+  answer=()=>{throw Error('tracking did not match this production shipment')};
+  // A refusal backs the parcel off like any other outcome, so each count needs a fresh window.
+  const LATER=i=>NOW+i*4*3600000;
+  for(let i=1;i<=3;i++){ await sweep.runTrackingSweep({DB:db},LATER(i)); assert.equal(read(db,'refused').data.shipment.readFails,i,'refusal '+i+' is counted'); }
+  answer=()=>'pre_transit';
+  await sweep.runTrackingSweep({DB:db},LATER(4));
+  assert.equal(read(db,'refused').data.shipment.readFails,undefined,'one good read clears the count');
+  assert.equal(read(db,'refused').data.shipment.sweptAt,LATER(4));
+  // And a good read that also moves the parcel clears it, not only a quiet one.
+  db=database(); add(db,'recovered','paid',ship({readFails:4}));
+  answer=()=>'in_transit';
+  await sweep.runTrackingSweep({DB:db},NOW);
+  assert.equal(read(db,'recovered').status,'shipped');
+  assert.equal(read(db,'recovered').data.shipment.readFails,undefined,'a successful transition clears the count too');
+
+  // Stamping never disturbs the order row's own updated column, which drives other jobs.
+  db=database(); add(db,'quiet','paid',ship({status:'pre_transit'}));
+  answer=()=>'pre_transit';
+  await sweep.runTrackingSweep({DB:db},NOW);
+  assert.equal(db.raw.prepare('SELECT updated FROM orders WHERE id=?').get('quiet').updated,OLD,'updated is left alone');
+
+  // A newer observation already stored is never overwritten by an older sweep. sweptAt is old enough
+  // that the parcel really is due, so the write is reached and the guard is the thing that stops it.
+  db=database(); add(db,'newer','paid',ship({checkedAt:NOW+60000,sweptAt:OLD}));
+  reads=[]; answer=()=>'in_transit';
+  health=await sweep.runTrackingSweep({DB:db},NOW);
+  assert.equal(health.due,1); assert.equal(reads.length,1,'the parcel was due and was read');
   assert.equal(read(db,'newer').status,'paid','the stored newer observation wins');
   assert.equal(health.changed,0);
+  assert.equal(read(db,'newer').data.shipment.checkedAt,NOW+60000,'the newer observation is untouched');
+  assert.equal(read(db,'newer').data.shipment.status,'pre_transit','and so is the status it came with');
+  assert.equal(read(db,'newer').data.shipment.sweptAt,NOW,'it still backs off rather than being re-read forever');
 
   // The batch is capped so one run cannot run away.
   db=database(); for(let i=0;i<20;i++) add(db,'bulk'+i,'paid',ship());
@@ -84,5 +135,5 @@ const read=(db,id)=>{const r=db.raw.prepare('SELECT status,data FROM orders WHER
   health=await sweep.runTrackingSweep({DB:db,TRACKING_RECHECK_LIMIT:'5'},NOW);
   assert.equal(health.due,5); assert.equal(reads.length,5,'only the capped number of carrier reads');
 
-    console.log('PASS: due selection by staleness, paid->shipped and ->delivered transitions, settled/recent/test/unlabelled skipped, carrier failure isolated, no-op when unchanged, newer observation preserved, batch capped.');
+    console.log('PASS: due selection by staleness, paid->shipped and ->delivered transitions, settled/recent/just-asked/test/unlabelled skipped, carrier failure isolated, unchanged and failed reads back off without touching checkedAt or updated, queue rotates instead of deadlocking, consecutive provider refusals counted and cleared, newer observation preserved, batch capped.');
 })().catch(e=>{console.error(e);process.exitCode=1});
