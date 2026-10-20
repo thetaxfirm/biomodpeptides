@@ -17,7 +17,7 @@ export function orderPreorderNotice(data: { items?: unknown } | undefined): stri
 }
 
 /** Payment status is not proof of physical dispatch. Shared by admin and customer views. */
-export type FulfillmentOrder = { status: string; data?: { items?: unknown; internalTest?: boolean; shipment?: { status?: string; checkedAt?: number }; tracking?: string; hold?: unknown; labelCreatedAt?: number; handoff?: { at?: number; by?: string }; labelApproval?: { cents?: number; limitCents?: number; at?: number } } };
+export type FulfillmentOrder = { status: string; data?: { items?: unknown; internalTest?: boolean; shipment?: { status?: string; checkedAt?: number }; tracking?: string; hold?: unknown; labelCreatedAt?: number; paidAt?: number; handoff?: { at?: number; by?: string }; labelApproval?: { cents?: number; limitCents?: number; at?: number } } };
 /** A label quoted above the automatic ceiling, waiting for a person to approve the cost. */
 export function awaitingLabelApproval(order: FulfillmentOrder): boolean {
     return Boolean(order.data?.labelApproval && !order.data?.shipment);
@@ -30,6 +30,24 @@ export function awaitingLabelApproval(order: FulfillmentOrder): boolean {
 export const STALLED_LABEL_MS = 24 * 3600000;
 /** A parcel the carrier reported moving, then went quiet for this long, is probably stuck or lost. */
 export const STUCK_IN_TRANSIT_MS = 4 * 86400000;
+/**
+ * A paid order that has not reached the carrier in this long needs a person, whatever the reason:
+ * no postage bought, postage waiting for approval, a hold, or a box nobody posted. Measured from
+ * payment rather than from the label, because the customer's clock started when they paid.
+ */
+export const UNSHIPPED_REMINDER_MS = 48 * 3600000;
+/** When the order was paid for, falling back to when it was placed on records written before paidAt. */
+export function paidAt(order: FulfillmentOrder & { created?: number }): number | null {
+    const stamped = order.data?.paidAt;
+    if (typeof stamped === 'number' && Number.isFinite(stamped)) return stamped;
+    return typeof order.created === 'number' && Number.isFinite(order.created) ? order.created : null;
+}
+/** Paid, still not handed to the carrier, and past the reminder window. */
+export function unshippedTooLong(order: FulfillmentOrder & { created?: number }, now = Date.now()): boolean {
+    if (order.status !== 'paid' && order.status !== 'labeling') return false;
+    const since = paidAt(order);
+    return since !== null && now - since > UNSHIPPED_REMINDER_MS;
+}
 /**
  * Bought, but the carrier has never reported it moving. Automatic purchase makes this likelier:
  * nobody consciously handled the order, so nobody notices the parcel still sitting on the bench.
