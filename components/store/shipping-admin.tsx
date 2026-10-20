@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { money } from '@/lib/catalog';
 import styles from './shipping-help.module.css';
 // Admin order controls for EasyPost: buy the label, open it for printing, and resend the tracking email.
-async function post(body: Record<string, unknown>) {
+export async function post(body: Record<string, unknown>) {
     const r = await fetch('/api/admin/shipping', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const d = await r.json().catch(() => ({})) as any;
     if (!r.ok)
