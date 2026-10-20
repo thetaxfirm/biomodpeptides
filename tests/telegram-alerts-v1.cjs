@@ -99,6 +99,41 @@ assert.equal(T,'telegram_bot_token_v1'); assert.equal(C,'telegram_chat_ids_v1');
   assert.deepEqual(await tg.findTelegramChats(good,{fetch:async()=>new Response('not json',{status:200})}),[]);
   assert.deepEqual(await tg.findTelegramChats(good,{fetch:async()=>{throw Error('down');}}),[]);
 
+  // --- The probe: why discovery found nothing, said in the owner's terms rather than Telegram's. ---
+  const reply=(method,map)=>async url=>{const m=String(url).split('/').pop().split('?')[0];
+    if(!(m in map)) throw Error('unexpected method '+m);
+    const v=map[m]; if(typeof v==='function') return v(); return new Response(JSON.stringify(v.body),{status:v.status});};
+  const live={getMe:{status:200,body:{ok:true,result:{username:'biomod_orders_bot'}}}};
+  const noHook={getWebhookInfo:{status:200,body:{ok:true,result:{url:''}}}};
+  const oneChat={getUpdates:{status:200,body:{ok:true,result:[{message:{chat:{id:-100999,title:'Orders',type:'supergroup'}}}]}}};
+
+  // A token Telegram refuses is never 'no chats yet'.
+  assert.deepEqual(await tg.probeTelegram(good,{fetch:reply('',{getMe:{status:401,body:{ok:false}}})}),
+    {problem:'unauthorized',username:'',webhookUrl:'',chats:[]});
+  assert.deepEqual(await tg.probeTelegram('not-a-token',{fetch:ok}),{problem:'unauthorized',username:'',webhookUrl:'',chats:[]},'a malformed token never reaches Telegram');
+  assert.deepEqual(await tg.probeTelegram(good,{fetch:async()=>{throw Error('offline');}}),
+    {problem:'unreachable',username:'',webhookUrl:'',chats:[]},'an outage is not a bad credential');
+
+  // A webhook silently steals every update, so discovery can never work until it goes.
+  assert.deepEqual(await tg.probeTelegram(good,{fetch:reply('',{...live,getWebhookInfo:{status:200,body:{ok:true,result:{url:'https://example.invalid/hook'}}}})}),
+    {problem:'webhook',username:'biomod_orders_bot',webhookUrl:'https://example.invalid/hook',chats:[]});
+
+  // Healthy and empty: the bot is named, so the owner can check it is the one in the member list.
+  assert.deepEqual(await tg.probeTelegram(good,{fetch:reply('',{...live,...noHook,getUpdates:{status:200,body:{ok:true,result:[]}}})}),
+    {problem:'',username:'biomod_orders_bot',webhookUrl:'',chats:[]});
+  assert.deepEqual(await tg.probeTelegram(good,{fetch:reply('',{...live,...noHook,...oneChat})}),
+    {problem:'',username:'biomod_orders_bot',webhookUrl:'',chats:[{id:'-100999',title:'Orders',kind:'supergroup'}]});
+  // A webhook report that cannot be read is not a reason to stop looking.
+  assert.deepEqual((await tg.probeTelegram(good,{fetch:reply('',{...live,getWebhookInfo:()=>{throw Error('down');},...oneChat})})).chats,
+    [{id:'-100999',title:'Orders',kind:'supergroup'}]);
+
+  // The route turns each of those into one plain sentence, and never into the wrong one.
+  const routeText=fs.readFileSync(path.join(root,'app/api/admin/order-alerts/route.ts'),'utf8');
+  assert.match(routeText,/Telegram rejected this token/,'a dead credential says so');
+  assert.match(routeText,/webhook registered/,'a webhook says so');
+  assert.match(routeText,/could not be reached/,'an outage says so');
+  assert.match(routeText,/'\/start@' \+ probe\.username/,'and an empty queue names the exact command to send');
+
   // --- Wiring: the push rides the paid-order notification, and the token never leaves the server. ---
   const summary=fs.readFileSync(path.join(root,'lib/order-summary.ts'),'utf8');
   assert.match(summary,/await sendOrderPush\(env as never, orderId, data\)/,'a paid order posts to the group');
@@ -113,5 +148,5 @@ assert.equal(T,'telegram_bot_token_v1'); assert.equal(C,'telegram_chat_ids_v1');
   assert.match(panel,/@BotFather/,'the panel explains where a token comes from');
   assert.match(panel,/Find my chats/,'and finds the group id for you');
 
-  console.log('PASS: bot token and chat id validation, the exact lock-screen message (never the catalogue), one request per chat with correct URL and body, silence when unconfigured, refusals/outages/partial failures swallowed so an order is never blocked, an honest test message, chat discovery from a raw API response, and a token that is written but never returned or logged. Telegram is always stubbed.');
+  console.log('PASS: bot token and chat id validation, the exact lock-screen message (never the catalogue), one request per chat with correct URL and body, silence when unconfigured, refusals/outages/partial failures swallowed so an order is never blocked, an honest test message, chat discovery from a raw API response, a probe that tells a rejected token, a webhook and an outage apart from an empty queue, and a token that is written but never returned or logged. Telegram is always stubbed.');
 })().catch(e=>{console.error(e);process.exitCode=1});
