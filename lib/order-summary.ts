@@ -3,6 +3,7 @@ import { dueDay, pacific } from './ship-cutoff';
 import { presentationText } from './private-presentation';
 import { savedPreorder, orderPreorderNotice } from './fulfillment';
 import type { AnetOrderDetails } from './authorizenet-payments';
+import { sendOrderPush } from './telegram';
 // One readable summary of a saved order, shared by the admin Orders tab, the Authorize.net receipt and the store's order email.
 type Environment = Record<string, string | undefined>;
 export type SummaryItem = { id: string | number; name: string; detail: string; quantity: number; unitCents: number | null; lineTotalCents: number };
@@ -99,6 +100,9 @@ export async function orderAlertRecipients(env: Environment): Promise<string[]> 
 }
 /** Sends the store copy of a paid order. Never throws; returns false when email is not configured or Resend refuses it. */
 export async function sendOrderNotification(env: Environment, orderId: string, data: Record<string, any>, placedAt = Date.now()): Promise<boolean> {
+    // The chat push rides the same once-per-order guard as the email, and goes first so a store
+    // that has Telegram but no mail provider still gets told. Never throws, never blocks the order.
+    try { await sendOrderPush(env as never, orderId, data); } catch { /* a chat app is not the order */ }
     const key = (env.RESEND_API_KEY || '').trim();
     const to = await orderAlertRecipients(env);
     if (!key || !to.length)
