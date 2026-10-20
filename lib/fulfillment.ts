@@ -17,7 +17,7 @@ export function orderPreorderNotice(data: { items?: unknown } | undefined): stri
 }
 
 /** Payment status is not proof of physical dispatch. Shared by admin and customer views. */
-export type FulfillmentOrder = { status: string; data?: { items?: unknown; internalTest?: boolean; shipment?: { status?: string; checkedAt?: number; sweptAt?: number; readFails?: number }; tracking?: string; hold?: unknown; labelCreatedAt?: number; paidAt?: number; handoff?: { at?: number; by?: string }; labelApproval?: { cents?: number; limitCents?: number; at?: number } } };
+export type FulfillmentOrder = { status: string; data?: { items?: unknown; internalTest?: boolean; shipment?: { status?: string; checkedAt?: number; sweptAt?: number; readFails?: number }; tracking?: string; hold?: unknown; labelCreatedAt?: number; paidAt?: number; dismissed?: { at?: number; by?: string; note?: string; carrierStatus?: string }; handoff?: { at?: number; by?: string }; labelApproval?: { cents?: number; limitCents?: number; at?: number } } };
 /** A label quoted above the automatic ceiling, waiting for a person to approve the cost. */
 export function awaitingLabelApproval(order: FulfillmentOrder): boolean {
     return Boolean(order.data?.labelApproval && !order.data?.shipment);
@@ -152,6 +152,39 @@ export function orderBucket(order: FulfillmentOrder, now = Date.now()): OrderBuc
     if (order.status === 'paid') return 'to_ship';
     if (['creating', 'awaiting_payment', 'pending'].includes(order.status)) return 'unpaid';
     return 'review';
+}
+
+/** What the carrier last said about this parcel, as a plain string. '' when it has said nothing. */
+export const carrierState = (order: FulfillmentOrder): string => String(order.data?.shipment?.status || '');
+
+/**
+ * The three Needs review reasons that come from the carrier rather than from a decision: not scanned,
+ * no update in four days, and a carrier problem. These are the ones that can sit in the tab forever
+ * with no button to clear them, because only the carrier can clear them. A hold, a label over the
+ * limit and a payment that needs checking each have their own button and a real decision behind
+ * them, so none of those is dismissible (owner, Oct 20 2026).
+ */
+export function dismissibleReview(order: FulfillmentOrder, now = Date.now()): boolean {
+    return orderBucket(order, now) === 'review' && !order.data?.hold && !awaitingLabelApproval(order) && Boolean(order.data?.shipment);
+}
+/**
+ * A carrier flag the owner has looked at and accepted. The dismissal is tied to the carrier status
+ * it was given for, never to the order: if the carrier later says something different — including a
+ * new problem — it stops matching and the order returns to Needs review on its own.
+ */
+export function flagDismissed(order: FulfillmentOrder): boolean {
+    const d = order.data?.dismissed;
+    return Boolean(d) && typeof d?.at === 'number' && Number.isFinite(d.at) && d.carrierStatus === carrierState(order);
+}
+/**
+ * The admin queue's bucket: orderBucket(), with an accepted carrier flag standing down. A dismissed
+ * order goes to Shipped rather than back into To ship, because the parcel is with the carrier and
+ * the only thing that changed is that nobody needs to be told about it again. Its real carrier
+ * status still prints on the row. The customer's own view never consults this.
+ */
+export function queueBucket(order: FulfillmentOrder, now = Date.now()): OrderBucket {
+    const bucket = orderBucket(order, now);
+    return bucket === 'review' && flagDismissed(order) && dismissibleReview(order, now) ? 'shipped' : bucket;
 }
 
 /** Customer-facing short status. Never claims a carrier event the carrier has not reported. */
