@@ -42,6 +42,14 @@ assert.equal(f.orderBucket({...stuck,data:{...stuck.data,shipment:{...stuck.data
 assert.equal(f.carrierWords.pre_transit,'Not scanned by carrier yet'); assert.equal(f.carrierWords.unknown,'Not scanned by carrier yet');
 // A real hold still reads as under review for the customer.
 assert.equal(f.customerOrderStatus({...label(),data:{...label().data,hold:{issue:'x'}}}).label,'Under review');
+// The 48-hour reminder measures from payment, never from the label (owner, Oct 20 2026).
+assert.equal(f.UNSHIPPED_REMINDER_MS,48*H);
+assert.equal(f.paidAt({status:'paid',data:{paidAt:now-10*H},created:now-9*24*H}),now-10*H,'the stamp wins over the order date');
+assert.equal(f.paidAt({status:'paid',data:{},created:now-10*H}),now-10*H,'older records fall back to the order date');
+assert.equal(f.unshippedTooLong({status:'paid',data:{paidAt:now-49*H},created:now-49*H},now),true);
+assert.equal(f.unshippedTooLong({status:'paid',data:{paidAt:now-47*H},created:now-47*H},now),false);
+assert.equal(f.unshippedTooLong({status:'shipped',data:{paidAt:now-90*H},created:now-90*H},now),false,'a shipped order is never late');
+assert.equal(f.unshippedTooLong({status:'awaiting_payment',data:{},created:now-90*H},now),false,'an unpaid order is not this alert');
 
 // --- Route wiring: handoff never changes status or emails; tracked parcels are never delivered by hand. ---
 const route=fs.readFileSync(path.join(root,'app/api/store/[action]/route.ts'),'utf8');
@@ -52,6 +60,7 @@ assert(!/SET status|status=\?|sendTrackingEmail|resend/i.test(handoff),'handoff 
 assert.match(route,/status === 'delivered' && carrierShipment\?\.tracking && carrierShipment\.status !== 'delivered'/,'hand-marked delivery refused on a tracked parcel');
 for(const file of ['lib/auto-label.ts','app/api/admin/shipping/route.ts']) assert.match(fs.readFileSync(path.join(root,file),'utf8'),/valueCents: goodsValueCents\(data\)/,file+' passes the goods value');
 assert.match(fs.readFileSync(path.join(root,'worker.ts'),'utf8'),/runParcelAlerts\(parcelEnv/,'the daily alert runs on the 5-minute schedule');
+assert.match(fs.readFileSync(path.join(root,'lib/checkout.ts'),'utf8'),/json_set\(data,'\$\.paidAt',\?\).*json_extract\(data,'\$\.paidAt'\) IS NULL/,'payment stamps when it landed, once');
 
 // --- Queue UI: Dropped off replaces Mark shipped. ---
 const ui=fs.readFileSync(path.join(root,'components/store/orders-admin.tsx'),'utf8');
@@ -94,19 +103,46 @@ assert.match(ui,/The customer is not emailed/);
   add('ffffffff-1','shipped',{address:addr,shipment:{status:'in_transit',tracking:'T6',checkedAt:now-H},labelCreatedAt:now-2*24*H});
   add('gggggggg-1','paid',{address:addr,internalTest:true,shipment:{status:'pre_transit',tracking:'T7'},labelCreatedAt:now-30*H});
   add('hhhhhhhh-1','delivered',{address:addr,archivedAt:1,shipment:{status:'return_to_sender',tracking:'T8'},labelCreatedAt:now-30*H});
+  // Paid, but never reached the carrier. An order nobody bought postage for has no tracking to match
+  // on, so until the 48-hour reminder it produced no alert of any kind (owner, Oct 20 2026).
+  const addAt=(id,status,data,created)=>sql.prepare('INSERT INTO orders VALUES(?,?,?,?)').run(id,status,JSON.stringify(data),created);
+  addAt('iiiiiiii-1','paid',{address:addr,paidAt:now-60*H},now-60*H);
+  addAt('jjjjjjjj-1','paid',{address:addr,paidAt:now-72*H,labelApproval:{cents:9240,limitCents:7500,at:now-70*H}},now-72*H);
+  addAt('kkkkkkkk-1','paid',{address:addr,paidAt:now-55*H,hold:{issue:'out_of_stock',at:now-50*H}},now-55*H);
+  // Paid two days ago; the label itself is only hours old, so the 24-hour unscanned rule says nothing.
+  addAt('llllllll-1','paid',{address:addr,paidAt:now-50*H,labelCreatedAt:now-10*H,shipment:{status:'pre_transit',tracking:'T9'}},now-50*H);
+  // Inside the window, and an order placed days ago but only just paid: both stay quiet. The second is
+  // why payment is stamped rather than measured from the order date, which a recovery email can precede by days.
+  addAt('mmmmmmmm-1','paid',{address:addr,paidAt:now-20*H},now-20*H);
+  addAt('nnnnnnnn-1','paid',{address:addr,paidAt:now-3*H},now-9*24*H);
+  // A record written before paidAt existed falls back to when the order was placed.
+  addAt('oooooooo-1','paid',{address:addr},now-70*H);
   const alerts=load('lib/parcel-alerts.ts');
   const found=await alerts.parcelAlerts({DB},now);
-  assert.deepEqual(found.map(a=>a.id.slice(0,1)+':'+a.kind).sort(),['a:unscanned','b:unscanned','c:stuck','d:problem'],'fresh, moving, test and archived parcels stay out');
+  assert.deepEqual(found.map(a=>a.id.slice(0,1)+':'+a.kind).sort(),
+    ['a:unscanned','b:unscanned','c:stuck','d:problem','i:unshipped','j:unshipped','k:unshipped','l:unshipped','o:unshipped'],
+    'fresh, moving, test and archived parcels stay out; recently paid and recovered checkouts stay quiet');
+  assert.equal(new Set(found.map(a=>a.id)).size,found.length,'an order is named once, under its most specific reason');
+  const why=id=>found.find(a=>a.id.startsWith(id))?.why||'';
+  assert.match(why('i'),/no postage bought yet/);
+  assert.match(why('j'),/\$92\.40, above the automatic limit/);
+  assert.match(why('k'),/on hold: out of stock/);
+  assert.match(why('l'),/not yet scanned by the carrier/);
+  assert.equal(found.find(a=>a.id.startsWith('a')).kind,'unscanned','a stale label keeps its own, more specific reason');
   const text=alerts.parcelAlertText(found,now);
   assert.match(text,/#AAAAAAAA.*never marked dropped off/); assert.match(text,/#BBBBBBBB.*marked dropped off/); assert.match(text,/Returning to sender/);
+  assert.match(text,/Paid but not shipped after 48 hours:/);
+  assert.match(text,/#JJJJJJJJ.*paid 3d ago, postage quoted at \$92\.40/);
+  assert.match(text,/#IIIIIIII.*no postage bought yet/);
+  assert(!/#MMMMMMMM|#NNNNNNNN/.test(text),'orders inside the window are never named');
   const sent=[];const fakeFetch=async(url,init)=>{sent.push({url,body:JSON.parse(init.body),key:init.headers['Idempotency-Key']});return new Response('{}',{status:200});};
   const mailEnv={DB,RESEND_API_KEY:'synthetic',ORDER_NOTIFY_EMAILS:'staff@example.invalid'};
   const early=new Date('2026-10-17T14:00:00Z').getTime();
   assert.equal((await alerts.runParcelAlerts(mailEnv,early,{fetch:fakeFetch})).reason,'too_early');
   const r1=await alerts.runParcelAlerts(mailEnv,now,{fetch:fakeFetch});
-  assert.equal(r1.sent,true); assert.equal(r1.count,4); assert.equal(sent.length,1);
-  assert.deepEqual(sent[0].body.to,['staff@example.invalid']); assert.equal(sent[0].body.subject,'4 parcels need a look'); assert.equal(sent[0].key,'parcel-alerts-2026-10-17');
+  assert.equal(r1.sent,true); assert.equal(r1.count,9); assert.equal(sent.length,1);
+  assert.deepEqual(sent[0].body.to,['staff@example.invalid']); assert.equal(sent[0].body.subject,'9 parcels need a look'); assert.equal(sent[0].key,'parcel-alerts-2026-10-17');
   assert.equal((await alerts.runParcelAlerts(mailEnv,now+60000,{fetch:fakeFetch})).reason,'already_today','one digest a day'); assert.equal(sent.length,1);
   assert.equal((await alerts.runParcelAlerts({DB:{prepare(){throw Error('down');}}},now)).reason,'failed','a broken database never fails the schedule');
-  console.log('PASS: owner-set insurance and signature thresholds (unset keeps today\'s behaviour), goods value, insurance on the buy, unscanned 24h and stuck 4-day staff flags hidden from customers, Dropped off handoff without status change or email, hand-marked delivery refused on tracked parcels, daily parcel alert once per day. Synthetic only.');
+  console.log('PASS: owner-set insurance and signature thresholds (unset keeps today\'s behaviour), goods value, insurance on the buy, unscanned 24h and stuck 4-day staff flags hidden from customers, Dropped off handoff without status change or email, hand-marked delivery refused on tracked parcels, daily parcel alert once per day, and the 48-hour reminder for a paid order that never reached the carrier. Synthetic only.');
 })().catch(e=>{console.error(e);process.exit(1);});
