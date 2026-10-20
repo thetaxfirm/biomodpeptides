@@ -74,12 +74,33 @@ export function orderEmailHtml(orderId: string, data: Record<string, any>, place
         + '</div></div></div>';
 }
 export function orderNotifyRecipients(env: Environment): string[] {
-    return (env.ORDER_NOTIFY_EMAILS || env.STORE_ADMIN_EMAILS || '').split(',').map(s => s.trim()).filter(s => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s)).slice(0, 10);
+    return cleanRecipients(env.ORDER_NOTIFY_EMAILS || env.STORE_ADMIN_EMAILS || '');
+}
+/** At most ten addresses, trimmed, de-duplicated and shaped like an address. Anything else is dropped. */
+export function cleanRecipients(value: unknown): string[] {
+    const list = String(value ?? '').split(/[,;\s]+/).map(s => s.trim()).filter(s => s.length <= 254 && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s));
+    return [...new Set(list.map(s => s.toLowerCase()))].slice(0, 10);
+}
+/**
+ * Where a new-order alert goes. The owner edits this list under Settings, so adding a phone or a
+ * second owner never needs a deployment. Read straight from D1 rather than through config(), because
+ * the daily digest runs on the cron schedule where no request runtime exists.
+ *
+ * The Cloudflare variables stay as the fallback, so a store that never opens the field keeps working.
+ */
+export const ORDER_ALERT_KEY = 'order_alert_recipients_v1';
+export async function orderAlertRecipients(env: Environment): Promise<string[]> {
+    try {
+        const row = await (env as { DB?: D1Database }).DB?.prepare(`SELECT value FROM settings WHERE key='${ORDER_ALERT_KEY}'`).first<{ value: string }>();
+        const saved = cleanRecipients(row?.value);
+        if (saved.length) return saved;
+    } catch { /* a settings read must never stop an order alert; fall back to the deployed list */ }
+    return orderNotifyRecipients(env);
 }
 /** Sends the store copy of a paid order. Never throws; returns false when email is not configured or Resend refuses it. */
 export async function sendOrderNotification(env: Environment, orderId: string, data: Record<string, any>, placedAt = Date.now()): Promise<boolean> {
     const key = (env.RESEND_API_KEY || '').trim();
-    const to = orderNotifyRecipients(env);
+    const to = await orderAlertRecipients(env);
     if (!key || !to.length)
         return false;
     const count = summaryItems(data).reduce((s, i) => s + i.quantity, 0);

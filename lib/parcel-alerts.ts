@@ -3,7 +3,7 @@
 // the carrier is returning or failed to deliver. Internal only; customers are never emailed. Nothing is
 // sent when every parcel is moving (owner, Oct 17 2026).
 import { stalledLabel, stuckInTransit, unshippedTooLong, unreadableParcel, flagDismissed, paidAt, carrierWords, type FulfillmentOrder } from './fulfillment';
-import { orderNotifyRecipients } from './order-summary';
+import { orderAlertRecipients } from './order-summary';
 
 type Environment = { DB: D1Database } & Record<string, any>;
 export type ParcelAlert = { id: string; kind: 'unscanned' | 'stuck' | 'problem' | 'unshipped'; name: string; place: string; since: number; droppedOff: boolean; unreadable: boolean; carrier: string; why?: string };
@@ -95,7 +95,7 @@ async function digest(env: Environment, now: number, deps: { fetch?: typeof fetc
     // Record the day first so a slow provider can never produce two digests.
     await env.DB.prepare(`INSERT INTO settings(key,value) VALUES('${STATE_KEY}',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).bind(today).run();
     if (!alerts.length) return { sent: false, reason: 'all_moving' };
-    const to = orderNotifyRecipients(env);
+    const to = await orderAlertRecipients(env);
     const from = String(env.ORDER_EMAIL_FROM || 'BIOMOD Orders <contact@trybiomod.com>');
     if (!to.length || !String(env.RESEND_API_KEY || '').trim()) return { sent: false, reason: 'mail_unconfigured' };
     const subject = alerts.length + (alerts.length === 1 ? ' parcel needs' : ' parcels need') + ' a look';
