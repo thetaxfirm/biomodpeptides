@@ -29,7 +29,7 @@ const alerts=h=>nodes(h.tree).filter(n=>n.props.role==='alert').map(text).join('
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return{promise,resolve,reject};};
 const flush=async h=>{for(let i=0;i<16;i++)await Promise.resolve();h?.render();};
 const noop=()=>null;
-function AdminOverview(){}function PresaleProductPicker(){}function Field(){}function Check(){}function Choice(){}function Blank(){}function AuthPage(){}function ShippingLabel(){}function OrdersAdmin(){}function Dialog(){}function Tabs(){}function TabsTrigger(){}function TabsContent(){}function CoaAutomation(){}function ChangeHistory(){}function AdminProducts(){}function AdminShippingSettings(){}
+function AdminOverview(){}function PresaleProductPicker(){}function Field(){}function Check(){}function Choice(){}function Blank(){}function AuthPage(){}function ShippingLabel(){}function OrdersAdmin(){}function Dialog(){}function Tabs(){}function TabsTrigger(){}function TabsContent(){}function CoaAutomation(){}function ChangeHistory(){}function AdminProducts(){}function AdminShippingSettings(){}function AdminOrderAlerts(){}
 const ownerA={id:'fixture-admin-a',name:'Fixture A',email:'a@example.invalid'};
 const ownerB={id:'fixture-admin-b',name:'Fixture B',email:'b@example.invalid'};
 const fixture=(label='Snapshot A')=>({config:{presalesEnabled:false,rewardsEnabled:false,affiliateEnabled:false,packDiscounts:{},shippingCents:null,freeShippingAt:20000},products:[{id:900001,name:label,price:10000,stockQuantity:1,inStock:true,purchasable:true}],campaigns:[{id:'fixture-campaign',title:'Simulated campaign',active:false,starts:'2099-01-01',ends:'2099-02-01'}],orders:[{id:'fixture-order',status:'pending',total:10000,created:0,data:{items:[]}}],requests:[{id:'fixture-request',kind:'fixture',status:'new',created:0,data:{}}],searchPublishing:{}});
@@ -62,6 +62,7 @@ mod.require=id=>{
   return{AdminShippingSettings};
  }
 
+ if(id==='./admin-order-alerts')return{AdminOrderAlerts};
  if(id==='./team-admin')return{TeamAdmin:noop};if(id==='@/lib/staff')return require('./staff-module-fixture.cjs').loadStaffModule();
  if(id==='./request-inbox')return{RequestInbox};
  if(id==='./primitives')return{Field,Check,Choice,Blank,formData:form=>form.fields};
@@ -161,6 +162,7 @@ const productNames=h=>String(Boolean(productPanel(h).props.edited));
   assert.equal(nodes(h.tree).some(n=>n.type===ChangeHistory),mayRead,'History is never mounted without reports permission');
   assert.equal(nodes(h.tree).some(n=>n.type===AdminProducts),mayRead,'Products editor is never mounted without store write permission');
   assert.equal(nodes(h.tree).some(n=>n.type===AdminShippingSettings),mayRead,'Shipping settings are never mounted without store write permission');
+  assert.equal(nodes(h.tree).some(n=>n.type===AdminOrderAlerts),mayRead,'The new-order alert list is never mounted without store write permission');
  }
  reset();h=mount({initialTab:'changes'});await flush(h);const priorHistoryKey=find(h,n=>n.type===ChangeHistory).key;
  button(h,'Refresh administration').props.onClick();await flush(h);assert.notEqual(find(h,n=>n.type===ChangeHistory).key,priorHistoryKey,'Global admin refresh remounts the history reader');
