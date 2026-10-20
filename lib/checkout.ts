@@ -212,5 +212,12 @@ if (!written[0]?.meta?.changes) {
  throw new Error('The order changed during verification. Check payment status again before paying.');
 }
 // Email the store a full copy of the order the first time it is marked paid (the status update only changes a row once).
-if (state === 'paid' && written[0]?.meta?.changes) await sendOrderNotification(runtime(), id, saved, row.created);
+// The same moment stamps when payment landed. Nothing else records it: created is when the order was
+// placed, which can be days earlier for a checkout recovered by email, and updated moves on every
+// write. The unshipped reminder measures from here, so it must start on the customer's clock.
+// Bookkeeping: a failed stamp never undoes a payment that has already been recorded.
+if (state === 'paid' && written[0]?.meta?.changes) {
+ try { await run("UPDATE orders SET data=json_set(data,'$.paidAt',?) WHERE id=? AND json_extract(data,'$.paidAt') IS NULL", timestamp(), id); } catch { }
+ await sendOrderNotification(runtime(), id, saved, row.created);
+}
 return { status: state, message: result.state === 'failed' ? 'The payment attempt failed. This order is held for review before inventory is released.' : result.message }; }
