@@ -2,11 +2,11 @@
 // Labels the carrier has not scanned in a day, parcels with no carrier update in four days, and parcels
 // the carrier is returning or failed to deliver. Internal only; customers are never emailed. Nothing is
 // sent when every parcel is moving (owner, Oct 17 2026).
-import { stalledLabel, stuckInTransit, unshippedTooLong, paidAt, carrierWords, type FulfillmentOrder } from './fulfillment';
+import { stalledLabel, stuckInTransit, unshippedTooLong, unreadableParcel, paidAt, carrierWords, type FulfillmentOrder } from './fulfillment';
 import { orderNotifyRecipients } from './order-summary';
 
 type Environment = { DB: D1Database } & Record<string, any>;
-export type ParcelAlert = { id: string; kind: 'unscanned' | 'stuck' | 'problem' | 'unshipped'; name: string; place: string; since: number; droppedOff: boolean; carrier: string; why?: string };
+export type ParcelAlert = { id: string; kind: 'unscanned' | 'stuck' | 'problem' | 'unshipped'; name: string; place: string; since: number; droppedOff: boolean; unreadable: boolean; carrier: string; why?: string };
 
 const STATE_KEY = 'parcel_alert_digest_v1';
 const problems = new Set(['return_to_sender', 'failure', 'error']);
@@ -55,7 +55,7 @@ export async function parcelAlerts(env: Environment, now = Date.now()): Promise<
             since: kind === 'unscanned' ? Number(data.labelCreatedAt)
                 : kind === 'unshipped' ? Number(paid)
                 : Number(data.shipment?.checkedAt) || Number(data.labelCreatedAt),
-            droppedOff: Number.isFinite(data.handoff?.at), carrier: carrierWords[carrier] || carrier,
+            droppedOff: Number.isFinite(data.handoff?.at), unreadable: unreadableParcel(order), carrier: carrierWords[carrier] || carrier,
             ...(kind === 'unshipped' ? { why: unshippedReason(data) } : {}),
         });
     }
@@ -68,7 +68,9 @@ export function parcelAlertText(alerts: ParcelAlert[], now = Date.now()): string
     const group = (title: string, list: ParcelAlert[], detail: (a: ParcelAlert) => string) => list.length ? [title, ...list.map(a => line(a) + ': ' + detail(a)), ''] : [];
     return [
         ...group('Not scanned by the carrier (label bought over a day ago):', alerts.filter(a => a.kind === 'unscanned'),
-            a => 'label ' + days(a.since) + 'd old, ' + (a.droppedOff ? 'marked dropped off. Ask the post office for an acceptance scan.' : 'never marked dropped off. Find the box.')),
+            a => 'label ' + days(a.since) + 'd old, ' + (a.unreadable
+                ? 'and the carrier will not return tracking for it. Open the shipment in EasyPost: the label may be cancelled or the tracking code wrong. The box may well be moving.'
+                : a.droppedOff ? 'marked dropped off. Ask the post office for an acceptance scan.' : 'never marked dropped off. Find the box.')),
         ...group('No carrier update in 4+ days:', alerts.filter(a => a.kind === 'stuck'), a => 'last update ' + days(a.since) + 'd ago. Consider a carrier inquiry.'),
         ...group('Carrier problem:', alerts.filter(a => a.kind === 'problem'), a => a.carrier + '. Contact the customer.'),
         ...group('Paid but not shipped after 48 hours:', alerts.filter(a => a.kind === 'unshipped'),

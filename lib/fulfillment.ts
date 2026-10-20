@@ -17,7 +17,7 @@ export function orderPreorderNotice(data: { items?: unknown } | undefined): stri
 }
 
 /** Payment status is not proof of physical dispatch. Shared by admin and customer views. */
-export type FulfillmentOrder = { status: string; data?: { items?: unknown; internalTest?: boolean; shipment?: { status?: string; checkedAt?: number }; tracking?: string; hold?: unknown; labelCreatedAt?: number; paidAt?: number; handoff?: { at?: number; by?: string }; labelApproval?: { cents?: number; limitCents?: number; at?: number } } };
+export type FulfillmentOrder = { status: string; data?: { items?: unknown; internalTest?: boolean; shipment?: { status?: string; checkedAt?: number; sweptAt?: number; readFails?: number }; tracking?: string; hold?: unknown; labelCreatedAt?: number; paidAt?: number; handoff?: { at?: number; by?: string }; labelApproval?: { cents?: number; limitCents?: number; at?: number } } };
 /** A label quoted above the automatic ceiling, waiting for a person to approve the cost. */
 export function awaitingLabelApproval(order: FulfillmentOrder): boolean {
     return Boolean(order.data?.labelApproval && !order.data?.shipment);
@@ -58,6 +58,16 @@ export function stalledLabel(order: FulfillmentOrder, now = Date.now()): boolean
     const carrier = order.data.shipment.status;
     if (carrier && carrier !== 'pre_transit' && carrier !== 'unknown') return false;
     return now - created > STALLED_LABEL_MS;
+}
+/**
+ * The carrier has refused to tell us about this parcel several runs in a row. It looks identical to
+ * an unscanned parcel but the cause is at the provider, not the post office, so the team should be
+ * sent to the label rather than to the box. Three runs, so one outage does not accuse a good parcel.
+ */
+export const UNREADABLE_AFTER = 3;
+export function unreadableParcel(order: FulfillmentOrder): boolean {
+    const fails = order.data?.shipment?.readFails;
+    return typeof fails === 'number' && fails >= UNREADABLE_AFTER;
 }
 const moving = new Set(['in_transit', 'out_for_delivery', 'available_for_pickup']);
 /** Moving, but the carrier's last event is days old. checkedAt is the carrier's own event time. */
