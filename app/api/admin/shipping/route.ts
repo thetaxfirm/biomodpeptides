@@ -73,7 +73,11 @@ export async function POST(req: NextRequest) {
                 const recorded = await outcome('shipping.refresh_tracking', 'failed', 'Carrier tracking could not be verified. No order changes were saved.');
                 return j({ error: 'Carrier tracking could not be verified. No order changes were saved.' + (recorded ? '' : auditWarning) }, 400);
             }
-            const saved = await run("UPDATE orders SET data=json_set(data,'$.shipment.status',?,'$.shipment.checkedAt',?),status=CASE WHEN status IN ('paid','shipped') AND ?='delivered' THEN 'delivered' WHEN status='paid' AND ? IN ('in_transit','out_for_delivery','available_for_pickup') THEN 'shipped' ELSE status END,updated=? WHERE id=? AND json_extract(data,'$.shipment.shipmentId')=? AND coalesce(json_extract(data,'$.shipment.checkedAt'),0)<=?", status, checked, status, status, checked, id, data.shipment.shipmentId, checked);
+            // Asking records sweptAt. checkedAt moves only when the carrier says something new, so
+            // pressing this button cannot reset the clock the stuck-in-transit alert measures.
+            const saved = status === (typeof data.shipment.status === 'string' ? data.shipment.status : '')
+                ? await run("UPDATE orders SET data=json_set(data,'$.shipment.sweptAt',?) WHERE id=? AND json_extract(data,'$.shipment.shipmentId')=?", checked, id, data.shipment.shipmentId)
+                : await run("UPDATE orders SET data=json_set(data,'$.shipment.status',?,'$.shipment.checkedAt',?,'$.shipment.sweptAt',?),status=CASE WHEN status IN ('paid','shipped') AND ?='delivered' THEN 'delivered' WHEN status='paid' AND ? IN ('in_transit','out_for_delivery','available_for_pickup') THEN 'shipped' ELSE status END,updated=? WHERE id=? AND json_extract(data,'$.shipment.shipmentId')=? AND coalesce(json_extract(data,'$.shipment.checkedAt'),0)<=?", status, checked, checked, status, status, checked, id, data.shipment.shipmentId, checked);
             const recorded = await outcome('shipping.refresh_tracking', saved.meta.changes ? 'succeeded' : 'observed', saved.meta.changes
                 ? 'Carrier tracking verified and saved. No email was sent.'
                 : 'Carrier tracking checked; a newer stored observation or changed shipment was preserved. No email was sent.');
