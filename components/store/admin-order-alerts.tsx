@@ -81,7 +81,7 @@ export function AdminOrderAlerts({ busy, onDraft }: { busy: boolean; onDraft?: (
                     placeholder={configured ? 'A token is saved. Type a new one to replace it.' : '1234567890:AA…'}
                     onChange={e => { setToken(e.target.value); onDraft?.(); }}/>
             </label>
-            <p className={styles.sub}>{configured ? 'A bot token is saved. It is never shown again — replace it by typing a new one, or clear it by saving an empty box.' : 'No bot token saved yet.'}</p>
+            <p className={styles.sub}>{configured ? 'A bot token is saved. It is never shown again, and leaving this box empty keeps it as it is — type a new one only to replace it.' : 'No bot token saved yet.'}</p>
             <label className="store-field">Chat IDs
                 <input value={chats} disabled={!loaded || busy || Boolean(chatBusy)} spellCheck={false} autoComplete="off"
                     placeholder="-1001234567890" onChange={e => { setChats(e.target.value); onDraft?.(); }}/>
@@ -93,9 +93,10 @@ export function AdminOrderAlerts({ busy, onDraft }: { busy: boolean; onDraft?: (
                 </li>)}</ul>
                 : <p className="notice">No chats found yet. Add the bot to the group, then send <code>/start@yourbotname</code> there and look again.</p>)}
             <div className={styles.row}>
-                <button type="button" className="button button-dark" disabled={!loaded || busy || Boolean(chatBusy)} onClick={() => chatAction('save', { botToken: token, chatIds: chats })}>{chatBusy === 'save' ? 'Saving…' : 'Save Telegram settings'}</button>
+                <button type="button" className="button button-dark" disabled={!loaded || busy || Boolean(chatBusy)} onClick={() => chatAction('save', { ...(token.trim() ? { botToken: token } : {}), chatIds: chats })}>{chatBusy === 'save' ? 'Saving…' : 'Save Telegram settings'}</button>
                 <button type="button" className="text-button" disabled={!loaded || busy || Boolean(chatBusy)} onClick={() => chatAction('find', { findChats: true, botToken: token })}>{chatBusy === 'find' ? 'Looking…' : 'Find my chats'}</button>
                 <button type="button" className="text-button" disabled={!loaded || busy || Boolean(chatBusy) || !configured} onClick={() => chatAction('test', { test: true })}>{chatBusy === 'test' ? 'Sending…' : 'Send a test message'}</button>
+                {configured && <button type="button" className="text-button" disabled={!loaded || busy || Boolean(chatBusy)} onClick={() => { const ask = typeof window === 'undefined' ? undefined : window.confirm; if (ask && !ask('Remove the saved bot token? Order alerts stop reaching Telegram until you add one again.')) return; chatAction('clear', { clearToken: true }); }}>{chatBusy === 'clear' ? 'Removing…' : 'Remove saved token'}</button>}
             </div>
         </>}
     </section>;

@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     try {
         const env = runtime();
         const context = { source: 'admin' as const, actor: actor.email, actorType: 'staff' as const };
-        const body = await req.json().catch(() => ({})) as { recipients?: unknown; botToken?: unknown; chatIds?: unknown; findChats?: unknown; test?: unknown };
+        const body = await req.json().catch(() => ({})) as { recipients?: unknown; botToken?: unknown; chatIds?: unknown; clearToken?: unknown; findChats?: unknown; test?: unknown };
 
         // Looks up the groups the bot can already see, so nobody reads a chat id out of raw JSON.
         // The token may come from the form before it is saved, and is never written to history.
@@ -67,13 +67,21 @@ export async function POST(req: NextRequest) {
         }
 
         // Telegram settings save on their own so the email list is never disturbed by them.
-        if (body.botToken !== undefined || body.chatIds !== undefined) {
+        if (body.botToken !== undefined || body.chatIds !== undefined || body.clearToken === true) {
             const changed: string[] = [];
-            if (body.botToken !== undefined) {
-                const raw = String(body.botToken ?? '').trim();
-                if (raw && !validBotToken(raw)) return j({ error: 'That does not look like a bot token. BotFather gives you digits, a colon, then a long code.' }, 400);
+            // An empty token box means "leave the token alone", never "delete it". The box is blank
+            // on every load because the token is write-only, so treating blank as a clear made every
+            // save of a chat id quietly destroy the credential (owner, Oct 20 2026). Removing a token
+            // is now its own explicit request.
+            if (body.clearToken === true) {
+                await auditRun(env.DB, context, 'INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', TELEGRAM_TOKEN_KEY, '');
+                changed.push('bot token removed');
+            }
+            else if (typeof body.botToken === 'string' && body.botToken.trim()) {
+                const raw = body.botToken.trim();
+                if (!validBotToken(raw)) return j({ error: 'That does not look like a bot token. BotFather gives you digits, a colon, then a long code.' }, 400);
                 await auditRun(env.DB, context, 'INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', TELEGRAM_TOKEN_KEY, validBotToken(raw));
-                changed.push(raw ? 'bot token set' : 'bot token cleared');
+                changed.push('bot token set');
             }
             if (body.chatIds !== undefined) {
                 const chats = cleanChatIds(body.chatIds);
@@ -87,7 +95,7 @@ export async function POST(req: NextRequest) {
                 });
             } catch { /* the settings are saved; a missing history row must not suggest otherwise */ }
             const now = await readTelegramConfig(env as never);
-            return j({ telegram: { configured: Boolean(now.token), chats: now.chats }, message: 'Telegram settings saved. Use Send a test message to prove it reaches the group.' });
+            return j({ telegram: { configured: Boolean(now.token), chats: now.chats }, message: (changed.length ? changed.join(', ').replace(/^./, c => c.toUpperCase()) + '. ' : '') + (now.token ? 'Use Send a test message to prove it reaches the group.' : 'No bot token is saved, so nothing will be posted until you add one.') });
         }
 
         if (typeof body.recipients !== 'string') return j({ error: 'Send the list as text.' }, 400);
