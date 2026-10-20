@@ -42,6 +42,11 @@ assert.equal(f.orderBucket({...stuck,data:{...stuck.data,shipment:{...stuck.data
 assert.equal(f.carrierWords.pre_transit,'Not scanned by carrier yet'); assert.equal(f.carrierWords.unknown,'Not scanned by carrier yet');
 // A real hold still reads as under review for the customer.
 assert.equal(f.customerOrderStatus({...label(),data:{...label().data,hold:{issue:'x'}}}).label,'Under review');
+// A parcel the provider refuses to answer about is a different problem from an unscanned one.
+assert.equal(f.UNREADABLE_AFTER,3);
+assert.equal(f.unreadableParcel(label({shipment:{status:'pre_transit',tracking:'T',readFails:3}})),true);
+assert.equal(f.unreadableParcel(label({shipment:{status:'pre_transit',tracking:'T',readFails:2}})),false);
+assert.equal(f.unreadableParcel(label()),false,'no count is not a verdict');
 // The 48-hour reminder measures from payment, never from the label (owner, Oct 20 2026).
 assert.equal(f.UNSHIPPED_REMINDER_MS,48*H);
 assert.equal(f.paidAt({status:'paid',data:{paidAt:now-10*H},created:now-9*24*H}),now-10*H,'the stamp wins over the order date');
@@ -61,12 +66,16 @@ assert.match(route,/status === 'delivered' && carrierShipment\?\.tracking && car
 for(const file of ['lib/auto-label.ts','app/api/admin/shipping/route.ts']) assert.match(fs.readFileSync(path.join(root,file),'utf8'),/valueCents: goodsValueCents\(data\)/,file+' passes the goods value');
 assert.match(fs.readFileSync(path.join(root,'worker.ts'),'utf8'),/runParcelAlerts\(parcelEnv/,'the daily alert runs on the 5-minute schedule');
 assert.match(fs.readFileSync(path.join(root,'lib/checkout.ts'),'utf8'),/json_set\(data,'\$\.paidAt',\?\).*json_extract\(data,'\$\.paidAt'\) IS NULL/,'payment stamps when it landed, once');
+// Asking the carrier records sweptAt; checkedAt stays the carrier's own last change, so the button
+// cannot hide a stuck parcel by resetting the clock the four-day alert measures.
+assert.match(fs.readFileSync(path.join(root,'app/api/admin/shipping/route.ts'),'utf8'),/json_set\(data,'\$\.shipment\.sweptAt',\?\) WHERE id=\?/,'an unchanged status writes only sweptAt');
 
 // --- Queue UI: Dropped off replaces Mark shipped. ---
 const ui=fs.readFileSync(path.join(root,'components/store/orders-admin.tsx'),'utf8');
 assert(!/Mark shipped/.test(ui),'the queue no longer claims a shipment by hand');
 assert.match(ui,/change\('order-handoff', \{ orderId: order\.id \}/);
 assert.match(ui,/The customer is not emailed/);
+assert.match(ui,/unreadableParcel\(o\)\) return 'Carrier will not return tracking/,'the queue names a provider refusal for what it is');
 
 (async()=>{
   // --- The real buyLabel, EasyPost stubbed: insurance rides on the buy, the signature on the shipment. ---
@@ -117,11 +126,24 @@ assert.match(ui,/The customer is not emailed/);
   addAt('nnnnnnnn-1','paid',{address:addr,paidAt:now-3*H},now-9*24*H);
   // A record written before paidAt existed falls back to when the order was placed.
   addAt('oooooooo-1','paid',{address:addr},now-70*H);
+  // The carrier has refused this parcel three sweeps running. It still needs a person, but the thing
+  // to check is the label at the provider, not whether the box was posted (owner, Oct 20 2026).
+  add('pppppppp-1','paid',{address:addr,shipment:{status:'pre_transit',tracking:'TA',readFails:3},labelCreatedAt:now-30*H});
+  // Two refusals is not yet a verdict: one provider wobble must not accuse a good parcel.
+  add('qqqqqqqq-1','paid',{address:addr,shipment:{status:'pre_transit',tracking:'TB',readFails:2},labelCreatedAt:now-30*H});
   const alerts=load('lib/parcel-alerts.ts');
   const found=await alerts.parcelAlerts({DB},now);
   assert.deepEqual(found.map(a=>a.id.slice(0,1)+':'+a.kind).sort(),
-    ['a:unscanned','b:unscanned','c:stuck','d:problem','i:unshipped','j:unshipped','k:unshipped','l:unshipped','o:unshipped'],
+    ['a:unscanned','b:unscanned','c:stuck','d:problem','i:unshipped','j:unshipped','k:unshipped','l:unshipped','o:unshipped','p:unscanned','q:unscanned'],
     'fresh, moving, test and archived parcels stay out; recently paid and recovered checkouts stay quiet');
+  const byId=Object.fromEntries(found.map(a=>[a.id.slice(0,1),a]));
+  assert.equal(byId.p.unreadable,true,'three refusals is a provider problem');
+  assert.equal(byId.q.unreadable,false,'two is not');
+  assert.equal(byId.a.unreadable,false,'a parcel the carrier answers about is not flagged');
+  const unreadableText=alerts.parcelAlertText(found,now);
+  assert.match(unreadableText,/#PPPPPPPP.*will not return tracking for it\. Open the shipment in EasyPost/,'the line sends the team to the label');
+  assert.doesNotMatch(unreadableText,/#PPPPPPPP.*Find the box/,'and not to the post office');
+  assert.match(unreadableText,/#AAAAAAAA.*never marked dropped off\. Find the box\./,'an ordinary unscanned parcel is unchanged');
   assert.equal(new Set(found.map(a=>a.id)).size,found.length,'an order is named once, under its most specific reason');
   const why=id=>found.find(a=>a.id.startsWith(id))?.why||'';
   assert.match(why('i'),/no postage bought yet/);
@@ -140,9 +162,9 @@ assert.match(ui,/The customer is not emailed/);
   const early=new Date('2026-10-17T14:00:00Z').getTime();
   assert.equal((await alerts.runParcelAlerts(mailEnv,early,{fetch:fakeFetch})).reason,'too_early');
   const r1=await alerts.runParcelAlerts(mailEnv,now,{fetch:fakeFetch});
-  assert.equal(r1.sent,true); assert.equal(r1.count,9); assert.equal(sent.length,1);
-  assert.deepEqual(sent[0].body.to,['staff@example.invalid']); assert.equal(sent[0].body.subject,'9 parcels need a look'); assert.equal(sent[0].key,'parcel-alerts-2026-10-17');
+  assert.equal(r1.sent,true); assert.equal(r1.count,11); assert.equal(sent.length,1);
+  assert.deepEqual(sent[0].body.to,['staff@example.invalid']); assert.equal(sent[0].body.subject,'11 parcels need a look'); assert.equal(sent[0].key,'parcel-alerts-2026-10-17');
   assert.equal((await alerts.runParcelAlerts(mailEnv,now+60000,{fetch:fakeFetch})).reason,'already_today','one digest a day'); assert.equal(sent.length,1);
   assert.equal((await alerts.runParcelAlerts({DB:{prepare(){throw Error('down');}}},now)).reason,'failed','a broken database never fails the schedule');
-  console.log('PASS: owner-set insurance and signature thresholds (unset keeps today\'s behaviour), goods value, insurance on the buy, unscanned 24h and stuck 4-day staff flags hidden from customers, Dropped off handoff without status change or email, hand-marked delivery refused on tracked parcels, daily parcel alert once per day, and the 48-hour reminder for a paid order that never reached the carrier. Synthetic only.');
+  console.log('PASS: owner-set insurance and signature thresholds (unset keeps today\'s behaviour), goods value, insurance on the buy, unscanned 24h, unreadable-at-the-provider and stuck 4-day staff flags hidden from customers, Dropped off handoff without status change or email, hand-marked delivery refused on tracked parcels, daily parcel alert once per day, and the 48-hour reminder for a paid order that never reached the carrier. Synthetic only.');
 })().catch(e=>{console.error(e);process.exit(1);});
