@@ -14,6 +14,12 @@ assert.equal(seoConfig({...base,SEO_PUBLIC_LAUNCH_APPROVED:'false'}).enabled,fal
 assert.equal(seoConfig({...base,SEO_INDEXING_ENABLED:'false'}).enabled,false);
 const live=seoConfig(base);
 assert.equal(mayIndex('/',query,live),true);
+assert.equal(mayIndex('/softgels',query,live),true);
+assert(sitemapPaths(live).includes('/softgels'));
+assert.equal(mayIndex('/softgels',query,seoConfig()),false);
+assert.equal(mayIndex('/softgels',new URLSearchParams('q=test'),live),false);
+assert(pageInfo('/softgels').description.includes('BPC-157 Arginate'));
+assert.equal(mayIndex('/product/softgel-lumen-ghk-cu-ahk-cu-astaxanthin-vitamin-e',query,live),false);
 assert.equal(mayIndex('/product/bpc-157-10mg',query,live),true);
 assert.equal(mayIndex('/product/ghk-cu-50mg',query,live),false);
 for (const slug of Object.keys(productReviewBlocks)) assert.equal(mayIndex('/product/'+slug,query,seoConfig({...base,SEO_REVIEWED_PRODUCT_SLUGS:slug})),false,slug);
