@@ -73,9 +73,9 @@ function assertNoInventedClaims(value) {
 }
 (async () => {
   const originalStaticPaths = ['/', '/shop', '/about', '/contact', '/testing', '/quality-standard', '/choosing-a-research-supplier', '/research-use-only', '/faq'];
-  // '/news' (newsroom index, October 12, 2026) is the only later static addition; see tests/newsroom-v1.cjs.
-  const expectedStaticPaths = [...originalStaticPaths, '/shipping-policy', '/returns-refunds', '/news'].sort();
-  assert.deepEqual(Object.keys(pageRecords).filter(path => pageRecords[path].eligible && !path.startsWith('/news/')).sort(), expectedStaticPaths, 'Only two policy pages are added to the prior public page set');
+  // Later public additions: newsroom and owner-approved softgel category (October 20, 2026).
+  const expectedStaticPaths = [...originalStaticPaths, '/shipping-policy', '/returns-refunds', '/news', '/softgels'].sort();
+  assert.deepEqual(Object.keys(pageRecords).filter(path => pageRecords[path].eligible && !path.startsWith('/news/')).sort(), expectedStaticPaths, 'Public set includes the policies, newsroom and approved softgel category');
   const releasePaths = require('../lib/press-releases.ts').pressReleases.map(release => '/news/' + release.slug);
   assert.deepEqual(sitemapPaths(live).sort(), [...expectedStaticPaths, ...releasePaths, productPath].sort());
   for (const path of ['/shipping-policy', '/returns-refunds', productPath]) {

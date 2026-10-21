@@ -35,6 +35,7 @@ try {
   assert.equal(png.readUInt32BE(20), expectedImage.height, 'Metadata height matches the actual raster');
 
   const editorialPaths = sitemapPaths(config).filter(p => !p.startsWith('/product/'));
+  assert(editorialPaths.includes('/softgels'));
   assert(editorialPaths.includes('/') && editorialPaths.includes('/shop') && editorialPaths.some(p => p.startsWith('/news/')));
   for (const route of editorialPaths) {
     const metadata = routeMetadata(route, new URLSearchParams(), config);
@@ -58,7 +59,7 @@ try {
     assert.deepEqual(metadata.twitter, { card: 'summary', title: pageInfo(route).title + ' | Biomod Research Supply Company', description: pageInfo(route).description }, product.slug + ': product Twitter metadata unchanged');
   }
 
-  for (const route of ['/admin', '/admin/login', '/account', '/checkout', '/softgels', '/locations', '/not-a-page', '/product/not-a-product', '/about-biomod']) {
+  for (const route of ['/admin', '/admin/login', '/account', '/checkout', '/locations', '/not-a-page', '/product/not-a-product', '/about-biomod']) {
     const metadata = routeMetadata(route, new URLSearchParams(), config);
     assert.equal(metadata.robots.index, false, route + ': indexing hold retained');
     assert.equal(metadata.openGraph.images, undefined, route + ': no new fallback');
