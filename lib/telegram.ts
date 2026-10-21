@@ -45,16 +45,25 @@ export function orderPushText(orderId: string, data: Record<string, any>): strin
         'https://trybiomod.com/admin?tab=orders'].filter(Boolean).join('\n');
 }
 
-/** One message to one chat. Never throws, never retries: an order must not wait on a chat app. */
-async function post(token: string, chat: string, text: string, send: typeof fetch): Promise<boolean> {
+/**
+ * One message to one chat. Never throws, never retries: an order must not wait on a chat app.
+ *
+ * Telegram explains every refusal in the body ("bot was kicked from the group chat", "chat not
+ * found", "not enough rights to send text messages"). Throwing that away left the admin saying only
+ * that something failed, which is useless to whoever has to fix it (owner, Oct 20 2026).
+ */
+async function post(token: string, chat: string, text: string, send: typeof fetch): Promise<{ ok: boolean; why: string }> {
     try {
         const response = await send(API + token + '/sendMessage', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ chat_id: chat, text, disable_web_page_preview: true }),
             redirect: 'manual', signal: AbortSignal.timeout(8000),
         });
-        return response.ok;
-    } catch { return false; }
+        if (response.ok) return { ok: true, why: '' };
+        const body = await response.json().catch(() => null) as { description?: unknown } | null;
+        const why = typeof body?.description === 'string' && body.description.trim() ? body.description.trim() : 'Telegram replied ' + response.status;
+        return { ok: false, why: why.slice(0, 200) };
+    } catch { return { ok: false, why: 'Telegram could not be reached.' }; }
 }
 
 /**
@@ -66,16 +75,17 @@ export async function sendOrderPush(env: Environment, orderId: string, data: Rec
     if (!token || !chats.length) return 0;
     const text = orderPushText(orderId, data);
     const results = await Promise.all(chats.map(chat => post(token, chat, text, deps.fetch || fetch)));
-    return results.filter(Boolean).length;
+    return results.filter(r => r.ok).length;
 }
 
 /** A test the owner can press, worded so a success never claims more than the provider accepted. */
-export async function sendTelegramTest(env: Environment, deps: { fetch?: typeof fetch } = {}): Promise<{ sent: number; chats: number; configured: boolean }> {
+export async function sendTelegramTest(env: Environment, deps: { fetch?: typeof fetch } = {}): Promise<{ sent: number; chats: number; configured: boolean; why: string }> {
     const { token, chats } = await readTelegramConfig(env);
-    if (!token || !chats.length) return { sent: 0, chats: chats.length, configured: false };
+    if (!token || !chats.length) return { sent: 0, chats: chats.length, configured: false, why: '' };
     const text = 'BIOMOD test message. New orders will arrive here.\nNothing was ordered and no customer was contacted.';
     const results = await Promise.all(chats.map(chat => post(token, chat, text, deps.fetch || fetch)));
-    return { sent: results.filter(Boolean).length, chats: chats.length, configured: true };
+    // The first refusal is the one worth repeating: it names what Telegram actually objected to.
+    return { sent: results.filter(r => r.ok).length, chats: chats.length, configured: true, why: results.find(r => !r.ok)?.why || '' };
 }
 
 /**
