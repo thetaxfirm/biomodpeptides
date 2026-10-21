@@ -76,10 +76,19 @@ assert.equal(T,'telegram_bot_token_v1'); assert.equal(C,'telegram_chat_ids_v1');
   // --- The test message says what it is and never implies an order happened. ---
   posts=[];
   const test=await tg.sendTelegramTest(env,{fetch:ok});
-  assert.deepEqual(test,{sent:2,chats:2,configured:true});
+  assert.deepEqual(test,{sent:2,chats:2,configured:true,why:''});
   assert.match(posts[0].body.text,/test message/i);
   assert.match(posts[0].body.text,/Nothing was ordered and no customer was contacted/);
-  assert.deepEqual(await tg.sendTelegramTest({DB:database()},{fetch:ok}),{sent:0,chats:0,configured:false});
+  assert.deepEqual(await tg.sendTelegramTest({DB:database()},{fetch:ok}),{sent:0,chats:0,configured:false,why:''});
+  // Telegram explains every refusal; that explanation is the whole value of the test button.
+  const kicked=async()=>new Response(JSON.stringify({ok:false,description:'Forbidden: bot was kicked from the group chat'}),{status:403});
+  assert.deepEqual(await tg.sendTelegramTest(env,{fetch:kicked}),{sent:0,chats:2,configured:true,why:'Forbidden: bot was kicked from the group chat'});
+  assert.deepEqual(await tg.sendTelegramTest(env,{fetch:async()=>new Response('not json',{status:400})}),{sent:0,chats:2,configured:true,why:'Telegram replied 400'},'a body with no description still says something');
+  assert.deepEqual(await tg.sendTelegramTest(env,{fetch:async()=>{throw Error('offline');}}),{sent:0,chats:2,configured:true,why:'Telegram could not be reached.'});
+  // A partial failure still reports why the bad one failed, and still counts the good one.
+  let which=0;
+  assert.deepEqual(await tg.sendTelegramTest(env,{fetch:async()=>{which++;return which===1?new Response(JSON.stringify({ok:false,description:'Bad Request: chat not found'}),{status:400}):new Response('{}',{status:200});}}),
+    {sent:1,chats:2,configured:true,why:'Bad Request: chat not found'});
 
   // --- Chat discovery turns a raw API response into something a person can pick from. ---
   const updates={ok:true,result:[
@@ -134,6 +143,14 @@ assert.equal(T,'telegram_bot_token_v1'); assert.equal(C,'telegram_chat_ids_v1');
   assert.match(routeText,/could not be reached/,'an outage says so');
   assert.match(routeText,/'\/start@' \+ probe\.username/,'and an empty queue names the exact command to send');
 
+  // A refusal reaches the panel through `error`, which is the only field it reads on a bad status.
+  // Putting the explanation in `message` turned 'bot was kicked from the group' into 'Request failed.'
+  const testRoute=fs.readFileSync(path.join(root,'app/api/admin/order-alerts/route.ts'),'utf8');
+  assert.match(testRoute,/if \(!result\.sent\) return j\(\{ error: 'Telegram refused the message'/,'a refused test answers in the error field');
+  assert.match(testRoute,/result\.why \? ': ' \+ result\.why/,'and repeats what Telegram actually said');
+  const callPanel=fs.readFileSync(path.join(root,'components/store/admin-order-alerts.tsx'),'utf8');
+  assert.match(callPanel,/d\.error \|\| d\.message \|\| 'Request failed\.'/,'and the panel falls back to message before giving up');
+
   // --- Saving a chat id must never destroy the credential. ---
   // The token box is blank on every load because the token is write-only, so an empty box meaning
   // 'clear it' made every chat-id save quietly wipe the token. It bit the owner live (Oct 20 2026).
@@ -160,5 +177,5 @@ assert.equal(T,'telegram_bot_token_v1'); assert.equal(C,'telegram_chat_ids_v1');
   assert.match(panel,/@BotFather/,'the panel explains where a token comes from');
   assert.match(panel,/Find my chats/,'and finds the group id for you');
 
-  console.log('PASS: bot token and chat id validation, the exact lock-screen message (never the catalogue), one request per chat with correct URL and body, silence when unconfigured, refusals/outages/partial failures swallowed so an order is never blocked, an honest test message, chat discovery from a raw API response, a probe that tells a rejected token, a webhook and an outage apart from an empty queue, a token that is written but never returned or logged, and an empty token box that leaves the saved credential alone rather than destroying it. Telegram is always stubbed.');
+  console.log('PASS: bot token and chat id validation, the exact lock-screen message (never the catalogue), one request per chat with correct URL and body, silence when unconfigured, refusals/outages/partial failures swallowed so an order is never blocked, an honest test message that repeats the refusal Telegram gave, chat discovery from a raw API response, a probe that tells a rejected token, a webhook and an outage apart from an empty queue, a token that is written but never returned or logged, and an empty token box that leaves the saved credential alone rather than destroying it. Telegram is always stubbed.');
 })().catch(e=>{console.error(e);process.exitCode=1});
