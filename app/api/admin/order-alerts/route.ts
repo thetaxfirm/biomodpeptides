@@ -61,9 +61,10 @@ export async function POST(req: NextRequest) {
             const result = await sendTelegramTest(env as never);
             if (!result.configured) return j({ error: 'Save a bot token and at least one chat first.' }, 400);
             // Accepted by Telegram is not the same as read by a person, and the wording says so.
-            return j({ message: result.sent
-                ? 'Telegram accepted the test for ' + result.sent + ' of ' + result.chats + (result.chats === 1 ? ' chat.' : ' chats.') + ' Check the group to confirm it arrived.'
-                : 'Telegram refused the message for every chat. Check the bot is still in the group and the chat id is right.' }, result.sent ? 200 : 502);
+            // A failure goes in `error`, because that is the field the panel reads on a bad status;
+            // putting the explanation anywhere else turned a precise refusal into 'Request failed.'
+            if (!result.sent) return j({ error: 'Telegram refused the message' + (result.why ? ': ' + result.why + '.' : ' for every chat.') + ' Check the bot is still a member of that group and the chat id is current.' }, 502);
+            return j({ message: 'Telegram accepted the test for ' + result.sent + ' of ' + result.chats + (result.chats === 1 ? ' chat.' : ' chats.') + ' Check the group to confirm it arrived.' });
         }
 
         // Telegram settings save on their own so the email list is never disturbed by them.

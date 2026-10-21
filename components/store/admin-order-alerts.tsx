@@ -9,7 +9,8 @@ async function call(body?: Record<string, unknown>) {
         ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
         : { headers: { 'Cache-Control': 'no-store' } });
     const d = await r.json().catch(() => ({})) as any;
-    if (!r.ok) throw new Error(d.error || 'Request failed.');
+    // message is the fallback so a server that explains itself there is never reduced to 'Request failed.'
+    if (!r.ok) throw new Error(d.error || d.message || 'Request failed.');
     return d;
 }
 type Found = { id: string; title: string; kind: string };
