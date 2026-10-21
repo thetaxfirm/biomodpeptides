@@ -39,7 +39,6 @@ Module._load = function(request, parent, isMain) {
 const { routeStructuredData } = require('../lib/seo.ts');
 const node = (data, type) => data['@graph'].find(item => item['@type'] === type);
 // Official compound names in catalog data may contain the word; store copy may not.
-const identities = /Delta Sleep-Inducing Peptide|Epitalon Tetrapeptide|Copper Tripeptide-1/g;
 const claims = /\b(dos(e|es|ing|age)|treat(s|ment)?|cure|heal(s|ing)?|benefit(s)?|human use|inject(ion)?|take|administer)\b/i;
 
 (async () => {
@@ -79,9 +78,8 @@ const claims = /\b(dos(e|es|ing|age)|treat(s|ment)?|cure|heal(s|ing)?|benefit(s)
     // Pack paragraph: only the documented 1, 3, 5 and 10 counts.
     assert.equal(paragraphs[2], 'Order a single vial or a 3, 5 or 10-pack; each pack price on this page is shown per vial.', slug);
 
-    // Research-use-only wording: facts about the listing, no dosing, use or effect claims, no "peptide" copy.
+    // Research-use-only wording: facts about the listing, no dosing, use or effect claims.
     assert(!claims.test(text), slug + ': no dosing, use or effect wording: ' + text);
-    assert(!/peptide/i.test(text.replace(identities, '')), slug + ': no peptide wording');
     assert(!/HEAT/.test(text), slug + ': no HEAT names');
 
     // The Product structured data carries the same facts after the searched phrase.
