@@ -37,4 +37,11 @@ export const legacyRoutes: Record<string, string> = {
   'tag/spray-formulation': '/shop',
   'tag/longevity-supplement-peptides': '/',
   'longevity-peptide-stack': '/shop',
+  // Old-domain URLs listed by Bing on October 23, 2026 that still ended in a 404.
+  'research-peptide-storage-and-inventory-management-2026-laboratory-protocol-guide': '/quality-standard',
+  'research-peptide-sourcing-for-startups-in-las-vegas-a-2026-procurement-guide': '/choosing-a-research-supplier',
+  'comprehensive-checklist-for-vetting-new-lab-peptide-suppliers-in-2026': '/choosing-a-research-supplier',
+  'nevada-research-peptides-a-selection-guide': '/choosing-a-research-supplier',
+  'research-peptides/blends': '/shop',
+  'tag/nevada-research-supply': '/about',
 };

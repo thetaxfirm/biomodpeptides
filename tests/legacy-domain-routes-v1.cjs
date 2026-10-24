@@ -48,6 +48,13 @@ const mappings = {
   '/tag/spray-formulation': '/shop',
   '/tag/longevity-supplement-peptides': '/',
   '/longevity-peptide-stack': '/shop',
+  // Listed by Bing on October 23, 2026 and still ending in a 404.
+  '/research-peptide-storage-and-inventory-management-2026-laboratory-protocol-guide': '/quality-standard',
+  '/research-peptide-sourcing-for-startups-in-las-vegas-a-2026-procurement-guide': '/choosing-a-research-supplier',
+  '/comprehensive-checklist-for-vetting-new-lab-peptide-suppliers-in-2026': '/choosing-a-research-supplier',
+  '/nevada-research-peptides-a-selection-guide': '/choosing-a-research-supplier',
+  '/research-peptides/blends': '/shop',
+  '/tag/nevada-research-supply': '/about',
 };
 
 (async () => {
@@ -62,7 +69,7 @@ const mappings = {
       await assert.rejects(handler(props(form)), error => error.digest === `NEXT_REDIRECT;replace;${destination};308;`, form + ' must permanently redirect');
     }
   }
-  for (const unknown of ['/not-a-real-old-post', '/product-tag/not-a-tag', '/product-tag/blends/extra', '/tag/not-a-tag', '/tag/reproducibility/extra']) {
+  for (const unknown of ['/not-a-real-old-post', '/product-tag/not-a-tag', '/product-tag/blends/extra', '/tag/not-a-tag', '/tag/reproducibility/extra', '/research-peptides', '/research-peptides/not-a-category', '/tag/nevada-research-supply/extra']) {
     for (const handler of [generateMetadata, Page]) {
       await assert.rejects(handler(props(unknown)), error => error.digest === 'NEXT_HTTP_ERROR_FALLBACK;404', unknown + ' must remain a genuine 404');
     }
