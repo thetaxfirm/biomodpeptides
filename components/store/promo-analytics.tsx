@@ -6,6 +6,7 @@ import type { PromoAnalyticsReport } from '@/lib/promo-analytics';
 import { promoAnalyticsExport } from '@/lib/promo-analytics-export';
 import { money } from '@/lib/catalog';
 import { api } from './provider';
+import { AdminPromoCodes } from './admin-promo-codes';
 import styles from './promo-analytics.module.css';
 
 type Environment = 'live' | 'sandbox' | 'unknown';
@@ -51,8 +52,10 @@ export function PromoAnalytics() {
   const missingAmounts = visible?.codes.reduce((sum, code) => sum + (code.rows.find(row => row.environment === environment)?.missingAmountRecords ?? 0), 0) ?? 0;
   const missingDiscounts = visible?.codes.reduce((sum, code) => sum + (code.rows.find(row => row.environment === environment)?.missingDiscountRecords ?? 0), 0) ?? 0;
 
-  return <section className={styles.report} aria-labelledby="promo-analytics-title">
-    <h2 id="promo-analytics-title">Affiliate &amp; promo codes</h2>
+  return <>
+    <AdminPromoCodes/>
+    <section className={styles.report} aria-labelledby="promo-analytics-title">
+    <h2 id="promo-analytics-title">Affiliate &amp; promo code totals</h2>
     <p>All active codes appear here, including codes with no orders yet. Use the totals below to track orders attributed to each code.</p>
     <div className={styles.toolbar}>
       <label className={styles.control}>Reporting period<select value={days} onChange={event => { clearReport(); setDays(event.target.value); }}>
@@ -94,5 +97,6 @@ export function PromoAnalytics() {
         <p>Orders explicitly marked as internal tests are excluded. Remaining orders are not independently classified; a live payment can still be an internal test.</p>
       </div>
     </>}
-  </section>;
+    </section>
+  </>;
 }
