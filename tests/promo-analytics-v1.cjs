@@ -118,12 +118,15 @@ const getRow = (report, code, environment = 'live') => report.codes.find(p => p.
   let identity = null, dbFails = false;
   const env = { SUPABASE_URL: 'https://auth.fixture.invalid', SUPABASE_ANON_KEY: 'isolated-fixture', STORE_ADMIN_EMAILS: 'admin@example.invalid' };
   const originalLoad = Module._load, originalFetch = global.fetch;
-  const runtimeMock = { all: async (...args) => { if (dbFails) throw Error(sensitive); return all(...args); }, runtime: () => env };
+  const runtimeMock = { all: async (...args) => { if (dbFails) throw Error(sensitive); return all(...args); }, runtime: () => env, database: () => ({}) };
+  // Codes the owner added in administration reach the report through the same route.
+  let storedCodes = [];
   global.fetch = async url => { assert.equal(url, 'https://auth.fixture.invalid/auth/v1/user'); return { ok: true, json: async () => identity || {} }; };
   Module._load = function(name, parent, isMain) {
     if (name === 'next/headers') return { cookies: async () => ({ get: () => identity ? { value: 'isolated-fixture-token' } : undefined }) };
     if (name === 'next/server') return { NextResponse: { json: (body, options) => ({ body, ...options }) } };
     if (name === '@/lib/promo-analytics') return require('../lib/promo-analytics.ts');
+    if (name === '@/lib/promo-codes') return { storedPromotions: async () => storedCodes };
     if (name === '@/lib/runtime' || (name === './runtime' && parent?.filename.endsWith('/lib/auth.ts'))) return runtimeMock;
     if (name === '@/lib/auth') return require('../lib/auth.ts');
     if (name.startsWith('@/lib/')) return {};
@@ -143,6 +146,14 @@ const getRow = (report, code, environment = 'live') => report.codes.find(p => p.
     const success = await route();
     assert.equal(success.status, 200); assert.equal(queries.length, 1); assert.equal(success.headers['Cache-Control'], 'no-store');
     assert.equal(success.body.classification, 'unclassified'); assert(!JSON.stringify(success.body).includes(sensitive));
+    // An owner-added code is listed beside the built-ins, with no orders against it yet.
+    storedCodes = [{ code: 'SPRING15', percentOff: 15 }]; queries = [];
+    const withStored = await route();
+    assert.equal(withStored.status, 200);
+    const added = withStored.body.codes.find(entry => entry.code === 'SPRING15');
+    assert.deepEqual(added && [added.percentOff, added.active], [15, true], 'an owner-added code appears in the report');
+    assert.ok(withStored.body.codes.some(entry => entry.code === 'BM10'), 'and the built-ins are still there');
+    storedCodes = [];
     queries = []; assert.equal((await route('365')).status, 400); assert.equal(queries.length, 0);
     dbFails = true;
     const unavailable = await route();
