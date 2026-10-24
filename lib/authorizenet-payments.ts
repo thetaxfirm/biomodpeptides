@@ -40,6 +40,8 @@ export type AnetVerification = {
     underReview?: boolean;
     noPaymentFound?: boolean;
     message: string;
+    /** Raw getTransactionDetails results for this invoice, for the Orders screen (lib/payment-check.ts). */
+    transactions?: unknown[];
 };
 export class AnetPaymentError extends Error {
     constructor(public code: string, message: string) {
@@ -421,7 +423,23 @@ export function createAnetAdapter(env: Environment = process.env, request: typeo
                 const d = await transactionDetails(id);
                 if (d) details.push(d);
             }
-            return reconcileAnetTransactions(order, details, providerReference);
+            return { ...reconcileAnetTransactions(order, details, providerReference), transactions: details };
+        },
+        /**
+         * Approve or decline one transaction the fraud filter is holding: the same call as the Approve and
+         * Decline buttons in Authorize.net. Only for a transaction on this order's invoice that is still held.
+         */
+        async decideHeld(order: AnetOrder, transId: string, decision: 'approve' | 'decline'): Promise<void> {
+            validateAnetOrder(order);
+            active(false);
+            if (!/^\d{1,20}$/.test(transId) || !['approve', 'decline'].includes(decision))
+                throw new AnetPaymentError('INVALID_REQUEST', 'Choose a held transaction to approve or decline.');
+            const current = await transactionDetails(transId);
+            if (!current || object(current.order)?.invoiceNumber !== anetOrderReference(order.id))
+                throw new AnetPaymentError('NOT_THIS_ORDER', 'That transaction is not on this order.');
+            if (!PENDING.has(String(current.transactionStatus || '')))
+                throw new AnetPaymentError('NOT_HELD', 'Authorize.net is no longer holding this payment. Press Check payment to see its current status.');
+            await call({ updateHeldTransactionRequest: { merchantAuthentication: auth(), heldTransactionRequest: { action: decision, refTransId: transId } } });
         },
     };
 }

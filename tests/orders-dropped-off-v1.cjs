@@ -10,6 +10,7 @@ function load(file){const name=path.join(root,file),m=new Module(name,module);m.
   if(id==='./provider')return{api(){throw Error('Test must not call the admin API');},report(){}};
   if(id==='./shipping-admin')return{ShippingLabel:()=>null};
   if(id==='./order-admin')return{OrderDetails:()=>null};
+  if(id==='@/lib/payment-check')return{paymentLine:()=>'',paymentAdvice:()=>'',savedPaymentCheck:()=>null};
   if(id==='./fulfillment-admin')return{CarrierConnection:()=>null};
   if(id==='./primitives')return{Field:()=>null};
   if(id==='@/components/ui/sheet')return{Sheet:()=>null,SheetContent:()=>null,SheetTitle:()=>null,SheetDescription:()=>null};

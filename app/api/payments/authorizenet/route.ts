@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { classifyAnetTransaction, createAnetAdapter, verifyAnetWebhookSignature } from '@/lib/authorizenet-payments';
 import { reconcile } from '@/lib/checkout';
 import { paymentProvider } from '@/lib/payments';
-import { one, runtime } from '@/lib/runtime';
+import { database, one, runtime } from '@/lib/runtime';
+import { auditRun } from '@/lib/change-history';
+import { paymentCheck } from '@/lib/payment-check';
 export const dynamic = 'force-dynamic';
 // Authorize.net webhook receiver. Register this URL in Merchant Interface → Account → Webhooks.
 // The payload is only a signed hint: payment status is always re-read from the Authorize.net API.
@@ -39,8 +41,11 @@ export async function POST(req: NextRequest) {
             return reply(200);
         }
         // A declined card leaves the order open so the customer can try another card on the hosted form.
-        if (classifyAnetTransaction({ id: order.id, totalCents: order.total, currency: 'USD' }, details).state === 'failed')
+        // The decline is still saved on the order so the Orders screen can say why (owner, Oct 23 2026).
+        if (classifyAnetTransaction({ id: order.id, totalCents: order.total, currency: 'USD' }, details).state === 'failed') {
+            await auditRun(database(), { source: 'system', actor: 'Authorize.net webhook', actorType: 'system', action: 'payment.webhook_declined' }, "UPDATE orders SET data=json_set(data,'$.paymentCheck',json(?)) WHERE id=?", JSON.stringify(paymentCheck([details])), order.id).catch(() => undefined);
             return reply(200);
+        }
         await reconcile(order.owner, order.id, [transId], { source: 'system', actor: 'Authorize.net webhook reconciliation', actorType: 'system', action: 'payment.webhook_reconcile' });
         return reply(200);
     }

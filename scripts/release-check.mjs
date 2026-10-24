@@ -24,7 +24,7 @@ const tests = [
   "admin-read-recovery-v1.cjs", "admin-password-setup-v1.cjs", "admin-landing-v1.cjs", "staff-access-v1.cjs",
   "admin-request-status-v1.cjs", "request-alerts-v1.cjs", "request-snapshot-v1.cjs", "request-desk-v1.cjs", "request-forward-v1.cjs", "request-cases-v1.cjs", "reply-overdue-v1.cjs",
   "auth-return-v1.cjs", "payment-return-v1.cjs",
-  "payments-authorizenet-v1.mjs", "payment-lookup-completeness-v1.cjs",
+  "payments-authorizenet-v1.mjs", "payment-lookup-completeness-v1.cjs", "payment-check-v1.cjs",
   "product-discovery-v1.cjs", "storefront-search-v2.cjs",
   "product-schema-identifiers-v1.cjs", "search-readable-facts-v1.cjs", "canonical-host-redirect-v1.cjs", "request-lifetime-v1.cjs", "offer-bar-v1.cjs", "ship-cutoff-v1.cjs", "vial-artwork-weight-v1.cjs", "search-buy-intent-v1.cjs", "social-preview-v1.cjs", "newsroom-v1.cjs", "sitemap-lastmod-v1.cjs", "legacy-domain-routes-v1.cjs", "editorial-vial-links-v1.cjs", "product-description-v1.cjs", "shop-item-list-v1.cjs",
   "promo-analytics-v1.cjs", "promo-analytics-export-v1.cjs",

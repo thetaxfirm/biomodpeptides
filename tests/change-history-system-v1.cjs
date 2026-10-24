@@ -62,7 +62,8 @@ async function shippingEvent(signature=true,mode='production'){
  const payments=load('app/api/payments/authorizenet/route.ts',{
   'next/server':{NextResponse},'@/lib/payments':{paymentProvider:()=> 'authorizenet'},
   '@/lib/authorizenet-payments':{verifyAnetWebhookSignature:(_raw,signature)=>signature==='fixture-valid',createAnetAdapter:()=>({transactionDetails:async()=>({order:{invoiceNumber:'A'.repeat(20)}})}),classifyAnetTransaction:()=>({state:'paid'})},
-  '@/lib/runtime':{runtime:()=>env,one:async()=>({id:orderId,owner:'synthetic-owner',status:'awaiting_payment',total:10000})},
+  '@/lib/runtime':{runtime:()=>env,database:()=>env.DB,one:async()=>({id:orderId,owner:'synthetic-owner',status:'awaiting_payment',total:10000})},
+  '@/lib/change-history':{auditRun:async()=>({meta:{changes:0}})},'@/lib/payment-check':{paymentCheck:()=>({at:0,attempts:[],holdExpiresAt:null})},
   '@/lib/checkout':{reconcile:async(owner,id,hints,actor)=>{reconciled++;assert.equal(id,orderId);assert.deepEqual(actor,{source:'system',actor:'Authorize.net webhook reconciliation',actorType:'system',action:'payment.webhook_reconcile'});}},
  });
  const paymentRequest=signature=>new Request('https://trybiomod.com/api/payments/authorizenet',{method:'POST',headers:{'x-anet-signature':signature},body:JSON.stringify({eventType:'net.authorize.payment.authcapture.created',payload:{entityName:'transaction',id:'12345'}})});

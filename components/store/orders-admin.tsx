@@ -16,6 +16,7 @@ import { bucketStatus, queueTabs, canArchive, isArchived, dismissibleReview, fla
 import { CarrierConnection } from './fulfillment-admin';
 import { ShippingLabel, post as shippingPost } from './shipping-admin';
 import { OrderDetails } from './order-admin';
+import { paymentLine, paymentAdvice, savedPaymentCheck } from '@/lib/payment-check';
 import styles from './orders-admin.module.css';
 
 type Props = {
@@ -74,7 +75,41 @@ function statusLine(o: QueueRow) {
     // Says so when a flag was accepted, so a returning or unscanned parcel sitting under Shipped is
     // never a mystery: the carrier words beside it are still the carrier's own.
     const dismissed = flagDismissed(o) ? 'Flag dismissed ' + shortTime(Number(o.data.dismissed.at)) + ' by ' + String(o.data.dismissed.by || 'staff') : '';
-    return [o.data?.shipment?.status ? carrierLine(o) : why, protectionLine(o), dismissed, archived].filter(Boolean).join(' · ');
+    // What Authorize.net said, for an order that is not paid yet (owner, Oct 23 2026: say WHY it needs review).
+    const payment = ['unpaid', 'review'].includes(o.bucket) && !o.data?.hold ? paymentLine(savedPaymentCheck(o.data?.paymentCheck)) : '';
+    return [payment, o.data?.shipment?.status ? carrierLine(o) : why, protectionLine(o), dismissed, archived].filter(Boolean).join(' · ');
+}
+
+const money2 = (c: number | null) => c === null ? '' : money(c);
+/** Every card attempt on this order as Authorize.net reported it, what to do, and the owner's Approve/Decline. */
+function PaymentPanel({ order, owner, busy, change }: { order: QueueRow; owner: boolean; busy: boolean; change: Props['change'] }) {
+    const check = savedPaymentCheck(order.data?.paymentCheck);
+    if (!check || ['paid', 'labeling', 'shipped', 'delivered'].includes(order.status)) return null;
+    const decide = (transId: string, decision: 'approve' | 'decline') => {
+        const ask = typeof window === 'undefined' ? undefined : window.confirm;
+        const question = decision === 'approve'
+            ? 'Approve this payment? Authorize.net collects ' + money(Number(order.total) || 0) + ' from the customer\'s card and the order moves to To ship.'
+            : 'Decline this payment? The customer is not charged and the hold on their card is released. The order stays unpaid.';
+        if (ask && !ask(question)) return;
+        void change('payment-hold', { id: order.id, transId, decision }, r => toast.success(r?.message || 'Done.'));
+    };
+    return <div className={styles.messageLog}>
+        <h3>Payment at Authorize.net</h3>
+        <p>{paymentAdvice(check)}</p>
+        {check.attempts.length ? <ul>{check.attempts.map(a => <li key={a.transId}>
+            <span><strong>{a.words}</strong>{a.amountCents !== null ? ' · ' + money2(a.amountCents) : ''}</span>
+            <span className={styles.sub}>{[a.card, a.submittedAt ? new Date(a.submittedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '', 'Transaction ' + a.transId].filter(Boolean).join(' · ')}</span>
+            {a.filters.length > 0 && <span className={styles.sub}>Flagged by: {a.filters.map(f => f.name + (f.action ? ' (' + f.action + ')' : '')).join(', ')}</span>}
+            {(a.avs || a.cvv) && <span className={styles.sub}>{[a.avs, a.cvv].filter(Boolean).join(' · ')}</span>}
+            {a.reason && <span className={styles.sub}>Bank: {a.reason}</span>}
+            {a.kind === 'held' && owner && <span className={styles.nextGroup}>
+                <button type="button" className="button button-dark" disabled={busy} onClick={() => decide(a.transId, 'approve')}>Approve payment</button>
+                <button type="button" className="text-button" disabled={busy} onClick={() => decide(a.transId, 'decline')}>Decline</button>
+            </span>}
+            {a.kind === 'held' && !owner && <span className={styles.sub}>Only an owner can approve or decline a held payment.</span>}
+        </li>)}</ul> : null}
+        <p className={styles.sub}>Checked {new Date(check.at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}. Press Check payment for the latest.</p>
+    </div>;
 }
 
 /** A bought label not yet handed over can be marked dropped off straight from the queue. */
@@ -209,7 +244,10 @@ export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, form
             {canMarkDroppedOff(o, allowed) && <DroppedOff order={o} busy={busy} change={change}/>}
         </span>;
         if ((o.bucket === 'shipped' || o.bucket === 'delivered') && s?.trackingUrl) return <a className="text-button" href={s.trackingUrl} target="_blank" rel="noopener">Track</a>;
-        if ((o.bucket === 'unpaid' || o.bucket === 'review') && canReconcile(o)) return <button type="button" className="text-button" disabled={busy} onClick={() => reconcile(o)}>Check payment</button>;
+        if ((o.bucket === 'unpaid' || o.bucket === 'review') && canReconcile(o)) return <span className={styles.nextGroup}>
+            {o.data?.paymentCheck && <button type="button" className="text-button" onClick={() => setSelected(o)}>Payment details</button>}
+            <button type="button" className="text-button" disabled={busy} onClick={() => reconcile(o)}>Check payment</button>
+        </span>;
         return <button type="button" className="text-button" onClick={() => setSelected(o)}>View</button>;
     }
 
@@ -295,6 +333,7 @@ export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, form
                             : <p className={styles.sub}>Nothing sent to this customer yet.</p>}
                         <p className={styles.sub}>Times are when the mail provider accepted the email; inbox delivery is not confirmed.</p>
                     </div>
+                    <PaymentPanel order={selected} owner={allowed('team:manage')} busy={busy} change={change}/>
                     <OrderDetails order={selected}/>
                     {selected.data?.recovery?.savings > 0 && <p>Additional 7.5% recovery savings: {money(selected.data.recovery.savings)}. Original promo attribution retained.</p>}
                     {recoveryJobs(selected.id).map((j: any) => <p key={j.order_id}>Recovery email: {j.status === 'accepted' ? 'Accepted by mail provider' : j.status === 'review' ? 'Needs manual review' : j.status}. {String(j.reason || '').replaceAll('_', ' ')}{j.accepted_at ? ' · ' + new Date(j.accepted_at).toLocaleString() : ''}</p>)}

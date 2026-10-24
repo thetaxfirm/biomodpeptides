@@ -1,3 +1,4 @@
+import { paymentCheck } from './payment-check';
 import { savedBatch } from './batch-snapshot';
 import { withAuditDb, auditRun, type AuditActor } from './change-history';
 import { unavailableOrder } from './catalog-visibility';
@@ -200,7 +201,11 @@ export async function reconcile(owner: string, id: string, hints: string[] = [],
     throw new Error('This order belongs to another payment environment and requires review.'); if (timestamp() - row.created > 29 * 86400000) {
     await run('UPDATE orders SET status=?,updated=? WHERE id=?', 'review', timestamp(), id);
     throw new Error('This payment is outside the online verification window. Contact Biomod for reconciliation.');
-} const result = await createPaymentAdapter(runtime()).verifyPayment({ id, totalCents: row.total, currency: 'USD' }, row.checkout_ref, hints, row.created); if (result.state === 'paid' && (!result.notificationId || !result.providerReference))
+} const result = await createPaymentAdapter(runtime()).verifyPayment({ id, totalCents: row.total, currency: 'USD' }, row.checkout_ref, hints, row.created);
+// Keep what the provider said (held, declined, which fraud filter, card ending) so the Orders screen can
+// explain a Needs review row (owner, Oct 23 2026). Bookkeeping only: a failed save never blocks the check.
+if (result.transactions) { try { await run("UPDATE orders SET data=json_set(data,'$.paymentCheck',json(?)) WHERE id=?", JSON.stringify(paymentCheck(result.transactions)), id); } catch { } }
+if (result.state === 'paid' && (!result.notificationId || !result.providerReference))
     throw new Error('Payment requires review.'); const state = result.noPaymentFound ? 'awaiting_payment' : result.state === 'failed' || result.state === 'pending' ? 'review' : result.state; const db=withAuditDb(database(), auditActor);const written=await db.batch([
  db.prepare(inventorySql.paymentStatus + ' AND total=?').bind(state,result.state==='paid'?result.providerReference:null,result.notificationId||null,timestamp(),id,row.total),
  db.prepare(inventorySql.settleInventory).bind(id,id,id),

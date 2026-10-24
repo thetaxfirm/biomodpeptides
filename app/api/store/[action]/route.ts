@@ -28,7 +28,7 @@ import { mixesPreorder, preorderSeparateMessage } from '@/lib/preorders';
 import { availabilityOptions, hasPublicationHold, sourcePublicationHold, blockedReleaseLot } from '@/lib/availability';
 import { all, one, run, uid, timestamp, parse, runtime, database } from '@/lib/runtime';
 import { checkout, reconcile, addressSchema, issueQuote } from '@/lib/checkout';
-import { getPaymentStatus, paymentEnvironment, paymentProvider } from '@/lib/payments';
+import { createPaymentAdapter, getPaymentStatus, paymentEnvironment, paymentProvider } from '@/lib/payments';
 import { createAnetAdapter } from '@/lib/authorizenet-payments';
 import { anetOrderDetails } from '@/lib/order-summary';
 import { packSizes, supportsPacks, standardPackPrices } from '@/lib/packs';
@@ -737,6 +737,28 @@ export async function POST(req: NextRequest, { params }: {
                 if (!o)
                     throw new Error('Order not found.');
                 return j(await reconcile(o.owner, b.id, [], auditActor));
+            }
+            // Owner only (not in adminActionPermission): approve or decline a payment Authorize.net's fraud
+            // filter is holding, without logging in to Authorize.net (owner, Oct 23 2026). The decision is
+            // recorded before and after the provider call, then the order is re-checked from Authorize.net.
+            if (action === 'admin-payment-hold') {
+                const orderId = str(b.id, 50);
+                const decision = z.enum(['approve', 'decline']).parse(b.decision);
+                const transId = z.string().regex(/^\d{1,20}$/).parse(b.transId);
+                const o = await one<{ owner: string; total: number; status: string }>('SELECT owner,total,status FROM orders WHERE id=?', orderId);
+                if (!o) throw new Error('Order not found.');
+                if (['paid', 'labeling', 'shipped', 'delivered'].includes(o.status)) throw new Error('This order is already paid.');
+                const adapter = createPaymentAdapter(runtime());
+                if (adapter.provider !== 'authorizenet') throw new Error('Approving held payments works only with Authorize.net.');
+                const record = (status: 'attempted' | 'succeeded' | 'failed', summary: string) => recordChange(database(), { source: 'admin', actor: actor.email, actorType: 'staff', action: 'payment.held_' + decision, entityType: 'order', entityId: orderId, summary, status, changes: [] }).catch(() => undefined);
+                await record('attempted', (decision === 'approve' ? 'Approve' : 'Decline') + ' held Authorize.net transaction ' + transId + '.');
+                try { await adapter.decideHeld({ id: orderId, totalCents: o.total, currency: 'USD' }, transId, decision); }
+                catch (e) { await record('failed', 'Authorize.net did not accept the ' + decision + ': ' + (e instanceof Error ? e.message : 'unknown error')); throw e; }
+                await record('succeeded', 'Authorize.net accepted the ' + decision + ' of transaction ' + transId + '.');
+                const checked = await reconcile(o.owner, orderId, [transId], auditActor).catch(() => null);
+                return j({ ...(checked || {}), message: decision === 'approve'
+                    ? (checked?.status === 'paid' ? 'Approved. The payment is collected and the order moved to To ship.' : 'Approved at Authorize.net. Press Check payment in a minute if the order has not moved to To ship.')
+                    : 'Declined. The customer is not charged and the hold on their card is released.' });
             }
             if (action === 'admin-order') {
                 const status = z.enum(['shipped', 'delivered']).parse(b.status);
