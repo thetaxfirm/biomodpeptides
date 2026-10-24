@@ -13,7 +13,8 @@ import { changeHistory, auditRun, withAuditDb, recordChange, type AuditActor } f
 import { recoveryAdminStatus } from '@/lib/checkout-recovery';
 import { coaAutomationStatus, enqueueCoaRequest, enqueueRequestAlert, processCoaOutbox, saveCoaConfig } from '@/lib/coa-outbox';
 import { promoAnalytics } from '@/lib/promo-analytics';
-import { PROMO_COOKIE, promotion } from '@/lib/promotions';
+import { PROMO_COOKIE, promotion, type PromoRecord } from '@/lib/promotions';
+import { storedPromotions } from '@/lib/promo-codes';
 import inventorySql from '@/lib/inventory-statements.json';
 import { AUTH_RETURN_COOKIE, AUTH_RETURN_MAX_AGE, safeAuthReturn, clearAuthSessionCookies, ANONYMOUS_SESSION_COOKIE, needsAnonymousSession, needsAccountSession } from '@/lib/auth-return';
 import { after, NextRequest, NextResponse } from 'next/server';
@@ -77,8 +78,18 @@ async function publicCoaLinks() {
 }
 async function currentPromoCode() {
     const jar = await cookies();
-    try { return promotion(jar.get(PROMO_COOKIE)?.value)?.code || ''; }
-    catch { jar.delete(PROMO_COOKIE); return ''; }
+    const saved = jar.get(PROMO_COOKIE)?.value;
+    if (!saved) return '';
+    // Owner-added codes have to survive a page load, so the stored list is read here too. Failing to
+    // read it is not the customer's fault and must not cost them their code: the cookie is only
+    // thrown away when the store can see the full list and still refuses what is in it.
+    let stored: PromoRecord[] | null = null;
+    try { stored = await storedPromotions(database()); } catch { stored = null; }
+    try { return promotion(saved, stored || [])?.code || ''; }
+    catch {
+        if (stored !== null) jar.delete(PROMO_COOKIE);
+        return '';
+    }
 }
 
 const str = (v: unknown, max = 2000) => z.string().trim().min(1).max(max).parse(v);
@@ -106,7 +117,7 @@ export async function GET(req: NextRequest, { params }: {
         if (action === 'admin-diagnostics')
             return j(await salesDiagnostics({ requireAdmin: () => requireStaff('reports:read'), all }, req.nextUrl.searchParams.get('days')));
         if (action === 'admin-promos')
-            return j(await promoAnalytics({ requireAdmin: () => requireStaff('reports:read'), all }, req.nextUrl.searchParams.get('days')));
+            return j(await promoAnalytics({ requireAdmin: () => requireStaff('reports:read'), all, storedPromos: () => storedPromotions(database()) }, req.nextUrl.searchParams.get('days')));
         const u = await customer();
         if (action === 'state') {
             const secure = req.nextUrl.protocol === 'https:';
@@ -307,7 +318,7 @@ export async function POST(req: NextRequest, { params }: {
             if (u) { await cartImports().bindOwner(u.id, s.id); await cartImports().assertResolved(u.id, s.id); }
             const stored = u ? (await one<{ cart: string }>('SELECT cart FROM customer_carts WHERE id=?', u.id))?.cart : s.cart;
             const lines = currentCart(validateLines(parse(stored, [])));
-            const selected = promotion(b.code);
+            const selected = promotion(b.code, await storedPromotions(database()));
             const jar = await cookies();
             // Removal must work even when a cart item has become unavailable.
             if (!selected) { jar.delete(PROMO_COOKIE); return j({ ok: true, promo: null }); }
