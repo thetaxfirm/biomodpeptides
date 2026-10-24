@@ -1,5 +1,6 @@
 import { batchSnapshot } from './batch-snapshot';
 import { applyPromotion } from './promotions';
+import { storedPromotions } from './promo-codes';
 import { applySale } from './sales';
 import { applyAvailability } from './availability';
 import { products, Product } from './catalog';
@@ -104,7 +105,8 @@ export async function quote(lines: CartLine[], promoCode?: unknown) {
         });
     }
     const priced = lines.map(l => ({ ...l, product: { ...byId.get(l.id)!, soldBatch: batchSnapshot(byId.get(l.id)!) }, lineTotal: byId.get(l.id)!.price * l.quantity - (lineDiscount.get(l) || 0) }));
-    const promotion = applyPromotion(priced, promoCode);
+    // Owner-added codes are read per quote so a code saved in administration prices the very next cart.
+    const promotion = applyPromotion(priced, promoCode, await storedPromotions(database()));
     const packDiscount = discount;
     discount += promotion.promoDiscount;
     return { subtotal, discount, packDiscount, ...promotion, total: subtotal - discount, currency: 'USD' as const, config: cfg };
