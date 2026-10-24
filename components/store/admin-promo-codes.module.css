@@ -1,0 +1,12 @@
+.panel { margin-bottom: 28px; }
+.row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin: 12px 0; }
+.row .field { flex: 1 1 180px; min-width: 150px; }
+.percent { max-width: 160px; }
+.list { list-style: none; margin: 12px 0 0; padding: 0; }
+.list li { display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline; padding: 10px 0; border-bottom: 1px solid #e9d9ef; }
+.code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 15px; letter-spacing: 0.04em; }
+.off { color: #5c5c5c; }
+.meta { color: #5c5c5c; font-size: 13px; flex: 1 1 auto; }
+.actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.sub { color: #5c5c5c; font-size: 13px; margin: 4px 0 12px; }
+.builtIn { color: #5c5c5c; font-size: 13px; line-height: 1.7; margin: 8px 0 0; }
