@@ -5,6 +5,7 @@
 import { z } from 'zod';
 import agreementDocument from '../content/affiliate-agreement-v1.json';
 import { activePromotions } from './promotions';
+import { storedPromotions } from './promo-codes';
 export const affiliateStatuses = ['pending', 'approved', 'rejected', 'suspended'] as const;
 export type Agreement = { company:string; contact:string; payout_schedule:string; payout_methods:string; id: string; version: string; title: string; body: string; commission_bps: number; hold_days: number; minimum_payout_cents: number; created: number };
 export type Member = { owner: string; email: string; name: string; website: string; audience: string; status: typeof affiliateStatuses[number]; code: string | null; agreement_id: string; accepted: number; reviewed: number | null; review_note: string; created: number; updated: number };
@@ -45,7 +46,7 @@ export async function affiliateAdmin(db: D1Database) {
  return { ...await affiliateState(db), agreementDocument, invitations:(await db.prepare('SELECT email,active,created,updated FROM affiliate_invitations ORDER BY updated DESC LIMIT 500').all()).results, earnings: await affiliateEarnings(db), schedules:(await db.prepare('SELECT f.*,fa.accepted FROM affiliate_schedule_state ss JOIN affiliate_schedules f ON f.id=ss.schedule_id LEFT JOIN affiliate_schedule_acceptances fa ON fa.schedule_id=f.id').all()).results, members:(await db.prepare('SELECT * FROM affiliate_members ORDER BY updated DESC LIMIT 500').all<Member>()).results,
  agreements:(await db.prepare('SELECT id,version,title,created FROM affiliate_agreements ORDER BY created DESC').all()).results,
  events:(await db.prepare('SELECT id,owner,actor,action,detail,created FROM affiliate_events ORDER BY created DESC LIMIT 100').all()).results,
- codes:activePromotions().map(p=>p.code) };
+ codes:activePromotions(await storedPromotions(db)).map(p=>p.code) };
 }
 function event(db:D1Database,owner:string|null,actor:string,action:string,detail:unknown,now:number) {
  return stmt(db,'INSERT INTO affiliate_events(id,owner,actor,action,detail,created) VALUES(?,?,?,?,?,?)',crypto.randomUUID(),owner,actor,action,JSON.stringify(detail),now);
@@ -110,7 +111,7 @@ export async function reviewAffiliate(db:D1Database,actor:string,raw:unknown,now
   if(!(await affiliateState(db)).agreement || member.agreement_id!==(await affiliateState(db)).agreement?.id) throw Error('The partner must accept the current agreement first.');
   const schedule=await affiliateSchedule(db,input.owner);
   if(!schedule?.accepted || schedule.agreement_id!==member.agreement_id) throw Error('The partner must accept their individual financial schedule first.');
-  if(!code || !activePromotions().some(p=>p.code===code)) throw Error('Select an existing store promotion code. Discount prices are managed separately.');
+  if(!code || !activePromotions(await storedPromotions(db)).some(p=>p.code===code)) throw Error('Select an existing store promotion code. Discount prices are managed separately.');
  }
  now=Math.max(now,member.updated+1);
  const results=await db.batch([
