@@ -52,7 +52,9 @@ const dependencies = {
   validateLines: value => { assert.deepEqual(value, lines, 'Only the authenticated saved cart is used'); record('validate-lines'); return value; },
  },
  '@/lib/cart-import': { createCartImports: ({ db: received }) => { assert.equal(received, db); return { assertResolved: async (owner, session) => { assert(customerAuthorized); assert.equal(owner, user.id); assert.equal(session, 'synthetic-session'); record('cart-resolved'); } }; } },
- '@/lib/promotions': { PROMO_COOKIE: 'fixture-promo', promotion: value => { assert.equal(value, 'BIOMOD15'); return { code: value }; } },
+ '@/lib/promotions': { PROMO_COOKIE: 'fixture-promo', promotion: (value, extra) => { assert.equal(value, 'BIOMOD15'); assert.deepEqual(extra, [], 'owner-added codes are offered to the validator'); return { code: value }; } },
+ // Reading the owner-added codes is a database read like any other and follows authorization.
+ '@/lib/promo-codes': { storedPromotions: async received => { assert(customerAuthorized || staffAuthorized, 'Authorization precedes the stored promo read'); assert.equal(received, db); record('stored-promos'); return []; } },
  '@/lib/checkout': { issueQuote: async (...args) => { assert(customerAuthorized); record('issue-quote', args); return { quoteId, shippingOptionId: args[4]?.shippingOptionId || 'flat_standard', shipping: 1000 }; } },
  '@/lib/change-history': { auditRun: async (received, actor, query, ...values) => { assert(staffAuthorized); assert.equal(received, db); assert.equal(actor.actor, user.email); assert.equal(actor.action, 'admin-config'); assert.equal(query, settingsSql); assert.equal(values[0], 'store'); record('settings-write', JSON.parse(values[1])); return { meta: sql.prepare(query).run(...values) }; } },
 };
