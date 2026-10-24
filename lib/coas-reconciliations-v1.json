@@ -398,7 +398,7 @@
       ],
       "report_scope_notes": [
         "The laboratory states the analysis is specific to the sample provided and may be influenced by sample integrity and handling. It does not establish that every vial in the lot is identical.",
-        "Identity is reported by LC-MS mass confirmation and purity by HPLC with UV detection, as printed. Net content is the measured peptide amount in the submitted vial.",
+        "Identity is reported by LC-MS mass confirmation and purity by HPLC with UV detection, as printed. Net content is the measured compound amount in the submitted vial.",
         "The report states the material is for research use only. Its results do not establish product approval, clinical safety or suitability for human or animal use."
       ]
     },
@@ -462,7 +462,7 @@
       ],
       "report_scope_notes": [
         "The laboratory states the analysis is specific to the sample provided and may be influenced by sample integrity and handling. It does not establish that every vial in the lot is identical.",
-        "Identity is reported by LC-MS mass confirmation and purity by HPLC with UV detection, as printed. Net content is the measured peptide amount in the submitted vial.",
+        "Identity is reported by LC-MS mass confirmation and purity by HPLC with UV detection, as printed. Net content is the measured compound amount in the submitted vial.",
         "The report states the material is for research use only. Its results do not establish product approval, clinical safety or suitability for human or animal use."
       ]
     },
