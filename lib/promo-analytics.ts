@@ -1,4 +1,4 @@
-import { activePromotions } from './promotions';
+import { activePromotions, type PromoRecord } from './promotions';
 
 /** Admin-only, order-created cohorts. Stored payment records are not proof of
  * customer sales; internal tests remain unclassified and amounts are not net revenue. */
@@ -17,6 +17,8 @@ export type PromoAnalyticsReport = {
 type Dependencies = {
   requireAdmin: () => Promise<unknown>;
   all: <T>(sql: string, ...values: (string | number | null)[]) => Promise<T[]>;
+  /** Codes the owner added in administration. Omitted by callers that only have the built-in table. */
+  storedPromos?: () => Promise<PromoRecord[]>;
 };
 const environments: PromoEnvironment[] = ['live', 'sandbox', 'unknown'];
 const historicalCodes = ['BIOMOD10', 'BIOMOD20'];
@@ -71,7 +73,7 @@ export async function promoAnalytics(deps: Dependencies, days: string | null, no
   await deps.requireAdmin(); // Authorization precedes validation and every database read.
   const window = promoWindow(days, now);
   try {
-    const active = activePromotions();
+    const active = activePromotions(deps.storedPromos ? await deps.storedPromos() : []);
     const knownCodes = [...new Set([...active.map(p => p.code), ...historicalCodes])];
     const aggregates = await deps.all<PromoAnalyticsRow & { code: string }>(aggregateSql(knownCodes), window.start, window.end, ...knownCodes);
     const codes = new Map<string, PromoAnalyticsReport['codes'][number]>(active.map(p => [p.code, { ...p, active: true, rows: environments.map(emptyRow) }]));
