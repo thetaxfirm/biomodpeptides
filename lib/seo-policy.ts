@@ -7,7 +7,7 @@ export const previewOrigin = 'https://trybiomod.com';
 export const reviewedOn = '2026-10-08';
 export const pageRecords: Record<string, { title: string; description: string; eligible: boolean; name?: string }> = {
   '/': { title: 'Buy Research Compounds | Biomod Research Supply Company', description: 'Buy research compounds from Biomod: BPC-157 10mg, MOTS-c, SS-31 and more, with available batch COAs and 1, 3, 5 and 10-packs. Research use only.', eligible: true },
-  '/softgels': { title: 'The Original Peptide Softgel™ by BIOMOD', description: 'Explore BIOMOD peptide softgels with BPC-157 Arginate, KPV, GHK-Cu, AHK-Cu, Pinealon and Epitalon. Compare formulations and enteric design.', eligible: true },
+  '/softgels': { title: 'The Original RUO Softgel™ by BIOMOD', description: 'Explore BIOMOD RUO softgels with BPC-157 Arginate, KPV, GHK-Cu, AHK-Cu, Pinealon and Epitalon. Compare formulations and enteric design.', eligible: true },
   '/shop': { title: 'Buy Research Compounds Online', description: 'Buy research compounds for laboratory research: BPC-157, MOTS-c, SS-31, KPV and more. Compare vial sizes, per-mg pack prices and batch documentation.', eligible: true },
   '/about': { title: 'About Biomod and TryBiomod', description: 'TryBiomod.com is the online storefront for Biomod Research Supply Company, a U.S. Marine Corps veteran-owned company with Las Vegas retail roots.', eligible: true },
   '/locations': { title: 'BIOMOD Locations', description: 'BIOMOD stores in Las Vegas, Nevada, the St. George area in Utah, and El Paso, Texas. Contact the team to confirm visiting details.', eligible: false },
