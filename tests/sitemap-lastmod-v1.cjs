@@ -53,6 +53,12 @@ loaded._compile(transpile(filename), filename);
   // 92d01ce (October 17) renamed a header menu item on every page, and da848db changed the
   // shipping wording on every product page: no page may keep a date from before that.
   for (const [route, date] of entries) assert(date >= '2026-10-17', route + ' shows the October 17 header change but is dated ' + date);
+  // The footer on every page renders TrademarkNote; d52581c (October 23) changed its wording, so
+  // no page may keep an older date. If the footer stops rendering it, this check must be revisited.
+  const brandSource = fs.readFileSync(path.join(root, 'components/store/brand-story.tsx'), 'utf8');
+  assert(/function Footer\(\)[^\n]*<TrademarkNote\/>/.test(contentSource), 'footer renders the trademark note on every page');
+  assert(/The Original RUO Softgel/.test(brandSource.match(/function TrademarkNote[\s\S]*?\n}/)[0]), 'trademark note carries the October 23 wording');
+  for (const [route, date] of entries) assert(date >= '2026-10-23', route + ' shows the October 23 footer change but is dated ' + date);
   // A specific page date can never pull a page below the sitewide date.
   for (const route of Object.keys(pageLastmod)) assert.equal(lastmodFor(route), pageLastmod[route] > siteLastmod ? pageLastmod[route] : siteLastmod, route);
   // Honest by construction: every date is a hand-set constant tied to a release, never "today".

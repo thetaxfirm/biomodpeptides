@@ -4,10 +4,11 @@
 // that changes a page; never set every page to today by default.
 import { pressReleases } from './press-releases';
 
-// The sitewide header last changed on October 17, 2026: 92d01ce renamed the "Nasal & spray"
-// menu item to "Sprays" on every page. A sitewide change dates every page, so no entry below
-// can be older than this (lastmodFor takes the later of the two).
-export const siteLastmod = '2026-10-17';
+// The sitewide footer last changed on October 23, 2026: d52581c renamed the softgel marks in
+// the footer trademark line on every page (710dc82 had added that line on October 20; 92d01ce
+// changed the header on October 17). A sitewide change dates every page, so no entry below can
+// be older than this (lastmodFor takes the later of the two).
+export const siteLastmod = '2026-10-23';
 // October 17: da848db added free USPS Priority Mail at $250 and the 2 p.m. Pacific same-day
 // wording to every product page; 589ae41 moved the product images to WebP.
 // The same day the store was renamed Biomod Research Supply Company, changing every page's title.
