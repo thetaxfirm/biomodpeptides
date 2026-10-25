@@ -31,7 +31,7 @@ const tests = [
   "sales-diagnostics-v1.cjs", "sales-diagnostics-export-v1.cjs",
   "shopping-measurement-client-v1.cjs", "traffic-measurement-v1.cjs",
   "traffic-metrics-v1.cjs", "coa-delivery-v1.cjs",
-  "coa-label-lot-v1.cjs", "request-replies-v1.cjs", "reply-simple-v1.cjs", "request-reply-route-v1.cjs", "coa-routes-v1.cjs", "coa-scheduler-v1.cjs", "coa-automation-ui-v1.cjs",
+  "coa-label-lot-v1.cjs", "request-replies-v1.cjs", "reply-simple-v1.cjs", "email-voice-v1.cjs", "request-reply-route-v1.cjs", "coa-routes-v1.cjs", "coa-scheduler-v1.cjs", "coa-automation-ui-v1.cjs",
 ];
 // Do not pass ambient provider credentials, NODE_OPTIONS or .env files to tests.
 const env = Object.fromEntries(

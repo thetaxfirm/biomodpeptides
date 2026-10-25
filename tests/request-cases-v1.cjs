@@ -51,7 +51,7 @@ const cases=require('../lib/request-cases.ts'),replies=require('../lib/request-r
  const live=require('../lib/promotions.ts').activePromotions().map(p=>p.code);assert(previews.every(t=>(t.body.match(/COMEBACK\d+/g)||[]).every(code=>live.includes(code))),'Every code in a template is a real active code');
  assert.match(previews.find(t=>t.id==='help').body,/\$12\.34 saving/,'Mentions the automatic recovery saving already applied');
  assert(previews.every(t=>!/expires|only today|hurry|last chance/i.test(t.body)),'No invented urgency');
- const againWb=await cases.startWinBack(env,unpaid,'last',owner);assert.equal(againWb.requestId,wb.requestId,'Same conversation reused');assert.match(sql.prepare('SELECT proposed_body FROM request_reply_drafts WHERE request_id=?').get(wb.requestId).proposed_body,/won't send another reminder/);
+ const againWb=await cases.startWinBack(env,unpaid,'last',owner);assert.equal(againWb.requestId,wb.requestId,'Same conversation reused');assert.match(sql.prepare('SELECT proposed_body FROM request_reply_drafts WHERE request_id=?').get(wb.requestId).proposed_body,/last reminder you'll get about this order/);
  // Replies outside the desk: Jarvis mailbox findings and manual notes; desk sends and pre-request mail are ignored; duplicates collapse.
  const ext=require('../lib/request-external.ts');
  const open=(await replies.handleReplyBridge(env,{action:'open_requests'})).requests;assert(open.some(r=>r.id===wb.requestId&&r.email==='cart@example.invalid'));

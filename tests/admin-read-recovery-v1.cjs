@@ -38,7 +38,7 @@ const provider={useStore:()=>({...state,refresh:()=>{refreshCalls++;return refre
 const issuesLib=(()=>{const f=path.join(root,'lib/request-issues.ts'),m=new Module(f,module);m.filename=f;m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,f);return m.exports;})();
 const inboxFilename=path.join(root,'components/store/request-inbox.tsx'),inboxModule=new Module(inboxFilename,module);
 inboxModule.filename=inboxFilename;inboxModule.paths=Module._nodeModulePaths(root);
-inboxModule.require=id=>id==='@/lib/request-issues'?issuesLib:id==='react'?hooks:id==='react/jsx-runtime'?projectRequire(id):id.endsWith('.module.css')?{__esModule:true,default:new Proxy({},{get:(_,key)=>String(key)})}:(()=>{throw Error('Unexpected inbox dependency '+id);})();
+inboxModule.require=id=>id==='@/lib/customer-context'?(()=>{const m={exports:{}};new Function('exports',require('typescript').transpileModule(require('node:fs').readFileSync(require('node:path').join(__dirname,'..','lib/customer-context.ts'),'utf8'),{compilerOptions:{module:1,target:9}}).outputText)(m.exports);return m.exports;})():id==='@/lib/request-issues'?issuesLib:id==='react'?hooks:id==='react/jsx-runtime'?projectRequire(id):id.endsWith('.module.css')?{__esModule:true,default:new Proxy({},{get:(_,key)=>String(key)})}:(()=>{throw Error('Unexpected inbox dependency '+id);})();
 inboxModule._compile(ts.transpileModule(fs.readFileSync(inboxFilename,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,inboxFilename);
 const {RequestInbox}=inboxModule.exports;
 const filename=path.join(root,'components/store/admin.tsx');

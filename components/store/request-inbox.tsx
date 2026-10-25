@@ -1,5 +1,6 @@
 'use client';
 
+import { vipSignal } from '@/lib/customer-context';
 import { useEffect, useRef, useState } from 'react';
 import type { CoaAutomationReport } from './coa-automation';
 import styles from './request-inbox.module.css';
@@ -452,10 +453,12 @@ export function RequestInbox({ requests: initialRequests, activeTab = true, auto
           const { request, reply } = row;
           const name = text(request.data.name) || text(request.data.email) || 'Customer';
           const preview = text(request.data.message) || text(request.data.subject);
+          // VIP (partner, business buyer, met at a show): owner, Oct 24 2026.
+          const vip = vipSignal(text(request.data.email), text(request.data.subject) + ' ' + text(request.data.message));
           const late = row.late;
           return <article key={request.id} role="listitem" className={styles.row} data-selected={selected === request.id ? 'true' : 'false'}>
             <button type="button" className={styles.rowButton} aria-expanded={selected === request.id} aria-controls={`request-reply-${request.id}`} onClick={() => open(request.id)}>
-              <span className={styles.rowTop}><strong>{name}</strong>{row.count > 1 && <span className={styles.age}>{row.count} requests</span>}</span>
+              <span className={styles.rowTop}><strong>{vip.vip && <span title={'VIP: ' + vip.why} aria-label={'VIP: ' + vip.why}>⭐ </span>}{name}</strong>{row.count > 1 && <span className={styles.age}>{row.count} requests</span>}</span>
               <span className={styles.rowSubject}>{text(request.data.subject) || (request.kind === 'affiliate' ? 'Partner application' : request.kind === 'stock' ? 'Product availability' : 'Website message')}</span>
               <span className={styles.rowPreview}>{preview}</span>
               <span className={styles.rowState} data-stage={row.stage}>{row.label}{reply?.coa?.state === 'matched' && row.stage === 'todo' ? ' · COA' : ''}</span>
