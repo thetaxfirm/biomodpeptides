@@ -75,6 +75,13 @@ export async function storedPromoList(db?: D1Database | null): Promise<StoredPro
 }
 /** What pricing may honour. An unreadable settings row leaves the built-in codes working and the
  * stored ones refused, which is the safe direction: a customer sees "not valid", never a wrong price. */
-export async function storedPromotions(db?: D1Database | null): Promise<PromoRecord[]> {
-    return (await storedPromoList(db)).filter(promo => promo.active).map(({ code, percentOff }) => ({ code, percentOff }));
+export async function storedPromotions(db?: D1Database | null, options: { throwOnReadError?: boolean } = {}): Promise<PromoRecord[]> {
+    // Pricing can fail closed to built-ins. A saved-cookie resolver must distinguish an outage
+    // from a successful empty list before deciding that a customer's code was removed.
+    let rows: StoredPromo[];
+    if (options.throwOnReadError) {
+        if (!db) throw new Error('Promo settings are unavailable.');
+        rows = (await readStoredPromos(db)).rows;
+    } else rows = await storedPromoList(db);
+    return rows.filter(promo => promo.active).map(({ code, percentOff }) => ({ code, percentOff }));
 }

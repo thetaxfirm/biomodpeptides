@@ -84,7 +84,7 @@ async function currentPromoCode() {
     // read it is not the customer's fault and must not cost them their code: the cookie is only
     // thrown away when the store can see the full list and still refuses what is in it.
     let stored: PromoRecord[] | null = null;
-    try { stored = await storedPromotions(database()); } catch { stored = null; }
+    try { stored = await storedPromotions(database(), { throwOnReadError: true }); } catch { stored = null; }
     try { return promotion(saved, stored || [])?.code || ''; }
     catch {
         if (stored !== null) jar.delete(PROMO_COOKIE);
