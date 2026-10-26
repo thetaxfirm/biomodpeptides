@@ -31,7 +31,7 @@
       "5mg / vial"
     ],
     "identity": "SLU-PP-332 (ERR agonist)",
-    "casNumber": "2245445-83-6",
+    "casNumber": "303760-60-3",
     "description": "SLU-PP-332 (ERR agonist) in a 5 mg vial.",
     "shortDescription": "SLU-PP-332 (ERR agonist) in a 5 mg vial.",
     "sourceIssues": []
@@ -68,7 +68,7 @@
       "100mg / bottle"
     ],
     "identity": "GHK-Cu",
-    "casNumber": "49557-75-7",
+    "casNumber": "89030-95-5",
     "description": "GHK-Cu spray solution with a listed total content of 100 mg per bottle.",
     "shortDescription": "GHK-Cu spray solution with a listed total content of 100 mg per bottle.",
     "sourceIssues": []
@@ -140,7 +140,7 @@
       "60 caps"
     ],
     "identity": "Tesofensine",
-    "casNumber": "457657-66-8",
+    "casNumber": "195875-84-4",
     "description": "Tesofensine in a 60-capsule softgel format.",
     "shortDescription": "Tesofensine in a 60-capsule softgel format.",
     "sourceIssues": []
@@ -362,7 +362,7 @@
       "50mg / vial"
     ],
     "identity": "5-Amino-1-Methylquinolinium",
-    "casNumber": "331717-54-1",
+    "casNumber": "685079-15-6",
     "description": "5-Amino-1-Methylquinolinium in a 50 mg vial.",
     "shortDescription": "5-Amino-1-Methylquinolinium in a 50 mg vial.",
     "sourceIssues": []
@@ -399,7 +399,7 @@
       "30 caps"
     ],
     "identity": "Pinealon + Epitalon",
-    "casNumber": "147551-89-5 / 307297-39-8",
+    "casNumber": "175175-23-2 / 307297-39-8",
     "description": "A two-compound softgel containing Pinealon and Epitalon, supplied as 30 capsules.",
     "shortDescription": "A two-compound softgel containing Pinealon and Epitalon, supplied as 30 capsules.",
     "sourceIssues": []
@@ -547,7 +547,7 @@
       "60 caps"
     ],
     "identity": "GHK-Cu + AHK-Cu + Astaxanthin + Vitamin E",
-    "casNumber": "49557-75-7 / 89030-95-5 / 472-61-7",
+    "casNumber": "89030-95-5 / 682809-81-0 / 472-61-7",
     "description": "A four-component formula of GHK-Cu, AHK-Cu, astaxanthin and vitamin E, supplied as 60 softgel capsules.",
     "shortDescription": "A four-component formula of GHK-Cu, AHK-Cu, astaxanthin and vitamin E, supplied as 60 softgel capsules.",
     "sourceIssues": []
@@ -620,10 +620,10 @@
     "sizes": [
       "Bottle; content specification pending confirmation"
     ],
-    "identity": "Pinealon + Selank + DSIP + Oxytocin + Melatonin",
-    "casNumber": "147551-89-5 / 129954-34-3 / 62568-57-4 / 50-56-6",
-    "description": "A spray formula combining Pinealon, Selank, DSIP, oxytocin and melatonin.",
-    "shortDescription": "A spray formula combining Pinealon, Selank, DSIP, oxytocin and melatonin.",
+    "identity": "Pinealon + Selank + DSIP + Oxy + Melatonin",
+    "casNumber": "175175-23-2 / 129954-34-3 / 62568-57-4 / 50-56-6 / 73-31-4",
+    "description": "A spray formula combining Pinealon, Selank, DSIP, Oxy and melatonin.",
+    "shortDescription": "A spray formula combining Pinealon, Selank, DSIP, Oxy and melatonin.",
     "sourceIssues": []
   },
   {
@@ -880,7 +880,7 @@
       "140mg / bottle"
     ],
     "identity": "GHK-Cu + BPC-157 + KPV",
-    "casNumber": "49557-75-7 / 137525-51-0 / 67727-97-3",
+    "casNumber": "89030-95-5 / 137525-51-0 / 67727-97-3",
     "description": "GHK-Cu, BPC-157 and KPV combined in a spray formula with 140 mg listed per bottle.",
     "shortDescription": "GHK-Cu, BPC-157 and KPV combined in a spray formula with 140 mg listed per bottle.",
     "sourceIssues": []
@@ -916,10 +916,10 @@
     "sizes": [
       "35mg / bottle"
     ],
-    "identity": "PT-141 + Oxytocin",
+    "identity": "PT-141 + Oxy",
     "casNumber": "189691-06-3 / 50-56-6",
-    "description": "A spray formula combining PT-141 and oxytocin, with a listed total content of 35 mg per bottle.",
-    "shortDescription": "A spray formula combining PT-141 and oxytocin, with a listed total content of 35 mg per bottle.",
+    "description": "A spray formula combining PT-141 and Oxy, with a listed total content of 35 mg per bottle.",
+    "shortDescription": "A spray formula combining PT-141 and Oxy, with a listed total content of 35 mg per bottle.",
     "sourceIssues": []
   },
   {
@@ -954,7 +954,7 @@
       "70mg"
     ],
     "identity": "BPC-157 + GHK-Cu + TB-500",
-    "casNumber": "137525-51-0 / 49557-75-7 / 885340-08-9",
+    "casNumber": "137525-51-0 / 89030-95-5 / 885340-08-9",
     "description": "BPC-157 + GHK-Cu + TB-500 in a 70 mg vial.",
     "shortDescription": "BPC-157 + GHK-Cu + TB-500 in a 70 mg vial.",
     "sourceIssues": []
@@ -991,7 +991,7 @@
       "80mg"
     ],
     "identity": "BPC-157 + GHK-Cu + TB-500 + KPV",
-    "casNumber": "137525-51-0 / 49557-75-7 / 885340-08-9 / 67727-97-3",
+    "casNumber": "137525-51-0 / 89030-95-5 / 885340-08-9 / 67727-97-3",
     "description": "BPC-157 + GHK-Cu + TB-500 + KPV in a 80 mg vial.",
     "shortDescription": "BPC-157 + GHK-Cu + TB-500 + KPV in a 80 mg vial.",
     "sourceIssues": []
@@ -1324,7 +1324,7 @@
       "50mg"
     ],
     "identity": "Prezatide Copper",
-    "casNumber": "49557-75-7",
+    "casNumber": "89030-95-5",
     "description": "Prezatide Copper in a 50 mg vial.",
     "shortDescription": "Prezatide Copper in a 50 mg vial.",
     "sourceIssues": []

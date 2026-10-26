@@ -78,7 +78,7 @@ const unchanged = [
   ['GHK-Cu BPC157 KPV 140mg spray', 'klow-spray'],
   ['BPC157 GHK-Cu TB500 70mg', 'glow-70mg'],
   ['BPC157 GHK-Cu TB500 KPV 80mg', 'klow-80mg'],
-  ['PT141 Oxytocin 35mg spray', 'ignite-pt-141-oxytocin-spray'],
+  ['PT141 Oxy 35mg spray', 'ignite-pt-141-oxytocin-spray'],
   ['MIC Blend Methylcobalamin 10ml', 'lipo-c-w-b12'],
   ['NAD500mg', 'nad-500mg'],
   ['Nicotinamide Adenine Dinucleotide 500mg', 'nad-500mg'],
@@ -96,7 +96,7 @@ for (const [query, expected] of unchanged) assert.deepEqual(matches(query), [exp
 for (const query of [
   'Wolv BPC157 10mg', 'Run Ipamorelin 10mg', 'Gun CJC1295 10mg',
   'Ipamorelin CJC1295 10mg', 'Ipamorelin CJC1295 No 10mg',
-  'BPC157 TB 10mg', 'PT Oxytocin 35mg spray',
+  'BPC157 TB 10mg', 'PT Oxy 35mg spray',
   'BPC157 5mg TB500 5mg', 'BPC157 10mg TB500 10mg 20mg',
   'BPC157 TB500 10mg spray', 'BPC157 TB500 10mg softgel',
   'Wolverine 10ml', 'BPC157 10mg spray', 'SS31 21mg',
