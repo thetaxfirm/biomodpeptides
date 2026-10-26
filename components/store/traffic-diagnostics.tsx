@@ -7,7 +7,7 @@ import type { TrafficReport, TrafficPageGroup, TrafficSourceGroup } from '@/lib/
 import styles from './traffic-diagnostics.module.css';
 
 const pageNames: Record<TrafficPageGroup, string> = { home: 'Home', catalog: 'Catalog and packs', product: 'Reviewed product pages', documents: 'Batch document library', guide: 'Guides and FAQs', about: 'About Biomod', locations: 'Locations', contact: 'Contact and partnerships', policy: 'Policies' };
-const sourceNames: Record<TrafficSourceGroup, string> = { search: 'Search site', ai: 'AI site', social: 'Social site', external_other: 'Other referring site', internal: 'Internal navigation', direct_or_unavailable: 'Direct or unavailable' };
+const sourceNames: Record<TrafficSourceGroup, string> = { search: 'Search site', ai: 'AI referrer or tag', social: 'Social site', external_other: 'Other referring site', internal: 'Internal navigation', direct_or_unavailable: 'Direct or unavailable' };
 const time = (value: string | null) => value ? new Date(value).toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : 'Not recorded';
 const date = (value: string) => value.slice(0, 10);
 const previousDate = (value: string) => new Date(Date.parse(value) - 1).toISOString().slice(0, 10);
@@ -62,14 +62,14 @@ export function TrafficDiagnostics() {
             {available.completedDays.length < available.window.requestedDays && <p className={styles.note}>Coverage is shorter than the requested period. Dates before activation are unavailable; the partial activation day is excluded from these totals.</p>}
             <p>Zero means no accepted events were recorded for that bucket. It does not establish that nobody visited or that collection was uninterrupted.</p>
             <div className={styles.breakdowns}>
-              <section aria-labelledby="traffic-source-title"><h4 id="traffic-source-title">Referrer categories</h4>
+              <section aria-labelledby="traffic-source-title"><h4 id="traffic-source-title">Source categories</h4>
                 <Table><TableHeader><TableRow><TableHead>Category</TableHead><TableHead className={styles.number}>Events</TableHead></TableRow></TableHeader><TableBody>{available.totals.bySourceGroup.map(row => <TableRow key={row.sourceGroup}><TableCell>{sourceNames[row.sourceGroup]}</TableCell><TableCell className={styles.number}>{count(row.events)}</TableCell></TableRow>)}</TableBody></Table>
               </section>
               <section aria-labelledby="traffic-page-title"><h4 id="traffic-page-title">Page categories</h4>
                 <Table><TableHeader><TableRow><TableHead>Category</TableHead><TableHead className={styles.number}>Events</TableHead></TableRow></TableHeader><TableBody>{available.totals.byPageGroup.map(row => <TableRow key={row.pageGroup}><TableCell>{pageNames[row.pageGroup]}</TableCell><TableCell className={styles.number}>{count(row.events)}</TableCell></TableRow>)}</TableBody></Table>
               </section>
             </div>
-            <p>A referrer category reflects a known referring hostname, not a search query or proven acquisition. Missing referrers can include search engines, AI apps or direct navigation. Later navigation within the same document is classified as internal.</p>
+            <p>Source categories use recognized referring hosts and, for the AI group, recognized utm_source tags. Tags are client-provided and do not prove an AI citation or acquisition. Missing referrers can include search engines, AI apps or direct navigation. Later navigation within the same document is classified as internal. The expanded AI classification and news-page coverage apply to new events; historical buckets were not reclassified.</p>
             <details className={styles.detail}><summary>Daily accepted event totals</summary>
               <Table><TableHeader><TableRow><TableHead>Day (UTC)</TableHead><TableHead className={styles.number}>Events</TableHead><TableHead>Daily limit</TableHead></TableRow></TableHeader><TableBody>{available.completedDays.map(day => <TableRow key={day.date}><TableCell>{day.date}</TableCell><TableCell className={styles.number}>{count(day.events)}</TableCell><TableCell>{day.capReached ? 'Reached; additional events excluded' : 'Not reached'}</TableCell></TableRow>)}</TableBody></Table>
             </details>
