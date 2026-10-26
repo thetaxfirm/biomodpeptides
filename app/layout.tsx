@@ -1,3 +1,4 @@
+import { pressReleases } from '@/lib/press-releases';
 import type { Metadata } from "next";
 import { StoreChrome } from "@/components/store/store-chrome";
 import "./globals.css";
@@ -24,4 +25,4 @@ import { runtime } from '@/lib/runtime';
 import searchPublication from '@/lib/seo-publication-v1.json';
 
 export const metadata: Metadata={title:{default:"Biomod Research Supply Company | TryBiomod",template:"%s | Biomod Research Supply Company"},description:"Biomod Research Supply Company at TryBiomod.com. Research compound vials, product specifications and available lot-level documentation. For laboratory research only.",icons:{icon:"/favicon.svg"},robots:{index:false,follow:false}};
-export default async function RootLayout({children}:{children:React.ReactNode}){const snapshot=await publicCatalog(); return <html lang="en"><body><StoreProvider initialCatalog={snapshot.products} shoppingMeasurementEnabled={shoppingConfiguration(runtime()).enabled}><TrafficMeasurement enabled={trafficConfiguration(runtime()).enabled} reviewedProductSlugs={searchPublication.productSlugs}/><StoreChrome>{children}</StoreChrome></StoreProvider></body></html>}
+export default async function RootLayout({children}:{children:React.ReactNode}){const snapshot=await publicCatalog(); return <html lang="en"><body><StoreProvider initialCatalog={snapshot.products} shoppingMeasurementEnabled={shoppingConfiguration(runtime()).enabled}><TrafficMeasurement enabled={trafficConfiguration(runtime()).enabled} reviewedProductSlugs={searchPublication.productSlugs} publishedNewsSlugs={pressReleases.map(release => release.slug)}/><StoreChrome>{children}</StoreChrome></StoreProvider></body></html>}

@@ -4,12 +4,14 @@ import type { TrafficEvent, TrafficPageGroup, TrafficSourceGroup } from './traff
 const publicRoutes: Readonly<Record<string, TrafficPageGroup>> = {
   '/': 'home', '/shop': 'catalog', '/softgels': 'catalog', '/multi-pack': 'catalog', '/presales': 'catalog',
   '/testing': 'documents', '/quality-standard': 'guide', '/choosing-a-research-supplier': 'guide', '/faq': 'guide',
-  '/about': 'about', '/locations': 'locations', '/contact': 'contact', '/international-partners': 'contact',
+  '/news': 'guide', '/about': 'about', '/locations': 'locations', '/contact': 'contact', '/international-partners': 'contact',
   '/research-use-only': 'policy', '/shipping-policy': 'policy', '/returns-refunds': 'policy',
   '/terms-of-sale': 'policy', '/privacy-policy': 'policy',
 };
-export function trafficPageGroup(pathname: string, reviewedProductSlugs: readonly string[]): TrafficPageGroup | null {
+export function trafficPageGroup(pathname: string, reviewedProductSlugs: readonly string[], publishedNewsSlugs: readonly string[] = []): TrafficPageGroup | null {
   if (Object.prototype.hasOwnProperty.call(publicRoutes, pathname)) return publicRoutes[pathname];
+  const news = /^\/news\/([a-z0-9]+(?:-[a-z0-9]+)*)$/.exec(pathname);
+  if (news) return publishedNewsSlugs.includes(news[1]) ? 'guide' : null;
   const match = /^\/product\/([a-z0-9]+(?:-[a-z0-9]+)*)$/.exec(pathname);
   return match && reviewedProductSlugs.includes(match[1]) ? 'product' : null;
 }

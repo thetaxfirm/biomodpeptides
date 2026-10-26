@@ -31,7 +31,7 @@ let pathname='/',search='',storeState,props,requests,frames,frameId,observers;
 function fresh(options={}) {
   pathname=options.pathname||'/';search=options.search||'';requests=[];frames=new Map();frameId=0;observers=new Set();
   storeState={ready:true,loadError:'',store:{admin:false},...options.storeState};
-  props={enabled:true,reviewedProductSlugs:['reviewed-vial'],...options.props};
+  props={enabled:true,reviewedProductSlugs:['reviewed-vial'],publishedNewsSlugs:['published-announcement'],...options.props};
   const listeners=new Map();
   const doc={visibilityState:'visible',referrer:'https://www.google.com/search?q=private-query',body:{},marker:pathname,
     querySelector(selector){assert.equal(selector,'main[data-traffic-path]');return this.marker===null?null:{getAttribute:key=>{assert.equal(key,'data-traffic-path');return this.marker;}};},
@@ -72,6 +72,17 @@ for(const [referrer,search,expected] of [['','?utm_source=chatgpt.com','ai'],[''
   assert.equal(helpers.trafficSourceGroup(referrer,shared.TRAFFIC_ORIGIN,search),expected,referrer+search);
 {const state=helpers.newTrafficNavigation();helpers.observeTrafficNavigation(state,'/','?utm_source=chatgpt.com');
   assert.deepEqual(helpers.consumeTrafficNavigation(state,'home','',shared.TRAFFIC_ORIGIN,'?utm_source=chatgpt.com'),{event:'page_view',pageGroup:'home',sourceGroup:'ai'});}
+
+  // Published news can receive external traffic; unknown article paths remain excluded.
+  fresh({pathname:'/news/published-announcement'});document.referrer='https://chatgpt.com/';let newsHost=mount();paint();
+  assert.deepEqual(payloads(),[{event:'page_view',pageGroup:'guide',sourceGroup:'ai'}]);
+  navigate(newsHost,'/news');assert.equal(payloads()[1].sourceGroup,'internal');newsHost.unmount();
+  for(const route of ['/news/unpublished','/news/published-announcement/extra','/news/published-announcement/']){
+    fresh({pathname:route});newsHost=mount();paint();assert.equal(requests.length,0,route);newsHost.unmount();
+  }
+  fresh({pathname:'/news/published-announcement',search:'?measurement=off'});newsHost=mount();paint();assert.equal(requests.length,0);newsHost.unmount();
+  const actualNews=load('lib/press-releases.ts').pressReleases.map(release=>release.slug);
+  for(const slug of actualNews)assert.equal(helpers.trafficPageGroup('/news/'+slug,[],actualNews),'guide');
 
   fresh({storeState:{ready:false}});let host=mount();paint();assert.equal(requests.length,0,'Wait for store readiness before identifying administrators');
   storeState.ready=true;document.marker='/old-page';host.render();paint();assert.equal(requests.length,0,'A stale route is not a completed page view');

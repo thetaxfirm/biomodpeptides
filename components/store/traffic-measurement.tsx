@@ -8,7 +8,7 @@ import { useStore } from './provider';
 
 // One document, not one component instance: remounts and StrictMode do not create events.
 // No cookies, storage, identifiers, per-person history or network retry queue.
-export function TrafficMeasurement({ enabled, reviewedProductSlugs }: { enabled: boolean; reviewedProductSlugs: string[] }) {
+export function TrafficMeasurement({ enabled, reviewedProductSlugs, publishedNewsSlugs }: { enabled: boolean; reviewedProductSlugs: string[]; publishedNewsSlugs: string[] }) {
   const pathname = usePathname();
   const search = useSearchParams().toString();
   const { store, ready, loadError } = useStore();
@@ -17,7 +17,7 @@ export function TrafficMeasurement({ enabled, reviewedProductSlugs }: { enabled:
     const state = documentTrafficNavigation(document, pathname, search);
     if (!enabled || window.location.origin !== TRAFFIC_ORIGIN || !ready || loadError || store.admin || state.optedOut
       || trafficPrivacyExcluded(navigator as Navigator & { globalPrivacyControl?: boolean }, (window as Window & { doNotTrack?: string }).doNotTrack)) return;
-    const pageGroup = trafficPageGroup(pathname, reviewedProductSlugs);
+    const pageGroup = trafficPageGroup(pathname, reviewedProductSlugs, publishedNewsSlugs);
     if (!pageGroup || state.attempted) return;
     let frame = 0;
     let observer: MutationObserver | undefined;
@@ -46,6 +46,6 @@ export function TrafficMeasurement({ enabled, reviewedProductSlugs }: { enabled:
     document.addEventListener('visibilitychange', schedule);
     schedule();
     return () => { active = false; if (frame) window.cancelAnimationFrame(frame); observer?.disconnect(); document.removeEventListener('visibilitychange', schedule); };
-  }, [enabled, pathname, search, reviewedProductSlugs, ready, loadError, store.admin]);
+  }, [enabled, pathname, search, reviewedProductSlugs, publishedNewsSlugs, ready, loadError, store.admin]);
   return null;
 }
