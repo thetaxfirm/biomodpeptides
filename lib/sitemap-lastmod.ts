@@ -25,7 +25,8 @@ export const pageLastmod: Record<string, string> = {
   '/shipping-policy': '2026-10-14',
   '/contact': '2026-10-14',
   // 628f8c0 (October 16): these four pages now end with the research vial index.
-  '/faq': '2026-10-16',
+  // October 26: official-store and current-price source answers added to the visible FAQ.
+  '/faq': '2026-10-26',
   '/about': '2026-10-16',
   '/quality-standard': '2026-10-16',
   '/choosing-a-research-supplier': '2026-10-16',

@@ -16,6 +16,20 @@ export const researchFaqGroups = [
         href: '/shop',
         link: 'Shop research compounds',
       },
+      {
+        id: 'official-store',
+        question: 'Is TryBiomod.com the official Biomod online store?',
+        answer: 'Yes. TryBiomod.com is the online storefront for Biomod Research Supply Company. The former biomodpeptides.com storefront redirects here. Use this site for current product listings, available batch documents and ordering information.',
+        href: '/about',
+        link: 'About Biomod and its online store',
+      },
+      {
+        id: 'current-product-price',
+        question: 'Which price should I use if a search result or directory shows a different amount?',
+        answer: 'Check the current product page at TryBiomod.com and match the compound, strength, physical form and selected pack size. A single-vial price is different from a pack total, and a price per milligram is a separate comparison. Search summaries and third-party listings may reflect an older observation. Review the current cart and checkout totals, including shipping and tax, before payment.',
+        href: '/shop',
+        link: 'Check current products and pack prices',
+      },
     ],
   },
   {
