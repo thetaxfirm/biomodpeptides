@@ -14,11 +14,26 @@ export function trafficPageGroup(pathname: string, reviewedProductSlugs: readonl
   return match && reviewedProductSlugs.includes(match[1]) ? 'product' : null;
 }
 
-const aiHosts = ['chatgpt.com', 'chat.openai.com', 'perplexity.ai', 'claude.ai', 'copilot.microsoft.com', 'gemini.google.com'];
+const aiHosts = ['chatgpt.com', 'chat.openai.com', 'openai.com', 'perplexity.ai', 'claude.ai', 'copilot.microsoft.com', 'copilot.cloud.microsoft',
+  'edgeservices.bing.com', 'gemini.google.com', 'bard.google.com', 'notebooklm.google.com', 'chat.mistral.ai', 'meta.ai', 'grok.com',
+  'chat.deepseek.com', 'you.com', 'phind.com', 'poe.com', 'kagi.com', 'duck.ai', 'character.ai'];
+// AI apps often strip the referrer but tag outbound links (ChatGPT adds utm_source=chatgpt.com).
+// The value is read in the browser only to pick a group; it is never transmitted or stored.
+const aiUtmSources = [...aiHosts, 'chatgpt', 'openai', 'perplexity', 'claude', 'anthropic', 'copilot', 'gemini', 'mistral', 'grok', 'deepseek', 'phind'];
 const searchHosts = ['google.com', 'google.co.uk', 'google.ca', 'google.com.au', 'google.de', 'google.fr', 'google.co.in', 'bing.com', 'duckduckgo.com', 'search.yahoo.com', 'search.brave.com'];
 const socialHosts = ['facebook.com', 'instagram.com', 'linkedin.com', 't.co', 'x.com', 'twitter.com', 'youtube.com', 'reddit.com', 'tiktok.com', 'pinterest.com'];
 const matchesHost = (host: string, domains: readonly string[]) => domains.some(domain => host === domain || host.endsWith('.' + domain));
-export function trafficSourceGroup(referrer: string, origin: string): TrafficSourceGroup {
+function aiUtmSource(search: string) {
+  return new URLSearchParams(search).getAll('utm_source').some(value => {
+    const source = value.trim().toLowerCase().replace(/^www\./, '');
+    return aiUtmSources.some(known => source === known || source.endsWith('.' + known));
+  });
+}
+export function trafficSourceGroup(referrer: string, origin: string, search = ''): TrafficSourceGroup {
+  if (aiUtmSource(search)) {
+    try { if (referrer && new URL(referrer).origin === origin) return 'internal'; } catch { /* Fall through to the tagged source. */ }
+    return 'ai';
+  }
   if (!referrer) return 'direct_or_unavailable';
   try {
     const source = new URL(referrer);
@@ -50,10 +65,10 @@ export function observeTrafficNavigation(state: TrafficNavigation, pathname: str
     state.shoppingAttempted.clear();
   }
 }
-export function consumeTrafficNavigation(state: TrafficNavigation, pageGroup: TrafficPageGroup, referrer: string, origin: string): TrafficEvent | null {
+export function consumeTrafficNavigation(state: TrafficNavigation, pageGroup: TrafficPageGroup, referrer: string, origin: string, search = ''): TrafficEvent | null {
   if (state.optedOut || state.attempted) return null;
   state.attempted = true; // A failed submission is still attempted; never retry or double count.
-  return { event: 'page_view', pageGroup, sourceGroup: state.initialNavigation ? trafficSourceGroup(referrer, origin) : 'internal' };
+  return { event: 'page_view', pageGroup, sourceGroup: state.initialNavigation ? trafficSourceGroup(referrer, origin, search) : 'internal' };
 }
 export function trafficPrivacyExcluded(navigator: { globalPrivacyControl?: boolean; doNotTrack?: string | null; webdriver?: boolean }, windowDoNotTrack?: string | null) {
   return navigator.globalPrivacyControl === true || navigator.doNotTrack === '1' || windowDoNotTrack === '1' || navigator.webdriver === true;

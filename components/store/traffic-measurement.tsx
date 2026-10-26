@@ -29,7 +29,7 @@ export function TrafficMeasurement({ enabled, reviewedProductSlugs }: { enabled:
       // A query-only opt-out can arrive before the routing hook commits.
       observeTrafficNavigation(state!, pathname, window.location.search);
       if (trafficPrivacyExcluded(navigator as Navigator & { globalPrivacyControl?: boolean }, (window as Window & { doNotTrack?: string }).doNotTrack)) return;
-      const payload = consumeTrafficNavigation(state!, pageGroup, document.referrer, TRAFFIC_ORIGIN);
+      const payload = consumeTrafficNavigation(state!, pageGroup, document.referrer, TRAFFIC_ORIGIN, window.location.search);
       if (!payload) return;
       observer?.disconnect();
       document.removeEventListener('visibilitychange', schedule);

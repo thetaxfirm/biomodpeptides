@@ -65,6 +65,13 @@ const flush=async()=>{for(let i=0;i<8;i++)await Promise.resolve();};
   for(const [url,expected] of [
     ['https://www.google.com/search?q=hidden','search'],['https://www.google.co.uk/','search'],['https://gemini.google.com/app','ai'],['https://chatgpt.com/c/private-thread','ai'],['https://chat.openai.com/','ai'],['https://www.perplexity.ai/','ai'],['https://m.facebook.com/x','social'],['https://t.co/private','social'],['https://trybiomod.com/shop?private=x','internal'],
     ['https://google.com.evil.example/','external_other'],['https://notgoogle.com/','external_other'],['https://chatgpt.com.evil.example/','external_other'],['https://example.com/google.com','external_other'],['https://trybiomod.com.evil.example/','external_other'],['','direct_or_unavailable'],['not a URL','direct_or_unavailable'],['javascript:alert(1)','direct_or_unavailable'],['https://user:pass@google.com/','direct_or_unavailable']])assert.equal(helpers.trafficSourceGroup(url,shared.TRAFFIC_ORIGIN),expected,url);
+// AI apps that strip the referrer still tag links; tags never override an internal navigation.
+for(const [referrer,search,expected] of [['','?utm_source=chatgpt.com','ai'],['','?utm_source=ChatGPT.com&x=1','ai'],['https://www.google.com/','?utm_source=perplexity','ai'],
+  ['','?utm_source=newsletter','direct_or_unavailable'],['','?utm_source=chatgpt.com.evil.example','direct_or_unavailable'],['https://trybiomod.com/shop','?utm_source=chatgpt.com','internal'],
+  ['https://www.perplexity.ai/search/x','','ai'],['https://gemini.google.com/app','','ai'],['https://copilot.microsoft.com/','','ai'],['https://grok.com/','','ai'],['https://www.google.com/','','search']])
+  assert.equal(helpers.trafficSourceGroup(referrer,shared.TRAFFIC_ORIGIN,search),expected,referrer+search);
+{const state=helpers.newTrafficNavigation();helpers.observeTrafficNavigation(state,'/','?utm_source=chatgpt.com');
+  assert.deepEqual(helpers.consumeTrafficNavigation(state,'home','',shared.TRAFFIC_ORIGIN,'?utm_source=chatgpt.com'),{event:'page_view',pageGroup:'home',sourceGroup:'ai'});}
 
   fresh({storeState:{ready:false}});let host=mount();paint();assert.equal(requests.length,0,'Wait for store readiness before identifying administrators');
   storeState.ready=true;document.marker='/old-page';host.render();paint();assert.equal(requests.length,0,'A stale route is not a completed page view');
