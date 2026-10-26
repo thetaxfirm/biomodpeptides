@@ -32,7 +32,7 @@ for path in ['/','/?q=test','/shop','/locations','/testing','/product/bpc-157-10
 assert len(set(titles))==len(titles),titles
 for path in ['/missing-page-v7-check','/product/missing-product-v7-check','/testing/missing-lot-v7-check','/account/missing-section']:
  status,headers,body=get(path);assert status==404,(path,status);assert 'noindex' in headers.get('X-Robots-Tag','')
-status,headers,body=get('/robots.txt');assert status==200 and 'Allow: /' in body and 'Disallow: /account' in body and 'Sitemap:' not in body
+status,headers,body=get('/robots.txt');assert status==200 and 'Allow: /' in body and 'Disallow: /admin' in body and 'Disallow: /account' not in body and 'Sitemap:' not in body
 status,headers,body=get('/sitemap.xml');assert status==200;assert len(ET.fromstring(body))==0
 status,headers,body=get('/api/store/state');state=json.loads(body)
 assert len(state['products'])==50

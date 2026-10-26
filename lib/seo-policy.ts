@@ -51,6 +51,8 @@ export function seoConfig(env: Env = {}) {
 }
 export type SEOConfig = ReturnType<typeof seoConfig>;
 export const privatePath = (path: string) => /^\/(?:account|admin|api|auth|cart|checkout|login|register|forgot-password|reset-password|payment)(?:\/|$)/.test(path);
+// Robots blocks admin and non-page paths only; private store pages stay crawlable so their noindex is read.
+export const crawlBlockedPaths = ['/admin', '/api/', '/auth/', '/payment/'];
 export function normalizedPath(path: string) { return path === '/' ? '/' : '/' + path.replace(/^\/+|\/+$/g, ''); }
 export function productAt(path: string): Product | undefined { return path.startsWith('/product/') ? products.find(p => p.slug === path.slice(9)) : undefined; }
 export function canonicalPath(path: string) {
