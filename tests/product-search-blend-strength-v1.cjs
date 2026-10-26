@@ -51,6 +51,8 @@ const corrected = [
   ['KPV 80mg', []],
   ['BPC157 140mg spray', []],
   ['PT141 35mg spray', []],
+  ['Oxytocin 35mg spray', []],
+  ['Oxy 35mg spray', []],
 ];
 for (const [query, expected] of corrected) assert.deepEqual(matches(query), expected, query);
 
@@ -79,6 +81,8 @@ const unchanged = [
   ['BPC157 GHK-Cu TB500 70mg', 'glow-70mg'],
   ['BPC157 GHK-Cu TB500 KPV 80mg', 'klow-80mg'],
   ['PT141 Oxy 35mg spray', 'ignite-pt-141-oxytocin-spray'],
+  ['PT141 oxytocin 35mg spray', 'ignite-pt-141-oxytocin-spray'],
+  ['PT141 Oxy (oxytocin) 35mg spray', 'ignite-pt-141-oxytocin-spray'],
   ['MIC Blend Methylcobalamin 10ml', 'lipo-c-w-b12'],
   ['NAD500mg', 'nad-500mg'],
   ['Nicotinamide Adenine Dinucleotide 500mg', 'nad-500mg'],

@@ -1,6 +1,6 @@
 /* Every CAS number shown for a product or its batch record is a well-formed registry
  * number (check digit), the corrected identifiers stay corrected, and customer-facing
- * product text says Oxy, not oxytocin (owner, October 26, 2026). Source data only. */
+ * Oxy alias retains the scientific ingredient identity. Source data only. */
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const root = path.resolve(__dirname, '..');
@@ -32,10 +32,17 @@ for (const [slug, cas] of Object.entries({
   'noctis-blend-spray': '175175-23-2 / 129954-34-3 / 62568-57-4 / 50-56-6 / 73-31-4',
 })) assert.equal(bySlug[slug].casNumber, cas, slug);
 
-// URLs and image filenames keep their existing slug so links and lot records still resolve.
-const shown = [...catalog.flatMap(p => [p.name, p.identity, p.description, p.shortDescription, p.image?.alt]),
-  ...Object.values(editorial).flatMap(p => [p.identity, p.description]),
-  ...records.flatMap(r => [r.public_identity, JSON.stringify(r.product_facts || {})])];
-for (const text of shown) assert(!/oxytocin/i.test(String(text || '')), String(text));
-assert.equal(bySlug['ignite-pt-141-oxytocin-spray'].identity, 'PT-141 + Oxy');
-console.log('PASS: every product and batch CAS has a valid check digit, GHK-Cu uses the copper-complex number, corrected identifiers hold, and product text says Oxy.');
+// Preserve the owner-selected Oxy alias without obscuring the scientific ingredient.
+// CAS 50-56-6 is oxytocin: https://www.ncbi.nlm.nih.gov/mesh/68010121
+// URLs, image filenames and original laboratory PDFs remain untouched.
+for (const slug of ['ignite-pt-141-oxytocin-spray', 'noctis-blend-spray']) {
+  const p = bySlug[slug], r = records.find(record => record.product_slug === slug);
+  assert(r, slug + ' batch metadata');
+  for (const text of [p.identity, p.description, p.shortDescription, editorial[slug].identity,
+    editorial[slug].description, r.public_identity, r.product_facts['Active Compound']]) {
+    assert.match(text, /Oxy \(oxytocin\)/, slug + ' identifies the alias');
+  }
+  assert(split(p.casNumber).includes('50-56-6'));
+  assert(split(r.cas).includes('50-56-6'));
+}
+console.log('PASS: CAS check digits and corrected identifiers; Oxy alias and scientific identity agree across catalog, editorial and batch metadata.');

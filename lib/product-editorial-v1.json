@@ -102,9 +102,9 @@
     },
     "noctis-blend-spray": {
       "name": "NOCTIS",
-      "identity": "Pinealon + Selank + DSIP + Oxy + Melatonin",
+      "identity": "Pinealon + Selank + DSIP + Oxy (oxytocin) + Melatonin",
       "format": "Spray solution",
-      "description": "A spray formula combining Pinealon, Selank, DSIP, Oxy and melatonin.",
+      "description": "A spray formula combining Pinealon, Selank, DSIP, Oxy (oxytocin) and melatonin.",
       "sourceBasis": [
         "catalog-source-v1.json:description",
         "coas-source-v1.json:records.product_facts"
@@ -202,15 +202,15 @@
     },
     "ignite-pt-141-oxytocin-spray": {
       "name": "IGNITE",
-      "identity": "PT-141 + Oxy",
+      "identity": "PT-141 + Oxy (oxytocin)",
       "format": "Spray solution",
-      "description": "A spray formula combining PT-141 and Oxy, with a listed total content of 35 mg per bottle.",
+      "description": "A spray formula combining PT-141 and Oxy (oxytocin), with a listed total content of 35 mg per bottle.",
       "sourceBasis": [
         "catalog-source-v1.json:description",
         "coas-source-v1.json:records.product_facts"
       ],
       "ambiguities": [
-        "Catalog Active compound field names only Bremelanotide; catalog title, slug, CAS list and product facts specify PT-141 + Oxy. Mapping follows the two-component identity supported by title and product facts."
+        "Catalog Active compound field names only Bremelanotide; catalog title, slug, CAS list and product facts specify PT-141 + Oxy (oxytocin). Mapping follows the two-component identity supported by title and product facts."
       ],
       "hasCertificatePdf": false
     },

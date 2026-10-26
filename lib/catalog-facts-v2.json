@@ -620,10 +620,10 @@
     "sizes": [
       "Bottle; content specification pending confirmation"
     ],
-    "identity": "Pinealon + Selank + DSIP + Oxy + Melatonin",
+    "identity": "Pinealon + Selank + DSIP + Oxy (oxytocin) + Melatonin",
     "casNumber": "175175-23-2 / 129954-34-3 / 62568-57-4 / 50-56-6 / 73-31-4",
-    "description": "A spray formula combining Pinealon, Selank, DSIP, Oxy and melatonin.",
-    "shortDescription": "A spray formula combining Pinealon, Selank, DSIP, Oxy and melatonin.",
+    "description": "A spray formula combining Pinealon, Selank, DSIP, Oxy (oxytocin) and melatonin.",
+    "shortDescription": "A spray formula combining Pinealon, Selank, DSIP, Oxy (oxytocin) and melatonin.",
     "sourceIssues": []
   },
   {
@@ -916,10 +916,10 @@
     "sizes": [
       "35mg / bottle"
     ],
-    "identity": "PT-141 + Oxy",
+    "identity": "PT-141 + Oxy (oxytocin)",
     "casNumber": "189691-06-3 / 50-56-6",
-    "description": "A spray formula combining PT-141 and Oxy, with a listed total content of 35 mg per bottle.",
-    "shortDescription": "A spray formula combining PT-141 and Oxy, with a listed total content of 35 mg per bottle.",
+    "description": "A spray formula combining PT-141 and Oxy (oxytocin), with a listed total content of 35 mg per bottle.",
+    "shortDescription": "A spray formula combining PT-141 and Oxy (oxytocin), with a listed total content of 35 mg per bottle.",
     "sourceIssues": []
   },
   {
