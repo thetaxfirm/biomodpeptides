@@ -1,5 +1,9 @@
-// Once a day (morning, Pacific time): one email to the owner listing customers who have waited over a day
-// for a reply. Internal only; customers are never emailed. Nothing is sent when nobody is waiting.
+// Customers who have waited over a day for a reply.
+//
+// `overdueCustomers` feeds the admin Today screen and is the live part of this file. `runOverdueDigest`
+// emails the same list and is no longer scheduled (owner, Oct 27 2026): the store now interrupts the
+// owner for a paid order and for an order that has stopped moving, and for nothing else. The list is
+// still there to be looked at. Adding runOverdueDigest back to the worker cron turns the email on again.
 import { coaEmail, coaSender } from './coa-delivery';
 import { readCoaConfig, type CoaEnvironment } from './coa-outbox';
 import { looksLikePitchText } from './request-issues';
