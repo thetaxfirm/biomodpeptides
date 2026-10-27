@@ -60,6 +60,24 @@ export function stalledLabel(order: FulfillmentOrder, now = Date.now()): boolean
     return now - created > STALLED_LABEL_MS;
 }
 /**
+ * A parcel somebody has already walked to the post office, that the carrier still has no record of
+ * a day later. That is the anomaly worth a person: the box left the building and USPS never
+ * accepted it. A label that was simply never dropped off is not an anomaly, it is the job, so it
+ * stays in To ship next to its Dropped off button rather than being filed away under Needs review
+ * where the button does not exist (owner, Oct 27 2026).
+ *
+ * The clock runs from the handoff, not from the label purchase. Marking a week-old label dropped
+ * off must buy a full day of silence before it counts as stalled, or pressing the button would
+ * throw the order straight back into Needs review and the owner could never clear it.
+ */
+export function stalledAfterHandoff(order: FulfillmentOrder, now = Date.now()): boolean {
+    const at = order.data?.handoff?.at;
+    if (!order.data?.shipment || typeof at !== 'number' || !Number.isFinite(at)) return false;
+    const carrier = order.data.shipment.status;
+    if (carrier && carrier !== 'pre_transit' && carrier !== 'unknown') return false;
+    return now - at > STALLED_LABEL_MS;
+}
+/**
  * The carrier has refused to tell us about this parcel several runs in a row. It looks identical to
  * an unscanned parcel but the cause is at the provider, not the post office, so the team should be
  * sent to the label rather than to the box. Three runs, so one outage does not accuse a good parcel.
@@ -143,8 +161,9 @@ export function orderBucket(order: FulfillmentOrder, now = Date.now()): OrderBuc
     // A label priced above the automatic ceiling waits for a person, in the same place they already
     // look for work that needs them. Unlike a hold, every manual action stays available.
     if (awaitingLabelApproval(order)) return 'review';
-    // A label nobody ever handed to the carrier needs a human, not another day of waiting.
-    if (stalledLabel(order, now)) return 'review';
+    // A parcel marked dropped off that the carrier never scanned needs a human. One that was never
+    // dropped off needs the drop-off, so it stays in To ship, flagged and late, with its button.
+    if (stalledAfterHandoff(order, now)) return 'review';
     if (stuckInTransit(order, now)) return 'review';
     if (carrier && moving.has(carrier)) return 'shipped';
     if (order.status === 'labeling' || (order.data?.shipment && ['paid', 'shipped'].includes(order.status))) return 'label';
@@ -158,11 +177,11 @@ export function orderBucket(order: FulfillmentOrder, now = Date.now()): OrderBuc
 export const carrierState = (order: FulfillmentOrder): string => String(order.data?.shipment?.status || '');
 
 /**
- * The three Needs review reasons that come from the carrier rather than from a decision: not scanned,
- * no update in four days, and a carrier problem. These are the ones that can sit in the tab forever
- * with no button to clear them, because only the carrier can clear them. A hold, a label over the
- * limit and a payment that needs checking each have their own button and a real decision behind
- * them, so none of those is dismissible (owner, Oct 20 2026).
+ * The three Needs review reasons that come from the carrier rather than from a decision: dropped off
+ * but never scanned, no update in four days, and a carrier problem. These are the ones that can sit
+ * in the tab forever with no button to clear them, because only the carrier can clear them. A hold,
+ * a label over the limit and a payment that needs checking each have their own button and a real
+ * decision behind them, so none of those is dismissible (owner, Oct 20 2026).
  */
 export function dismissibleReview(order: FulfillmentOrder, now = Date.now()): boolean {
     return orderBucket(order, now) === 'review' && !order.data?.hold && !awaitingLabelApproval(order) && Boolean(order.data?.shipment);

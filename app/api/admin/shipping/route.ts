@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
             // while that is still what the carrier says. A different answer later -- including a new
             // problem -- stops matching and the flag comes back on its own (owner, Oct 20 2026).
             if (!dismissibleReview({ status: order.status, data }))
-                return j({ error: 'This is not a carrier flag. A hold, a label over your limit and a payment that needs checking each have their own button.' }, 409);
+                return j({ error: 'This is not a carrier flag. A hold, a label over your limit, a payment that needs checking and a parcel not yet marked dropped off each have their own button.' }, 409);
             await record('shipping.dismiss_flag', 'attempted', 'Requested to accept a carrier flag on this order.');
             const carrier = carrierState({ status: order.status, data });
             const note = typeof body.note === 'string' ? body.note.trim().slice(0, 200) : '';
