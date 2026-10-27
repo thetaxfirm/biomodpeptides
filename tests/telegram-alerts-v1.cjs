@@ -67,6 +67,17 @@ assert.equal(T,'telegram_bot_token_v1'); assert.equal(C,'telegram_chat_ids_v1');
   assert.equal(await tg.sendOrderPush({DB:database({[C]:'-100123'})},'x-0000-4000-8000-000000000001',order,{fetch:ok}),0,'a chat with no token goes nowhere');
   assert.deepEqual(posts,[],'nothing configured means Telegram is never called');
 
+  // The same sender carries the second alert: one line a day about orders that have stopped moving.
+  // It is the only other thing allowed to reach the chat (owner, Oct 27 2026).
+  posts=[];
+  assert.equal(await tg.sendTelegramText(env,'7 orders have not moved in 4 days\nhttps://trybiomod.com/admin?tab=orders',{fetch:ok}),2);
+  assert.deepEqual(posts.map(p=>p.body.text),Array(2).fill('7 orders have not moved in 4 days\nhttps://trybiomod.com/admin?tab=orders'));
+  posts=[];
+  for(const blank of ['','   ','\n',null,undefined])
+    assert.equal(await tg.sendTelegramText(env,blank,{fetch:ok}),0,'a push that would say nothing is never sent');
+  assert.deepEqual(posts,[],'and costs no request');
+  assert.equal(await tg.sendTelegramText({DB:database()},'anything',{fetch:ok}),0,'no bot configured is silence');
+
   // A refusal, an outage or a hang is counted and swallowed: the order is not a chat app's problem.
   assert.equal(await tg.sendOrderPush(env,'x-0000-4000-8000-000000000001',order,{fetch:async()=>new Response('{}',{status:403})}),0);
   assert.equal(await tg.sendOrderPush(env,'x-0000-4000-8000-000000000001',order,{fetch:async()=>{throw Error('network down');}}),0);
