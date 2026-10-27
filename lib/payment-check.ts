@@ -142,3 +142,49 @@ export function paymentAdvice(check: PaymentCheck | null, now = Date.now()): str
     if (latest.kind === 'paid') return 'Authorize.net shows this payment collected. Press Check payment to move the order to To ship.';
     return 'Check this transaction in Authorize.net before shipping.';
 }
+
+/**
+ * The result of independently re-asking the provider about an order that is already marked paid.
+ *
+ * `paid` on an order means a transaction was accepted at checkout. This says something narrower and
+ * later: we went back to the provider, found the transaction on this order's own invoice, and it is
+ * an auth-and-capture for this order's exact total that the bank approved and has not reversed.
+ * `settled` means the money reached the merchant account; `captured` means it is collected and
+ * settles overnight. Anything else is `failed` and wants a person (owner, Oct 27 2026).
+ */
+export type PaymentVerification = {
+    at: number;
+    state: 'settled' | 'captured' | 'failed';
+    transId: string;
+    amountCents: number | null;
+    why: string;
+    /** Set once, when the owner was told. A failure never alerts the same order twice. */
+    alertedAt?: number;
+};
+
+/** Reads a saved verification back off order data; anything malformed reads as not verified. */
+export function savedPaymentVerification(value: unknown): PaymentVerification | null {
+    const v = obj(value);
+    const state = text(v?.state, 20);
+    if (!v || !Number.isFinite(v.at) || !['settled', 'captured', 'failed'].includes(state)) return null;
+    return {
+        at: v.at as number,
+        state: state as PaymentVerification['state'],
+        transId: text(v.transId, 20),
+        amountCents: Number.isFinite(v.amountCents) ? v.amountCents as number : null,
+        why: text(v.why, 300),
+        ...(Number.isFinite(v.alertedAt) ? { alertedAt: v.alertedAt as number } : {}),
+    };
+}
+
+/** Only a confirmed collection earns the check. No verification yet is never a pass. */
+export const paymentConfirmed = (v: PaymentVerification | null): boolean => v?.state === 'settled' || v?.state === 'captured';
+
+/** What the check means, in the owner's words, for a tooltip or a line of text. */
+export function verificationLabel(v: PaymentVerification | null): string {
+    if (!v) return '';
+    const amount = v.amountCents === null ? '' : ' of $' + (v.amountCents / 100).toFixed(2);
+    if (v.state === 'settled') return 'Payment verified: ' + (v.amountCents === null ? 'collected' : 'the full order total' + amount) + ' settled at the provider. Checked ' + day(v.at) + '.';
+    if (v.state === 'captured') return 'Payment verified: ' + (v.amountCents === null ? 'collected' : 'the full order total' + amount + ' collected') + ', settling overnight. Checked ' + day(v.at) + '.';
+    return 'Payment could not be verified: ' + (v.why || 'the provider did not confirm this payment') + ' (checked ' + day(v.at) + ').';
+}
