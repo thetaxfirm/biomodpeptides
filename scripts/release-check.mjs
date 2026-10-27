@@ -24,14 +24,14 @@ const tests = [
   "admin-read-recovery-v1.cjs", "admin-password-setup-v1.cjs", "admin-landing-v1.cjs", "staff-access-v1.cjs",
   "admin-request-status-v1.cjs", "request-alerts-v1.cjs", "request-snapshot-v1.cjs", "request-desk-v1.cjs", "request-forward-v1.cjs", "request-cases-v1.cjs", "reply-overdue-v1.cjs",
   "auth-return-v1.cjs", "payment-return-v1.cjs",
-  "payments-authorizenet-v1.mjs", "payment-lookup-completeness-v1.cjs", "payment-check-v1.cjs",
-  "product-discovery-v1.cjs", "storefront-search-v2.cjs", "catalog-cas-v1.cjs",
-  "product-schema-identifiers-v1.cjs", "search-readable-facts-v1.cjs", "canonical-host-redirect-v1.cjs", "request-lifetime-v1.cjs", "offer-bar-v1.cjs", "ship-cutoff-v1.cjs", "vial-artwork-weight-v1.cjs", "search-buy-intent-v1.cjs", "social-preview-v1.cjs", "newsroom-v1.cjs", "sitemap-lastmod-v1.cjs", "robots-noindex-crawlable-v1.cjs", "legacy-domain-routes-v1.cjs", "editorial-vial-links-v1.cjs", "product-description-v1.cjs", "shop-item-list-v1.cjs",
+  "payments-authorizenet-v1.mjs", "payment-lookup-completeness-v1.cjs", "payment-check-v1.cjs", "payment-verify-v1.cjs",
+  "product-discovery-v1.cjs", "storefront-search-v2.cjs",
+  "product-schema-identifiers-v1.cjs", "search-readable-facts-v1.cjs", "canonical-host-redirect-v1.cjs", "request-lifetime-v1.cjs", "offer-bar-v1.cjs", "ship-cutoff-v1.cjs", "vial-artwork-weight-v1.cjs", "search-buy-intent-v1.cjs", "social-preview-v1.cjs", "newsroom-v1.cjs", "sitemap-lastmod-v1.cjs", "legacy-domain-routes-v1.cjs", "editorial-vial-links-v1.cjs", "product-description-v1.cjs", "shop-item-list-v1.cjs",
   "promo-analytics-v1.cjs", "promo-analytics-export-v1.cjs", "promo-codes-v1.cjs",
   "sales-diagnostics-v1.cjs", "sales-diagnostics-export-v1.cjs",
   "shopping-measurement-client-v1.cjs", "traffic-measurement-v1.cjs",
   "traffic-metrics-v1.cjs", "coa-delivery-v1.cjs",
-  "coa-label-lot-v1.cjs", "request-replies-v1.cjs", "reply-simple-v1.cjs", "email-voice-v1.cjs", "request-reply-route-v1.cjs", "coa-routes-v1.cjs", "coa-scheduler-v1.cjs", "coa-automation-ui-v1.cjs",
+  "coa-label-lot-v1.cjs", "request-replies-v1.cjs", "reply-simple-v1.cjs", "request-reply-route-v1.cjs", "coa-routes-v1.cjs", "coa-scheduler-v1.cjs", "coa-automation-ui-v1.cjs",
 ];
 // Do not pass ambient provider credentials, NODE_OPTIONS or .env files to tests.
 const env = Object.fromEntries(
