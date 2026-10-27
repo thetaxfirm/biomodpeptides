@@ -16,7 +16,7 @@ import { bucketStatus, queueTabs, canArchive, isArchived, dismissibleReview, fla
 import { CarrierConnection } from './fulfillment-admin';
 import { ShippingLabel, post as shippingPost } from './shipping-admin';
 import { OrderDetails } from './order-admin';
-import { paymentLine, paymentAdvice, savedPaymentCheck } from '@/lib/payment-check';
+import { paymentLine, paymentAdvice, savedPaymentCheck, savedPaymentVerification, paymentConfirmed, verificationLabel } from '@/lib/payment-check';
 import styles from './orders-admin.module.css';
 
 type Props = {
@@ -67,7 +67,6 @@ function protectionLine(o: QueueRow) {
     const s = o.data?.shipment;
     return [s?.insuredCents ? 'Insured ' + money(s.insuredCents) : '', s?.signature ? 'Signature' : ''].filter(Boolean).join(' · ');
 }
-
 /** The line under the status: what the carrier said, why an order closed, and when it was archived. */
 function statusLine(o: QueueRow) {
     const archived = isArchived(o) ? 'Archived ' + new Date(o.data.archivedAt).toLocaleDateString([], { dateStyle: 'medium' }) : '';
@@ -78,6 +77,20 @@ function statusLine(o: QueueRow) {
     // What Authorize.net said, for an order that is not paid yet (owner, Oct 23 2026: say WHY it needs review).
     const payment = ['unpaid', 'review'].includes(o.bucket) && !o.data?.hold ? paymentLine(savedPaymentCheck(o.data?.paymentCheck)) : '';
     return [payment, o.data?.shipment?.status ? carrierLine(o) : why, protectionLine(o), dismissed, archived].filter(Boolean).join(' · ');
+}
+
+/**
+ * Whether the money for this order has been confirmed at the provider, shown on every tab beside the
+ * order number (owner, Oct 27 2026). Three states on purpose: a check once a scheduled re-check found
+ * a capture for the exact order total, a warning when the provider would not stand behind it, and
+ * nothing at all until it has been asked. Silence is never a pass.
+ */
+function PaymentVerified({ order }: { order: QueueRow }) {
+    const verified = savedPaymentVerification(order.data?.paymentVerified);
+    if (!verified) return null;
+    const ok = paymentConfirmed(verified);
+    const label = verificationLabel(verified);
+    return <span className={ok ? styles.verified : styles.unverified} role="img" aria-label={label} title={label}>{ok ? '✓' : '⚠'}</span>;
 }
 
 const money2 = (c: number | null) => c === null ? '' : money(c);
@@ -298,7 +311,7 @@ export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, form
             <table className={styles.table}>
                 <thead><tr><th>Order</th><th>Customer</th><th className={styles.number}>Items</th><th className={styles.number}>Total</th><th>Status</th><th>Messaged</th><th>Next step</th></tr></thead>
                 <tbody>{rows.map(o => { const due = shipDue(o); const urgent = due && due.state !== 'upcoming'; return <tr key={o.id}>
-                    <td>{urgent && <span className={styles.star} role="img" aria-label={due.label} title={due.label}>★</span>}<button type="button" className={styles.orderButton} onClick={() => setSelected(o)}>{orderNumber(o.id)}</button>{due && <span className={urgent ? styles.dueUrgent : styles.sub}>{due.label}</span>}<span className={styles.sub}>{new Date(o.created).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span></td>
+                    <td>{urgent && <span className={styles.star} role="img" aria-label={due.label} title={due.label}>★</span>}<button type="button" className={styles.orderButton} onClick={() => setSelected(o)}>{orderNumber(o.id)}</button><PaymentVerified order={o}/>{due && <span className={urgent ? styles.dueUrgent : styles.sub}>{due.label}</span>}<span className={styles.sub}>{new Date(o.created).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span></td>
                     <td>{o.data?.address?.name || 'Name not recorded'}<span className={styles.sub}>{[place(o), o.data?.email].filter(Boolean).join(' · ')}</span></td>
                     <td className={styles.number}>{units(o)}</td>
                     <td className={styles.number}>{money(Number(o.total) || 0)}</td>
