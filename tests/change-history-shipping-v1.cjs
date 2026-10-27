@@ -123,8 +123,10 @@ const checkSafe = () => {
   assert.equal(row().data.shipment.tracking, label.tracking, 'and the bought label is still recorded');
   // Dismissing a carrier flag: audited like every other write, refused when it is not a carrier
   // flag, and never saved once the carrier has moved on (owner, Oct 20 2026).
+  // Owner, Oct 27 2026: only a parcel already marked dropped off reaches Needs review on a carrier
+  // flag, so only that one is dismissible. One still waiting to be dropped off has its own button.
   const old = { ...label, status: 'pre_transit' };
-  reset({ shipment: old, labelCreatedAt: -1 });
+  reset({ shipment: old, labelCreatedAt: -1, handoff: { at: -1 } });
   r = await post({ dismiss: true });
   assert.equal(r.status, 200); assert.match(r.body.message, /moves to Shipped/);
   assert.equal(row().data.dismissed.by, 'staff@example.invalid');
@@ -134,6 +136,12 @@ const checkSafe = () => {
   // And back again.
   r = await post({ undoDismiss: true });
   assert.equal(r.status, 200); assert.equal(row().data.dismissed, undefined); assert.equal(events.at(-1).status, 'succeeded');
+  // Nor is a parcel nobody has dropped off yet: Dropped off is its button, and dismissing would
+  // record it as shipped without ever recording the handoff.
+  reset({ shipment: old, labelCreatedAt: -1 });
+  r = await post({ dismiss: true });
+  assert.equal(r.status, 409); assert.match(r.body.error, /not yet marked dropped off/);
+  assert.equal(row().data.dismissed, undefined); assert.equal(events.length, 0); assert.deepEqual(calls, []);
   // A hold is not a carrier flag: it has its own button, so it is refused without touching anything.
   reset({ shipment: old, labelCreatedAt: -1, hold: { issue: 'out_of_stock' } });
   r = await post({ dismiss: true });
@@ -143,7 +151,7 @@ const checkSafe = () => {
   reset({ shipment: old, labelCreatedAt: Date.now() });
   assert.equal((await post({ dismiss: true })).status, 409); assert.equal(row().data.dismissed, undefined);
   // A carrier that moved while the owner was pressing the button loses the race, and says so.
-  reset({ shipment: old, labelCreatedAt: -1 }); raceCarrier = true;
+  reset({ shipment: old, labelCreatedAt: -1, handoff: { at: -1 } }); raceCarrier = true;
   r = await post({ dismiss: true });
   assert.equal(r.status, 409); assert.match(r.body.error, /reported something new/);
   assert.equal(row().data.dismissed, undefined);

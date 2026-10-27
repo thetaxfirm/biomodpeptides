@@ -32,8 +32,15 @@ const label=(extra={})=>({status:'paid',data:{shipment:{status:'pre_transit',tra
 assert.equal(f.STALLED_LABEL_MS,24*H);
 assert.equal(f.stalledLabel(label(),now),true,'a day without a scan is flagged');
 assert.equal(f.stalledLabel(label({labelCreatedAt:now-23*H}),now),false);
-assert.equal(f.orderBucket(label(),now),'review');
+// Owner, Oct 27 2026: unscanned and never dropped off is the drop-off job, so it waits in To ship
+// where its button is. Unscanned a day AFTER the handoff is the anomaly that needs a person.
+assert.equal(f.orderBucket(label(),now),'label','never dropped off stays in To ship');
+assert.equal(f.orderBucket(label({handoff:{at:now-25*H}}),now),'review');
+assert.equal(f.orderBucket(label({handoff:{at:now-2*H}}),now),'label','a fresh drop-off gets its own full day');
+assert.equal(f.stalledAfterHandoff(label({handoff:{at:now-25*H}}),now),true);
+assert.equal(f.stalledAfterHandoff(label(),now),false,'no handoff, no post-handoff stall');
 assert.equal(f.customerOrderStatus(label()).label,'Preparing shipment','the customer never sees an internal flag');
+assert.equal(f.customerOrderStatus(label({handoff:{at:now-25*H}})).label,'Preparing shipment','nor once it is flagged');
 const stuck={status:'shipped',data:{shipment:{status:'in_transit',tracking:'T',checkedAt:now-5*24*H},labelCreatedAt:now-6*24*H}};
 assert.equal(f.stuckInTransit(stuck,now),true); assert.equal(f.orderBucket(stuck,now),'review');
 assert.equal(f.customerOrderStatus(stuck).label,'Shipped');
@@ -50,9 +57,10 @@ assert.equal(f.unreadableParcel(label()),false,'no count is not a verdict');
 // Dismissing a carrier flag: only the three the carrier owns, only while it says the same thing.
 const q=load('lib/order-queue.ts');
 const dismissedAt=now-H;
-const unscanned=label();
-assert.equal(f.dismissibleReview(unscanned,now),true,'not scanned is a carrier flag');
-assert.equal(f.dismissibleReview({...label(),data:{...label().data,hold:{issue:'x'}}},now),false,'a hold has its own button');
+const unscanned=label({handoff:{at:now-25*H}});
+assert.equal(f.dismissibleReview(unscanned,now),true,'dropped off and still not scanned is a carrier flag');
+assert.equal(f.dismissibleReview(label(),now),false,'one still waiting to be dropped off has its own button');
+assert.equal(f.dismissibleReview({...unscanned,data:{...unscanned.data,hold:{issue:'x'}}},now),false,'a hold has its own button');
 assert.equal(f.dismissibleReview({status:'paid',data:{labelApproval:{cents:9240,limitCents:7500}}},now),false,'postage over the limit needs a real decision');
 assert.equal(f.dismissibleReview({status:'review',data:{}},now),false,'a payment that needs checking is not a carrier flag');
 assert.equal(f.dismissibleReview({status:'paid',data:{shipment:{status:'pre_transit'},labelCreatedAt:now-2*H}},now),false,'a parcel that is not flagged has nothing to dismiss');

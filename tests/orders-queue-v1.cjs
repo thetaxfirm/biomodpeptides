@@ -67,14 +67,29 @@ assert.match(fulfillment.fulfillmentLabel(order('appr7', 'paid', { labelApproval
 // A label bought but never scanned by the carrier is a parcel still on the bench. Automatic purchase
 // makes that likelier, because nobody handled the order by hand and noticed.
 const stale = Date.now() - fulfillment.STALLED_LABEL_MS - 60000, fresh = Date.now() - 3600000;
-assert.equal(q.orderBucket(order('stall1', 'paid', { shipment: { status: 'pre_transit' }, labelCreatedAt: stale })), 'review');
-assert.equal(q.orderBucket(order('stall2', 'paid', { shipment: { status: 'unknown' }, labelCreatedAt: stale })), 'review');
+const handed = { at: stale };
+// Owner, Oct 27 2026: an unscanned label that was never dropped off stays in To ship, where the
+// Dropped off button lives. Filing it under Needs review hid the job and took the button away.
+assert.equal(q.orderBucket(order('stall1', 'paid', { shipment: { status: 'pre_transit' }, labelCreatedAt: stale })), 'label', 'never dropped off stays in To ship');
+assert.equal(q.orderBucket(order('stall2', 'paid', { shipment: { status: 'unknown' }, labelCreatedAt: stale })), 'label', 'never dropped off stays in To ship');
+// Dropped off and still unscanned a day later is the real anomaly: the box left and USPS has no record.
+assert.equal(q.orderBucket(order('stall1h', 'paid', { shipment: { status: 'pre_transit' }, labelCreatedAt: stale, handoff: handed })), 'review');
+assert.equal(q.orderBucket(order('stall2h', 'paid', { shipment: { status: 'unknown' }, labelCreatedAt: stale, handoff: handed })), 'review');
+assert.equal(q.orderBucket(order('stall3h', 'paid', { shipment: { status: 'pre_transit' }, labelCreatedAt: fresh, handoff: handed })), 'review', 'once dropped off it is the handoff that is timed, not the label');
+assert.equal(fulfillment.stalledAfterHandoff(order('stall9', 'paid', { shipment: { status: 'pre_transit' }, labelCreatedAt: stale, handoff: { at: 'nonsense' } })), false, 'a corrupt handoff stamp is not a handoff');
+assert.equal(fulfillment.stalledAfterHandoff(order('stall10', 'paid', { shipment: { status: 'pre_transit' }, labelCreatedAt: stale })), false, 'no handoff, no post-handoff stall');
+// The clock runs from the handoff, not the label. Marking a week-old label dropped off must buy a
+// full day of silence, or pressing the button would throw the order straight back into review.
+assert.equal(q.orderBucket(order('stall12', 'paid', { shipment: { status: 'pre_transit' }, labelCreatedAt: stale, handoff: { at: Date.now() } })), 'label', 'a fresh drop-off of an old label is not a stall');
+assert.equal(q.orderBucket(order('stall13', 'paid', { shipment: { status: 'in_transit' }, labelCreatedAt: stale, handoff: handed })), 'shipped', 'a scanned parcel is not a post-handoff stall');
+assert.equal(q.orderBucket(order('stall14', 'paid', { shipment: { status: 'delivered' }, labelCreatedAt: stale, handoff: handed })), 'delivered', 'an arrival is not a post-handoff stall');
 assert.equal(q.orderBucket(order('stall3', 'paid', { shipment: { status: 'pre_transit' }, labelCreatedAt: fresh })), 'label', 'a fresh label is not a stall');
 assert.equal(q.orderBucket(order('stall4', 'shipped', { shipment: { status: 'in_transit' }, labelCreatedAt: stale })), 'shipped', 'a moving parcel is not a stall');
 assert.equal(q.orderBucket(order('stall5', 'paid', { shipment: { status: 'delivered' }, labelCreatedAt: stale })), 'delivered', 'an arrival is not a stall');
 assert.equal(q.orderBucket(order('stall6', 'paid', { labelCreatedAt: stale })), 'to_ship', 'no label, no stall');
 assert.equal(q.orderBucket(order('stall7', 'paid', { shipment: { status: 'pre_transit' } })), 'label', 'an older label with no recorded purchase time is left alone');
 assert.equal(fulfillment.stalledLabel(order('stall8', 'paid', { shipment: { status: 'pre_transit' }, labelCreatedAt: 'nonsense' })), false, 'a corrupt timestamp never raises a stall');
+assert.equal(q.orderBucket(order('stall11', 'paid', { shipment: { status: 'pre_transit' }, labelCreatedAt: stale, handoff: handed, hold: { issue: 'x' } })), 'review', 'a hold still outranks everything');
 
 // Counts are per tab, and a tab can gather more than one status: an order waiting for a label and
 // one already labelled are the same job, as are a parcel in transit and one that arrived.
