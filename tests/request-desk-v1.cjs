@@ -56,7 +56,7 @@ async function main(){
  openRow(host,'answered');assert(text(host.tree).includes('Activity ('));assert(text(host.tree).includes('Received from the website'));openRow(host,'answered');
  filter(host,'Spam');assert.deepEqual(rowIds(),['junk']);
  filter(host,'Needs reply');query(host,'NEW-YOUNG@EXAMPLE');assert.deepEqual(rowIds(),['new-young']);query(host,'');
- assert(text(host.tree).includes('3 of the last 4'),'Learning progress is visible');
+ assert(text(host.tree).includes("Past customers' replies are not reused as examples"),'Unrelated customer examples are retired');
  // Opening a conversation never sends; it shows the thread, pickers and an owner Send.
  openRow(host,'new-old');assert.equal(preparations.length,0);
  assert(text(host.tree).includes('Synthetic request body only'));assert(text(host.tree).includes('contact@trybiomod.com'));
@@ -73,7 +73,7 @@ async function main(){
  nodes(host.tree).find(n=>n.type==='input'&&n.props.type==='checkbox').props.onChange({target:{checked:true}});host.render();
  nodes(host.tree).find(n=>n.type==='button'&&text(n)==='Rewrite').props.onClick();await flush(host);
  assert.deepEqual(preparations[0],{rule:{rule:'um make it friendlier'}});
- assert.deepEqual(preparations[1],{id:'new-old',mode:'ai',body:'Hi there, use code BM10 (10% off at checkout)',instruction:'um make it friendlier',expectedRevision:null,coaSha256:'a'.repeat(64)});
+ assert.deepEqual(preparations[1],{id:'new-old',mode:'ai',purpose:'reply',body:'Hi there, use code BM10 (10% off at checkout)',instruction:'um make it friendlier',expectedRevision:null,coaSha256:'a'.repeat(64)});
  assert(text(host.tree).includes('AI is writing'));assert.equal(field(host,'replyBody').props.readOnly,true);
  type(host,'replyBody','ignored while writing');assert.equal(field(host,'replyBody').props.value,'Hi there, use code BM10 (10% off at checkout)');
  // The finished AI draft replaces the text, with undo back to what was there.
@@ -83,7 +83,7 @@ async function main(){
  // Send is one click and one request, marked as an owner send of exactly this text.
  send().props.onClick();send().props.onClick();await flush(host);
  const sends=preparations.filter(p=>p.send);assert.equal(sends.length,1,'Double click sends once');
- assert.deepEqual(sends[0],{id:'new-old',mode:'staff',body:'Hi there, use code BM10 (10% off at checkout)',instruction:'',expectedRevision:1,coaSha256:'a'.repeat(64),send:true});
+ assert.deepEqual(sends[0],{id:'new-old',mode:'staff',purpose:'reply',body:'Hi there, use code BM10 (10% off at checkout)',instruction:'',expectedRevision:1,coaSha256:'a'.repeat(64),send:true});
  assert(text(host.tree).includes('Queued to send'));
  // Staff without send rights only save drafts.
  host=mount({...props,canSend:false});await flush(host);openRow(host,'new-young');
@@ -137,10 +137,19 @@ async function main(){
  assert(text(latest()).includes('Here is the label photo.'));assert(text(latest()).includes('Customer message'),'A real later email remains clearly visible');
  const old=nodes(host.tree).find(n=>n.type==='details'&&text(n.props.children[0]).startsWith('Earlier messages and replies'));assert(old&&!old.props.open);assert(text(old).includes('COA request form'));
  host=mount({...props,requests:[request('typed-coa','new','contact',{subject:'COA request: lot QA-100 (Fixture page)',message:'These are the exact words I typed.'})],requestReplies:{}});await flush(host);openRow(host,'typed-coa');assert(text(latest()).includes('These are the exact words I typed.'));assert(!text(latest()).includes('No written message'),'Subject wording alone never turns customer text into a system note');
+ // An automatic recovery acceptance is visible contact, never proof a question was answered.
+ const unanswered=request('recovery-question','new','contact',{email:'recovery-fixture@example.invalid',origin:'coa-link',subject:'COA request: lot QA-300 (Fixture page)',labelLot:'QA-300'});unanswered.created=now-3*day;
+ const recoveryContact={id:'recovery:fixture',source:'recovery',direction:'outgoing',body:'Checkout reminder accepted by provider. Delivery unconfirmed.',created:now-2*day};
+ host=mount({...props,requests:[unanswered],requestReplies:{[unanswered.id]:reply(unanswered.id,{status:'ready',history:[recoveryContact]})}});await flush(host);
+ assert.deepEqual(ids(host),[unanswered.id],'Recovery contact does not remove an unanswered form from Needs reply');openRow(host,unanswered.id);
+ assert(text(host.tree).includes('No reply sent yet.'),'Recovery contact does not count as a substantive reply');assert(text(host.tree).includes('Automatic checkout reminder'),'Recovery evidence stays visible in the timeline');assert(!text(host.tree).includes('Last recorded reply:'),'Acceptance is not mislabeled as a staff reply');
+ const recoverySibling=request('recovery-sibling','new','contact',{email:'recovery-fixture@example.invalid',origin:'order'});recoverySibling.created=now-4*day;
+ host=mount({...props,requests:[unanswered,recoverySibling],requestReplies:{[recoverySibling.id]:reply(recoverySibling.id,{status:'ready',history:[recoveryContact]})}});await flush(host);
+ assert.deepEqual(ids(host),[unanswered.id],'A recovery reminder on a sibling thread does not answer the customer question');openRow(host,unanswered.id);assert(text(host.tree).includes('No reply sent yet.'));assert(text(host.tree).includes('Automatic checkout reminder'));
  // Order conversation: internal order notes stay staff-only; tagging the case saves issue and resolutions.
  const savedIssues=[];const orderReq=request('from-order','new','contact',{subject:'Your BioMod order #ABC',message:'Order #ABC. INTERNAL items list.',origin:'order',startedBy:'owner@example.invalid'});
  host=mount({...props,requests:[orderReq],requestReplies:{},onSaveIssue:async input=>{savedIssues.push(input);return {issue:input.issue,resolutions:input.resolutions,note:input.note,updated:now,updatedBy:'owner@example.invalid'};}});await flush(host);
- openRow(host,'from-order');assert(text(host.tree).includes('Order behind this conversation (only you see this)'));
+ filter(host,'All');openRow(host,'from-order');assert(text(host.tree).includes('Original order note (saved when opened; may be outdated)'));
  assert(!nodes(host.tree).some(n=>n.type==='li'&&n.props['data-direction']==='incoming'),'Internal order context is not shown as a customer message');
  assert(text(host.tree).includes('Conversation started from the order by owner@example.invalid'));
  const issueSelect=nodes(host.tree).find(n=>n.type==='select'&&nodes(n).some(o=>o.type==='option'&&text(o)==='Item not in stock yet'));issueSelect.props.onChange({target:{value:'out_of_stock'}});await flush(host);
@@ -149,7 +158,7 @@ async function main(){
  assert.deepEqual(savedIssues.at(-1).resolutions,['refund']);
  // Win-back templates on the side: Use fills the draft (with undo), Tailor asks the AI to fit it to this customer.
  const tplCalls=[];host=mount({...props,requests:[orderReq],requestReplies:{},onLoadTemplates:async id=>{tplCalls.push(id);return [{id:'help',label:'Need a hand?',why:'Service first.',body:'Hi Synthetic, need a hand?'}];}});await flush(host);
- openRow(host,'from-order');await flush(host);await flush(host);assert.deepEqual(tplCalls,['from-order']);assert(text(host.tree).includes('Win-back emails'));
+ filter(host,'All');openRow(host,'from-order');await flush(host);await flush(host);assert.deepEqual(tplCalls,['from-order']);assert(text(host.tree).includes('Follow-up suggestions'));
  nodes(host.tree).find(n=>n.type==='button'&&text(n)==='Use').props.onClick();host.render();assert.equal(field(host,'replyBody').props.value,'Hi Synthetic, need a hand?');
  const before2=preparations.length;nodes(host.tree).find(n=>n.type==='button'&&text(n)==='Tailor').props.onClick();await flush(host);
  assert.equal(preparations.length,before2+1);assert.equal(preparations.at(-1).mode,'ai');assert.match(preparations.at(-1).instruction,/^Tailor this email/);assert.equal(preparations.at(-1).body,'Hi Synthetic, need a hand?');

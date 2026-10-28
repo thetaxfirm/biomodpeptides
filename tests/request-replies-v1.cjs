@@ -90,7 +90,7 @@ const conflict=async(fn)=>assert.rejects(fn,e=>e.status===409);
   claimed=(await f.bridge({action:'claim'})).job;assert.equal(claimed.requestId,other);
   const sib=f.request({email:'OTHER-customer@example.invalid',subject:'Earlier question',message:'SIBLING_TEXT first message'});f.sql.prepare('UPDATE requests SET created=? WHERE id=?').run(Date.now()-86400000,sib);
   const latest=f.request({email:'other-customer@example.invalid'});await f.prepare(latest);await f.bridge({action:'fail',id:claimed.id,revision:claimed.revision,leaseToken:claimed.leaseToken,reason:'fixture'});
-  const sibJob=(await f.bridge({action:'claim'})).job;assert.equal(sibJob.requestId,latest);assert(sibJob.history.some(m=>m.body.includes('SIBLING_TEXT')),'The AI sees the same customer\'s earlier request');assert.deepEqual(claimed.style.rules,['Sign off as Ash.']);assert.equal(claimed.style.examples[0].sent,'Here is the report you asked about.');assert(claimed.codes.some(c=>c.code==='BM10'));
+  const sibJob=(await f.bridge({action:'claim'})).job;assert.equal(sibJob.requestId,latest);assert(sibJob.history.some(m=>m.body.includes('SIBLING_TEXT')),'The AI sees the same customer\'s earlier request');assert.deepEqual(claimed.style.rules,['Sign off as Ash.']);assert.deepEqual(claimed.style.examples,[],'Other customer messages are not recycled as style examples');assert(claimed.codes.some(c=>c.code==='BM10'));
   const desk=await api.replyDeskOptions(f.env);assert.equal(desk.coas.length,originals.length);assert.equal(desk.learning.recent,1);assert.equal(desk.learning.unchanged,0);assert(desk.bridgeSeen>0,'Jarvis heartbeat recorded');assert(!JSON.stringify(desk).includes(picked.base64.slice(0,40)),'Desk options never carry report bytes');
   await assert.rejects(()=>api.prepareRequestReply(f.env,{requestId:second,mode:'staff',body:'x',expectedRevision:1,coaSha256:'not-a-hash'},owner),e=>e.status===400);
   // Several chosen originals ride on one reply; each is verified and travels to Jarvis; validate needs every hash.
@@ -109,6 +109,34 @@ const conflict=async(fn)=>assert.rejects(fn,e=>e.status===409);
  // New messages: customers get an automatic AI draft; supplier pitches do not.
  {const cust=f.request({email:'auto-customer@example.invalid',subject:'Order question',message:'When will my order ship?'});assert.equal((await api.autoDraftNewRequest(f.env,cust)).status,'queued');
   const pitch=f.request({email:'auto-vendor@example.invalid',subject:'High quality peptides',message:'We are a leading manufacturer with competitive price.'});assert.equal(await api.autoDraftNewRequest(f.env,pitch),null);assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM request_reply_drafts WHERE request_id=?').get(pitch).n,0);}
+ // Recovery purpose survives edits and is checked again at the send boundary.
+ f=setup();const recoveryOrder='recovery-fixture-order';const born=Date.now()-3*86400000;
+ const seedOrder=(id,status,created)=>f.sql.prepare('INSERT INTO orders(id,owner,request_key,status,total,data,created,updated) VALUES(?,?,?,?,?,?,?,?)').run(id,'fixture-account',id,status,1000,JSON.stringify({email:'reply-fixture@example.invalid',environment:'authorizenet:live',items:[]}),created,created);
+ seedOrder(recoveryOrder,'awaiting_payment',born);
+ request=f.request({origin:'order',orderId:recoveryOrder,message:'Internal snapshot'});
+ draft=await f.prepare(request,{mode:'staff',body:'Can we help with checkout?',purpose:'checkout_recovery',instruction:'Keep it brief.'});
+ assert.equal(draft.purpose,'checkout_recovery');assert.equal(draft.instruction,'Keep it brief.');
+ draft=await f.prepare(request,{mode:'staff',body:'Any checkout questions?',expectedRevision:1});
+ assert.equal(draft.purpose,'checkout_recovery','An older client omitting purpose must preserve reminder safeguards');
+ job=(await f.bridge({action:'claim'})).job;assert.equal(job.instruction,'','Internal purpose is not sent as an AI instruction');assert.equal(job.history.some(m=>m.body.includes('Internal snapshot')),false,'Generated order notes are not incoming customer messages');
+ const recoveryReady=randomUUID();await f.bridge({action:'complete',id:job.id,revision:job.revision,leaseToken:job.leaseToken,readyId:recoveryReady,body:job.proposedBody,model:'staff'});
+ seedOrder('later-purchase','paid',Date.now());
+ await conflict(()=>f.bridge(validate({job,readyId:recoveryReady,body:job.proposedBody})));
+ await conflict(()=>f.prepare(request,{mode:'staff',body:'Any checkout questions?',expectedRevision:2}));
+ assert.equal(f.row(job.id).status,'ready','Later purchase blocks before a send lock');
+ const newMessage=await f.prepare(request,{mode:'staff',body:'Here is the answer to your product question.',expectedRevision:2,purpose:'reply'});
+ assert.equal(newMessage.purpose,'reply','Staff can deliberately start a different conversation after clearing the old reminder');
+ // Owner cleanup is bounded to the release cutoff; never touches sent or locked outcomes/new edits.
+ f=setup();const oldId=f.request(),newId=f.request({email:'newer@example.invalid'}),lockedId=f.request({email:'locked@example.invalid'});
+ const oldDraft=await f.prepare(oldId,{mode:'staff',body:'Old contradictory proposal'}),newDraft=await f.prepare(newId,{mode:'staff',body:'New staff work'}),lockedDraft=await f.prepare(lockedId,{mode:'staff',body:'Outcome pending'});
+ f.sql.prepare("UPDATE request_reply_drafts SET status='ready',updated=?,approved_at=1,approved_by='fixture-owner@example.invalid' WHERE id=?").run(api.LEGACY_REPLY_CUTOFF-1,oldDraft.id);
+ f.sql.prepare("UPDATE request_reply_drafts SET updated=? WHERE id=?").run(api.LEGACY_REPLY_CUTOFF+1,newDraft.id);
+ f.sql.prepare("UPDATE request_reply_drafts SET status='sending',send_locked_at=1,updated=0 WHERE id=?").run(lockedDraft.id);
+ await assert.rejects(()=>api.retireStaleReplyDrafts(f.env,staff),e=>e.status===403);
+ const cleanup=await api.retireStaleReplyDrafts(f.env,{email:'fixture-owner@example.invalid',role:'owner'});
+ assert.equal(cleanup.retired,1);assert.equal(cleanup.pendingOutcomes,1);assert.equal(f.row(oldDraft.id).revision,2);assert.equal(f.row(oldDraft.id).approved_at,null);assert.equal(f.row(newDraft.id).status,'queued');assert.equal(f.row(lockedDraft.id).status,'sending');
+ assert.equal((await api.summarizeRequestReplies(f.env,[oldId]))[oldId].body,'','Retired proposal is never returned for editing or send');
+ assert.equal((await api.retireStaleReplyDrafts(f.env,{email:'fixture-owner@example.invalid',role:'owner'})).retired,0,'Cleanup is idempotent');
  assert.equal(fetches,0);
  console.log('PASS: private draft CAS/roles, raw original and threaded follow-ups, bounded claims/leases, staff equality, exact private COA bytes and current-lot checks, duplicate/unknown send holds, one-time owner send locks, exact-body/idempotent ACK, immutable history and non-PII audit. Real isolated SQLite, zero providers.');
 }finally{for(const f of fixtures)f.sql.close();}})().catch(error=>{console.error(error);process.exitCode=1;});

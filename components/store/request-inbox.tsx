@@ -1,6 +1,6 @@
 'use client';
 
-import { vipSignal } from '@/lib/customer-context';
+import { vipSignal, type CustomerContext } from '@/lib/customer-context';
 import { useEffect, useRef, useState } from 'react';
 import type { CoaAutomationReport } from './coa-automation';
 import styles from './request-inbox.module.css';
@@ -15,16 +15,16 @@ export type ReplySummary = {
   status: 'queued' | 'preparing' | 'ready' | 'needs_review' | 'sending' | 'sent' | 'cancelled';
   mode: 'ai' | 'staff'; sender: string; recipient: string; subject: string; body: string;
   preparedBy: string; updated: number; readyId?: string; model?: string; reason?: string;
-  instruction?: string; approvedAt?: number; approvedBy?: string; coaChoice?: string | null;
+  instruction?: string; purpose?: 'checkout_recovery' | 'reply'; approvedAt?: number; approvedBy?: string; coaChoice?: string | null;
   coa: { state: 'matched' | 'needs_review' | 'already_sent' | 'not_requested'; reason: string; extras?: { productName?: string; strength?: string; lot?: string; sha256?: string }[]; productName?: string; strength?: string; lot?: string; reportId?: string; chemicalIdentity?: string; filename?: string; sha256?: string };
-  history: { id: string; direction: 'incoming' | 'outgoing'; body: string; created: number; from?: string; to?: string; subject?: string; sentBy?: string; attachment?: string }[];
+  history: { id: string; direction: 'incoming' | 'outgoing'; body: string; created: number; from?: string; to?: string; subject?: string; sentBy?: string; attachment?: string; source?: 'recovery' }[];
 };
-export type PrepareReplyInput = { id: string; mode: 'ai' | 'staff'; body?: string; instruction?: string; expectedRevision: number | null; coaSha256?: string | null; send?: boolean };
+export type PrepareReplyInput = { id: string; mode: 'ai' | 'staff'; body?: string; instruction?: string; expectedRevision: number | null; coaSha256?: string | null; send?: boolean; purpose?: 'checkout_recovery' | 'reply' };
 export type DeskCoa = { sha256: string; productName: string; strength: string; form: string; lot: string; reportId: string; current: boolean };
 export type RequestForward = { id: string; to: string; by: string; note: string; status: 'sending' | 'unknown' | 'accepted' | 'failed'; created: number };
 export type TeamMember = { email: string; name: string; role: string };
 export type CaseEntry = { requestId: string; issue: string; resolutions: string[]; note: string; updated: number; updatedBy: string; name: string; subject: string };
-export type DeskOptions = { team?: TeamMember[]; links?: { label: string; url: string }[]; coas: DeskCoa[]; codes: { code: string; percentOff: number }[]; rules: { id: string; rule: string; issue?: string | null }[]; learning: { recent: number; unchanged: number }; bridgeSeen: number | null };
+export type DeskOptions = { team?: TeamMember[]; links?: { label: string; url: string }[]; coas: DeskCoa[]; codes: { code: string; percentOff: number }[]; rules: { id: string; rule: string; issue?: string | null }[]; learning: { recent: number; unchanged: number }; legacyDrafts?: number; bridgeSeen: number | null };
 type Props = {
   requests: readonly CustomerRequest[];
   activeTab?: boolean;
@@ -36,7 +36,7 @@ type Props = {
   canSend?: boolean;
   onStatus: (request: CustomerRequest, status: string) => void | Promise<void>;
   onPrepareReply: (input: PrepareReplyInput) => Promise<ReplySummary>;
-  onRefreshReplies?: (ids: string[], focusId?: string | null) => Promise<{ requests?: CustomerRequest[]; replies: Record<string, ReplySummary>; forwards?: Record<string, RequestForward[]>; activity?: Record<string, { at: number; text: string }[]>; issues?: Record<string, RequestIssue>; external?: Record<string, ExternalReply[]> }>;
+  onRefreshReplies?: (ids: string[], focusId?: string | null) => Promise<{ requests?: CustomerRequest[]; replies: Record<string, ReplySummary>; forwards?: Record<string, RequestForward[]>; activity?: Record<string, { at: number; text: string }[]>; issues?: Record<string, RequestIssue>; external?: Record<string, ExternalReply[]>; customerContext?: { requestId: string; context: CustomerContext | null } }>;
   onMarkReplied?: (input: { id: string; note: string }) => Promise<ExternalReply>;
   onSaveIssue?: (input: { id: string; issue: string; resolutions: string[]; note: string }) => Promise<RequestIssue>;
   onLoadCases?: () => Promise<CaseEntry[]>;
@@ -44,11 +44,12 @@ type Props = {
   focusId?: string | null;
   onForward?: (input: { id: string; to: string; note: string }) => Promise<RequestForward>;
   onLoadOptions?: () => Promise<DeskOptions>;
+  onRetireDrafts?: () => Promise<{ retired: number; changedSinceReview: number; remainingApproved: number; pendingOutcomes: number }>;
   onSaveRule?: (input: { rule?: string; removeId?: string; issue?: string | null }) => Promise<DeskOptions>;
 };
 // coa: undefined = keep what the saved reply uses; null = auto-match the request; '' = none; sha = chosen report.
-type Draft = { body: string; instruction: string; revision: number | null; edited: boolean; error: string; message: string; coa?: string | null; undo?: string; remember: boolean };
-type Stage = 'todo' | 'sending' | 'waiting' | 'done' | 'spam' | 'deleted' | 'pitch';
+type Draft = { purpose: 'checkout_recovery' | 'reply'; body: string; instruction: string; revision: number | null; edited: boolean; error: string; message: string; coa?: string | null; undo?: string; remember: boolean };
+type Stage = 'todo' | 'sending' | 'waiting' | 'followup' | 'done' | 'spam' | 'deleted' | 'pitch';
 const noReplies: Record<string, ReplySummary> = {};
 const sender = 'contact@trybiomod.com';
 const DAY = 86400000;
@@ -67,10 +68,10 @@ function usableEmail(value: unknown) {
  * Leaving the sent text in an editable box with an active Send button read as
  * "not sent" (owner, Oct 15 2026: "if we replied, let me know"). */
 function seedBody(reply?: ReplySummary): string {
-  return reply?.status === 'sent' ? '' : (reply?.body || '');
+  return reply?.status === 'sent' || reply?.status === 'cancelled' ? '' : (reply?.body || '');
 }
 function newDraft(reply?: ReplySummary): Draft {
-  return { body: seedBody(reply), instruction: '', revision: reply?.revision ?? null, edited: false, error: '', message: '', remember: false };
+  return { purpose: reply?.status === 'cancelled' || reply?.status === 'sent' ? 'reply' : reply?.purpose || 'reply', body: seedBody(reply), instruction: '', revision: reply?.revision ?? null, edited: false, error: '', message: '', remember: false };
 }
 function newestReply(remote?: ReplySummary, local?: ReplySummary) {
   if (!remote) return local;
@@ -106,12 +107,12 @@ export const looksLikePitch = (request: CustomerRequest) => request.data.origin 
 type StageInfo = { stage: Stage; label: string; since: number; when: string; late: boolean };
 function stageOf(request: CustomerRequest, reply: ReplySummary | undefined, external: ExternalReply[] = [], issue: string | null = null, activity: { at: number; text: string }[] = [], now = Date.now(), shared: { at: number; how: string }[] = [], team: readonly TeamMember[] = []): StageInfo {
   const history = reply?.history || [];
-  const desk = history.filter(m => m.direction === 'outgoing').map(m => ({ at: m.created, how: deskHow(m, team) }));
+  const desk = history.filter(m => m.direction === 'outgoing' && m.source !== 'recovery').map(m => ({ at: m.created, how: deskHow(m, team) }));
   const outside = external.map(e => ({ at: e.at, how: outsideHow(e, team) }));
   const replies = [...desk, ...outside, ...shared].sort((a, b) => a.at - b.at);
   const last = replies[replies.length - 1];
   const lastOut = last?.at || 0;
-  const lastIn = Math.max(request.created, ...history.filter(m => m.direction === 'incoming').map(m => m.created));
+  const lastIn = Math.max(request.data.origin === 'order' ? 0 : request.created, ...history.filter(m => m.direction === 'incoming' && !(request.data.origin === 'order' && m.id.startsWith('original:'))).map(m => m.created));
   const customerReplied = lastOut > 0 && lastIn > lastOut;
   // An order conversation is started by us, so the first email is not a "reply".
   const started = request.data.origin === 'order' && !history.some(m => m.direction === 'incoming' && !m.id.startsWith('original:'));
@@ -125,6 +126,7 @@ function stageOf(request: CustomerRequest, reply: ReplySummary | undefined, exte
     const closed = [...activity].reverse().find(a => a.text.startsWith('Archived'));
     return { stage: 'done', label: 'Closed without reply' + (closed ? ` · ${shortDate(closed.at)}${closed.text.includes(' by ') ? ' by ' + personName(closed.text.split(' by ').pop()!, team) : ''}` : ''), since: closed?.at || request.created, when: 'Received ' + shortDate(request.created), late: false };
   }
+  if (started) return { stage: 'followup', label: 'Optional follow-up · no customer message', since: request.created, when: 'Opened ' + shortDate(request.created), late: false };
   // Plain answer to "did we reply?" first, then what is waiting.
   const base = customerReplied ? `Replied ${shortDate(lastOut)}, then they wrote again` : 'Not replied yet';
   const state = base + (working(reply) ? ' · AI is writing a draft' : reply?.status === 'ready' ? ' · draft ready for your approval' : reply?.status === 'needs_review' ? ' · draft needs a look' : '');
@@ -133,6 +135,7 @@ function stageOf(request: CustomerRequest, reply: ReplySummary | undefined, exte
   return { stage: 'todo', label: state, since: lastIn, when: (customerReplied ? 'Wrote ' : 'Received ') + shortDate(lastIn) + (days >= 1 ? ` · waiting ${days} day${days === 1 ? '' : 's'}` : ''), late: waited > DAY };
 }
 function friendlyReason(reason?: string) {
+  if (reason === 'retired_reply_policy_v2') return 'Old draft removed. Check the current history before writing a new message.';
   if (!reason) return '';
   if (reason === 'request_closed') return 'This draft was set aside because the request was closed (for example, a reply to this customer already answered it). Nothing was sent.';
   if (reason === 'send_blocked') return 'Jarvis stopped that send before anything went out (the request, recipient or report changed). Check the reply and press Send again.';
@@ -146,7 +149,7 @@ function speechRecognition(): (new () => Speech) | null {
   return w.SpeechRecognition || w.webkitSpeechRecognition || null;
 }
 
-export function RequestInbox({ requests: initialRequests, activeTab = true, automation, requestReplies = noReplies, busy, dirty, refreshing, canSend = false, onStatus, onPrepareReply, onRefreshReplies, onLoadOptions, onSaveRule, onForward, onSaveIssue, onLoadCases, onLoadTemplates, focusId, onMarkReplied }: Props) {
+export function RequestInbox({ requests: initialRequests, activeTab = true, automation, requestReplies = noReplies, busy, dirty, refreshing, canSend = false, onStatus, onPrepareReply, onRefreshReplies, onLoadOptions, onSaveRule, onRetireDrafts, onForward, onSaveIssue, onLoadCases, onLoadTemplates, focusId, onMarkReplied }: Props) {
   const [snapshot, setSnapshot] = useState<{ base: readonly CustomerRequest[]; requests: readonly CustomerRequest[]; focus: string | null } | null>(null);
   const requests = snapshot?.base === initialRequests ? snapshot.requests : initialRequests;
   const [checkedAt, setCheckedAt] = useState<number | null>(null);
@@ -166,7 +169,9 @@ export function RequestInbox({ requests: initialRequests, activeTab = true, auto
   const [panel, setPanel] = useState<{ id: string; kind: 'forward' | 'delete'; to: string; note: string; busy: boolean; error: string } | null>(null);
   const [pending, setPending] = useState<Record<string, boolean>>({});
   const [options, setOptions] = useState<DeskOptions | null>(null);
-  const [filter, setFilterState] = useState<'todo' | 'waiting' | 'done' | 'spam' | 'deleted' | 'pitch' | 'all'>('todo');
+  const [filter, setFilterState] = useState<'todo' | 'waiting' | 'followup' | 'done' | 'spam' | 'deleted' | 'pitch' | 'all'>('todo');
+  const [cleanup, setCleanup] = useState({ busy: false, message: '' });
+  const [customerEvidence, setCustomerEvidence] = useState<Record<string, CustomerContext | null>>({});
   const [external, setExternal] = useState<Record<string, ExternalReply[]>>({});
   const [replyNote, setReplyNote] = useState<{ id: string; note: string; busy: boolean } | null>(null);
   const [query, setQuery] = useState('');
@@ -210,6 +215,7 @@ export function RequestInbox({ requests: initialRequests, activeTab = true, auto
             if (fresh.activity) setActivity(fresh.activity);
             if (fresh.issues) setIssues(fresh.issues);
             if (fresh.external) setExternal(fresh.external);
+            if (fresh.customerContext) setCustomerEvidence(previous => ({ ...previous, [fresh.customerContext!.requestId]: fresh.customerContext!.context }));
             setCheckedAt(Date.now()); setRefreshError('');
           }
         } catch { if (!stopped && mounted.current) setRefreshError('Could not refresh requests. Showing the last loaded information; retrying automatically.'); }
@@ -224,7 +230,7 @@ export function RequestInbox({ requests: initialRequests, activeTab = true, auto
     const resume = () => { if (document.visibilityState !== 'hidden') void tick(); };
     if (typeof document !== 'undefined') document.addEventListener?.('visibilitychange', resume);
     if (typeof window !== 'undefined') window.addEventListener?.('focus', resume);
-    timer = setTimeout(tick, 2500);
+    timer = setTimeout(tick, selected ? 0 : 2500);
     (timer as any)?.unref?.();
     return () => {
       stopped = true;
@@ -232,7 +238,7 @@ export function RequestInbox({ requests: initialRequests, activeTab = true, auto
       if (typeof document !== 'undefined') document.removeEventListener?.('visibilitychange', resume);
       if (typeof window !== 'undefined') window.removeEventListener?.('focus', resume);
     };
-  }, [onRefreshReplies, initialRequests, activeTab, focusId]);
+  }, [onRefreshReplies, initialRequests, activeTab, focusId, selected]);
   // Exact links also reveal archived, supplier and deleted requests. Consume once so
   // subsequent refreshes never reset the person's chosen filter, search or draft.
   useEffect(() => {
@@ -276,11 +282,11 @@ export function RequestInbox({ requests: initialRequests, activeTab = true, auto
   for (const request of requests) (family[emailKey(request)] ||= []).push(request);
   const team = options?.team || [];
   const sharedReplies = (request: CustomerRequest) => (family[emailKey(request)] || []).filter(other => other.id !== request.id).flatMap(other => [
-    ...(replyOf(other.id)?.history || []).filter(m => m.direction === 'outgoing').map(m => ({ at: m.created, how: deskHow(m, team) })),
+    ...(replyOf(other.id)?.history || []).filter(m => m.direction === 'outgoing' && m.source !== 'recovery').map(m => ({ at: m.created, how: deskHow(m, team) })),
     ...(external[other.id] || []).map(e => ({ at: e.at, how: outsideHow(e, team) })),
   ]);
   const rows = requests.map(request => ({ request, reply: replyOf(request.id), ...stageOf(request, replyOf(request.id), external[request.id], issues[request.id]?.issue || null, activity[request.id], now, sharedReplies(request), team) }));
-  const counts = { todo: 0, waiting: 0, done: 0, spam: 0, deleted: 0, pitch: 0, all: rows.filter(row => row.stage !== 'deleted').length };
+  const counts = { todo: 0, waiting: 0, followup: 0, done: 0, spam: 0, deleted: 0, pitch: 0, all: rows.filter(row => row.stage !== 'deleted').length };
   const counted = new Set<string>();
   for (const row of rows) { const bucket = row.stage === 'sending' || row.stage === 'todo' ? 'todo' : row.stage === 'waiting' ? 'done' : row.stage; const key = bucket + ':' + emailKey(row.request); if (counted.has(key)) continue; counted.add(key); counts[bucket]++; }
   counts.all = new Set(rows.filter(row => row.stage !== 'deleted').map(row => emailKey(row.request))).size;
@@ -303,7 +309,7 @@ export function RequestInbox({ requests: initialRequests, activeTab = true, auto
     existing.count++; existing.members.push(row.request);
     if (row.request.created > existing.request.created) Object.assign(existing, { request: row.request, reply: row.reply, label: row.label, stage: row.stage });
   }
-  const views = [['todo', 'Needs reply'], ['done', 'Replied & archive'], ['pitch', 'Sales pitches'], ['spam', 'Spam'], ['deleted', 'Deleted'], ['all', 'All']] as const;
+  const views = [['todo', 'Needs reply'], ['followup', 'Optional follow-ups'], ['done', 'Replied & archive'], ['pitch', 'Sales pitches'], ['spam', 'Spam'], ['deleted', 'Deleted'], ['all', 'All']] as const;
 
   function open(id: string) {
     const reply = replyOf(id);
@@ -339,7 +345,7 @@ export function RequestInbox({ requests: initialRequests, activeTab = true, auto
       if (mode === 'ai' && draft.remember && instruction && onSaveRule) {
         try { const next = await onSaveRule({ rule: instruction }); if (mounted.current) setOptions(next); } catch { /* the draft request still goes ahead */ }
       }
-      const reply = await onPrepareReply({ id, mode, body: draft.body, instruction: mode === 'ai' ? instruction : '', expectedRevision: draft.revision, ...(draft.coa !== undefined ? { coaSha256: draft.coa } : {}), ...(send ? { send: true } : {}) });
+      const reply = await onPrepareReply({ id, mode, purpose: draft.purpose, body: draft.body, instruction: mode === 'ai' ? instruction : '', expectedRevision: draft.revision, ...(draft.coa !== undefined ? { coaSha256: draft.coa } : {}), ...(send ? { send: true } : {}) });
       if (!mounted.current) return;
       setPreparedReplies(previous => ({ ...previous, [id]: reply }));
       setDrafts(previous => ({ ...previous, [id]: {
@@ -418,10 +424,19 @@ export function RequestInbox({ requests: initialRequests, activeTab = true, auto
     <div className={styles.top}>
       <h2 id="request-inbox-title">Customer requests</h2>
       {options && <p className={styles.learning}>
-        {options.learning.recent ? <>AI drafts: <strong>{options.learning.unchanged} of the last {options.learning.recent}</strong> went out without edits.</> : <>The AI learns from every reply you send.</>}{' '}
+        Drafts use this customer's records. Past customers' replies are not reused as examples.{' '}
         <button type="button" className={styles.link} aria-expanded={rulesOpen} onClick={() => void openRules()}>Issues &amp; rules ({options.rules.length} rules)</button>
       </p>}
     </div>
+    {canSend && onRetireDrafts && Boolean(options?.legacyDrafts) && <div className={styles.note}>
+      <button type="button" className={styles.action} disabled={disabled || cleanup.busy} onClick={async () => {
+        setCleanup({busy:true,message:''});
+        try { const result=await onRetireDrafts();setCleanup({busy:false,message:result.retired+' old unsent drafts removed. '+(result.pendingOutcomes ? result.pendingOutcomes+' send outcomes still need checking. ' : '')+(result.remainingApproved ? result.remainingApproved+' previously approved messages remain queued. ' : 'No messages queued to send.')});if(onLoadOptions)setOptions(await onLoadOptions()); }
+        catch { setCleanup({busy:false,message:'Could not remove old drafts. Refresh and try again.'}); }
+      }}>{cleanup.busy ? 'Removing…' : 'Remove old unsent drafts ('+options!.legacyDrafts+')'}</button>
+      <span>Clears drafts from before this update. Sent messages and newer edits stay intact.</span>
+    </div>}
+    {cleanup.message && <p className={styles.note} role="status">{cleanup.message}</p>}
     {rulesOpen && options && <div className={styles.rules}>
       <p className={styles.note}>Every case you tag, and how you resolved it, collects here. Write the rule once you know how you want that kind of case handled; the AI follows the general rules on every draft and an issue's rules on that kind of case.</p>
       {[['', 'General (every reply)'] as const, ...issueTypes].map(([key, label]) => {
@@ -487,7 +502,7 @@ export function RequestInbox({ requests: initialRequests, activeTab = true, auto
           const targets = [active.request, ...siblings.filter(r => r.status !== status && (status === 'new' ? ['resolved', 'spam', 'deleted'].includes(r.status) : !['spam', 'deleted'].includes(r.status)))];
           void (async () => { for (const target of targets) await onStatus(target, status); })(); },
         siblings: siblings.map(r => ({ request: r, reply: replyOf(r.id), external: external[r.id] || [] })),
-        templates: templates[active.request.id] || [],
+        templates: templates[active.request.id] || [], customerEvidence: customerEvidence[active.request.id],
         external: external[active.request.id] || [], canMarkReplied: Boolean(onMarkReplied),
         markNote: replyNote?.id === active.request.id ? replyNote.note : null,
         onMarkNote: note => setReplyNote(note === null ? null : { id: active.request.id, note, busy: false }),
@@ -512,12 +527,13 @@ type ConversationProps = {
   forwards: RequestForward[]; team: TeamMember[]; canForward: boolean; activity: { at: number; text: string }[];
   siblings: { request: CustomerRequest; reply?: ReplySummary; external: ExternalReply[] }[];
   templates: { id: string; label: string; why: string; body: string }[];
+  customerEvidence?: CustomerContext | null;
   external: ExternalReply[]; canMarkReplied: boolean; markNote: string | null; onMarkNote: (note: string | null) => void; onMarkReplied: () => void;
   issue: RequestIssue | null; canTag: boolean; onIssue: (patch: Partial<{ issue: string; resolutions: string[]; note: string }>) => void; issueNote: string; onIssueNote: (note: string) => void;
   panel: { kind: 'forward' | 'delete'; to: string; note: string; busy: boolean; error: string } | null;
   onPanel: (next: Partial<{ kind: 'forward' | 'delete'; to: string; note: string; busy: boolean; error: string }> | null) => void; onForward: () => void;
 };
-function conversation({ row, draft, automation, options, canSend, disabled, listening, preparing, bodyField, now, onClose, onEdit, onDraft, onInsert, onSubmit, onDictate, onStatus, forwards, team, canForward, panel, onPanel, onForward, activity, siblings, templates, external, canMarkReplied, markNote, onMarkNote, onMarkReplied, issue, canTag, onIssue, issueNote, onIssueNote }: ConversationProps) {
+function conversation({ row, draft, automation, options, canSend, disabled, listening, preparing, bodyField, now, onClose, onEdit, onDraft, onInsert, onSubmit, onDictate, onStatus, forwards, team, canForward, panel, onPanel, onForward, activity, siblings, templates, customerEvidence, external, canMarkReplied, markNote, onMarkNote, onMarkReplied, issue, canTag, onIssue, issueNote, onIssueNote }: ConversationProps) {
   const { request, reply } = row;
   const email = text(request.data.email), canReply = usableEmail(request.data.email);
   const name = text(request.data.name) || email || 'Customer';
@@ -539,7 +555,7 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
   const setChoice = (list: string[]) => onDraft({ coa: list.length ? list.join(',') : null, edited: true });
   const isCoaRequest = /^coa request:/i.test(subject);
   const coaForm = coaFormDetails(request);
-  const lastSent = [...history].reverse().find(m => m.direction === 'outgoing');
+  const lastSent = history.filter(m => m.direction === 'outgoing' && m.source !== 'recovery').sort((a, b) => b.created - a.created)[0];
   // The newest reply by any channel: this desk, Gmail, or a logged call/text.
   const lastExternal = [...external].sort((a, b) => b.at - a.at)[0];
   const lastReplied = lastSent && (!lastExternal || lastSent.created >= lastExternal.at)
@@ -547,10 +563,10 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
     : lastExternal ? { at: lastExternal.at, how: lastExternal.source === 'manual' ? 'by phone or text' : 'from Gmail' } : null;
   const firstName = name === email ? 'the customer' : name.split(/\s+/)[0] || 'the customer';
   // One list of every email in this conversation, each labelled in plain words: who wrote it, to whom, how, and who sent it.
-  type Item = { id: string; direction: 'incoming' | 'outgoing' | 'request'; created: number; body: string; title: string; detail: string; by?: string; attachment?: string };
-  const deskItem = (m: ReplySummary['history'][number]): Item => ({ id: m.id, direction: 'outgoing', created: m.created, body: m.body, title: 'You emailed ' + firstName,
-    by: m.sentBy ? 'sent by ' + personName(m.sentBy, team) : 'sent from this reply desk',
-    detail: ['From ' + (m.from || sender) + ' to ' + (m.to || email), m.sentBy ? 'Sent by ' + personName(m.sentBy, team) : 'Sent from this reply desk', m.subject ? 'Subject: ' + m.subject : ''].filter(Boolean).join(' · '),
+  type Item = { id: string; direction: 'incoming' | 'outgoing' | 'request'; created: number; body: string; title: string; detail: string; by?: string; attachment?: string; source?: 'recovery' };
+  const deskItem = (m: ReplySummary['history'][number]): Item => ({ id: m.id, direction: 'outgoing', created: m.created, body: m.body, ...(m.source ? { source: m.source } : {}), title: m.source === 'recovery' ? 'Automatic checkout reminder' : 'You emailed ' + firstName,
+    by: m.source === 'recovery' ? 'accepted by email provider; delivery unconfirmed' : m.sentBy ? 'sent by ' + personName(m.sentBy, team) : 'sent from this reply desk',
+    detail: m.source === 'recovery' ? 'Accepted by the email provider. Inbox delivery is not confirmed.' : ['From ' + (m.from || sender) + ' to ' + (m.to || email), m.sentBy ? 'Sent by ' + personName(m.sentBy, team) : 'Sent from this reply desk', m.subject ? 'Subject: ' + m.subject : ''].filter(Boolean).join(' · '),
     ...(m.attachment ? { attachment: m.attachment } : {}) });
   const outsideItems = (list: ExternalReply[], tag: string): Item[] => list.map((e, i) => e.source === 'manual'
     ? { id: 'ext-' + tag + i + '-' + e.at, direction: 'outgoing', created: e.at, body: e.body + (e.preview ? ' …' : ''), title: 'Answered outside email', by: 'by phone or text', detail: 'Logged as answered by phone or text by ' + personName(e.account, team) }
@@ -581,8 +597,9 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
     ];
     return all.filter(m => { if (seen.has(m.id)) return false; seen.add(m.id); return true; }).sort((a, b) => a.created - b.created);
   })();
-  const sentCount = thread.filter(m => m.direction === 'outgoing').length;
-  const lastOutItem = [...thread].reverse().find(m => m.direction === 'outgoing');
+  const outgoingContactCount = thread.filter(m => m.direction === 'outgoing').length;
+  const sentCount = thread.filter(m => m.direction === 'outgoing' && m.source !== 'recovery').length;
+  const lastOutItem = [...thread].reverse().find(m => m.direction === 'outgoing' && m.source !== 'recovery');
   const latestRequest = [...thread].reverse().find(m => m.direction !== 'outgoing');
   const earlierMessages = thread.filter(m => m.id !== latestRequest?.id);
   const renderMessage = (message: Item) => <li key={message.id} data-direction={message.direction}>
@@ -597,6 +614,7 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
     if (request.status === 'spam') return { tone: 'done', text: 'Marked as spam.', hint: 'Nothing to do.' };
     if (sending) return { tone: 'done', text: 'Sending now.', hint: 'Nothing else to do.' };
     if (row.stage === 'pitch') return { tone: 'done', text: 'Sales pitch.', hint: 'No reply needed.' };
+    if (fromOrder && !latestRequest) return { tone: 'done', text: 'Optional follow-up.', hint: outgoingContactCount ? 'Prior contact is recorded below. Check the purchase history before writing again.' : 'The customer has not written in. Check their history before contacting them.' };
     if (row.stage === 'todo') return { tone: 'todo', text: sentCount ? 'Needs your reply.' : fromOrder ? 'Needs your first email.' : 'Needs your reply.', hint: sentCount ? 'The customer wrote again.' : 'No reply sent yet.' };
     if (request.status === 'resolved') return { tone: 'done', text: 'Done. Nothing to do.', hint: `Archived. If ${firstName} writes back, it moves to Needs reply on its own.` };
     return { tone: 'done', text: `Waiting on ${firstName}.`, hint: `Nothing to do now. Archive it to clear it; if ${firstName} writes back, it moves to Needs reply on its own.` };
@@ -650,6 +668,16 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
     </div>
     {siblings.length > 0 && <p className={styles.note}>{siblings.length + 1} requests from this customer, shown as one conversation. One reply answers all of them.</p>}
     {!coaForm && <p className={styles.subjectLine}><strong>{subject}</strong></p>}
+    <section className={styles.customerContext} aria-label="Customer history">
+      <h4>Customer history</h4>
+      {!customerEvidence ? <p className={styles.note}>Purchase and contact history is not available yet. Refreshing automatically.</p> : <>
+        <p>{customerEvidence.purchaseHistory.state === 'unavailable' ? 'Purchase history could not be checked.' : <><strong>{customerEvidence.purchaseHistory.confirmedLivePurchases} {customerEvidence.purchaseHistory.confirmedLivePurchases === 1 ? 'purchase' : 'purchases'} recorded in the live store</strong> across {customerEvidence.purchaseHistory.matchedOrders ?? 'more than 200'} matching order records.{customerEvidence.purchaseHistory.testOrders ? ' Test orders excluded: '+customerEvidence.purchaseHistory.testOrders+'.' : ''}{customerEvidence.purchaseHistory.unclassifiedOrders ? ' Unclassified orders need checking: '+customerEvidence.purchaseHistory.unclassifiedOrders+'.' : ''}</>}</p>
+        <p>{customerEvidence.communicationHistory.state === 'unavailable' ? 'Previous contact could not be checked.' : customerEvidence.communicationHistory.lastOutgoingAt ? 'Last recorded outgoing contact: '+when(customerEvidence.communicationHistory.lastOutgoingAt)+'.' : 'No outgoing contact in the website records.'}</p>
+        <details><summary>What was checked</summary><p className={styles.note}>{customerEvidence.purchaseHistory.note}</p><p className={styles.note}>{customerEvidence.communicationHistory.note}</p><p className={styles.note}>Checked {when(customerEvidence.purchaseHistory.checkedAt)}.</p></details>
+        {customerEvidence.orders.length > 0 && <details><summary>Orders on record ({customerEvidence.purchaseHistory.matchedOrders})</summary><ul>{customerEvidence.orders.map(order => <li key={order.number}><strong>#{order.number}</strong> · {order.status} · {order.placed}{order.environment !== 'live' ? ' · '+order.environment : ''}<br/>{order.items}</li>)}</ul></details>}
+        {customerEvidence.communicationHistory.recent.length > 0 && <details><summary>Recorded contact</summary><ul>{customerEvidence.communicationHistory.recent.map((event, i) => <li key={i}>{when(event.at)} · {event.source === 'recovery' ? 'Checkout reminder accepted by provider; delivery unconfirmed' : event.source === 'manual' ? 'Phone/text or other contact logged' : event.status === 'submitted_coa_form' ? 'COA request form submitted' : event.source === 'customer_request' ? 'Website request submitted' : event.direction === 'incoming' ? 'Customer email recorded' : 'Outgoing email recorded'}</li>)}</ul></details>}
+      </>}
+    </section>
     {latestRequest && <section aria-label={latestRequest.direction === 'request' ? 'What they requested' : 'Customer message'}>
       <h4 className={styles.threadHead}>{latestRequest.direction === 'request' ? 'What they requested' : 'Customer message'}</h4>
       <ol className={styles.thread} aria-label="Latest customer request">{renderMessage(latestRequest)}</ol>
@@ -662,7 +690,7 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
     {request.status === 'deleted' ? null : !canReply ? <p className={styles.warning}>No usable email address was saved, so there is no way to reply.</p> : !draft ? null : <div className={styles.composer}>
       <div className={styles.composeHead}><strong>Your reply</strong><span>To {reply?.recipient || email}</span><span className={styles.note}>From {sender}</span></div>
       {lastReplied && <p className={styles.replied} role="status">
-        Already emailed {when(lastReplied.at)}{lastReplied.how ? ' ' + lastReplied.how : ''}. {row.stage === 'todo' ? firstName + ' wrote back since. ' : ''}Anything you write here goes out as a new email.
+        Last recorded reply: {when(lastReplied.at)}{lastReplied.how ? ' ' + lastReplied.how : ''}. {row.stage === 'todo' ? firstName + ' wrote back since. ' : ''}Anything you write here goes out as a new email.
       </p>}
       {coaForm && !sending && <div className={styles.quickReply}>
         <button type="button" className={styles.action} disabled={locked || writing || conflict} onClick={() => onDraft({ body: 'Hi, could you send a clear photo of your vial label showing the product name and lot number? This will help us check which COA matches your vial. Thank you.', undo: draft.body || undefined, edited: true })}>Ask for a label photo</button>
@@ -679,12 +707,13 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
           ? <button type="button" className={styles.send} disabled={locked || conflict || writing || !draft.body.trim()} onClick={() => onSubmit('staff', true)}>{sending ? 'Sending…' : 'Send'}</button>
           : <p className={styles.note}>Ash sends replies. Save the draft and it appears here for him.</p>}
         <button type="button" className={styles.link} disabled={locked || conflict || writing || !draft.body.trim()} onClick={() => onSubmit('staff')}>Save draft</button>
+        {draft.purpose === 'checkout_recovery' && <button type="button" className={styles.link} disabled={locked || conflict || writing} onClick={() => onDraft({ purpose: 'reply', body: '', instruction: '', undo: undefined, edited: true, message: 'New message. Write about the customer’s current question.' })}>Start a new message</button>}
       </div>
       <details className={styles.more} open={moreOpen || undefined}>
         <summary>AI help &amp; attachments</summary>
         {templates.length > 0 && !sending && <div className={styles.templates}>
-          <p className={styles.moreLabel}>Win-back emails</p>
-          <ul>{templates.map(t => <li key={t.id}><button type="button" className={styles.action} disabled={locked || writing} onClick={() => onDraft({ body: t.body, undo: draft.body || undefined, edited: true })}>Use</button> <strong>{t.label}</strong><span className={styles.note}>{t.why}</span></li>)}</ul>
+          <p className={styles.moreLabel}>Follow-up suggestions</p>
+          <ul>{templates.map(t => <li key={t.id}><button type="button" className={styles.action} disabled={locked || writing} onClick={() => onDraft({ purpose: 'checkout_recovery', body: t.body, undo: undefined, edited: true })}>Use</button> <strong>{t.label}</strong><span className={styles.note}>{t.why}</span></li>)}</ul>
         </div>}
         <p className={styles.moreLabel}>AI help</p>
         <div className={styles.ask}>
@@ -692,10 +721,10 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
           <textarea id={`reply-ai-${request.id}`} name="replyInstruction" rows={2} maxLength={2000} value={draft.instruction} disabled={locked}
             onChange={event => onEdit('instruction', event.target.value)}
             onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); if (!locked && !conflict) onSubmit('ai'); } }}
-            placeholder={listening ? 'Listening… say what the reply should say' : draft.body.trim() ? 'Tell the AI what to change: "shorter", "add the 10% code", "say the cart is fixed"' : 'Tell the AI what to write, or press the mic and say it'}/>
+            placeholder={listening ? 'Listening… say what the reply should say' : draft.body.trim() ? 'Tell the AI what to change: "shorter", "answer their latest question", "explain the next step"' : 'Tell the AI what to write, or press the mic and say it'}/>
           <button type="button" className={styles.mic} aria-pressed={listening} disabled={locked && !listening} onClick={onDictate}>{listening ? 'Stop' : 'Dictate'}</button>
           <button type="button" className={styles.action} disabled={locked || conflict || writing} onClick={() => onSubmit('ai')}>{writing && reply?.mode === 'ai' ? 'Writing…' : draft.body.trim() ? 'Rewrite' : 'Write it'}</button>
-          {templates.length > 0 && draft.body.trim() && <button type="button" className={styles.action} disabled={locked || conflict || writing} onClick={() => onSubmit('ai', false, 'Tailor this email to this customer and their order. Keep it short and personal, keep every code and link exactly, and do not add new offers.')}>Tailor</button>}
+          {templates.length > 0 && draft.body.trim() && <button type="button" className={styles.action} disabled={locked || conflict || writing} onClick={() => onSubmit('ai', false, 'Tailor this email to this customer and their order. Check current purchases and previous contact first. Remove outdated claims or offers. Keep it short, useful, and based on verified records.')}>Tailor</button>}
         </div>
         <label className={styles.remember}><input type="checkbox" checked={draft.remember} disabled={locked} onChange={event => onDraft({ remember: event.target.checked })}/> Remember this instruction for future replies</label>
         {typeof request.data?.labelLot === 'string' && <p className={styles.vialLot}>Lot entered: <strong>{request.data.labelLot}</strong>. Attach only the report for this exact lot.</p>}
@@ -733,7 +762,7 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
     {(row.stage === 'todo' || row.stage === 'pitch') && canMarkReplied && (markNote === null
       ? <p className={styles.note}>Already answered by phone, text or another app? <button type="button" className={styles.link} disabled={disabled} onClick={() => onMarkNote('')}>Mark as replied</button></p>
       : <div className={styles.confirm}><p>How did you reply? (optional)</p><input value={markNote} maxLength={1000} onChange={e => onMarkNote(e.target.value)} placeholder="e.g. Called him, he will wait for the restock"/><button type="button" className={styles.action} disabled={disabled} onClick={onMarkReplied}>Mark as replied</button><button type="button" className={styles.link} onClick={() => onMarkNote(null)}>Cancel</button></div>)}
-      {fromOrder && <p className={styles.orderNote}><strong>Order behind this conversation (only you see this):</strong> {text(request.data.message)}</p>}
+      {fromOrder && <p className={styles.orderNote}><strong>Original order note (saved when opened; may be outdated):</strong> {text(request.data.message)}</p>}
       {siblings.length > 0 && <p className={styles.note}>{siblings.length + 1} requests from this customer, shown as one conversation. One reply answers all of them.</p>}
     {canTag && <details className={styles.caseBox}>
       <summary>Internal case notes <span className={styles.note}>(optional, not sent){issue?.issue ? ' · ' + issueLabel(issue.issue) + (issue.resolutions.length ? ' · ' + issue.resolutions.map(resolutionLabel).join(', ') : '') : ' · not filled in'}</span></summary>
@@ -743,7 +772,7 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
       </select></label>
       {issue?.issue && <fieldset><legend>How you handled it</legend>{resolutionTypes.map(([key, label]) => <label key={key} className={styles.check}><input type="checkbox" checked={issue.resolutions.includes(key)} onChange={event => onIssue({ resolutions: event.target.checked ? [...issue.resolutions, key] : issue.resolutions.filter(r => r !== key) })}/> {label}</label>)}</fieldset>}
       {issue?.issue && <label className={styles.caseNote}><span>Case note</span><input value={issueNote} maxLength={1000} onChange={event => onIssueNote(event.target.value)} onBlur={() => { if (issueNote !== (issue.note || '')) onIssue({ note: issueNote }); }} placeholder="e.g. Waiting on restock; offered 30% off next order"/></label>}
-      {issue?.issue && <p className={styles.note}>The AI drafts with this decision and with your {issueLabel(issue.issue)} rules.</p>}
+      {issue?.issue && <p className={styles.note}>The AI checks these notes against current records and your {issueLabel(issue.issue)} rules.</p>}
       </div>
     </details>}
     {(() => {

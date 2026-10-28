@@ -5,6 +5,7 @@ import { isIssue, isResolution, type RequestIssue } from './request-issues';
 import { winBackTemplates, winBackTemplate, type WinBackContext } from './win-back';
 import { products } from './catalog';
 import { prepareRequestReply } from './request-replies';
+import { orderFollowUp } from './customer-context';
 type Env = { DB: D1Database };
 type Actor = { email: string; role: string };
 const fail = (message: string, status = 409): never => { throw Object.assign(new Error(message), { status }); };
@@ -23,9 +24,9 @@ export async function startOrderConversation(env: Env, orderId: string, actor: A
   const items = (Array.isArray(data.items) ? data.items : []).map((item: any) => `${Number(item.quantity) || 1} × ${String(item.product?.name || 'Product').slice(0, 120)}${item.product?.activePreorder ? ' (preorder)' : ''}`).join('; ');
   const number = orderNumber(order!.id);
   const recovery = await env.DB.prepare('SELECT status,savings,accepted_at FROM checkout_recovery WHERE order_id=?').bind(orderId).first<{ status: string; savings: number; accepted_at: number | null }>().catch(() => null);
-  const context = [`Order ${number} placed ${new Date(order!.created).toUTCString()}.`, `Items: ${items || 'not recorded'}.`, `Order status: ${order!.status}${data.shipment?.status ? ', shipment ' + data.shipment.status : ''}.`,
-    ...(recovery?.status === 'accepted' ? [`The automatic recovery email already went out${recovery.accepted_at ? ' on ' + new Date(recovery.accepted_at).toUTCString() : ''} with an extra $${(recovery.savings / 100).toFixed(2)} off this order.`] : []),
-    'BioMod started this conversation; the customer has not written in.'].join(' ');
+  const context = [`Order snapshot recorded ${new Date().toUTCString()}; refresh purchase and contact history before replying. Order ${number} placed ${new Date(order!.created).toUTCString()}.`, `Items: ${items || 'not recorded'}.`, `Order status: ${order!.status}${data.shipment?.status ? ', shipment ' + data.shipment.status : ''}.`,
+    ...(recovery?.status === 'accepted' ? [`The email provider accepted an automatic checkout reminder${recovery.accepted_at ? ' on ' + new Date(recovery.accepted_at).toUTCString() : ''} with an extra $${(recovery.savings / 100).toFixed(2)} off this order. Inbox delivery is unverified.`] : []),
+    'Staff opened this conversation from an order; this note is not a customer message.'].join(' ');
   const id = crypto.randomUUID();
   const record = { name: String(data.address?.name || '').slice(0, 100), email, subject: (options.subject || `Your BioMod order ${number}`).slice(0, 150), message: context, origin: 'order', orderId, startedBy: actor.email };
   await withAuditDb(env.DB, { source: 'admin', actor: actor.email, actorType: 'staff', action: 'request.order_conversation' }).prepare("INSERT INTO requests(id,owner,kind,data,status,created) VALUES(?,NULL,'contact',?,'new',?)").bind(id, JSON.stringify(record), Date.now()).run();
@@ -81,12 +82,12 @@ export async function setOrderHold(env: Env, orderId: string, hold: { issue: str
   return value;
 }
 
-const UNPAID = ['creating', 'awaiting_payment', 'pending'];
 async function winBackContext(env: Env, orderId: string): Promise<WinBackContext> {
-  const order = await env.DB.prepare('SELECT id,status,data FROM orders WHERE id=?').bind(orderId).first<{ id: string; status: string; data: string }>();
-  if (!order) fail('Order not found.', 404);
+  const evidence = await orderFollowUp(env.DB, orderId);
+  if (!evidence.eligible) fail(evidence.reason, 409);
+  const order = evidence.order!;
   let data: any = {}; try { data = JSON.parse(order!.data); } catch { data = {}; }
-  const items = (Array.isArray(data.items) ? data.items : []).map((item: any) => { const product = products.find(p => p.id === item.id); return { name: product?.name || String(item.product?.name || 'your item'), url: product ? 'https://trybiomod.com/product/' + product.slug : 'https://trybiomod.com/shop' }; })
+  const items = (Array.isArray(data.items) ? data.items : []).map((item: any) => { const product = products.find(p => p.id === item.id); return { name: String(item.product?.name || product?.name || 'your item'), url: product ? 'https://trybiomod.com/product/' + product.slug : 'https://trybiomod.com/shop' }; })
     .filter((item: { name: string }, index: number, all: { name: string }[]) => all.findIndex(other => other.name === item.name) === index);
   const recovery = await env.DB.prepare("SELECT savings FROM checkout_recovery WHERE order_id=? AND status='accepted'").bind(orderId).first<{ savings: number }>().catch(() => null);
   return { firstName: String(data.address?.name || '').trim().split(/\s+/)[0]?.slice(0, 40) || '', items, orderNumber: orderNumber(order!.id), ordersUrl: 'https://trybiomod.com/account/orders', autoRecovery: recovery ? { savingsCents: recovery.savings } : null };
@@ -97,15 +98,14 @@ export async function winBackPreview(env: Env, requestId: string) {
   const request = await env.DB.prepare("SELECT data FROM requests WHERE id=? AND kind='contact'").bind(requestId).first<{ data: string }>();
   let data: any = {}; try { data = JSON.parse(request?.data || '{}'); } catch { data = {}; }
   if (data.origin !== 'order' || typeof data.orderId !== 'string') return [];
+  const evidence = await orderFollowUp(env.DB, data.orderId);
+  if (!evidence.eligible) return [];
   const context = await winBackContext(env, data.orderId);
   return winBackTemplates.map(t => ({ id: t.id, label: t.label, why: t.why, body: t.body(context) }));
 }
 /** Start (or reuse) the order conversation, tag it, and put the chosen template in as a draft. Never sends. */
 export async function startWinBack(env: Env, orderId: string, templateId: string, actor: Actor): Promise<{ requestId: string }> {
   const template = winBackTemplate(templateId); if (!template) fail('Choose an email template.', 400);
-  const order = await env.DB.prepare('SELECT status FROM orders WHERE id=?').bind(orderId).first<{ status: string }>();
-  if (!order) fail('Order not found.', 404);
-  if (!UNPAID.includes(order!.status)) fail('Win-back emails are for unpaid checkouts only.', 409);
   const context = await winBackContext(env, orderId);
   const first = context.items[0]?.name || 'BioMod';
   const conversation = await startOrderConversation(env, orderId, actor, { subject: `${context.firstName ? context.firstName + ', your ' : 'Your '}${first} order is saved` });
@@ -113,6 +113,6 @@ export async function startWinBack(env: Env, orderId: string, templateId: string
   if (!known) await saveRequestIssue(env, { requestId: conversation.requestId, issue: 'unfinished_checkout' }, actor);
   const draft = await env.DB.prepare('SELECT revision,status FROM request_reply_drafts WHERE request_id=?').bind(conversation.requestId).first<{ revision: number; status: string }>();
   if (draft?.status === 'sending') fail('A reply to this customer is sending right now.', 409);
-  await prepareRequestReply(env, { requestId: conversation.requestId, mode: 'staff', body: template!.body(context), instruction: '', expectedRevision: draft?.revision ?? null }, actor);
+  await prepareRequestReply(env, { requestId: conversation.requestId, mode: 'staff', purpose: 'checkout_recovery', body: template!.body(context), instruction: '', expectedRevision: draft?.revision ?? null }, actor);
   return { requestId: conversation.requestId };
 }

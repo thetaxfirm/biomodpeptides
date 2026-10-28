@@ -10,13 +10,14 @@ const newDraft=new Function(take('seedBody')+take('newDraft')+';return newDraft;
 assert.equal(seedBody({status:'sent',body:'Hi Albert, here is 15% off'}),'');
 assert.equal(seedBody({status:'ready',body:'Draft text'}),'Draft text');
 assert.equal(seedBody(undefined),'');
+assert.equal(seedBody({status:'cancelled',body:'Stale draft'}),'','Retired drafts never reappear in the composer');
 assert.equal(newDraft({status:'sent',body:'sent text',revision:4}).body,'');
 assert.equal(newDraft({status:'sent',body:'sent text',revision:4}).revision,4,'The next message builds on the sent revision');
 // The clean-draft sync compares against the same seed, so a sent reply is not pushed back into the box.
 assert.match(src,/draft\.body !== seedBody\(reply\)/);
 
 // Replied line from any channel, above the box; the old ambiguous status line is gone.
-assert.match(src,/Already emailed \{when\(lastReplied\.at\)\}/);
+assert.match(src,/Last recorded reply: \{when\(lastReplied\.at\)\}/);
 assert.match(src,/wrote back since/);
 assert.doesNotMatch(src,/'Sent ' \+ when\(reply\.updated\) \+ '\. Accepted by the mail provider\.'/);
 assert.doesNotMatch(src,/Last reply sent \{when/);
@@ -26,6 +27,6 @@ assert.match(src,/Write a new message to \$\{firstName\}/);
 const sendAt=src.indexOf("onClick={() => onSubmit('staff', true)}"),moreAt=src.indexOf('<details className={styles.more}');
 assert(sendAt>0&&moreAt>sendAt,'Send comes before More options');
 const more=src.slice(moreAt,src.indexOf('</details>',moreAt));
-for(const tool of ['Win-back emails','replyInstruction','Dictate','Rewrite','Tailor','Remember this instruction','Insert code','Insert COA link','Attach COA PDF'])assert(more.includes(tool),tool+' is inside More options');
+for(const tool of ['Follow-up suggestions','replyInstruction','Dictate','Rewrite','Tailor','Remember this instruction','Insert code','Insert COA link','Attach COA PDF'])assert(more.includes(tool),tool+' is inside More options');
 assert.match(src,/const moreOpen = listening \|\| writing/,'Opens for active AI or dictation; COA tools stay optional');
 console.log('reply-simple-v1: ok');

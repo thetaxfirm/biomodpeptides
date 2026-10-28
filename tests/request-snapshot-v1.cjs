@@ -29,7 +29,7 @@ const dependencies = {
     one: async (query, ...args) => { checked(); assert.match(query, /WHERE id=\? AND kind IN \('contact','stock','affiliate'\)$/); assert.equal(args.length, 1); reads.push({ query, args }); return sql.prepare(query).get(...args) || null; },
     run: forbidden('database mutation'), database: forbidden('raw database'),
   },
-  '@/lib/request-replies': { summarizeRequestReplies: metadata('replies'), prepareRequestReply: forbidden('draft'), autoDraftNewRequest: forbidden('auto draft') },
+  '@/lib/request-replies': { replyCustomerContext: async () => { checked(); return null; }, summarizeRequestReplies: metadata('replies'), prepareRequestReply: forbidden('draft'), autoDraftNewRequest: forbidden('auto draft') },
   '@/lib/request-forward': { forwardsFor: metadata('forwards'), activityFor: metadata('activity'), forwardRequest: forbidden('forward') },
   '@/lib/request-cases': { issuesFor: metadata('issues') },
   '@/lib/request-external': { externalRepliesFor: metadata('external') },

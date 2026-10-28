@@ -19,6 +19,9 @@ assert.equal(L.hasStandingLabel(order('e','paid',ship({status:'in_transit'}))),f
 assert.equal(L.hasStandingLabel(order('f','delivered',ship())),false);
 assert.equal(L.hasStandingLabel(order('g','paid',ship(),{data:{internalTest:true}})),false,'internal tests excluded');
 
+assert.equal(L.hasStandingLabel(order('handed','paid',ship(),{data:{handoff:{at:Date.now()}}})),false,'already handed over is not a waiting label');
+assert.equal(L.hasStandingLabel(order('archived','paid',ship(),{data:{archivedAt:1}})),false,'filed records excluded');
+assert.equal(L.hasStandingLabel(order('verify','paid',ship(),{data:{paymentVerified:{at:1,state:'failed'}}})),false,'payment verification failure is a decision first');
 // Oldest first, unqualified dropped.
 const entries=L.labelEntries([order('11111111-1111-1111-1111-111111111111','paid',ship(),{created:300}),
   order('22222222-2222-2222-2222-222222222222','paid',null,{created:100}),

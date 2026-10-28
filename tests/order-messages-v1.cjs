@@ -50,7 +50,7 @@ const {orderMessageLogs,orderMessageLabel}=require('../lib/order-messages.ts');
  const route=fs.readFileSync(path.join(root,'app/api/store/[action]/route.ts'),'utf8');
  assert.match(route,/orderMessageLogs\(runtime\(\)/);
  const ui=fs.readFileSync(path.join(root,'components/store/orders-admin.tsx'),'utf8');
- assert.match(ui,/<th>Messaged<\/th>/);assert.match(ui,/Messages sent/);assert.match(ui,/inbox delivery is not confirmed/);
+ assert.match(ui,/<th>Last contact recorded<\/th>/);assert.match(ui,/Contact history recorded/);assert.match(ui,/not confirmed inbox delivery/);assert.match(ui,/No contact recorded/);
  const auto=fs.readFileSync(path.join(root,'lib/auto-label.ts'),'utf8');
  assert.match(auto,/action: 'shipping\.tracking_email'/);
  console.log('order-messages-v1: ok');

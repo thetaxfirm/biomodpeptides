@@ -94,6 +94,11 @@ const productNames=h=>String(Boolean(productPanel(h).props.edited));
  assert.deepEqual([reportsTab.props.value,text(reportsTab),reportsTab.props.className],['diagnostics','Reports','admin-tab-reports'],'One Reports tab opens Sales reports first');
  assert(!nodes(h.tree).some(n=>n.type===TabsTrigger&&['traffic','search','changes'].includes(n.props.value)),'Report pages live behind the Reports tab');
  assert(nodes(h.tree).some(n=>n.type===AdminOverview),'Today is shown on open');
+ const openWork=find(h,n=>n.type===AdminOverview).props.onOpen;
+ openWork('orders','unpaid');h.render();assert.equal(find(h,n=>n.type===Tabs).props.value,'orders');
+ assert.equal(queue(h).viewRequest.tab,'unpaid','Today opens the matching order work queue');
+ const firstViewRevision=queue(h).viewRequest.revision;
+ openWork('orders','unpaid');h.render();assert(queue(h).viewRequest.revision>firstViewRevision,'reopening a work card reselects its queue after manual navigation');
  for(const initialTab of ['orders','promos','settings','changes','unknown','https://example.invalid/','../orders']){
   reset({store:{admin:false,customer:null}});h=mount({initialTab});
   assert.equal(h.tree.type,AuthPage);assert.equal(h.tree.props.returnTo,'/admin?tab='+(['orders','promos','settings','changes'].includes(initialTab)?initialTab:'overview'));assert.equal(reads(),0);

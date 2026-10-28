@@ -6,7 +6,7 @@ import { externalRepliesFor, markReplied } from '@/lib/request-external';
 import { startOrderConversation, saveRequestIssue, issuesFor, caseLog, setOrderHold, startWinBack, winBackPreview } from '@/lib/request-cases';
 import { orderMessageLogs } from '@/lib/order-messages';
 import { forwardRequest, forwardsFor, teamMembers, activityFor } from '@/lib/request-forward';
-import { summarizeRequestReplies, prepareRequestReply, autoDraftNewRequest, replyDeskOptions, saveReplyRule } from '@/lib/request-replies';
+import { retireStaleReplyDrafts, replyCustomerContext, summarizeRequestReplies, prepareRequestReply, autoDraftNewRequest, replyDeskOptions, saveReplyRule } from '@/lib/request-replies';
 import { adminBatchRecords, validateBatchEdit } from '@/lib/product-batch';
 import { coaHash, loadCoaReports, readCoaOriginal, verifiedCoaAttachment, normalizeLot } from '@/lib/coa-delivery';
 import { changeHistory, auditRun, withAuditDb, recordChange, type AuditActor } from '@/lib/change-history';
@@ -43,7 +43,7 @@ export const dynamic = 'force-dynamic';
 // What each admin write needs. An admin action missing here requires the owner.
 const adminActionPermission: Record<string, StaffPermission> = {
     'admin-orders': 'orders:read', 'admin-order': 'orders:fulfill', 'admin-order-archive': 'orders:fulfill', 'admin-order-handoff': 'orders:fulfill', 'admin-reconcile': 'orders:reconcile',
-    'admin-request': 'requests:write', 'admin-request-reply': 'requests:write', 'admin-reply-desk': 'requests:write', 'admin-request-replies': 'requests:write', 'admin-reply-rule': 'requests:write', 'admin-request-forward': 'requests:write', 'admin-order-conversation': 'requests:write', 'admin-order-hold': 'requests:write', 'admin-win-back': 'requests:write', 'admin-mark-replied': 'requests:write', 'admin-win-back-preview': 'requests:write', 'admin-request-issue': 'requests:write', 'admin-case-log': 'requests:write', 'admin-coa-process': 'requests:write',
+    'admin-request': 'requests:write', 'admin-request-reply': 'requests:write', 'admin-reply-desk': 'requests:write', 'admin-request-replies': 'requests:write', 'admin-reply-rule': 'requests:write', 'admin-retire-reply-drafts': 'requests:write', 'admin-request-forward': 'requests:write', 'admin-order-conversation': 'requests:write', 'admin-order-hold': 'requests:write', 'admin-win-back': 'requests:write', 'admin-mark-replied': 'requests:write', 'admin-win-back-preview': 'requests:write', 'admin-request-issue': 'requests:write', 'admin-case-log': 'requests:write', 'admin-coa-process': 'requests:write',
     'admin-config': 'store:write', 'admin-product': 'store:write', 'admin-campaign': 'store:write', 'admin-reward': 'store:write', 'admin-coa-config': 'store:write',
     'admin-staff': 'team:manage',
 };
@@ -553,7 +553,7 @@ export async function POST(req: NextRequest, { params }: {
                 return j({ message: 'COA email settings saved.' });
             }
             if (action === 'admin-request-reply') {
-                const input = z.object({ id: z.string().uuid(), mode: z.enum(['ai', 'staff']), body: z.string().max(12000).optional(), instruction: z.string().max(2000).optional(), expectedRevision: z.number().int().positive().nullable(), coaSha256: z.string().max(330).nullable().optional(), send: z.boolean().optional() }).parse(b);
+                const input = z.object({ id: z.string().uuid(), mode: z.enum(['ai', 'staff']), body: z.string().max(12000).optional(), instruction: z.string().max(2000).optional(), expectedRevision: z.number().int().positive().nullable(), coaSha256: z.string().max(330).nullable().optional(), send: z.boolean().optional(), purpose: z.enum(['checkout_recovery', 'reply']).optional() }).parse(b);
                 try {
                     const reply = await prepareRequestReply(runtime(), { ...input, requestId: input.id }, actor);
                     return j({ reply, message: input.send ? 'Sending from contact@trybiomod.com through Jarvis.' : input.mode === 'ai' ? 'AI is writing the draft.' : 'Draft saved. Nothing was sent.' });
@@ -593,7 +593,8 @@ export async function POST(req: NextRequest, { params }: {
                     ]);
                     Object.assign(replies, nextReplies); Object.assign(forwards, nextForwards); Object.assign(activity, nextActivity); Object.assign(issues, nextIssues); Object.assign(external, nextExternal);
                 }
-                return j({ replies, forwards, activity, issues, external, ...(requests ? { requests } : {}) });
+                const customerContext = input.focusId ? { requestId: input.focusId, context: await replyCustomerContext(env, input.focusId).catch(() => null) } : undefined;
+                return j({ replies, forwards, activity, issues, external, ...(customerContext ? { customerContext } : {}), ...(requests ? { requests } : {}) });
             }
             if (action === 'admin-order-conversation') {
                 const input = z.object({ orderId: z.string().min(6).max(80) }).parse(b);
@@ -636,6 +637,10 @@ export async function POST(req: NextRequest, { params }: {
                 const input = z.object({ id: z.string().uuid(), to: z.string().email().max(254), note: z.string().max(2000).optional() }).parse(b);
                 try { const forward = await forwardRequest(runtime(), { requestId: input.id, to: input.to, note: input.note }, actor); return j({ forward, message: 'Forwarded to ' + forward.to + '.' }); }
                 catch (error) { const status = (error as Error & { status?: number }).status; return j({ error: status ? (error as Error).message : 'Email status unconfirmed. Check the mail provider before retrying.' }, status || 500); }
+            }
+            if (action === 'admin-retire-reply-drafts') {
+                try { return j(await retireStaleReplyDrafts(runtime(), actor)); }
+                catch (error) { const status = (error as Error & { status?: number }).status; return j({ error: status ? (error as Error).message : 'Old drafts could not be removed. Refresh and try again.' }, status || 500); }
             }
             if (action === 'admin-reply-rule') {
                 const input = z.object({ rule: z.string().max(500).optional(), removeId: z.string().uuid().optional(), issue: z.string().max(40).nullable().optional() }).parse(b);

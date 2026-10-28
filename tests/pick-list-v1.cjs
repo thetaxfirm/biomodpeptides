@@ -22,6 +22,9 @@ assert.equal(p.needsPicking(order('d','delivered')),false);
 assert.equal(p.needsPicking(order('e','paid',{data:{hold:{issue:'stock',by:'x',at:1}}})),false,'a hold stops picking');
 assert.equal(p.needsPicking(order('f','paid',{data:{internalTest:true}})),false,'internal tests are excluded');
 
+assert.equal(p.needsPicking(order('handed','paid',{data:{shipment:{status:'pre_transit'},handoff:{at:Date.now()}}})),false,'handoff must not be packed again');
+assert.equal(p.needsPicking(order('archived','paid',{data:{archivedAt:1}})),false,'filed records excluded');
+assert.equal(p.needsPicking(order('verify','paid',{data:{paymentVerified:{at:1,state:'failed'}}})),false,'verification issues require attention before packing');
 // Oldest first, and only qualifying orders.
 const entries=p.pickEntries([order('11111111-1111-1111-1111-111111111111','paid',{created:300}),order('22222222-2222-2222-2222-222222222222','pending',{created:100}),order('33333333-3333-3333-3333-333333333333','paid',{created:200})]);
 assert.deepEqual(entries.map(e=>e.number),['#33333333','#11111111'],'unpaid dropped, oldest first');

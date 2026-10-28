@@ -227,3 +227,55 @@ export function customerOrderStatus(order: FulfillmentOrder): { label: string; t
         test: { label: 'Test order', tone: 'muted' },
     } as Record<OrderBucket, { label: string; tone: Tone }>)[bucket];
 }
+
+
+export type OrderStateLabel = { label: string; tone: Tone; detail?: string };
+/** A failed recorded verification must be reviewed before staff fulfill the order. */
+export function paymentVerificationFailed(order: FulfillmentOrder): boolean {
+    const verified = (order.data as Record<string, any> | undefined)?.paymentVerified;
+    return Number.isFinite(verified?.at) && verified.state === 'failed';
+}
+/** Stored money state only. A carrier scan is never payment verification. */
+export function orderPaymentStatus(order: FulfillmentOrder): OrderStateLabel {
+    const data = order.data as Record<string, any> | undefined;
+    if (data?.internalTest) return { label: 'Internal test', tone: 'muted' };
+    if (order.status === 'refunded') return { label: 'Refunded', tone: 'muted', detail: 'Refund recorded on this order' };
+    if (['cancelled', 'canceled'].includes(order.status)) return { label: 'Not confirmed', tone: 'muted', detail: data?.releasedReason === 'unpaid_checkout_expired' ? 'Checkout expired without confirmed payment' : 'Order cancelled; payment or refund needs its own evidence' };
+    const verified = data?.paymentVerified;
+    if (paymentVerificationFailed(order)) return { label: 'Check payment', tone: 'problem', detail: 'Provider could not verify the recorded payment' };
+    if (Number.isFinite(verified?.at) && ['settled', 'captured'].includes(verified.state)) return { label: verified.state === 'settled' ? 'Paid · settled' : 'Paid · captured', tone: 'done', detail: 'Confirmed by payment provider' };
+    if (['paid', 'labeling', 'shipped', 'delivered'].includes(order.status)) return { label: 'Paid · recorded', tone: 'done', detail: 'No independent provider verification recorded' };
+    if (order.status === 'review') return { label: 'Payment review', tone: 'problem' };
+    if (order.status === 'failed') return { label: 'Payment unsuccessful', tone: 'problem' };
+    return { label: 'Not confirmed', tone: 'waiting', detail: 'No confirmed payment on this checkout' };
+}
+
+/** Physical progress only: clearly distinguish store reports, label purchase and carrier scans. */
+export function orderShipmentStatus(order: FulfillmentOrder): OrderStateLabel {
+    const carrier = order.data?.shipment?.status;
+    if (carrier === 'delivered') return { label: 'Delivered', tone: 'done', detail: 'Confirmed by carrier' };
+    if (carrier && moving.has(carrier)) return { label: carrierWords[carrier], tone: 'progress', detail: 'Confirmed by carrier' };
+    if (carrier && problems.has(carrier)) return { label: carrierWords[carrier], tone: 'problem' };
+    if (order.status === 'delivered') return { label: 'Delivery recorded', tone: 'done', detail: 'Store report; carrier unconfirmed' };
+    if (Number.isFinite(order.data?.handoff?.at) || order.status === 'shipped') return { label: 'Handed over', tone: 'progress', detail: 'Store report; awaiting carrier scan' };
+    if (order.data?.shipment) return { label: 'Label ready', tone: 'action', detail: 'No handoff recorded' };
+    if (awaitingLabelApproval(order)) return { label: 'Label approval needed', tone: 'problem' };
+    if (order.status === 'labeling') return { label: 'Preparing label', tone: 'progress' };
+    if (['paid'].includes(order.status)) return { label: orderHasPreorder(order.data) ? 'Preorder waiting' : 'Not dispatched', tone: 'waiting' };
+    return { label: 'No dispatch recorded', tone: 'muted' };
+}
+
+/** Attention is a reason for action, never a substitute for payment or parcel status. */
+export function orderAttentionReason(order: FulfillmentOrder, now = Date.now()): string {
+    const data = order.data as Record<string, any> | undefined;
+    if (paymentVerificationFailed(order)) return 'Review payment verification';
+    if (data?.hold) return 'Order on hold';
+    if (awaitingLabelApproval(order)) return 'Approve label cost';
+    if (flagDismissed(order)) return 'Carrier issue acknowledged';
+    if (stalledAfterHandoff(order, now)) return 'Handoff recorded; no carrier scan after 24 hours';
+    if (stuckInTransit(order, now)) return 'Carrier has not updated this parcel in four days';
+    const carrier = order.data?.shipment?.status;
+    if (carrier && problems.has(carrier)) return 'Review the carrier issue';
+    if (order.status === 'review') return 'Review payment details';
+    return '';
+}

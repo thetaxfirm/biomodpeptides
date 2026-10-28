@@ -1,7 +1,8 @@
 // Printable pick sheets for the warehouse: one order, or every order still waiting to be packed.
 // Read-only. Carries what a picker needs to pull and verify stock, not the customer's contact details.
 import { summaryItems } from './order-summary';
-import { orderBucket, type FulfillmentOrder } from './fulfillment';
+import { type FulfillmentOrder } from './fulfillment';
+import { tabForOrder, isArchived } from './order-queue';
 
 export type PickOrder = FulfillmentOrder & { id: string; created: number };
 export type PickLine = { name: string; detail: string; quantity: number };
@@ -12,7 +13,7 @@ export type PickEntry = { id: string; number: string; placed: number; customer: 
  * label is often bought before the items are picked. Holds, internal tests, and anything already
  * moving or delivered are excluded by their bucket.
  */
-export const needsPicking = (order: PickOrder) => ['to_ship', 'label'].includes(orderBucket(order));
+export const needsPicking = (order: PickOrder) => !isArchived(order) && tabForOrder(order) === 'to_ship';
 /** A single order is printable on exactly the same terms. */
 export const canPick = needsPicking;
 

@@ -8,16 +8,16 @@ import styles from './admin-overview.module.css';
 
 const tabNames: Record<string, string> = { orders: 'Orders', requests: 'Customer requests', products: 'Products', settings: 'Settings' };
 
-function Item({ item, onOpen }: { item: Attention; onOpen: (tab: string) => void }) {
+function Item({ item, onOpen }: { item: Attention; onOpen: (tab: string, orderView?: string) => void }) {
     return <li className={styles.item} data-tone={item.tone}>
         <span className={styles.count} aria-hidden="true">{item.count || '!'}</span>
         <div className={styles.text}><strong>{item.title}</strong><span>{item.detail}</span></div>
-        <button type="button" className={styles.open} onClick={() => onOpen(item.tab)}>Open {tabNames[item.tab] || item.tab}</button>
+        <button type="button" className={styles.open} onClick={() => onOpen(item.tab, item.tab === 'orders' ? item.id : undefined)}>Open {tabNames[item.tab] || item.tab}</button>
     </li>;
 }
 
 /** The first screen of administration: what needs doing now, sales, and store setup gaps. */
-export function AdminOverview({ onOpen, reloadToken = 0 }: { onOpen: (tab: string) => void; reloadToken?: number }) {
+export function AdminOverview({ onOpen, reloadToken = 0 }: { onOpen: (tab: string, orderView?: string) => void; reloadToken?: number }) {
     const [data, setData] = useState<Overview | null>(null);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
@@ -42,7 +42,7 @@ export function AdminOverview({ onOpen, reloadToken = 0 }: { onOpen: (tab: strin
         {data && <>
             <h3 className={styles.sectionTitle}>Needs attention</h3>
             {work.length ? <ul className={styles.list}>{work.map(item => <Item key={item.id} item={item} onOpen={onOpen}/>)}</ul>
-                : <p className={styles.clear} role="status">Nothing is waiting. Every paid order is moving, no customer has waited over a day, and no product is holding up an order.</p>}
+                : <p className={styles.clear} role="status">No open work was found in the available order, request and product records.</p>}
             {data.sales && <>
                 <h3 className={styles.sectionTitle}>Recorded live payments</h3>
                 <div className={styles.sales}>{data.sales.map(w => <div key={w.label} className={styles.figure}>

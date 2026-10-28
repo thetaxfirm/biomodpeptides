@@ -33,9 +33,18 @@ const orders = [
 (async () => {
   const work = orderAttention(orders, products, now);
   const byId = Object.fromEntries(work.map(w => [w.id, w]));
-  assert.equal(byId.to_ship.count, 2); assert.equal(byId.to_ship.tone, 'urgent', 'Oldest paid order waiting 3 days is urgent'); assert.match(byId.to_ship.detail, /3 days/); assert(!/COA/.test(byId.to_ship.detail), 'COA shipping rule removed Oct 14: no blocked count');
-  assert.equal(byId.label.count, 1); assert.equal(byId.review.count, 1, 'Held order needs review'); assert.equal(byId.unpaid.count, 1, 'Only this week\'s unfinished checkouts');
+  assert.equal(byId.to_ship.count, 3); assert.equal(byId.to_ship.tone, 'urgent', 'Oldest paid order waiting 3 days is urgent'); assert.match(byId.to_ship.detail, /3 days/); assert(!/COA/.test(byId.to_ship.detail), 'COA shipping rule removed Oct 14: no blocked count');
+  assert.equal(byId.label, undefined, 'label-ready orders belong to the same Pack & ship count'); assert.equal(byId.review.count, 1, 'Held order needs review'); assert.equal(byId.unpaid.count, 2, 'Dashboard and queue include the same unarchived checkouts');
   assert(!work.some(w => w.id === 'test'), 'Internal tests never count');
+  const { queryOrders } = require('../lib/order-queue.ts');
+  const mixed = [...orders,
+    order('paid', now - DAY, { shipment: { status: 'pre_transit' }, handoff: { at: now - 1000 } }),
+    order('paid', now - DAY, { archivedAt: now - 1000 }),
+    order('paid', now - DAY, { paymentVerified: { at: now, state: 'failed' } }),
+    order('shipped', now - 6 * DAY, { shipment: { status: 'return_to_sender' }, dismissed: { at: now, carrierStatus: 'return_to_sender' } }),
+  ];
+  const sharedCounts = queryOrders(mixed, { tab: 'all' }, now).counts;
+  for (const card of orderAttention(mixed, products, now)) assert.equal(card.count, sharedCounts[card.id], card.id + ' dashboard count matches order queue');
   const items = productAttention(products, [{ items: [{ id: 2 }] }]);
   const p = Object.fromEntries(items.map(i => [i.id, i]));
   assert.equal(p.coa_blocked, undefined, 'COA shipping rule removed: nothing held'); assert.equal(p.out_of_stock.count, 1); assert.match(p.low_stock.detail, /KPV \(3\)/); assert.equal(p.no_coa, undefined, 'COA shipping rule removed: no can\'t-ship warning');

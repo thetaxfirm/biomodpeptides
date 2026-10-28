@@ -10,17 +10,18 @@ import { orderMessageLabel, type OrderMessageLog } from '@/lib/order-messages';
 import { api, report } from './provider';
 import { Field } from './primitives';
 import { money } from '@/lib/catalog';
-import { fulfillmentLabel, awaitingLabelApproval, carrierWords, stalledLabel, stuckInTransit, unreadableParcel } from '@/lib/fulfillment';
+import { awaitingLabelApproval, carrierWords, stalledLabel, stuckInTransit, unreadableParcel, orderPaymentStatus, orderShipmentStatus, orderAttentionReason, paymentVerificationFailed } from '@/lib/fulfillment';
 import { shipDue } from '@/lib/ship-cutoff';
-import { bucketStatus, queueTabs, canArchive, isArchived, dismissibleReview, flagDismissed, closedReason, type QueueResult, type QueueRow, type QueueTab, type OrderBucket } from '@/lib/order-queue';
+import { queueTabs, tabForOrder, requestedTab, canArchive, isArchived, dismissibleReview, flagDismissed, closedReason, type QueueResult, type QueueRow, type QueueTab } from '@/lib/order-queue';
 import { CarrierConnection } from './fulfillment-admin';
 import { ShippingLabel, post as shippingPost } from './shipping-admin';
 import { OrderDetails } from './order-admin';
-import { paymentLine, paymentAdvice, savedPaymentCheck, savedPaymentVerification, paymentConfirmed, verificationLabel } from '@/lib/payment-check';
+import { paymentLine, paymentAdvice, savedPaymentCheck } from '@/lib/payment-check';
 import styles from './orders-admin.module.css';
 
 type Props = {
     reloadToken: number;
+    viewRequest?: { tab: string; revision: number };
     checkoutRecovery: any;
     allowed: (permission: string) => boolean;
     busy: boolean;
@@ -38,11 +39,6 @@ type Props = {
     onWinBack?: (order: QueueRow, template: string) => void;
 };
 
-export function StatusBadge({ bucket }: { bucket: OrderBucket }) {
-    const s = bucketStatus[bucket];
-    return <span className={'order-status order-status-' + s.tone}>{s.label}</span>;
-}
-
 const orderNumber = (id: string) => '#' + id.slice(0, 8).toUpperCase();
 const units = (o: QueueRow) => (Array.isArray(o.data?.items) ? o.data.items : []).reduce((n: number, i: any) => n + (Number(i?.quantity) || 0), 0);
 const place = (o: QueueRow) => [o.data?.address?.city, o.data?.address?.state].filter(Boolean).join(', ');
@@ -57,7 +53,7 @@ function carrierLine(o: QueueRow) {
         // A parcel the carrier will not return tracking for is not the same as one it has not
         // scanned, and sending staff to look for the box is the wrong instruction.
         if (unreadableParcel(o)) return 'Carrier will not return tracking · check the label in EasyPost';
-        const handoff = Number.isFinite(o.data?.handoff?.at) ? 'Dropped off ' + shortTime(o.data.handoff.at) : stalledLabel(o) ? 'Not dropped off' : '';
+        const handoff = Number.isFinite(o.data?.handoff?.at) ? 'Dropped off ' + shortTime(o.data.handoff.at) : stalledLabel(o) ? 'No handoff recorded' : '';
         return [stalledLabel(o) ? 'Not scanned 24h+' : words, handoff].filter(Boolean).join(' · ');
     }
     return words + (Number.isFinite(s.checkedAt) ? ' · ' + shortTime(s.checkedAt) : '');
@@ -70,27 +66,11 @@ function protectionLine(o: QueueRow) {
 /** The line under the status: what the carrier said, why an order closed, and when it was archived. */
 function statusLine(o: QueueRow) {
     const archived = isArchived(o) ? 'Archived ' + new Date(o.data.archivedAt).toLocaleDateString([], { dateStyle: 'medium' }) : '';
-    const why = o.bucket === 'closed' ? closedReason(o) : '';
+    const why = o.bucket === 'closed' ? closedReason(o) || 'Cancelled' : '';
     // Says so when a flag was accepted, so a returning or unscanned parcel sitting under Shipped is
     // never a mystery: the carrier words beside it are still the carrier's own.
     const dismissed = flagDismissed(o) ? 'Flag dismissed ' + shortTime(Number(o.data.dismissed.at)) + ' by ' + String(o.data.dismissed.by || 'staff') : '';
-    // What Authorize.net said, for an order that is not paid yet (owner, Oct 23 2026: say WHY it needs review).
-    const payment = ['unpaid', 'review'].includes(o.bucket) && !o.data?.hold ? paymentLine(savedPaymentCheck(o.data?.paymentCheck)) : '';
-    return [payment, o.data?.shipment?.status ? carrierLine(o) : why, protectionLine(o), dismissed, archived].filter(Boolean).join(' · ');
-}
-
-/**
- * Whether the money for this order has been confirmed at the provider, shown on every tab beside the
- * order number (owner, Oct 27 2026). Three states on purpose: a check once a scheduled re-check found
- * a capture for the exact order total, a warning when the provider would not stand behind it, and
- * nothing at all until it has been asked. Silence is never a pass.
- */
-function PaymentVerified({ order }: { order: QueueRow }) {
-    const verified = savedPaymentVerification(order.data?.paymentVerified);
-    if (!verified) return null;
-    const ok = paymentConfirmed(verified);
-    const label = verificationLabel(verified);
-    return <span className={ok ? styles.verified : styles.unverified} role="img" aria-label={label} title={label}>{ok ? '✓' : '⚠'}</span>;
+    return [o.data?.shipment?.status ? carrierLine(o) : '', why, protectionLine(o), dismissed, archived].filter(Boolean).join(' · ');
 }
 
 const money2 = (c: number | null) => c === null ? '' : money(c);
@@ -101,7 +81,7 @@ function PaymentPanel({ order, owner, busy, change }: { order: QueueRow; owner: 
     const decide = (transId: string, decision: 'approve' | 'decline') => {
         const ask = typeof window === 'undefined' ? undefined : window.confirm;
         const question = decision === 'approve'
-            ? 'Approve this payment? Authorize.net collects ' + money(Number(order.total) || 0) + ' from the customer\'s card and the order moves to To ship.'
+            ? 'Approve this payment? Authorize.net collects ' + money(Number(order.total) || 0) + ' from the customer\'s card and the order moves to Pack & ship.'
             : 'Decline this payment? The customer is not charged and the hold on their card is released. The order stays unpaid.';
         if (ask && !ask(question)) return;
         void change('payment-hold', { id: order.id, transId, decision }, r => toast.success(r?.message || 'Done.'));
@@ -127,7 +107,7 @@ function PaymentPanel({ order, owner, busy, change }: { order: QueueRow; owner: 
 
 /** A bought label not yet handed over can be marked dropped off straight from the queue. */
 export const canMarkDroppedOff = (o: QueueRow, allowed: (permission: string) => boolean) =>
-    allowed('orders:fulfill') && o.bucket === 'label' && ['paid', 'shipped'].includes(o.status) && !o.data?.handoff;
+    allowed('orders:fulfill') && !paymentVerificationFailed(o) && o.bucket === 'label' && ['paid', 'shipped'].includes(o.status) && !o.data?.handoff;
 
 /**
  * Records that the parcel left the building. Changes no status and emails nobody: the order moves to
@@ -137,7 +117,7 @@ export function DroppedOff({ order, busy, change }: { order: QueueRow; busy: boo
     const number = orderNumber(order.id);
     function click() {
         const ask = typeof window === 'undefined' ? undefined : window.confirm;
-        if (ask && !ask('Mark ' + number + ' as dropped off with the carrier? The customer is not emailed. It moves to Shipped when the carrier scans it.')) return;
+        if (ask && !ask('Mark ' + number + ' as dropped off with the carrier? The customer is not emailed. It moves to Track parcels; carrier acceptance stays unconfirmed until a scan.')) return;
         void change('order-handoff', { orderId: order.id }, r => toast.success(r?.message || number + ' marked dropped off.'));
     }
     return <button type="button" className="text-button" disabled={busy} onClick={click}>Dropped off</button>;
@@ -154,13 +134,13 @@ const messagesOf = (o: QueueRow): OrderMessageLog => (o as QueueRow & { messages
 const sentAt = (at: number) => new Date(at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
 function MessagedCell({ order }: { order: QueueRow }) {
     const log = messagesOf(order);
-    if (!log.last) return <span className={styles.notMessaged}>Not contacted</span>;
+    if (!log.last) return <span className={styles.notMessaged}>No contact recorded</span>;
     const all = log.items.map(m => orderMessageLabel[m.kind] + ' · ' + sentAt(m.at)).join('\n');
-    return <span title={all}>{orderMessageLabel[log.last.kind]}<span className={styles.sub}>{sentAt(log.last.at)}{log.count > 1 ? ' · ' + log.count + ' sent' : ''}</span></span>;
+    return <span title={all}>{orderMessageLabel[log.last.kind]}<span className={styles.sub}>{sentAt(log.last.at)}{log.count > 1 ? ' · ' + log.count + ' recorded' : ''}</span></span>;
 }
-export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, formGeneration, change, submit, markDraft, reload, onEmailCustomer, onReportProblem, onClearHold, onWinBack }: Props) {
+export function OrdersAdmin({ reloadToken, viewRequest, checkoutRecovery, allowed, busy, formGeneration, change, submit, markDraft, reload, onEmailCustomer, onReportProblem, onClearHold, onWinBack }: Props) {
     const [problem, setProblem] = useState<{ issue: string; note: string }>({ issue: 'out_of_stock', note: '' });
-    const [tab, setTab] = useState<QueueTab>('to_ship');
+    const [tab, setTab] = useState<QueueTab>(requestedTab(viewRequest?.tab));
     const [input, setInput] = useState('');
     const [q, setQ] = useState('');
     const [result, setResult] = useState<QueueResult | null>(null);
@@ -169,6 +149,8 @@ export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, form
     const [error, setError] = useState('');
     const [selected, setSelected] = useState<QueueRow | null>(null);
     const sequence = useRef(0);
+
+    useEffect(() => { if (viewRequest) { setTab(requestedTab(viewRequest.tab)); setInput(''); setQ(''); } }, [viewRequest?.revision]);
 
     // Search waits for a short pause in typing.
     useEffect(() => { const t = setTimeout(() => setQ(input.trim()), 250); return () => clearTimeout(t); }, [input]);
@@ -202,18 +184,13 @@ export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, form
 
     function nextStep(o: QueueRow) {
         const s = o.data?.shipment;
+        if (paymentVerificationFailed(o)) return mainStep(o, s);
         if (o.data?.hold) return <span className={styles.nextGroup}>
             <span className={styles.holdTag}>On hold: {issueLabel(o.data.hold.issue)}</span>
-            {onEmailCustomer && o.data?.email && <button type="button" className="text-button" disabled={busy} onClick={() => onEmailCustomer(o)}>Email customer</button>}
+            {onEmailCustomer && o.data?.email && <button type="button" className="text-button" disabled={busy} onClick={() => onEmailCustomer(o)}>Open customer history & reply</button>}
         </span>;
-        const report = onReportProblem && !['closed', 'delivered', 'test'].includes(o.bucket) ? <button type="button" className="text-button" onClick={() => { setProblem({ issue: 'out_of_stock', note: '' }); setSelected(o); }}>Report problem</button> : null;
         const step = mainStep(o, s);
-        const winBack = onWinBack && o.bucket === 'unpaid' && o.data?.email ? <select className={styles.winBack} value="" disabled={busy} aria-label={'Send ' + (o.data?.address?.name || 'this customer') + ' a win-back email'} onChange={e => { if (e.target.value) onWinBack(o, e.target.value); }}>
-            <option value="">Win back…</option>{winBackTemplates.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
-        </select> : null;
-        const archive = archiveButton(o);
-        const dismiss = dismissButton(o);
-        return report || winBack || archive || dismiss ? <span className={styles.nextGroup}>{step}{winBack}{report}{dismiss}{archive}</span> : step;
+        return <span className={styles.nextGroup}>{step}</span>;
     }
     /**
      * Accepts a carrier flag nobody can clear by hand: not scanned, no update in four days, or a
@@ -226,11 +203,11 @@ export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, form
         const send = (b: Record<string, unknown>, done: string) => {
             shippingPost({ id: o.id, ...b }).then(r => { toast.success(r?.message || done); reload(); }).catch(e => toast.error(e instanceof Error ? e.message : 'Request failed.'));
         };
-        if (flagDismissed(o)) return <button type="button" className="text-button" disabled={busy} onClick={() => send({ undoDismiss: true }, number + ' is back in Needs review.')}>Undo dismiss</button>;
+        if (flagDismissed(o)) return <button type="button" className="text-button" disabled={busy} onClick={() => send({ undoDismiss: true }, number + ' is back in Needs attention.')}>Undo dismiss</button>;
         if (!dismissibleReview(o)) return null;
         function click() {
             const ask = typeof window === 'undefined' ? undefined : window.confirm;
-            if (ask && !ask('Dismiss the carrier flag on ' + number + '? It moves to Shipped and stops appearing in the daily parcel email. The customer is not emailed, and nothing about the order changes. If the carrier later reports something different, the flag comes back.')) return;
+            if (ask && !ask('Dismiss the carrier flag on ' + number + '? It moves to Track parcels and stops appearing in the daily parcel email. The carrier issue remains visible. The customer is not emailed, and nothing about the order changes. If the carrier later reports something different, the flag comes back.')) return;
             send({ dismiss: true }, number + ' dismissed.');
         }
         return <button type="button" className="text-button" disabled={busy} onClick={click}>Dismiss flag</button>;
@@ -244,6 +221,7 @@ export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, form
         return <button type="button" className="text-button" disabled={busy} onClick={() => void change('order-archive', { orderId: o.id }, r => toast.success(r.message || number + ' archived.'))}>Archive</button>;
     }
     function mainStep(o: QueueRow, s: any) {
+        if (paymentVerificationFailed(o)) return <button type="button" className="text-button" onClick={() => setSelected(o)}>Review payment</button>;
         const noCoa = (o as QueueRow & { coaMissing?: string[] }).coaMissing || [];
         if (noCoa.length && (o.bucket === 'to_ship' || o.bucket === 'label')) return <span className={styles.coaHold}>Can't ship: no COA for {noCoa.join(', ')}</span>;
         // Buying it is the approval, so the button stays right next to the price that needs approving.
@@ -251,17 +229,16 @@ export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, form
             <span className={styles.coaHold}>{money(Number(o.data?.labelApproval?.cents) || 0)} label · over your {money(Number(o.data?.labelApproval?.limitCents) || 0)} limit</span>
             {allowed('orders:fulfill') ? <ShippingLabel order={o} onDone={reload} compact/> : null}
         </span>;
-        if (o.bucket === 'to_ship' && allowed('orders:fulfill')) return <ShippingLabel order={o} onDone={reload} compact/>;
-        if (o.bucket === 'label' && s?.labelUrl) return <span className={styles.nextGroup}>
+        if (tabForOrder(o) === 'to_ship' && o.bucket === 'to_ship' && allowed('orders:fulfill')) return <ShippingLabel order={o} onDone={reload} compact/>;
+        if (tabForOrder(o) === 'to_ship' && o.bucket === 'label' && s?.labelUrl) return <span className={styles.nextGroup}>
             <a className="text-button" href={s.labelUrl} target="_blank" rel="noopener">Print label</a>
             {canMarkDroppedOff(o, allowed) && <DroppedOff order={o} busy={busy} change={change}/>}
         </span>;
-        if ((o.bucket === 'shipped' || o.bucket === 'delivered') && s?.trackingUrl) return <a className="text-button" href={s.trackingUrl} target="_blank" rel="noopener">Track</a>;
+        if ((tabForOrder(o) === 'shipped' || o.bucket === 'delivered') && s?.trackingUrl) return <a className="text-button" href={s.trackingUrl} target="_blank" rel="noopener">Track</a>;
         if ((o.bucket === 'unpaid' || o.bucket === 'review') && canReconcile(o)) return <span className={styles.nextGroup}>
-            {o.data?.paymentCheck && <button type="button" className="text-button" onClick={() => setSelected(o)}>Payment details</button>}
             <button type="button" className="text-button" disabled={busy} onClick={() => reconcile(o)}>Check payment</button>
         </span>;
-        return <button type="button" className="text-button" onClick={() => setSelected(o)}>View</button>;
+        return <button type="button" className="text-button" onClick={() => setSelected(o)}>View details</button>;
     }
 
     const counts = result?.counts;
@@ -270,19 +247,28 @@ export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, form
 
     return <section className={styles.orders} aria-labelledby="orders-title">
         <div className={styles.heading}>
-            <div><h2 id="orders-title">Orders</h2><p>Paid orders waiting to ship come first. Select an order number for the full order.</p>
+            <div><h2 id="orders-title">Orders</h2><p>Choose the work to do. Payment and shipment are shown separately on every order.</p>
                 <div className={styles.sheetButtons}>
                     <a className="button button-dark" href="/api/admin/pick-list" target="_blank" rel="noopener">Print pick list</a>
-                    {allowed('orders:fulfill') && <a className="button button-gold" href="/api/admin/labels" target="_blank" rel="noopener">Print all bought labels</a>}
+                    {allowed('orders:fulfill') && <a className="button button-gold" href="/api/admin/labels" target="_blank" rel="noopener">Print waiting labels</a>}
                     <span>Printing changes nothing.</span>
                 </div></div>
             <label className={styles.search}>Search orders
                 <input type="search" value={input} onChange={e => setInput(e.target.value)} placeholder="Name, email, order number or tracking"/>
             </label>
         </div>
-        <div className={styles.tabs} role="group" aria-label="Order status">
-            {queueTabs.map(t => <button key={t.id} type="button" aria-pressed={tab === t.id} className={t.id === 'test' ? styles.quiet : undefined} onClick={() => setTab(t.id)}>{t.label}<span>{counts ? counts[t.id] : '…'}</span></button>)}
+        <div className={styles.views}>
+            <div className={styles.tabs} role="group" aria-label="Order work queues">
+                {queueTabs.filter(t => !t.secondary).map(t => <button key={t.id} type="button" aria-pressed={tab === t.id} onClick={() => setTab(t.id)}>{t.label}<span>{counts ? counts[t.id] : '…'}</span></button>)}
+            </div>
+            <label className={styles.otherViews}>Completed & other records
+                <select value={queueTabs.find(t => t.id === tab)?.secondary ? tab : ''} onChange={e => { if (e.target.value) setTab(e.target.value as QueueTab); }}>
+                    <option value="">Choose a view</option>
+                    {queueTabs.filter(t => t.secondary).map(t => <option key={t.id} value={t.id}>{t.label} ({counts ? counts[t.id] : '…'})</option>)}
+                </select>
+            </label>
         </div>
+        <p className={styles.viewDetail}>{current.detail}</p>
         {result?.noCoa && result.noCoa.length > 0 && (() => {
             const holding = result.noCoa.filter(p => p.waitingOrders > 0), rest = result.noCoa.length - holding.length;
             const table = (rows: typeof holding) => <table><thead><tr><th>Product</th><th>Lot being sold</th><th className={styles.number}>Paid orders waiting</th></tr></thead>
@@ -297,10 +283,10 @@ export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, form
         {result?.mustGoOut && (() => {
             // The 2 p.m. Pacific same-day promise, counted across every tab (lib/ship-cutoff.ts).
             const { today, late } = result.mustGoOut, total = today + late;
-            if (!total) return <p className={styles.cutoffClear}>Nothing has to go out today.</p>;
+            if (!total || tab !== 'to_ship') return null;
             return <div className={styles.cutoff} data-late={late > 0 || undefined}>
                 <span className={styles.star} aria-hidden="true">★</span>
-                <p><strong>{total} {total === 1 ? 'order has' : 'orders have'} to go out today</strong>{late ? ` (${late} late)` : ''}. Paid in-stock orders placed before 2 p.m. Pacific on a business day go out that day; later orders go out the next business day. Hand them to USPS, then press Dropped off.</p>
+                <p><strong>{late > 0 ? `${late} overdue` : ''}{late > 0 && today > 0 ? ' · ' : ''}{today > 0 ? `${today} due today` : ''}</strong>. Pack the orders, hand them to the carrier, then record Dropped off.</p>
             </div>;
         })()}
         {result && <p className={styles.summary} role="status">
@@ -309,15 +295,16 @@ export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, form
         </p>}
         {!rows.length ? <p className={styles.empty}>{loading ? 'Loading orders…' : q ? 'No orders match this search in ' + current.label + '. Try All.' : 'No orders in ' + current.label + '.'}</p> :
             <table className={styles.table}>
-                <thead><tr><th>Order</th><th>Customer</th><th className={styles.number}>Items</th><th className={styles.number}>Total</th><th>Status</th><th>Messaged</th><th>Next step</th></tr></thead>
-                <tbody>{rows.map(o => { const due = shipDue(o); const urgent = due && due.state !== 'upcoming'; return <tr key={o.id}>
-                    <td>{urgent && <span className={styles.star} role="img" aria-label={due.label} title={due.label}>★</span>}<button type="button" className={styles.orderButton} onClick={() => setSelected(o)}>{orderNumber(o.id)}</button><PaymentVerified order={o}/>{due && <span className={urgent ? styles.dueUrgent : styles.sub}>{due.label}</span>}<span className={styles.sub}>{new Date(o.created).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span></td>
+                <thead><tr><th>Order</th><th>Customer</th><th className={styles.number}>Items</th><th className={styles.number}>Total</th><th>Payment</th><th>Shipment</th><th>Last contact recorded</th><th>Next step</th></tr></thead>
+                <tbody>{rows.map(o => { const payment = orderPaymentStatus(o), shipment = orderShipmentStatus(o); const due = tabForOrder(o) === 'to_ship' ? shipDue(o) : null; const urgent = due && due.state !== 'upcoming'; return <tr key={o.id}>
+                    <td>{urgent && <span className={styles.star} role="img" aria-label={due.label} title={due.label}>★</span>}<button type="button" className={styles.orderButton} onClick={() => setSelected(o)}>{orderNumber(o.id)}</button>{due && <span className={urgent ? styles.dueUrgent : styles.sub}>{due.label}</span>}<span className={styles.sub}>{new Date(o.created).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span></td>
                     <td>{o.data?.address?.name || 'Name not recorded'}<span className={styles.sub}>{[place(o), o.data?.email].filter(Boolean).join(' · ')}</span></td>
-                    <td className={styles.number}>{units(o)}</td>
-                    <td className={styles.number}>{money(Number(o.total) || 0)}</td>
-                    <td><StatusBadge bucket={o.bucket}/>{statusLine(o) && <span className={styles.sub}>{statusLine(o)}</span>}</td>
-                    <td className={styles.messaged}><MessagedCell order={o}/></td>
-                    <td className={styles.next}>{nextStep(o)}</td>
+                    <td data-label="Items" className={styles.number}>{units(o)}</td>
+                    <td data-label="Order total" className={styles.number}>{money(Number(o.total) || 0)}</td>
+                    <td data-label="Payment"><strong>{payment.label}</strong>{payment.detail && <span className={styles.sub}>{payment.detail}</span>}{['unpaid', 'review'].includes(o.bucket) && paymentLine(savedPaymentCheck(o.data?.paymentCheck)) && <span className={styles.sub}>{paymentLine(savedPaymentCheck(o.data?.paymentCheck))}</span>}</td>
+                    <td data-label="Shipment"><strong>{shipment.label}</strong>{shipment.detail && <span className={styles.sub}>{shipment.detail}</span>}{statusLine(o) && <span className={styles.sub}>{statusLine(o)}</span>}</td>
+                    <td data-label="Last contact recorded" className={styles.messaged}><MessagedCell order={o}/></td>
+                    <td className={styles.next}>{orderAttentionReason(o) && <span className={styles.attentionReason}>{orderAttentionReason(o)}</span>}{nextStep(o)}</td>
                 </tr>; })}</tbody>
             </table>}
         {result?.hasMore && <div className={styles.more}><button type="button" className="button button-dark" disabled={loading} onClick={() => fetchPage(rows.length)}>{loading ? 'Loading…' : 'Load more (' + (result.total - rows.length) + ' left)'}</button></div>}
@@ -335,16 +322,18 @@ export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, form
         <Sheet open={Boolean(selected)} onOpenChange={open => { if (!open) setSelected(null); }}>
             <SheetContent side="right" className={styles.panel}>
                 {selected && <>
-                    <div className={styles.panelHead}><SheetTitle asChild><h2>Order {orderNumber(selected.id)}</h2></SheetTitle><StatusBadge bucket={selected.bucket}/></div>
+                    <div className={styles.panelHead}><SheetTitle asChild><h2>Order {orderNumber(selected.id)}</h2></SheetTitle></div>
                     <SheetDescription className={styles.panelMeta}>{new Date(selected.created).toLocaleString()} · {money(Number(selected.total) || 0)}</SheetDescription>
-                    <p className={styles.statusLine}>{fulfillmentLabel(selected)}</p>
-                    {awaitingLabelApproval(selected) && <p className={styles.coaHold}>This label quotes {money(Number(selected.data?.labelApproval?.cents) || 0)}, above your {money(Number(selected.data?.labelApproval?.limitCents) || 0)} automatic limit, so it was not bought. Buying it below approves that cost. Nothing has been charged.</p>}
+                    <div className={styles.stateSummary}><p><strong>Payment: {orderPaymentStatus(selected).label}</strong><span className={styles.sub}>{orderPaymentStatus(selected).detail}</span></p><p><strong>Shipment: {orderShipmentStatus(selected).label}</strong><span className={styles.sub}>{orderShipmentStatus(selected).detail}</span></p></div>
+                    {orderAttentionReason(selected) && <p className={styles.attentionReason}>{orderAttentionReason(selected)}</p>}
+                    {statusLine(selected) && <p className={styles.statusLine}>{statusLine(selected)}</p>}
+                    {!paymentVerificationFailed(selected) && awaitingLabelApproval(selected) && <p className={styles.coaHold}>This label quotes {money(Number(selected.data?.labelApproval?.cents) || 0)}, above your {money(Number(selected.data?.labelApproval?.limitCents) || 0)} automatic limit, so it was not bought. Buying it below approves that cost. Nothing has been charged.</p>}
                     <div className={styles.messageLog}>
-                        <h3>Messages sent</h3>
+                        <h3>Contact history recorded</h3>
                         {messagesOf(selected).items.length
                             ? <ul>{messagesOf(selected).items.map((m, i) => <li key={m.kind + m.at + i}><span>{orderMessageLabel[m.kind]}</span><span className={styles.sub}>{sentAt(m.at)}{m.by && m.kind !== 'auto_reminder' ? ' · ' + m.by : ''}</span></li>)}</ul>
-                            : <p className={styles.sub}>Nothing sent to this customer yet.</p>}
-                        <p className={styles.sub}>Times are when the mail provider accepted the email; inbox delivery is not confirmed.</p>
+                            : <p className={styles.sub}>No contact is recorded here. Other channels may not be connected.</p>}
+                        <p className={styles.sub}>Email times show provider acceptance, not confirmed inbox delivery. Logged phone or text contacts are separate records.</p>
                     </div>
                     <PaymentPanel order={selected} owner={allowed('team:manage')} busy={busy} change={change}/>
                     <OrderDetails order={selected}/>
@@ -352,7 +341,14 @@ export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, form
                     {recoveryJobs(selected.id).map((j: any) => <p key={j.order_id}>Recovery email: {j.status === 'accepted' ? 'Accepted by mail provider' : j.status === 'review' ? 'Needs manual review' : j.status}. {String(j.reason || '').replaceAll('_', ' ')}{j.accepted_at ? ' · ' + new Date(j.accepted_at).toLocaleString() : ''}</p>)}
                     <div className={styles.actions}>
                         <h3>Actions</h3>
-                        {['to_ship', 'label'].includes(selected.bucket) && <p className={styles.panelMeta}><a className="text-button" href={'/api/admin/pick-list?id=' + encodeURIComponent(selected.id)} target="_blank" rel="noopener">Pick list for this order</a></p>}
+                        {paymentVerificationFailed(selected) && <p className={styles.coaHold}>Resolve the payment verification issue before buying a label or confirming shipment. Fulfillment controls are unavailable while this payment needs review.</p>}
+                        {onWinBack && selected.bucket === 'unpaid' && selected.data?.email && <label className={styles.otherViews}>Prepare a follow-up after checking history
+                            <select value="" disabled={busy} onChange={e => { if (e.target.value) onWinBack(selected, e.target.value); }} aria-label="Prepare a follow-up draft">
+                                <option value="">Choose a draft</option>{winBackTemplates.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                            </select>
+                        </label>}
+                        <div className={styles.nextGroup}>{dismissButton(selected)}{archiveButton(selected)}</div>
+                        {tabForOrder(selected) === 'to_ship' && <p className={styles.panelMeta}><a className="text-button" href={'/api/admin/pick-list?id=' + encodeURIComponent(selected.id)} target="_blank" rel="noopener">Pick list for this order</a></p>}
                         {selected.data?.hold ? <div className={styles.hold}>
                             <p><strong>On hold: {issueLabel(selected.data.hold.issue)}</strong>{selected.data.hold.note ? ' · ' + selected.data.hold.note : ''}<br/><span className={styles.panelMeta}>By {selected.data.hold.by} · {new Date(selected.data.hold.at).toLocaleString()}. No label or shipping until the hold is cleared.</span></p>
                             {onClearHold && <button type="button" className="text-button" disabled={busy} onClick={() => { const order = selected; void onClearHold(order).then(() => setSelected(null)); }}>Clear hold (problem solved)</button>}
@@ -360,12 +356,12 @@ export function OrdersAdmin({ reloadToken, checkoutRecovery, allowed, busy, form
                             <p><strong>Report a problem</strong> <span className={styles.panelMeta}>Holds the order (no label, no shipping) and opens an email to the customer. Nothing is sent until you press Send.</span></p>
                             <label>What is wrong<select value={problem.issue} onChange={e => setProblem({ ...problem, issue: e.target.value })}>{issueTypes.filter(([k]) => !['partner', 'vendor', 'coa'].includes(k)).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>
                             <label>Note (optional)<input value={problem.note} maxLength={500} onChange={e => setProblem({ ...problem, note: e.target.value })} placeholder="e.g. Restock expected late November"/></label>
-                            <button type="submit" className="button button-dark" disabled={busy}>Hold order and email customer</button>
+                            <button type="submit" className="button button-dark" disabled={busy}>Hold order and prepare reply</button>
                         </form>}
-                        {onEmailCustomer && selected.data?.email && <button type="button" className="button button-dark" disabled={busy} onClick={() => { const order = selected; setSelected(null); onEmailCustomer(order); }}>Email customer</button>}
+                        {onEmailCustomer && selected.data?.email && <button type="button" className="button button-dark" disabled={busy} onClick={() => { const order = selected; setSelected(null); onEmailCustomer(order); }}>Open customer history & reply</button>}
                         {canReconcile(selected) && <button type="button" className="button button-dark" disabled={busy} onClick={() => reconcile(selected)}>Check payment status</button>}
-                        {allowed('orders:fulfill') && !selected.data?.hold && <ShippingLabel order={selected} onDone={reload}/>}
-                        {allowed('orders:fulfill') && !selected.data?.hold && ['paid', 'shipped'].includes(selected.status) && (selected.data?.shipment
+                        {allowed('orders:fulfill') && !selected.data?.hold && !paymentVerificationFailed(selected) && <ShippingLabel order={selected} onDone={reload}/>}
+                        {allowed('orders:fulfill') && !selected.data?.hold && !paymentVerificationFailed(selected) && ['paid', 'shipped'].includes(selected.status) && (selected.data?.shipment
                             ? <details className={styles.manual}><summary>Manual confirmation (only if the carrier is not tracking this parcel)</summary><ManualForm order={selected} formGeneration={formGeneration} submit={submit} markDraft={markDraft} busy={busy}/></details>
                             : <ManualForm order={selected} formGeneration={formGeneration} submit={submit} markDraft={markDraft} busy={busy}/>)}
                         {!allowed('orders:fulfill') && !canReconcile(selected) && <p className={styles.panelMeta}>No actions available for your role on this order.</p>}

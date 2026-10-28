@@ -184,9 +184,12 @@ const telegram={};
   const workerSource=fs.readFileSync(path.join(root,'worker.ts'),'utf8');
   assert.match(workerSource,/runPaymentVerification\(verifyEnv/,'it runs on the 5-minute schedule');
   const ui=fs.readFileSync(path.join(root,'components/store/orders-admin.tsx'),'utf8');
-  assert.match(ui,/<PaymentVerified order=\{o\}\/>/,'the badge sits in the shared row, so it shows on every tab');
-  assert.match(ui,/paymentConfirmed\(verified\)/,'and only a confirmed collection earns the check');
-  assert.match(ui,/if \(!verified\) return null;/,'an unasked order shows nothing rather than a false pass');
+  assert.match(ui,/orderPaymentStatus\(o\)/,'shared payment evidence appears on every order row');
+  const display=load('lib/fulfillment.ts');
+  assert.equal(display.orderPaymentStatus({status:'paid',data:{}}).label,'Paid · recorded','recorded payment never pretends it was independently verified');
+  assert.equal(display.orderPaymentStatus({status:'paid',data:{paymentVerified:{state:'settled'}}}).label,'Paid · recorded','missing timestamp earns no verified claim');
+  assert.equal(display.orderPaymentStatus({status:'paid',data:{paymentVerified:{at:1,state:'settled'}}}).label,'Paid · settled');
+  assert.equal(display.orderPaymentStatus({status:'paid',data:{paymentVerified:{at:1,state:'failed'}}}).label,'Check payment');
 
   console.log('PASS: verdicts for settled, captured, wrong amount, missing, held and declined payments; the check only for a confirmed capture of the exact order total; one alert per order and never a second; recovery after a fix; a provider outage recording no verdict and alerting nobody; unpaid, test, ancient, refunded and foreign-environment orders never asked about; settled money never questioned again; and a write that touches one field and no status. Isolated SQLite, no network.');
 })().catch(e=>{console.error(e);process.exitCode=1});

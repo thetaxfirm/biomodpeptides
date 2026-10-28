@@ -4,7 +4,7 @@
 import type { Product } from './catalog';
 import { hasCoa, noCoaProducts, COA_REQUIRED_TO_SHIP } from './coa-shipping';
 import { productAvailability } from './availability';
-import { orderBucket } from './fulfillment';
+import { tabForOrder, isArchived } from './order-queue';
 import { overdueCustomers } from './reply-overdue';
 import type { CoaEnvironment } from './coa-outbox';
 import type { ShippingOptionsConfig } from './shipping-options';
@@ -31,20 +31,19 @@ const plural = (n: number, one: string, many = one + 's') => n + ' ' + (n === 1 
 
 export function orderAttention(orders: OverviewOrder[], products: Product[], now: number): Attention[] {
     const out: Attention[] = [];
-    const bucketed = orders.map(o => ({ ...o, bucket: orderBucket(o as any) }));
-    const toShip = bucketed.filter(o => o.bucket === 'to_ship');
+    const bucketed = orders.filter(o => !isArchived(o)).map(o => ({ ...o, work: tabForOrder(o, now) }));
+    const toShip = bucketed.filter(o => o.work === 'to_ship');
     if (toShip.length) {
         const blocked = !COA_REQUIRED_TO_SHIP ? [] : toShip.filter(o => (Array.isArray(o.data?.items) ? o.data.items : []).some((i: any) => !hasCoa(products.find(p => p.id === Number(i?.id ?? i?.product?.id)))));
         const oldest = Math.min(...toShip.map(o => o.created));
-        out.push({ id: 'to_ship', tab: 'orders', count: toShip.length, tone: now - oldest > 2 * DAY ? 'urgent' : 'normal', title: plural(toShip.length, 'paid order') + ' to ship',
-            detail: `Oldest waiting ${ago(now, oldest)}.` + (blocked.length ? ` ${blocked.length} can't ship until a COA is attached.` : '') });
+        const labels = toShip.filter(o => Boolean(o.data?.shipment)).length;
+        out.push({ id: 'to_ship', tab: 'orders', count: toShip.length, tone: now - oldest > 2 * DAY ? 'urgent' : 'normal', title: plural(toShip.length, 'order') + ' to pack & ship',
+            detail: `Oldest waiting ${ago(now, oldest)}. ${labels} with a label ready; no handoff recorded.` + (blocked.length ? ` ${blocked.length} can't ship until a COA is attached.` : '') });
     }
-    const label = bucketed.filter(o => o.bucket === 'label');
-    if (label.length) out.push({ id: 'label', tab: 'orders', count: label.length, tone: 'normal', title: plural(label.length, 'label') + ' bought, not yet marked shipped', detail: 'Pack these and hand them to the carrier.' });
-    const review = bucketed.filter(o => o.bucket === 'review');
-    if (review.length) out.push({ id: 'review', tab: 'orders', count: review.length, tone: 'urgent', title: (review.length === 1 ? '1 order needs' : review.length + ' orders need') + ' review', detail: 'Payment or checkout needs a decision before anything ships.' });
-    const unpaid = bucketed.filter(o => o.bucket === 'unpaid' && now - o.created <= 7 * DAY);
-    if (unpaid.length) out.push({ id: 'unpaid', tab: 'orders', count: unpaid.length, tone: 'normal', title: plural(unpaid.length, 'unfinished checkout') + ' this week', detail: 'Customers started paying but did not finish. A win-back email can recover them.' });
+    const review = bucketed.filter(o => o.work === 'review');
+    if (review.length) out.push({ id: 'review', tab: 'orders', count: review.length, tone: 'urgent', title: (review.length === 1 ? '1 order needs' : review.length + ' orders need') + ' attention', detail: 'Check the reason on each order: payment, order hold, label approval or delivery issue.' });
+    const unpaid = bucketed.filter(o => o.work === 'unpaid');
+    if (unpaid.length) out.push({ id: 'unpaid', tab: 'orders', count: unpaid.length, tone: 'normal', title: plural(unpaid.length, 'checkout') + ' with payment to confirm', detail: 'Check payment and customer history before preparing a follow-up. An unfinished checkout is not proof of a failed purchase.' });
     return out;
 }
 
@@ -109,7 +108,7 @@ export async function adminOverview(env: CoaEnvironment, input: { orders: Overvi
         else if (waiting.length) attention.push({ id: 'requests', tab: 'requests', count: waiting.length, tone: 'urgent', title: plural(waiting.length, 'customer') + ' waiting over a day for a reply',
             detail: waiting.slice(0, 3).map(w => `${w.name || w.email} (${ago(now, w.since)})`).join(', ') + (waiting.length > 3 ? ` and ${waiting.length - 3} more` : '') + '.' });
     }
-    if (input.access.store) attention.push(...productAttention(input.products, input.orders.filter(o => orderBucket(o as any) === 'to_ship').map(o => ({ items: o.data?.items }))));
+    if (input.access.store) attention.push(...productAttention(input.products, input.orders.filter(o => !isArchived(o) && tabForOrder(o, now) === 'to_ship').map(o => ({ items: o.data?.items }))));
     // Urgent first, then the order work happens in.
     attention.sort((a, b) => (a.tone === b.tone ? 0 : a.tone === 'urgent' ? -1 : 1));
     return { generatedAt: now, attention, sales: input.access.reports ? salesWindows(input.orders, now) : null, setup: input.access.store ? setupAttention(input.shipping, input.environment) : [] };

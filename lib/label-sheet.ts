@@ -1,6 +1,7 @@
 // Every bought-but-not-yet-handed-over label on one printable sheet, one per page.
 // Read-only: it shows labels the carrier already issued and buys nothing.
 import { orderBucket, type FulfillmentOrder } from './fulfillment';
+import { tabForOrder, isArchived } from './order-queue';
 import { orderNumber } from './pick-list';
 
 export type LabelOrder = FulfillmentOrder & { id: string; created: number };
@@ -9,7 +10,7 @@ export type LabelEntry = { id: string; number: string; customer: string; place: 
 /** A label is "standing" once bought and before the parcel is on its way: the Label bought queue. */
 export const hasStandingLabel = (order: LabelOrder) => {
     const url = (order.data as Record<string, any> | undefined)?.shipment?.labelUrl;
-    return orderBucket(order) === 'label' && typeof url === 'string' && /^https:\/\//i.test(url);
+    return !isArchived(order) && tabForOrder(order) === 'to_ship' && orderBucket(order) === 'label' && typeof url === 'string' && /^https:\/\//i.test(url);
 };
 
 const text = (value: unknown, max = 120) => String(value ?? '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, max);

@@ -1,46 +1,37 @@
 // Admin order queue: one short status per order, status tabs with counts, search and paging.
 // Shared by the admin-orders route and the Orders tab, and the customer order list labels.
-import { orderBucket, queueBucket, type FulfillmentOrder, type OrderBucket } from './fulfillment';
+import { queueBucket, paymentVerificationFailed, type FulfillmentOrder, type OrderBucket } from './fulfillment';
 import { shipDue } from './ship-cutoff';
 export { orderBucket, queueBucket, dismissibleReview, flagDismissed, carrierState, bucketStatus, customerOrderStatus, type OrderBucket, type Tone } from './fulfillment';
 
-// Tab order is the order of work: what needs doing first comes first.
-//
-// A tab is a place to work, not a status. Several statuses share one where the work is the same:
-// an order waiting for a label and one whose label is already bought are both "get it out the
-// door", and a parcel in transit and one that arrived are both gone. Splitting those meant two
-// tabs to watch for one job. Each row still shows its own status in the Status column, so nothing
-// is lost by grouping them, and orderBucket() stays as precise as it ever was.
-// QueueTab stays wide because it is also what arrives from a saved view or an old link, and those
-// can still name a tab that has since been merged away. requestedTab() narrows anything to a tab
-// that exists; tabBuckets below is the list of tabs actually shown.
-export type QueueTab = OrderBucket | 'all' | 'archived';
-export const tabBuckets = {
-    to_ship: ['to_ship', 'label'],
-    shipped: ['shipped', 'delivered'],
-    unpaid: ['unpaid'],
-    review: ['review'],
-    closed: ['closed'],
-    test: ['test'],
-} as const satisfies Partial<Record<QueueTab, readonly OrderBucket[]>>;
-type WorkTab = keyof typeof tabBuckets;
-export const queueTabs: { id: QueueTab; label: string }[] = [
-    { id: 'to_ship', label: 'To ship' },
-    { id: 'shipped', label: 'Shipped' },
-    { id: 'unpaid', label: 'Unpaid' },
-    { id: 'review', label: 'Needs review' },
-    { id: 'closed', label: 'Refunded / cancelled' },
-    { id: 'all', label: 'All' },
-    { id: 'test', label: 'Internal tests' },
-    { id: 'archived', label: 'Archived' },
+// Work queues describe what staff need to do. Payment and parcel evidence are shown
+// independently; neither a refund nor a dismissed flag can invent a carrier event.
+export type QueueTab = OrderBucket | 'all' | 'archived' | 'refunded' | 'cancelled' | 'failed';
+export const queueTabs: { id: QueueTab; label: string; detail: string; secondary?: boolean }[] = [
+    { id: 'to_ship', label: 'Pack & ship', detail: 'Paid orders awaiting a label, packing or handoff.' },
+    { id: 'review', label: 'Needs attention', detail: 'An order, payment or delivery issue needs a decision. Each row explains why.' },
+    { id: 'unpaid', label: 'Payment to confirm', detail: 'Payment is not confirmed for this checkout. Check purchase and contact history before following up.' },
+    { id: 'shipped', label: 'Track parcels', detail: 'Parcels handed over, moving, or with an acknowledged carrier issue. The shipment column states the evidence.' },
+    { id: 'all', label: 'All orders', detail: 'Unarchived customer orders, including completed and closed orders. Internal tests are separate.' },
+    { id: 'delivered', label: 'Delivered', detail: 'Delivery recorded by the carrier or store; the shipment column distinguishes them.', secondary: true },
+    { id: 'refunded', label: 'Refunded', detail: 'Orders recorded as refunded. Refunds do not establish where the parcel is.', secondary: true },
+    { id: 'cancelled', label: 'Cancelled', detail: 'Cancelled orders and expired checkouts. This does not mean a refund was issued.', secondary: true },
+    { id: 'failed', label: 'Payment unsuccessful', detail: 'Orders recorded with an unsuccessful payment. This is separate from cancellation and refund.', secondary: true },
+    { id: 'test', label: 'Internal tests', detail: 'Orders explicitly marked as internal tests.', secondary: true },
+    { id: 'archived', label: 'Archived', detail: 'Filed records. Their payment and shipment history is unchanged.', secondary: true },
 ];
-/** The tab an order shows up under, from its own status. */
-export function tabForBucket(bucket: OrderBucket): WorkTab {
-    for (const tab of Object.keys(tabBuckets) as WorkTab[]) if ((tabBuckets[tab] as readonly OrderBucket[]).includes(bucket)) return tab;
-    return 'review';
+const mergedAway: Readonly<Record<string, QueueTab>> = Object.freeze({ label: 'to_ship', closed: 'all' });
+
+/** One shared work destination for the list, counters and dashboard. */
+export function tabForOrder(order: FulfillmentOrder, now = Date.now()): QueueTab {
+    const bucket = queueBucket(order, now);
+    if (bucket === 'test') return 'test';
+    if (bucket === 'closed') return order.status === 'refunded' ? 'refunded' : order.status === 'failed' ? 'failed' : 'cancelled';
+    if (paymentVerificationFailed(order)) return 'review';
+    if (bucket === 'label' && Number.isFinite(order.data?.handoff?.at)) return 'shipped';
+    if (bucket === 'label') return 'to_ship';
+    return bucket;
 }
-/** Tabs that used to stand alone. A saved view or an old link still lands where that work moved. */
-const mergedAway: Readonly<Record<string, QueueTab>> = Object.freeze({ label: 'to_ship', delivered: 'shipped' });
 
 export type QueueOrder = { id: string; owner?: string; status: string; total: number; created: number; data: Record<string, any> };
 export type QueueRow = QueueOrder & { bucket: OrderBucket };
@@ -103,9 +94,9 @@ export function queryOrders(rows: QueueOrder[], params: { tab?: unknown; q?: unk
     const mustGoOut = { today: 0, late: 0 };
     for (const o of tagged) {
         if (isArchived(o)) { counts.archived += 1; continue; }
-        const due = shipDue(o, now);
+        const due = tabForOrder(o, now) === 'to_ship' ? shipDue(o, now) : null;
         if (due?.state === 'today') mustGoOut.today += 1; else if (due?.state === 'late') mustGoOut.late += 1;
-        counts[tabForBucket(o.bucket)] += 1; if (o.bucket !== 'test') counts.all += 1;
+        counts[tabForOrder(o, now)] += 1; if (o.bucket !== 'test') counts.all += 1;
     }
     const tab = requestedTab(params.tab);
     const q = cleanQuery(params.q);
@@ -114,7 +105,7 @@ export function queryOrders(rows: QueueOrder[], params: { tab?: unknown; q?: unk
     // A single-order lookup ignores the tab so the details panel follows an order that changed state.
     let list = id ? tagged.filter(o => o.id === id)
         : tab === 'archived' ? tagged.filter(isArchived)
-        : tagged.filter(o => !isArchived(o) && (tab === 'all' ? o.bucket !== 'test' : ((tabBuckets[tab as WorkTab] ?? []) as readonly OrderBucket[]).includes(o.bucket)));
+        : tagged.filter(o => !isArchived(o) && (tab === 'all' ? o.bucket !== 'test' : tabForOrder(o, now) === tab));
     if (words.length && !id) list = list.filter(o => { const t = searchText(o); return words.every(w => t.includes(w)); });
     // Work queues run oldest first so nothing waits behind newer orders; everything else is newest first.
     if (tab === 'to_ship') list = [...list].reverse();

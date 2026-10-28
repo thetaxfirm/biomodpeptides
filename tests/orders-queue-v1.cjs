@@ -91,24 +91,37 @@ assert.equal(q.orderBucket(order('stall7', 'paid', { shipment: { status: 'pre_tr
 assert.equal(fulfillment.stalledLabel(order('stall8', 'paid', { shipment: { status: 'pre_transit' }, labelCreatedAt: 'nonsense' })), false, 'a corrupt timestamp never raises a stall');
 assert.equal(q.orderBucket(order('stall11', 'paid', { shipment: { status: 'pre_transit' }, labelCreatedAt: stale, handoff: handed, hold: { issue: 'x' } })), 'review', 'a hold still outranks everything');
 
-// Counts are per tab, and a tab can gather more than one status: an order waiting for a label and
-// one already labelled are the same job, as are a parcel in transit and one that arrived.
+// Action queues separate delivery, refund and cancellation without changing stored status.
 const all = q.queryOrders(rows, { tab: 'all' });
-assert.deepEqual(all.counts, { to_ship: 4, shipped: 4, unpaid: 2, review: 2, closed: 1, all: 13, test: 1, archived: 0 });
-assert.deepEqual(q.tabBuckets.to_ship, ['to_ship', 'label']);
-assert.deepEqual(q.tabBuckets.shipped, ['shipped', 'delivered']);
-assert(!q.queueTabs.some(t => t.id === 'label' || t.id === 'delivered'), 'the merged-away tabs are gone');
-// Grouping must not blur the orders themselves: each row still carries its own status.
-for (const [tab, statuses] of [['to_ship', ['To ship', 'Label bought']], ['shipped', ['Shipped', 'Delivered']]]) {
-  const shown = q.queryOrders(rows, { tab }).orders.map(o => q.bucketStatus[o.bucket].label);
-  assert.deepEqual([...new Set(shown)].sort(), [...statuses].sort(), tab + ': both statuses are visible inside the one tab');
-}
-// A saved view or an old link lands where that work moved rather than silently resetting.
+assert.deepEqual(all.counts, { to_ship: 4, review: 2, unpaid: 2, shipped: 2, all: 13, delivered: 2, refunded: 1, cancelled: 0, failed: 0, test: 1, archived: 0 });
+assert.equal(q.queryOrders(rows, { tab: 'shipped' }).orders.length, 2, 'tracking excludes completed deliveries');
+assert.equal(q.queryOrders(rows, { tab: 'delivered' }).orders.length, 2);
+assert.equal(q.queryOrders(rows, { tab: 'refunded' }).orders[0].status, 'refunded');
 assert.equal(q.requestedTab('label'), 'to_ship');
-assert.equal(q.requestedTab('delivered'), 'shipped');
+assert.equal(q.requestedTab('closed'), 'all', 'legacy combined view remains navigable');
+assert.equal(q.requestedTab('delivered'), 'delivered');
 assert.equal(q.requestedTab('nonsense'), 'to_ship');
 assert.deepEqual(q.queryOrders(rows, { tab: 'label' }).orders.map(o => o.id), q.queryOrders(rows, { tab: 'to_ship' }).orders.map(o => o.id));
-assert.deepEqual(q.queryOrders(rows, { tab: 'delivered' }).orders.map(o => o.id), q.queryOrders(rows, { tab: 'shipped' }).orders.map(o => o.id));
+const evidenceRows = [
+  order('handed', 'paid', { shipment: { status: 'pre_transit' }, handoff: { at: Date.now() } }),
+  order('cancel', 'cancelled'), order('fail', 'failed'), order('refunded', 'refunded', { shipment: { status: 'in_transit' } }),
+  order('verify', 'paid', { paymentVerified: { at: Date.now(), state: 'failed' } }),
+];
+const before = JSON.stringify(evidenceRows);
+assert.equal(q.queryOrders(evidenceRows, { tab: 'to_ship' }).total, 0, 'handoff and failed verification do not ask staff to dispatch again');
+assert.equal(q.queryOrders(evidenceRows, { tab: 'shipped' }).total, 1);
+for (const tab of ['cancelled', 'failed', 'refunded', 'review']) assert.equal(q.queryOrders(evidenceRows, { tab }).total, 1, tab);
+assert.equal(JSON.stringify(evidenceRows), before, 'presentation never rewrites financial or parcel history');
+assert.equal(fulfillment.orderShipmentStatus(evidenceRows[0]).label, 'Handed over');
+assert.match(fulfillment.orderShipmentStatus(evidenceRows[0]).detail, /awaiting carrier scan/);
+assert.equal(fulfillment.orderShipmentStatus(evidenceRows[3]).label, 'In transit', 'refund does not imply return or delivery');
+assert.equal(fulfillment.orderPaymentStatus(evidenceRows[3]).label, 'Refunded');
+assert.equal(fulfillment.orderPaymentStatus(evidenceRows[4]).tone, 'problem');
+assert.equal(fulfillment.orderPaymentStatus(order('paid-unverified', 'paid')).label, 'Paid · recorded');
+assert.equal(fulfillment.orderPaymentStatus(order('settled', 'paid', { paymentVerified: { at: 1, state: 'settled' } })).label, 'Paid · settled');
+assert.equal(fulfillment.orderShipmentStatus(order('label-only', 'paid', { shipment: { status: 'pre_transit' } })).label, 'Label ready');
+assert.equal(fulfillment.orderShipmentStatus(order('store-delivery', 'delivered')).label, 'Delivery recorded');
+assert.match(fulfillment.orderShipmentStatus(order('store-delivery', 'delivered')).detail, /carrier unconfirmed/);
 assert.equal(all.total, 13);
 assert(all.orders.every(o => o.bucket !== 'test'), 'internal tests stay out of All');
 assert.equal(all.orders[0].id.startsWith('refund1'), true, 'All is newest first');
@@ -172,7 +185,7 @@ assert.deepEqual(q.archivableBuckets, ['closed', 'delivered', 'test']);
 for (const b of ['to_ship', 'label', 'shipped', 'unpaid', 'review']) assert.equal(q.canArchive(b), false, b + ' still needs work');
 const filed = rows.map(o => o.id.startsWith('refund1') || o.id.startsWith('dlv2') ? { ...o, data: { ...o.data, archivedAt: 5, archivedBy: 'fixture' } } : o);
 const filedAll = q.queryOrders(filed, { tab: 'all' });
-assert.equal(filedAll.counts.archived, 2); assert.equal(filedAll.counts.closed, 0); assert.equal(filedAll.counts.shipped, 3); assert.equal(filedAll.counts.all, 11);
+assert.equal(filedAll.counts.archived, 2); assert.equal(filedAll.counts.refunded, 0); assert.equal(filedAll.counts.shipped, 2); assert.equal(filedAll.counts.all, 11);
 assert(!filedAll.orders.some(o => o.id.startsWith('refund1')), 'archived orders leave All');
 assert.deepEqual(q.queryOrders(filed, { tab: 'archived' }).orders.map(o => o.id.slice(0, 7)).sort(), ['dlv2000', 'refund1']);
 assert.equal(q.queryOrders(filed, { tab: 'archived' }).orders.find(o => o.id.startsWith('refund1')).bucket, 'closed', 'archive keeps the real status');
