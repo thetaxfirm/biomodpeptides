@@ -65,6 +65,34 @@ const conflict=async(fn)=>assert.rejects(fn,e=>e.status===409);
  f=setup();f.registry();for(const subject of [`COA request: ${report.productName} / wrong-lot`,'COA request: BPC-157 / 201-10-0001']){request=f.request({subject});draft=await f.prepare(request);job=(await f.bridge({action:'claim'})).job;assert.equal(job.coa.state,'needs_review');assert.equal(job.attachment,undefined);await f.bridge({action:'fail',id:job.id,revision:1,leaseToken:job.leaseToken,reason:'manual_review'});}
  // Controlled internal automation only queues drafts; no customer text can grant a staff identity.
  request=f.request();draft=await api.prepareRequestReply(f.env,{requestId:request,mode:'ai',expectedRevision:null},{email:'Website request automation',role:'system'});assert.equal(draft.status,'queued');await assert.rejects(()=>api.prepareRequestReply(f.env,{requestId:f.request(),mode:'ai',expectedRevision:null},{email:'arbitrary system',role:'system'}),e=>e.status===403);
+ // An owner-review reason added after approval invalidates that approval before any send lock.
+ {const r=setup(),requestId=r.request(),owner={email:'owner@example.invalid',role:'owner'};
+  const approved=await api.prepareRequestReply(r.env,{requestId,mode:'staff',body:'We are reviewing your concern.',expectedRevision:null,send:true},owner);
+  const j=(await r.bridge({action:'claim'})).job,readyId=randomUUID();
+  await r.bridge({action:'complete',id:j.id,revision:j.revision,leaseToken:j.leaseToken,readyId,body:j.proposedBody,model:'staff'});
+  r.sql.prepare('INSERT INTO request_issues(request_id,issue,resolutions,note,updated,updated_by) VALUES(?,?,?,?,?,?)').run(requestId,'owner_review','[]','New payment dispute.',approved.approvedAt+1,staff.email);
+  await assert.rejects(()=>r.bridge(validate({job:j,readyId,body:j.proposedBody})),e=>e.status===409&&/marked for owner review after approval/.test(e.message));
+  assert.equal(r.row(j.id).status,'ready','New review prevents the send lock');
+  r.sql.prepare('UPDATE request_issues SET updated=? WHERE request_id=?').run(approved.approvedAt-1,requestId);
+  await r.bridge(validate({job:j,readyId,body:j.proposedBody}));assert.equal(r.row(j.id).status,'sending','Approval made after the review can proceed');
+ }
+ // A new or updated owner-review reason between preflight and the atomic lock invalidates the old approval.
+ for(const existingReview of [false,true]){const r=setup(),requestId=r.request(),owner={email:'owner@example.invalid',role:'owner'};
+  const approved=await api.prepareRequestReply(r.env,{requestId,mode:'staff',body:'We are reviewing your concern.',expectedRevision:null,send:true},owner);
+  const j=(await r.bridge({action:'claim'})).job,readyId=randomUUID();
+  await r.bridge({action:'complete',id:j.id,revision:j.revision,leaseToken:j.leaseToken,readyId,body:j.proposedBody,model:'staff'});
+  if(existingReview)r.sql.prepare('INSERT INTO request_issues(request_id,issue,resolutions,note,updated,updated_by) VALUES(?,?,?,?,?,?)').run(requestId,'owner_review','[]','Earlier reviewed concern.',approved.approvedAt-1,staff.email);
+  r.hooks.beforeSendLock=()=>r.sql.prepare('INSERT INTO request_issues(request_id,issue,resolutions,note,updated,updated_by) VALUES(?,?,?,?,?,?) ON CONFLICT(request_id) DO UPDATE SET note=excluded.note,updated=excluded.updated').run(requestId,'owner_review','[]','New concern during verification.',approved.approvedAt+1,staff.email);
+  await conflict(()=>r.bridge(validate({job:j,readyId,body:j.proposedBody})));
+  assert.equal(r.row(j.id).status,'ready','A concurrent owner-review change cannot acquire the send lock');
+  assert.equal(r.row(j.id).send_locked_at,null);
+ }
+ // A manual owner Send from the linked Jarvis draft has no website approval timestamp; preserve that direct action.
+ {const r=setup(),requestId=r.request(),x=await ready(r,requestId);
+  assert.equal(r.row(x.job.id).approved_at,null);
+  r.hooks.beforeSendLock=()=>r.sql.prepare('INSERT INTO request_issues(request_id,issue,resolutions,note,updated,updated_by) VALUES(?,?,?,?,?,?)').run(requestId,'owner_review','[]','Owner is reviewing the linked draft.',Date.now(),staff.email);
+  await r.bridge(validate(x));assert.equal(r.row(x.job.id).status,'sending');
+ }
  // Reply desk v1: only an owner Send approves; approved sends jump the queue; a hand-picked original attaches; sends teach the next draft.
  {const owner={email:'synthetic-owner@example.invalid',role:'owner'};
   f=setup();f.registry();const first=f.request(),second=f.request({subject:'General question'});
@@ -72,6 +100,13 @@ const conflict=async(fn)=>assert.rejects(fn,e=>e.status===409);
   await assert.rejects(()=>api.prepareRequestReply(f.env,{requestId:second,mode:'staff',body:'Hi',expectedRevision:null,send:true},staff),e=>e.status===403,'Support cannot send');
   await assert.rejects(()=>api.prepareRequestReply(f.env,{requestId:second,mode:'ai',expectedRevision:null,send:true},owner),e=>e.status===403,'Send is always an exact owner-approved text');
   const picked=originals[1];
+  // Send explains why a chosen original is blocked before the generic attachment-copy guard.
+  const mismatched=f.request({origin:'coa-link',labelLot:'QA-WRONG-LOT',subject:'COA request: fixture vial'});
+  const wrongOriginal={requestId:mismatched,mode:'staff',body:'The original report is attached.',expectedRevision:null,coaSha256:picked.sha256};
+  await assert.rejects(()=>api.prepareRequestReply(f.env,{...wrongOriginal,send:true},owner),e=>e.status===409&&e.message===delivery.labelLotMismatch('QA-WRONG-LOT',picked.lot),'Show the exact vial/report lot mismatch on Send');
+  assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM request_reply_drafts WHERE request_id=?').get(mismatched).n,0,'A rejected send creates no approval or queued draft');
+  assert.equal(f.sql.prepare('SELECT status FROM requests WHERE id=?').get(mismatched).status,'new','A blocked send keeps the request open');
+  await assert.rejects(()=>api.prepareRequestReply(f.env,wrongOriginal,owner),e=>e.status===409&&e.message.includes('mentions an attachment but no original is approved'),'Ordinary saves retain the no-attachment safeguard');
   const approved=await api.prepareRequestReply(f.env,{requestId:second,mode:'staff',body:'Here is the report you asked about.',expectedRevision:null,coaSha256:picked.sha256,send:true},owner);
   assert.equal(approved.approvedBy,owner.email);assert.equal(approved.coaChoice,picked.sha256);assert.equal(approved.coa.state,'matched');
   let claimed=(await f.bridge({action:'claim'})).job;assert.equal(claimed.requestId,second,'Approved send is claimed before an older draft');assert.equal(claimed.approved.by,owner.email);assert.equal(claimed.attachment.base64,picked.base64);assert.equal(claimed.style,undefined);
@@ -82,7 +117,7 @@ const conflict=async(fn)=>assert.rejects(fn,e=>e.status===409);
   await f.bridge({action:'sent',id:claimed.id,revision:1,readyId,providerMessageId:'provider-desk-1',providerThreadId:'thread-desk-1',body:x2.body,sentAt:Date.now()});
   assert.equal(f.sql.prepare('SELECT status FROM requests WHERE id=?').get(second).status,'resolved','A sent reply archives the request');
   const learned=f.sql.prepare('SELECT * FROM request_reply_learning').all();assert.equal(learned.length,1);assert.equal(learned[0].changed,1);assert.equal(learned[0].ai_draft,'AI wording that was too long.');assert.equal(learned[0].final_body,'Here is the report you asked about.');
-  await api.saveReplyRule(f.env,{rule:'Sign off as Ash.'},owner);
+  await api.saveReplyRule(f.env,{rule:'Use the customer-care signature.'},owner);
   // One reply answers the customer: their earlier open request is archived and its queued draft set aside without blocking the queue.
   assert.equal(f.sql.prepare('SELECT status FROM requests WHERE id=?').get(first).status,'resolved');
   assert.equal((await f.bridge({action:'claim'})).job,null);assert.equal(f.sql.prepare('SELECT status,reason FROM request_reply_drafts WHERE request_id=?').get(first).reason,'request_closed');
@@ -90,7 +125,7 @@ const conflict=async(fn)=>assert.rejects(fn,e=>e.status===409);
   claimed=(await f.bridge({action:'claim'})).job;assert.equal(claimed.requestId,other);
   const sib=f.request({email:'OTHER-customer@example.invalid',subject:'Earlier question',message:'SIBLING_TEXT first message'});f.sql.prepare('UPDATE requests SET created=? WHERE id=?').run(Date.now()-86400000,sib);
   const latest=f.request({email:'other-customer@example.invalid'});await f.prepare(latest);await f.bridge({action:'fail',id:claimed.id,revision:claimed.revision,leaseToken:claimed.leaseToken,reason:'fixture'});
-  const sibJob=(await f.bridge({action:'claim'})).job;assert.equal(sibJob.requestId,latest);assert(sibJob.history.some(m=>m.body.includes('SIBLING_TEXT')),'The AI sees the same customer\'s earlier request');assert.deepEqual(claimed.style.rules,['Sign off as Ash.']);assert.deepEqual(claimed.style.examples,[],'Other customer messages are not recycled as style examples');assert(claimed.codes.some(c=>c.code==='BM10'));
+  const sibJob=(await f.bridge({action:'claim'})).job;assert.equal(sibJob.requestId,latest);assert(sibJob.history.some(m=>m.body.includes('SIBLING_TEXT')),'The AI sees the same customer\'s earlier request');assert.deepEqual(claimed.style.rules,['Use the customer-care signature.']);assert.deepEqual(claimed.style.examples,[],'Other customer messages are not recycled as style examples');assert(claimed.codes.some(c=>c.code==='BM10'));
   const desk=await api.replyDeskOptions(f.env);assert.equal(desk.coas.length,originals.length);assert.equal(desk.learning.recent,1);assert.equal(desk.learning.unchanged,0);assert(desk.bridgeSeen>0,'Jarvis heartbeat recorded');assert(!JSON.stringify(desk).includes(picked.base64.slice(0,40)),'Desk options never carry report bytes');
   await assert.rejects(()=>api.prepareRequestReply(f.env,{requestId:second,mode:'staff',body:'x',expectedRevision:1,coaSha256:'not-a-hash'},owner),e=>e.status===400);
   // Several chosen originals ride on one reply; each is verified and travels to Jarvis; validate needs every hash.

@@ -4,6 +4,7 @@
 import { coaEmail, coaHash, coaReportByHash, coaSender, normalizeLot, readCoaOriginal, verifiedCoaAttachment, type OriginalCoaMetadata } from './coa-delivery';
 export { normalizeLot } from './coa-delivery';
 import { loadCoaBatchContext } from './product-batch';
+import { customerMailFrom, CUSTOMER_MAIL_SIGNATURE_TEXT, CUSTOMER_MAIL_SIGNATURE_HTML } from './customer-mail';
 import { readCoaConfig, type CoaEnvironment } from './coa-outbox';
 
 export const COA_LINK_DAYS = 30;
@@ -38,13 +39,13 @@ export async function coaForLabelLot(db: D1Database, productId: number, lot: str
 
 export function coaLinkEmail(report: OriginalCoaMetadata, link: string) {
     const subject = `Your COA: ${report.productName} / lot ${report.lot}`;
-    const text = `Here is the original Certificate of Analysis you requested for ${report.productName} (${report.strength}), lot ${report.lot}.\n\nOpen the COA: ${link}\n\nThe link works for ${COA_LINK_DAYS} days. Compare the lot on the report with the lot on your vial. For laboratory research use only. Questions? Reply to this email.`;
+    const text = `Here is the original Certificate of Analysis you requested for ${report.productName} (${report.strength}), lot ${report.lot}.\n\nOpen the COA: ${link}\n\nThe link works for ${COA_LINK_DAYS} days. Compare the lot on the report with the lot on your vial. For laboratory research use only. Questions? Reply to this email.\n\n${CUSTOMER_MAIL_SIGNATURE_TEXT}`;
     const html = '<div style="font-family:Arial,sans-serif;color:#141414;max-width:520px;margin:0 auto;padding:20px">'
         + '<p style="font-size:20px;font-weight:bold;color:#2b1030;letter-spacing:2px;margin:0 0 16px">BIOMOD</p>'
         + `<p>Here is the original Certificate of Analysis you requested for <strong>${esc(report.productName)}</strong> (${esc(report.strength)}), lot <strong>${esc(report.lot)}</strong>.</p>`
         + `<p><a href="${esc(link)}" style="display:inline-block;background:#2b1030;color:#fbf1ea;padding:11px 18px;border-radius:6px;text-decoration:none;font-weight:bold">Open the COA</a></p>`
         + `<p style="font-size:13px;color:#5c5c5c">The link works for ${COA_LINK_DAYS} days. Compare the lot on the report with the lot on your vial.</p>`
-        + '<p style="font-size:12px;color:#5c5c5c">For laboratory research use only. Questions? Reply to this email.</p></div>';
+        + '<p style="font-size:12px;color:#5c5c5c">For laboratory research use only. Questions? Reply to this email.</p>' + CUSTOMER_MAIL_SIGNATURE_HTML + '</div>';
     return { subject, text, html };
 }
 
@@ -74,7 +75,7 @@ export async function sendCoaLink(env: CoaEnvironment, input: { productId: unkno
     try {
         const response = await (deps.fetch || fetch)('https://api.resend.com/emails', {
             method: 'POST', headers: { Authorization: 'Bearer ' + env.RESEND_API_KEY!.trim(), 'Content-Type': 'application/json', 'Idempotency-Key': 'coa-link-' + id },
-            body: JSON.stringify({ from: sender, to: [email], reply_to: replyTo, subject: message.subject, text: message.text, html: message.html }),
+            body: JSON.stringify({ from: customerMailFrom(sender), to: [email], reply_to: replyTo, subject: message.subject, text: message.text, html: message.html }),
             redirect: 'manual', signal: AbortSignal.timeout(10000),
         });
         accepted = response.ok;

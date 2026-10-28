@@ -43,6 +43,8 @@ try {
   let r = await post({ productId: 745, email: '  Buyer@Example.invalid ', lot: ' lot: 102-30-0001 ' });
   assert.equal(r.status, 200, JSON.stringify(r.body)); assert.match(r.body.message, /HEAT-R 30mg COA \(lot 102-30-0001\)/);
   assert.equal(sent.length, 1); const mail = sent[0];
+  assert.equal(mail.from, 'Kim C. | BioMod Customer Care <no-reply@example.invalid>');
+  assert.match(mail.text, /Kim C\.\nBioMod Customer Care$/); assert.match(mail.html, /Kim C\.<br>BioMod Customer Care/);
   assert.deepEqual(mail.to, ['buyer@example.invalid']); assert.equal(mail.subject, 'Your COA: HEAT-R 30mg / lot 102-30-0001');
   assert.equal(mail.attachments, undefined, 'A link, not an attachment'); assert.match(mail.html, /Open the COA/);
   assert(!/retatrutide/i.test(JSON.stringify(mail)), 'Compound name never appears in the email');

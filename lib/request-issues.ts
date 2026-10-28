@@ -2,7 +2,7 @@
 export const issueTypes = [
   ['unfinished_checkout', 'Did not finish checkout'], ['out_of_stock', 'Item not in stock yet'], ['website', 'Website or cart problem'], ['coa', 'COA request'],
   ['shipping', 'Shipping or delivery'], ['refund', 'Refund or cancellation'], ['wrong_damaged', 'Wrong or damaged item'],
-  ['product_question', 'Product question'], ['partner', 'Partner or affiliate'], ['vendor', 'Vendor pitch'], ['other', 'Other'],
+  ['owner_review', 'Owner review required'], ['product_question', 'Product question'], ['partner', 'Partner or affiliate'], ['vendor', 'Vendor pitch'], ['other', 'Other'],
 ] as const;
 export const resolutionTypes = [
   ['waiting', 'Customer will wait'], ['free_item', 'Free item of their choice if they wait'], ['refund', 'Refunded'], ['store_credit', 'Store credit'], ['substitute', 'Sent something else meanwhile'],

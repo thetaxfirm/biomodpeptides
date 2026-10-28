@@ -7,7 +7,8 @@ global.fetch=async()=>{throw Error('Live I/O forbidden');};
 const cases=require('../lib/request-cases.ts'),replies=require('../lib/request-replies.ts');
 (async()=>{
  const sql=new DatabaseSync(':memory:');for(const n of fs.readdirSync(path.join(root,'drizzle')).filter(n=>n.endsWith('.sql')).sort())sql.exec(fs.readFileSync(path.join(root,'drizzle',n),'utf8'));
- const db={prepare(q){const st=(v=[])=>({_sql:q,bind:(...n)=>st(n),first:async()=>sql.prepare(q).get(...v)||null,all:async()=>({results:sql.prepare(q).all(...v)}),_execute(){const s=sql.prepare(q);if(s.columns().length){const results=s.all(...v);return {results,success:true,meta:{changes:sql.prepare('SELECT changes() n').get().n}};}return {results:[],success:true,meta:s.run(...v)};},async run(){return this._execute();}});return st();},async batch(list){sql.exec('BEGIN');try{const out=list.map(s=>s._execute());sql.exec('COMMIT');return out;}catch(e){sql.exec('ROLLBACK');throw e;}}};
+ const hooks={};
+ const db={prepare(q){const st=(v=[])=>({_sql:q,bind:(...n)=>st(n),first:async()=>sql.prepare(q).get(...v)||null,all:async()=>({results:sql.prepare(q).all(...v)}),_execute(){const s=sql.prepare(q);if(s.columns().length){const results=s.all(...v);return {results,success:true,meta:{changes:sql.prepare('SELECT changes() n').get().n}};}return {results:[],success:true,meta:s.run(...v)};},async run(){if(hooks.beforeIssueSave&&q.startsWith('INSERT INTO request_issues')){const hook=hooks.beforeIssueSave;delete hooks.beforeIssueSave;hook();}return this._execute();}});return st();},async batch(list){sql.exec('BEGIN');try{const out=list.map(s=>s._execute());sql.exec('COMMIT');return out;}catch(e){sql.exec('ROLLBACK');throw e;}}};
  const env={DB:db},owner={email:'owner@example.invalid',role:'owner'};
  const orderId='ord_'+randomUUID().slice(0,12);
  sql.prepare('INSERT INTO orders(id,owner,request_key,status,total,data,created,updated) VALUES(?,?,?,?,?,?,?,?)').run(orderId,'synthetic-owner','rk-'+orderId,'paid',14842,JSON.stringify({email:'buyer@example.invalid',address:{name:'Synthetic Buyer'},items:[{id:1,quantity:1,product:{name:'Fixture vial',activePreorder:{ships:'Nov'}}}]}),Date.now(),Date.now());
@@ -20,11 +21,27 @@ const cases=require('../lib/request-cases.ts'),replies=require('../lib/request-r
  await cases.saveRequestIssue(env,{requestId:first.requestId,issue:'out_of_stock',resolutions:['waiting','discount','bogus'],note:'Offer 30% next order'},owner);
  await assert.rejects(()=>cases.saveRequestIssue(env,{requestId:first.requestId,issue:'made_up'},owner),e=>e.status===400);
  const issue=(await cases.issuesFor(env,[first.requestId]))[first.requestId];assert.deepEqual(issue.resolutions,['waiting','discount'],'Unknown resolutions are dropped');
- await replies.saveReplyRule(env,{rule:'Out of stock: offer wait, refund, credit or substitute.',issue:'out_of_stock'},owner);await replies.saveReplyRule(env,{rule:'Shipping rule',issue:'shipping'},owner);await replies.saveReplyRule(env,{rule:'Sign off as Ash.'},owner);
+ await replies.saveReplyRule(env,{rule:'Out of stock: offer wait, refund, credit or substitute.',issue:'out_of_stock'},owner);await replies.saveReplyRule(env,{rule:'Shipping rule',issue:'shipping'},owner);await replies.saveReplyRule(env,{rule:'Use the customer-care signature.'},owner);
  const draft=await replies.prepareRequestReply(env,{requestId:first.requestId,mode:'ai',instruction:'tell him it is not ready',expectedRevision:null},owner);assert.equal(draft.subject,data.subject);
  const job=(await replies.handleReplyBridge(env,{action:'claim'})).job;assert.equal(job.request.origin,'order');assert.match(job.caseInfo,/Item not in stock yet[\s\S]*Customer will wait, Discount on next order[\s\S]*30%/);
- assert.deepEqual(job.style.rules.sort(),['Out of stock: offer wait, refund, credit or substitute.','Sign off as Ash.'],'General rules plus only this issue\'s rules');
+ assert.deepEqual(job.style.rules.sort(),['Out of stock: offer wait, refund, credit or substitute.','Use the customer-care signature.'],'General rules plus only this issue\'s rules');
  const log=await cases.caseLog(env);assert.equal(log.length,1);assert.equal(log[0].name,'Synthetic Buyer');
+ // Serious cases keep an explicit reason; only an owner clears the review classification.
+ const support={email:'support@example.invalid',role:'support'};
+ await assert.rejects(()=>cases.saveRequestIssue(env,{requestId:first.requestId,issue:'owner_review',note:''},support),e=>e.status===400);
+ await cases.saveRequestIssue(env,{requestId:first.requestId,issue:'owner_review',note:'Payment dispute needs an owner decision.'},support);
+ await assert.rejects(()=>cases.saveRequestIssue(env,{requestId:first.requestId,issue:'shipping'},support),e=>e.status===403);
+ assert.equal((await cases.issuesFor(env,[first.requestId]))[first.requestId].issue,'owner_review');
+ await cases.saveRequestIssue(env,{requestId:first.requestId,issue:'shipping',note:'Owner reviewed.'},owner);
+ // A stale support save must not clear owner review added after its initial category read.
+ hooks.beforeIssueSave=()=>sql.prepare("UPDATE request_issues SET issue='owner_review',note='New concern raised concurrently.',updated=? WHERE request_id=?").run(Date.now(),first.requestId);
+ await assert.rejects(()=>cases.saveRequestIssue(env,{requestId:first.requestId,issue:'product_question',note:'Stale support edit.'},support),e=>e.status===403);
+ const concurrentIssue=(await cases.issuesFor(env,[first.requestId]))[first.requestId];assert.equal(concurrentIssue.issue,'owner_review');assert.equal(concurrentIssue.note,'New concern raised concurrently.','The rejected stale save preserves the owner-review reason');
+ await cases.saveRequestIssue(env,{requestId:first.requestId,issue:'owner_review',note:'Support added context to the same review.'},support);
+ assert.equal((await cases.issuesFor(env,[first.requestId]))[first.requestId].note,'Support added context to the same review.','Support may add context without clearing owner review');
+ await cases.saveRequestIssue(env,{requestId:first.requestId,issue:'shipping',note:'Owner reviewed the new concern.'},owner);
+ assert.equal((await cases.issuesFor(env,[first.requestId]))[first.requestId].issue,'shipping','Owner can clear the review after considering it');
+
  // Hold: a reported problem parks the order in Needs review; label purchase and Mark shipped refuse until cleared.
  const fulfillment=require('../lib/fulfillment.ts');
  const hold=await cases.setOrderHold(env,orderId,{issue:'out_of_stock',note:'Restock in November'},owner);assert.equal(hold.issue,'out_of_stock');

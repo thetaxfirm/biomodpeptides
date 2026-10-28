@@ -1,5 +1,6 @@
 // Backend only. Original reports live in private D1, never in source or public assets.
 import { products, productFormat } from './catalog';
+import { CUSTOMER_MAIL_SIGNATURE_TEXT } from './customer-mail';
 import { batchFor } from './testing';
 
 export type OriginalCoa = {
@@ -96,6 +97,6 @@ export async function verifiedCoaAttachment(report: OriginalCoa): Promise<{ file
 export function coaMessage(report: OriginalCoaMetadata) {
   return {
     subject: `Original COA: ${report.productName} / ${report.lot}`,
-    text: `Attached is the original laboratory report for ${report.productName}, ${report.strength} ${report.form}, lot ${report.lot}.\n\nReport: ${report.reportId}\nChemical identity in the original report: ${report.chemicalIdentity}\n\nCompare the report's lot with the vial you receive. Results apply to the submitted sample; this report does not confirm which lot will ship. The attachment has not been edited.\n\nFor laboratory research only, not for human or animal use. Please reply with any documentation questions.\n\nBIOMOD`,
+    text: `Attached is the original laboratory report for ${report.productName}, ${report.strength} ${report.form}, lot ${report.lot}.\n\nReport: ${report.reportId}\nChemical identity in the original report: ${report.chemicalIdentity}\n\nCompare the report's lot with the vial you receive. Results apply to the submitted sample; this report does not confirm which lot will ship. The attachment has not been edited.\n\nFor laboratory research only, not for human or animal use. Please reply with any documentation questions.\n\n${CUSTOMER_MAIL_SIGNATURE_TEXT}`,
   };
 }

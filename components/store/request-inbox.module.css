@@ -187,3 +187,13 @@
 .customerContext p { margin: .35rem 0; }
 .customerContext details { margin-top: .6rem; }
 .customerContext li { margin: .5rem 0; overflow-wrap: anywhere; }
+
+/* Attachments are part of the reply, independent of optional AI writing. */
+.coaPicker { display: grid; gap: 8px; min-width: 0; padding: 8px 0; font-size: 14px; }
+.coaPicker > .link { justify-self: start; }
+.coaPicker .inserts { max-width: 100%; }
+.coaPicker .vialLot { margin: 0; }
+
+.ownerReview { font-size: 14px; }
+.ownerReview summary { cursor: pointer; padding: 6px 0; }
+.ownerReview label { display: grid; gap: 4px; margin: 8px 0; }

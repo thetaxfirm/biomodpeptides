@@ -1,3 +1,4 @@
+import { customerMailFrom, CUSTOMER_MAIL_SIGNATURE_HTML } from './customer-mail';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { shipmentEmailText } from './fulfillment';
 import { normalizeShippingOptions, shippingCarrier, shippingTier, shippingTierEnabled, shippingHandling, serviceKey, enabledServiceSetting, catalogService, shippingCarriers, type ShippingOptionsConfig, type ShippingOption, type ShippingCarrier, minimumService, tierRank, labelProtection, freeEligible } from './shipping-options';
@@ -270,13 +271,14 @@ export async function sendTrackingEmail(env: Environment, to: string, orderId: s
         + '<p>' + esc(shipmentEmailText(label.status)) + '</p>'
         + '<p><strong>Tracking number:</strong> ' + esc(label.tracking) + '</p>'
         + '<p><a href="' + esc(link) + '" style="display:inline-block;background:#2b1030;color:#fbf1ea;padding:10px 16px;border-radius:6px;text-decoration:none;font-weight:bold">Track your package</a></p>'
+        + CUSTOMER_MAIL_SIGNATURE_HTML
         + '<p style="font-size:12px;color:#5c5c5c">For laboratory research use only. Questions? Reply to ' + esc(reply) + '.</p>'
         + '</div></div></div>';
     try {
         const r = await fetch('https://api.resend.com/emails', {
             method: 'POST',
             headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ from: env.SHIP_EMAIL_FROM || 'BIOMOD <contact@trybiomod.com>', to: [to], reply_to: reply, subject: 'Your BIOMOD order ' + orderId.slice(0, 8) + ' tracking information', html }),
+            body: JSON.stringify({ from: customerMailFrom(env.SHIP_EMAIL_FROM || 'BIOMOD <contact@trybiomod.com>'), to: [to], reply_to: reply, subject: 'Your BIOMOD order ' + orderId.slice(0, 8) + ' tracking information', html }),
             redirect: 'manual',
             signal: AbortSignal.timeout(10000),
         });

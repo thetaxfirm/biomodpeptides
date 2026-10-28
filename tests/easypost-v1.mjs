@@ -14,6 +14,8 @@ try {
   await fs.writeFile(file, (await fs.readFile(file,'utf8')).replace("'./fulfillment'","'./fulfillment.mjs'"));
   await fs.writeFile(path.join(temp, 'shipping-options.mjs'), ts.transpileModule(await fs.readFile(new URL('../lib/shipping-options.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText);
   await fs.writeFile(file, (await fs.readFile(file, 'utf8')).replace("'./shipping-options'", "'./shipping-options.mjs'"));
+  await fs.writeFile(path.join(temp, 'customer-mail.mjs'), ts.transpileModule(await fs.readFile(new URL('../lib/customer-mail.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText);
+  await fs.writeFile(file, (await fs.readFile(file, 'utf8')).replace("'./customer-mail'", "'./customer-mail.mjs'"));
   const e = await import(file);
   const env = { EASYPOST_API_KEY: 'EZTK_test_key_123456' };
   const vial = { quantity: 2, product: { categories: [{ slug: 'research-compounds' }] } };
@@ -66,15 +68,16 @@ try {
   assert.equal(await e.sendTrackingEmail({}, 'a@b.co', 'order-1', label), false, 'no key: no email');
   assert.equal(await e.sendTrackingEmail({ RESEND_API_KEY: 're_test' }, 'a@b.co', 'order-1', label, 'Ada Lovelace', 'current-reply@example.invalid'), true);
   assert.match(calls.at(-1)[3].html, /Carrier acceptance has not been confirmed/);
+  assert.match(calls.at(-1)[3].html, /Kim C\.<br>BioMod Customer Care/);
   assert.doesNotMatch(calls.at(-1)[3].html, /has shipped|is on its way/);
   assert.doesNotMatch(calls.at(-1)[3].subject, /has shipped/);
   assert.equal(calls.at(-1)[3].reply_to, 'current-reply@example.invalid');
   assert.match(calls.at(-1)[3].html, /Questions\? Reply to current-reply@example\.invalid/);
   assert.doesNotMatch(calls.at(-1)[3].html, /contact@trybiomod\.com/);
-  assert.equal(calls.at(-1)[3].from, 'BIOMOD <contact@trybiomod.com>', 'Reply routing preserves the existing sender');
+  assert.equal(calls.at(-1)[3].from, 'Kim C. | BioMod Customer Care <contact@trybiomod.com>', 'Customer display name changes without changing the mailbox');
   assert.equal(await e.sendTrackingEmail({ RESEND_API_KEY: 're_test', SHIP_EMAIL_FROM: 'Fixture <shipping@example.invalid>' }, 'a@b.co', 'order-2', label, 'Ada', 'next-reply@example.invalid'), true);
   assert.equal(calls.at(-1)[3].reply_to, 'next-reply@example.invalid', 'Later sends use the current reply address');
-  assert.equal(calls.at(-1)[3].from, 'Fixture <shipping@example.invalid>', 'Configured sender is unchanged');
+  assert.equal(calls.at(-1)[3].from, 'Kim C. | BioMod Customer Care <shipping@example.invalid>', 'Configured sender mailbox is preserved');
   const sentCount = calls.length;
   for (const reply of ['', 'not-email', 'name@example.invalid\nBcc:other@example.invalid', 'a@example.invalid,b@example.invalid', 'x'.repeat(260)+'@example.invalid']) {
     assert.equal(await e.sendTrackingEmail({ RESEND_API_KEY: 're_test' }, 'a@b.co', 'order-1', label, '', reply), false);

@@ -40,8 +40,12 @@ export async function saveRequestIssue(env: Env, input: { requestId: string; iss
   const note = typeof input.note === 'string' ? input.note.slice(0, 1000).trim() : '';
   const exists = await env.DB.prepare("SELECT id FROM requests WHERE id=? AND kind IN ('contact','affiliate','stock')").bind(input.requestId).first();
   if (!exists) fail('Request not found.', 404);
+  if (input.issue === 'owner_review' && !note) fail('Explain what needs an owner decision.', 400);
+  const previous = await env.DB.prepare('SELECT issue FROM request_issues WHERE request_id=?').bind(input.requestId).first<{ issue: string }>();
+  if (previous?.issue === 'owner_review' && input.issue !== 'owner_review' && actor.role !== 'owner') fail('Only an owner can clear owner review.', 403);
   const now = Date.now();
-  await env.DB.prepare('INSERT INTO request_issues(request_id,issue,resolutions,note,updated,updated_by) VALUES(?,?,?,?,?,?) ON CONFLICT(request_id) DO UPDATE SET issue=excluded.issue,resolutions=excluded.resolutions,note=excluded.note,updated=excluded.updated,updated_by=excluded.updated_by').bind(input.requestId, input.issue, JSON.stringify(resolutions), note, now, actor.email).run();
+  const saved = await env.DB.prepare("INSERT INTO request_issues(request_id,issue,resolutions,note,updated,updated_by) VALUES(?,?,?,?,?,?) ON CONFLICT(request_id) DO UPDATE SET issue=excluded.issue,resolutions=excluded.resolutions,note=excluded.note,updated=excluded.updated,updated_by=excluded.updated_by WHERE request_issues.issue!='owner_review' OR excluded.issue='owner_review' OR ?=1").bind(input.requestId, input.issue, JSON.stringify(resolutions), note, now, actor.email, actor.role === 'owner' ? 1 : 0).run();
+  if (!saved.meta.changes) fail('Only an owner can clear owner review.', 403);
   return { issue: input.issue as RequestIssue['issue'], resolutions: resolutions as RequestIssue['resolutions'], note, updated: now, updatedBy: actor.email };
 }
 export async function issuesFor(env: Env, ids: string[]): Promise<Record<string, RequestIssue>> {

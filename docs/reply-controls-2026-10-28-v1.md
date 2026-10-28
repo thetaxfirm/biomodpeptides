@@ -1,0 +1,15 @@
+# Reply controls and customer-care identity, October 28, 2026
+
+Owner request: restore visible COA selection and matching, send the reviewed reply from the website without another Jarvis approval, and identify customer-care replies as Kim C.
+
+The COA PDF selector now sits beside the reply, before Send, independent of optional AI writing help. Product, strength and lot remain visible for selected and verified originals. Removing the last selected report records an explicit no-attachment choice instead of re-enabling automatic matching. Automatic requested-lot matching is still available. Wrong-lot originals remain blocked; a rejected Send shows the specific mismatch before a generic missing-attachment warning.
+
+The existing owner-approved website Send path is retained and clarified: one click approves the exact staff text and attachments, and the running Jarvis bridge validates and sends it automatically. There is no second approval in Jarvis. A sleeping or disconnected Mac can delay the queue. Save draft and AI preparation do not authorize sending. Duplicate-click, revision, request, recipient and original-PDF safeguards remain active.
+
+The composer displays Kim C. / BioMod Customer Care. The companion Jarvis change applies this identity to outgoing contact@trybiomod.com mail, including linked website replies, direct compose and AI rewrites. The preview and transport share the identity rule. An old authored Ash sign-off requires correction before sending; a mention of Ash in ordinary text or quoted history does not. General personal/clinical mail, historical correspondence and the authenticated staff audit identity are preserved.
+
+The storefront uses one shared customer-mail identity for new shipping updates, checkout-recovery emails, COA messages and COA links. Configured sender addresses, reply-to, recipients and existing retry payload snapshots are preserved. Provider-managed payment receipts and account-login templates are outside these application templates and have not been changed.
+
+Open cases can be marked Owner review required with an explicit reason. They remain in Needs reply, and the owner sees Approve and send. Nonowners can save a draft but cannot clear the review requirement or send. A new review reason after an earlier website approval invalidates that approval at validation. Owner approval does not change the customer-facing name: the reply still comes from Kim C. The writing prompt acknowledges serious concerns without inventing a refund, escalation, legal or safety decision.
+
+Affected surfaces: /admin?tab=requests, reply preparation and validation, customer email templates, and the local Jarvis TryBiomod bridge/compose/signature paths. Catalog, historical orders, payments, provider credentials and runtime mailbox settings are not changed. Verification uses fictional isolated fixtures, a browser preview and read-only live checks; no customer email is sent as a test. Deployment and source receipts are recorded separately after the final production checks.

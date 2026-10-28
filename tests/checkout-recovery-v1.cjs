@@ -32,6 +32,7 @@ function fixture(){
  }
  let f=fixture(),id=f.seed();now=BASE+DAY-1;await f.run();assert.equal(mail.length,0);assert(!f.job(id));now=BASE+DAY;
  await f.run();let o=f.order(id),j=f.job(id);assert.equal(j.status,'accepted');assert.equal(o.status,'awaiting_payment');assert.equal(o.data.recovery.savings,638);assert.equal(o.data.tax,658);assert.equal(o.total,9020);assert.equal(o.data.promo.code,'BIOMOD15');assert.equal(o.data.promo.savings,1500);assert.equal(JSON.parse(j.original_snapshot).total,9712);assert.match(anetOrderDetails(o.data).note,/additional|Additional/);assert.match(orderEmailHtml(id,o.data),/7.5%/);assert.match(JSON.parse(mail[0].body).text,/after any existing promo/);await f.run();assert.equal(mail.length,1);
+ const firstMail=JSON.parse(mail[0].body);assert.equal(firstMail.from,'Kim C. | BioMod Customer Care <contact@trybiomod.com>');assert.match(firstMail.text,/Thank you,\nKim C\.\nBioMod Customer Care/);assert.equal(firstMail.reply_to,'reply@example.invalid');assert.deepEqual(firstMail.to,[id+'@example.invalid']);
  // Additional recovery savings never make paid expedited shipping free or reprice its handling fee.
  const overnight={id:'rate_fixture',tier:'overnight',shippingService:'UPS Next Day Air',shipping:3300,carrierCents:2300,handlingCents:1000,days:1,carrier:'UPS',carrierService:'NextDayAir',source:'easypost',free:false};
  f=fixture();id=f.seed(undefined,{shipping:3300,total:12512,shippingService:overnight.shippingService,shippingOptionId:overnight.id,shippingOption:overnight});await f.run();o=f.order(id);j=f.job(id);

@@ -20,4 +20,15 @@ assert.equal(review.number,'83AF686C');assert.equal(review.total,'$396.09');asse
 assert.doesNotMatch(review.status,/declin/i,'staff wording never says declined');
 const recovery=fs.readFileSync(path.join(__dirname,'..','lib/checkout-recovery.ts'),'utf8');
 assert.doesNotMatch(recovery,/has not been completed/);assert.match(recovery,/after any existing promo/);
+// Customer identity is shared by store-controlled mail while configured addresses stay intact.
+const identity=load('lib/customer-mail.ts');
+assert.equal(identity.customerMailFrom('Ash <shipping@example.invalid>'),'Kim C. | BioMod Customer Care <shipping@example.invalid>');
+assert.equal(identity.customerMailFrom('support@example.invalid'),'Kim C. | BioMod Customer Care <support@example.invalid>');
+assert.equal(identity.customerMailFrom('bad sender'),'bad sender','Identity formatting does not invent a fallback mailbox');
+const unsafe='Name <a@example.invalid>\nBcc:other@example.invalid';assert.equal(identity.customerMailFrom(unsafe),unsafe,'Existing transport validation receives invalid input unchanged');
+require.extensions['.ts']=(m,f)=>m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{module:1,target:9,esModuleInterop:true}}).outputText,f);
+global.fetch=async()=>{throw Error('Network forbidden in email identity fixture');};
+const report=require('./fixtures/coa-originals-v1.cjs').reports[0],linkEmail=require('../lib/coa-link.ts').coaLinkEmail(report,'https://trybiomod.com/api/coa-file/fixture');
+assert(linkEmail.text.endsWith(identity.CUSTOMER_MAIL_SIGNATURE_TEXT));assert(linkEmail.html.includes(identity.CUSTOMER_MAIL_SIGNATURE_HTML));
+assert(require('../lib/coa-delivery.ts').coaMessage(report).text.endsWith(identity.CUSTOMER_MAIL_SIGNATURE_TEXT));
 console.log('email-voice-v1: ok');

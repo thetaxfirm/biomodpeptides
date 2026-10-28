@@ -37,7 +37,7 @@ const type=(host,name,value)=>{field(host,name).props.onChange({target:{value}})
 const flush=async host=>{for(let i=0;i<4;i++)await Promise.resolve();host.render();};
 const openRow=(host,id)=>{nodes(host.tree).find(n=>n.type==='button'&&n.props['aria-controls']==='request-reply-'+id).props.onClick();host.render();};
 const select=(host,label)=>nodes(host.tree).find(n=>n.type==='label'&&text(n).startsWith(label)).props.children[1];
-const options={team:[{email:'logan@example.invalid',name:'Logan',role:'manager'}],links:[{label:'Fixture material 10 mg · lot QA-LOT',url:'https://trybiomod.com/testing/QA-LOT?product=1'}],coas:[{sha256:'a'.repeat(64),productName:'Fixture material',strength:'10 mg',form:'vial',lot:'QA-LOT',reportId:'QA-ORIGINAL',current:true}],codes:[{code:'BM10',percentOff:10}],rules:[{id:'00000000-0000-4000-8000-000000000001',rule:'Sign off as Ash'}],learning:{recent:4,unchanged:3},bridgeSeen:null};
+const options={team:[{email:'logan@example.invalid',name:'Logan',role:'manager'}],links:[{label:'Fixture material 10 mg · lot QA-LOT',url:'https://trybiomod.com/testing/QA-LOT?product=1'}],coas:[{sha256:'a'.repeat(64),productName:'Fixture material',strength:'10 mg',form:'vial',lot:'QA-LOT',reportId:'QA-ORIGINAL',current:true}],codes:[{code:'BM10',percentOff:10}],rules:[{id:'00000000-0000-4000-8000-000000000001',rule:'Use the customer-care signature'}],learning:{recent:4,unchanged:3},bridgeSeen:null};
 async function main(){
  const day=86400000,now=Date.now();
  const reqs=[request('new-old','new'),request('new-young','new'),request('answered','in_progress'),request('closed','resolved'),request('junk','spam'),request('came-back','resolved')];
@@ -67,7 +67,7 @@ async function main(){
  assert.equal(field(host,'replyBody').props.value,'Hi there, use code BM10 (10% off at checkout)');
  type(host,'replyBody','');select(host,'Insert COA link').props.onChange({target:{value:'https://trybiomod.com/testing/QA-LOT?product=1'}});host.render();assert.equal(field(host,'replyBody').props.value,'COA for Fixture material 10 mg · lot QA-LOT: https://trybiomod.com/testing/QA-LOT?product=1');
  type(host,'replyBody','Hi there, use code BM10 (10% off at checkout)');
- select(host,'Attach COA').props.onChange({target:{value:'a'.repeat(64)}});host.render();assert(text(host.tree).includes('Will attach when you save or send'));
+ select(host,'Attach COA').props.onChange({target:{value:'a'.repeat(64)}});host.render();assert(text(host.tree).includes('Selected for this reply'));
  // AI rewrite carries the current draft and the dictated instruction; remember saves a rule first.
  type(host,'replyInstruction','um make it friendlier');
  nodes(host.tree).find(n=>n.type==='input'&&n.props.type==='checkbox').props.onChange({target:{checked:true}});host.render();
@@ -87,7 +87,14 @@ async function main(){
  assert(text(host.tree).includes('Queued to send'));
  // Staff without send rights only save drafts.
  host=mount({...props,canSend:false});await flush(host);openRow(host,'new-young');
- assert(!nodes(host.tree).some(n=>n.type==='button'&&text(n)==='Send'));assert(text(host.tree).includes('Ash sends replies'));
+ assert(!nodes(host.tree).some(n=>n.type==='button'&&text(n)==='Send'));assert(text(host.tree).includes('An authorized sender can send from this screen'));
+ // Serious cases are explicitly flagged, with an owner-only approval control and recorded reason.
+ const issueSaves=[];
+ host=mount({...props,requests:[reqs[0]],requestReplies:{},onSaveIssue:async input=>{issueSaves.push(input);return {...input,updated:now,updatedBy:'support@example.invalid'};}});await flush(host);openRow(host,'new-old');
+ assert.equal(button(host.tree,'Mark for owner review').props.disabled,true);
+ type(host,'ownerReviewReason','A payment dispute needs a decision.');button(host.tree,'Mark for owner review').props.onClick();await flush(host);
+ assert.equal(issueSaves.at(-1).issue,'owner_review');assert(text(host.tree).includes('A payment dispute needs a decision.'));assert(button(host.tree,'Approve and send'));assert(!controls(host.tree,'Send').length);
+ host.props.canSend=false;host.render();assert(!controls(host.tree,'Approve and send').length);assert(text(host.tree).includes('This case requires their approval.'));
  // Failed preparation is plain English and keeps the request in To reply.
  host=mount({...props,requestReplies:{'new-young':reply('new-young',{status:'needs_review',reason:'bridge_preparation_failed'})}});await flush(host);openRow(host,'new-young');
  assert(text(host.tree).includes('The AI could not finish this draft. Nothing was sent.'));assert(!text(host.tree).includes('bridge_preparation_failed'));
@@ -127,7 +134,15 @@ async function main(){
  assert(text(latest()).includes('COA request form'));assert(text(latest()).includes('No written message was included.'));assert(text(latest()).includes('Lot entered: QA-100'));
  assert(!text(latest()).includes('SYSTEM NOTE'),'Generated processing notes are not presented as the customer message');
  assert(!nodes(latest()).some(n=>n.props?.['data-direction']==='incoming'),'A form submission is not a customer-written email');
- const tools=nodes(host.tree).find(n=>n.type==='details'&&text(n.props.children[0])==='AI help & attachments');assert(!tools.props.open,'COA attachment and AI tools start collapsed');
+ const tools=nodes(host.tree).find(n=>n.type==='details'&&text(n.props.children[0])==='AI writing help');assert(!tools.props.open,'AI tools start collapsed');
+ const attachments=nodes(host.tree).find(n=>n.type==='section'&&n.props['aria-label']==='COA attachments');assert(attachments,'COA picker is visible beside the reply');assert(!nodes(tools).includes(attachments),'COA selection is independent of AI tools');assert(text(attachments).includes('Requested lot: QA-100'));assert(text(host.tree).includes('Signature: Kim C.'));assert(text(host.tree).includes('No second Send in Jarvis'));
+ // Removing the last chosen PDF is explicit none, never a surprise automatic reattachment.
+ select(host,'Attach COA').props.onChange({target:{value:'a'.repeat(64)}});host.render();
+ button(host.tree,'Remove').props.onClick();host.render();assert(text(host.tree).includes('No report attached.'));
+ type(host,'replyBody','Please send a label photo.');button(host.tree,'Save draft').props.onClick();await flush(host);assert.equal(preparations.at(-1).coaSha256,'','Last removal saves explicit none');
+ host.props.requestReplies={'coa-form':reply('coa-form',{status:'ready',revision:1,body:'Please send a label photo.',coaChoice:'',updated:Date.now()})};host.render();
+ button(host.tree,'Match the requested lot').props.onClick();host.render();assert(text(host.tree).includes('Automatic matching is selected'));
+
  const internal=nodes(host.tree).find(n=>n.type==='details'&&text(n.props.children[0])==='Internal details & actions');assert(!internal.props.open);assert(text(internal).includes('SYSTEM NOTE'),'The original stored record remains available internally');
  const all=nodes(host.tree);assert(all.indexOf(latest())<all.indexOf(field(host,'replyBody')));assert(all.indexOf(internal)>all.indexOf(field(host,'replyBody')),'Optional administration follows the reply');
  type(host,'replyBody','My existing unsaved reply');const beforeQuick=preparations.length;
