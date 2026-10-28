@@ -196,6 +196,12 @@ assert.match(shipRoute,/WHERE id=\? AND coalesce\(json_extract\(data,'\$\.shipme
   // A label bought five days ago but handed over: still nothing from the carrier, still a person's problem.
   add('yyyyyyyy-1','paid',{address:addr,shipment:{status:'unknown',tracking:'TG'},labelCreatedAt:now-5*24*H,handoff:{at:now-5*24*H,by:'fixture'}});
   const alerts=load('lib/parcel-alerts.ts');
+  // A recent physical handoff is forward progress even when the label and carrier event are old.
+  // It must not enter the four-day digest just because postage was bought earlier.
+  addAt('zzzzzzzz-fresh-handoff','paid',{address:addr,paidAt:now-8*24*H,labelCreatedAt:now-6*24*H,shipment:{status:'pre_transit',tracking:'TH',checkedAt:now-5*24*H},handoff:{at:now-2*H,by:'fixture'}},now-9*24*H);
+  assert.equal(alerts.lastMovedAt({labelCreatedAt:now-6*24*H,shipment:{checkedAt:now-5*24*H},handoff:{at:now-2*H}},now-9*24*H),now-2*H,'the latest forward step sets the digest clock');
+  assert.equal(alerts.lastMovedAt({labelCreatedAt:now-6*24*H,shipment:{checkedAt:now-H},handoff:{at:now-2*24*H}},now-9*24*H),now-H,'a newer carrier event still takes precedence');
+  assert.equal(alerts.lastMovedAt({handoff:{at:'invalid'}},now-9*24*H),now-9*24*H,'malformed handoff does not erase the creation fallback');
   const found=await alerts.parcelAlerts({DB},now);
   // One rule decides this digest: no forward progress in four days. A carrier that says it is
   // bringing the parcel back has not stalled, it has failed, so it is named without waiting.

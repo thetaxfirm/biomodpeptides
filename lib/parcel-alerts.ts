@@ -31,12 +31,12 @@ const stamp = (value: unknown): number => {
 };
 
 /**
- * The last moment this order visibly moved forward, newest evidence first: a carrier event, then the
- * label purchase, then the captured payment. `created` is the floor, so an order with none of those
- * still has a clock rather than looking brand new forever.
+ * The latest recorded forward step: carrier event, physical handoff, label purchase or captured
+ * payment. A new handoff must reset the clock even when the carrier still reports an older event.
+ * Orders without a valid progress timestamp fall back to creation.
  */
 export function lastMovedAt(data: Record<string, any>, created: number): number {
-    return stamp(data?.shipment?.checkedAt) || stamp(data?.labelCreatedAt) || stamp(data?.paidAt) || created;
+    return Math.max(stamp(data?.shipment?.checkedAt), stamp(data?.handoff?.at), stamp(data?.labelCreatedAt), stamp(data?.paidAt)) || created;
 }
 
 /** What is actually holding this order up, so the line says what to do rather than only that it is late. */
