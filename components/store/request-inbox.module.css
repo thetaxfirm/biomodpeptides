@@ -56,7 +56,7 @@
 .paneActions { display: flex; gap: 6px; align-items: center; }
 .subjectLine { margin: 12px 0 10px; font-size: 15px; }
 .thread { list-style: none; margin: 0 0 16px; padding: 0; display: grid; gap: 10px; }
-.thread li { padding: 12px 14px; border-radius: 8px; background: var(--soft); max-width: 88%; justify-self: start; }
+.thread li { padding: 12px 14px; border-radius: 8px; background: var(--soft); max-width: 100%; width: 100%; box-sizing: border-box; justify-self: start; }
 .thread li[data-direction="outgoing"] { background: #eef3ee; justify-self: end; }
 .meta { margin: 0 0 4px; font-size: 12px; color: var(--muted); }
 .message { margin: 0; white-space: pre-wrap; line-height: 1.55; font-size: 15px; }
@@ -65,7 +65,7 @@
 .composeHead { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; font-size: 14px; }
 .composeHead .note { margin: 0; }
 .composer textarea { width: 100%; min-width: 0; resize: vertical; font: inherit; font-size: 15px; line-height: 1.6; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: white; color: var(--ink); }
-.composer textarea[name="replyBody"] { min-height: 230px; }
+.composer textarea[name="replyBody"] { min-height: 150px; }
 .composer textarea[data-writing="true"] { background: #fbf9fc; color: var(--muted); }
 .status { margin: 0; font-size: 14px; color: var(--muted); }
 .ask { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: stretch; }
@@ -162,3 +162,22 @@
 .caseBox .case { margin-top: 8px; }
 .verdict { font-size: 17px; margin-bottom: 6px !important; }
 .verdict strong { margin-right: 4px; }
+
+/* Read the request, then answer. Processing details never compete with either. */
+.coaHelp { margin: 0 0 16px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.quickReply { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
+.quickReply .note { margin: 0; }
+.earlier, .internal { margin-top: 20px; font-size: 14px; }
+.earlier > summary, .internal > summary { cursor: pointer; padding: 8px 0; color: var(--muted); }
+.earlier .thread { margin-top: 10px; }
+.thread li[data-direction="request"] { background: var(--soft); }
+@media (max-width: 540px) {
+  .mailTitle { flex-wrap: wrap; gap: 2px 10px; }
+  .who { flex-basis: 100%; }
+  .paneActions { flex-wrap: wrap; }
+}
+
+.actionMenu { font-size: 14px; }
+.actionMenu > summary { cursor: pointer; min-height: 40px; display: flex; align-items: center; padding: 6px 8px; box-sizing: border-box; }
+.actionMenu[open] > summary { font-weight: 600; }
+.menuItems { display: flex; gap: 8px 14px; flex-wrap: wrap; padding: 4px 8px 8px; }

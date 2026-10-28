@@ -79,7 +79,7 @@ async function main(){
  // The finished AI draft replaces the text, with undo back to what was there.
  host.props.requestReplies={...replies,'new-old':reply('new-old',{revision:1,status:'ready',body:'Hello! Use code BM10 for 10% off.',updated:Date.parse('2026-10-15T08:00:00Z')})};host.render();
  assert.equal(field(host,'replyBody').props.value,'Hello! Use code BM10 for 10% off.');
- nodes(host.tree).find(n=>n.type==='button'&&text(n)==='Undo AI change').props.onClick();host.render();assert.equal(field(host,'replyBody').props.value,'Hi there, use code BM10 (10% off at checkout)');
+ nodes(host.tree).find(n=>n.type==='button'&&text(n)==='Undo change').props.onClick();host.render();assert.equal(field(host,'replyBody').props.value,'Hi there, use code BM10 (10% off at checkout)');
  // Send is one click and one request, marked as an owner send of exactly this text.
  send().props.onClick();send().props.onClick();await flush(host);
  const sends=preparations.filter(p=>p.send);assert.equal(sends.length,1,'Double click sends once');
@@ -120,6 +120,23 @@ async function main(){
   host.unmount();
  } finally {global.document=savedDocument;global.setTimeout=savedSetTimeout;global.clearTimeout=savedClearTimeout;}
 
+ // A COA form records an action and a lot, never words the customer did not write.
+ const formReq=request('coa-form','new','contact',{name:'form@example.invalid',email:'form@example.invalid',subject:'COA request: lot QA-100 (Fixture research vial page)',message:'SYSTEM NOTE: no matching report. Do not call this customer-written.',origin:'coa-link',labelLot:'QA-100'});
+ host=mount({...props,requests:[formReq],requestReplies:{}});await flush(host);openRow(host,'coa-form');
+ const latest=()=>nodes(host.tree).find(n=>n.type==='ol'&&n.props['aria-label']==='Latest customer request');
+ assert(text(latest()).includes('COA request form'));assert(text(latest()).includes('No written message was included.'));assert(text(latest()).includes('Lot entered: QA-100'));
+ assert(!text(latest()).includes('SYSTEM NOTE'),'Generated processing notes are not presented as the customer message');
+ assert(!nodes(latest()).some(n=>n.props?.['data-direction']==='incoming'),'A form submission is not a customer-written email');
+ const tools=nodes(host.tree).find(n=>n.type==='details'&&text(n.props.children[0])==='AI help & attachments');assert(!tools.props.open,'COA attachment and AI tools start collapsed');
+ const internal=nodes(host.tree).find(n=>n.type==='details'&&text(n.props.children[0])==='Internal details & actions');assert(!internal.props.open);assert(text(internal).includes('SYSTEM NOTE'),'The original stored record remains available internally');
+ const all=nodes(host.tree);assert(all.indexOf(latest())<all.indexOf(field(host,'replyBody')));assert(all.indexOf(internal)>all.indexOf(field(host,'replyBody')),'Optional administration follows the reply');
+ type(host,'replyBody','My existing unsaved reply');const beforeQuick=preparations.length;
+ button(host.tree,'Ask for a label photo').props.onClick();host.render();assert.match(field(host,'replyBody').props.value,/clear photo.*product name and lot number/);assert.equal(preparations.length,beforeQuick,'Quick reply fills locally; it neither saves nor sends');
+ button(host.tree,'Undo change').props.onClick();host.render();assert.equal(field(host,'replyBody').props.value,'My existing unsaved reply','Quick reply replacement is reversible');
+ host.props.requestReplies={'coa-form':reply('coa-form',{status:'sent',history:[{id:'original:coa-form',direction:'incoming',body:formReq.data.message,created:formReq.created},{id:'real-incoming',direction:'incoming',body:'Here is the label photo. Is this the right report?',created:now}]})};host.render();
+ assert(text(latest()).includes('Here is the label photo.'));assert(text(latest()).includes('Customer message'),'A real later email remains clearly visible');
+ const old=nodes(host.tree).find(n=>n.type==='details'&&text(n.props.children[0]).startsWith('Earlier messages and replies'));assert(old&&!old.props.open);assert(text(old).includes('COA request form'));
+ host=mount({...props,requests:[request('typed-coa','new','contact',{subject:'COA request: lot QA-100 (Fixture page)',message:'These are the exact words I typed.'})],requestReplies:{}});await flush(host);openRow(host,'typed-coa');assert(text(latest()).includes('These are the exact words I typed.'));assert(!text(latest()).includes('No written message'),'Subject wording alone never turns customer text into a system note');
  // Order conversation: internal order notes stay staff-only; tagging the case saves issue and resolutions.
  const savedIssues=[];const orderReq=request('from-order','new','contact',{subject:'Your BioMod order #ABC',message:'Order #ABC. INTERNAL items list.',origin:'order',startedBy:'owner@example.invalid'});
  host=mount({...props,requests:[orderReq],requestReplies:{},onSaveIssue:async input=>{savedIssues.push(input);return {issue:input.issue,resolutions:input.resolutions,note:input.note,updated:now,updatedBy:'owner@example.invalid'};}});await flush(host);

@@ -53,6 +53,12 @@ const noReplies: Record<string, ReplySummary> = {};
 const sender = 'contact@trybiomod.com';
 const DAY = 86400000;
 const text = (value: unknown) => typeof value === 'string' ? value.trim() : '';
+/** Only this server-created form origin has no customer-written message. Keep legacy notes intact. */
+export function coaFormDetails(request: CustomerRequest) {
+  if (request.data.origin !== 'coa-link') return null;
+  const product = text(request.data.productName) || text(request.data.subject).match(/\((.+) page\)$/i)?.[1] || '';
+  return { product, lot: text(request.data.labelLot) };
+}
 function usableEmail(value: unknown) {
   const email = text(value);
   return email.length <= 254 && /^[^\s@<>,;?&#%]+@[^\s@<>,;?&#%]+\.[^\s@<>,;?&#%]+$/.test(email);
@@ -452,7 +458,8 @@ export function RequestInbox({ requests: initialRequests, activeTab = true, auto
         {!grouped.length ? <p className={styles.empty}>{requests.length ? (filter === 'todo' ? 'Nothing waiting for a reply.' : filter === 'done' ? 'Nothing archived yet. Requests move here once a reply is sent or you archive them.' : 'No requests here.') : 'No customer requests yet.'}</p> : grouped.map(row => {
           const { request, reply } = row;
           const name = text(request.data.name) || text(request.data.email) || 'Customer';
-          const preview = text(request.data.message) || text(request.data.subject);
+          const form = coaFormDetails(request);
+          const preview = form ? 'COA request form' + (form.lot ? ' · lot ' + form.lot : '') : text(request.data.message) || text(request.data.subject);
           // VIP (partner, business buyer, met at a show): owner, Oct 24 2026.
           const vip = vipSignal(text(request.data.email), text(request.data.subject) + ' ' + text(request.data.message));
           const late = row.late;
@@ -531,15 +538,16 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
   const attachedNow = reply?.coa.state === 'matched' && (draft?.coa === undefined || draft.coa === reply.coaChoice) ? reply.coa : null;
   const setChoice = (list: string[]) => onDraft({ coa: list.length ? list.join(',') : null, edited: true });
   const isCoaRequest = /^coa request:/i.test(subject);
+  const coaForm = coaFormDetails(request);
   const lastSent = [...history].reverse().find(m => m.direction === 'outgoing');
   // The newest reply by any channel: this desk, Gmail, or a logged call/text.
   const lastExternal = [...external].sort((a, b) => b.at - a.at)[0];
   const lastReplied = lastSent && (!lastExternal || lastSent.created >= lastExternal.at)
     ? { at: lastSent.created, how: '' }
     : lastExternal ? { at: lastExternal.at, how: lastExternal.source === 'manual' ? 'by phone or text' : 'from Gmail' } : null;
-  const firstName = name.split(/\s+/)[0] || 'the customer';
+  const firstName = name === email ? 'the customer' : name.split(/\s+/)[0] || 'the customer';
   // One list of every email in this conversation, each labelled in plain words: who wrote it, to whom, how, and who sent it.
-  type Item = { id: string; direction: 'incoming' | 'outgoing'; created: number; body: string; title: string; detail: string; by?: string; attachment?: string };
+  type Item = { id: string; direction: 'incoming' | 'outgoing' | 'request'; created: number; body: string; title: string; detail: string; by?: string; attachment?: string };
   const deskItem = (m: ReplySummary['history'][number]): Item => ({ id: m.id, direction: 'outgoing', created: m.created, body: m.body, title: 'You emailed ' + firstName,
     by: m.sentBy ? 'sent by ' + personName(m.sentBy, team) : 'sent from this reply desk',
     detail: ['From ' + (m.from || sender) + ' to ' + (m.to || email), m.sentBy ? 'Sent by ' + personName(m.sentBy, team) : 'Sent from this reply desk', m.subject ? 'Subject: ' + m.subject : ''].filter(Boolean).join(' · '),
@@ -547,13 +555,26 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
   const outsideItems = (list: ExternalReply[], tag: string): Item[] => list.map((e, i) => e.source === 'manual'
     ? { id: 'ext-' + tag + i + '-' + e.at, direction: 'outgoing', created: e.at, body: e.body + (e.preview ? ' …' : ''), title: 'Answered outside email', by: 'by phone or text', detail: 'Logged as answered by phone or text by ' + personName(e.account, team) }
     : { id: 'ext-' + tag + i + '-' + e.at, direction: 'outgoing', created: e.at, body: e.body + (e.preview ? ' …' : ''), title: 'You emailed ' + firstName, by: 'sent in Gmail from ' + e.account, detail: 'Sent in Gmail from ' + e.account + ' to ' + email });
+  const originalItem = (source: CustomerRequest): Item => {
+    const form = coaFormDetails(source);
+    return { id: 'original:' + source.id, direction: form ? 'request' : 'incoming', created: source.created,
+      title: form ? 'COA request form' : 'Customer message',
+      detail: form ? 'Submitted from the website. No written message was included.' : 'From ' + (text(source.data.email) || email),
+      body: form ? [form.product ? 'COA requested: ' + form.product : 'Certificate of Analysis requested', form.lot ? 'Lot entered: ' + form.lot : 'Lot not recorded'].join('\n') : text(source.data.message) };
+  };
   const thread: Item[] = (() => {
     const seen = new Set<string>();
+    const sources = [request, ...siblings.map(sib => sib.request)];
     const all: Item[] = [
-      ...history.map(m => m.direction === 'incoming' ? { id: m.id, direction: 'incoming' as const, created: m.created, body: m.body, title: firstName + ' wrote', detail: 'From ' + email } : deskItem(m)),
+      ...history.flatMap(m => {
+        if (m.direction === 'outgoing') return [deskItem(m)];
+        const original = sources.find(source => m.id === 'original:' + source.id);
+        if (original?.data.origin === 'order') return [];
+        return [original ? originalItem(original) : { id: m.id, direction: 'incoming' as const, created: m.created, body: m.body, title: m.id.startsWith('original:') ? 'Website submission' : 'Customer message', detail: 'From ' + email }];
+      }),
       ...outsideItems(external, 'a'),
       ...siblings.flatMap(sib => [
-        { id: 'original:' + sib.request.id, direction: 'incoming' as const, created: sib.request.created, body: [text(sib.request.data.subject), text(sib.request.data.message)].filter(Boolean).join('\n'), title: (text(sib.request.data.name).split(/\s+/)[0] || firstName) + ' wrote (earlier request)', detail: 'From ' + (text(sib.request.data.email) || email) },
+        ...(sib.request.data.origin === 'order' ? [] : [originalItem(sib.request)]),
         ...(sib.reply?.history || []).filter(m => m.direction === 'outgoing').map(deskItem),
         ...outsideItems(sib.external, sib.request.id),
       ]),
@@ -561,56 +582,54 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
     return all.filter(m => { if (seen.has(m.id)) return false; seen.add(m.id); return true; }).sort((a, b) => a.created - b.created);
   })();
   const sentCount = thread.filter(m => m.direction === 'outgoing').length;
-  const gotCount = thread.filter(m => m.direction === 'incoming').length;
-  const lastItem = thread[thread.length - 1];
   const lastOutItem = [...thread].reverse().find(m => m.direction === 'outgoing');
-  const times = (n: number) => n === 1 ? 'once' : n === 2 ? 'twice' : n + ' times';
-  // The answer to "what happened here, and is anything waiting on us?" in two short sentences.
-  const summary = (() => {
-    if (!thread.length) return { headline: 'No emails yet.', next: canReply ? 'Write the first email below.' : '' };
-    const parts = [fromOrder && !gotCount ? '' : `${firstName} wrote ${times(gotCount)}`, sentCount ? `we emailed ${times(sentCount)}` : 'nobody has answered yet'].filter(Boolean).join(', ');
-    const last = lastOutItem ? ` Our last email: ${when(lastOutItem.created)}, ${lastOutItem.by}.` : '';
-    let next: string;
-    if (sending) next = 'Your new email is on its way.';
-    else if (lastItem?.direction === 'incoming') next = sentCount ? `${firstName} wrote again after our last email and is waiting for an answer.` : `${firstName} is waiting for an answer.`;
-    else next = `${firstName} has not written back. Nothing to do unless they do.`;
-    return { headline: parts.charAt(0).toUpperCase() + parts.slice(1) + '.' + last, next };
-  })();
+  const latestRequest = [...thread].reverse().find(m => m.direction !== 'outgoing');
+  const earlierMessages = thread.filter(m => m.id !== latestRequest?.id);
+  const renderMessage = (message: Item) => <li key={message.id} data-direction={message.direction}>
+    <p className={styles.mailTitle}><strong>{message.title}</strong><span>{when(message.created)}</span></p>
+    <p className={styles.meta}>{message.detail}</p>
+    <p className={styles.message}>{message.body || 'No message text was included.'}</p>
+    {message.attachment && <p className={styles.mailAttachment}>Attached: {message.attachment}</p>}
+  </li>;
   // The first thing on the screen: is this done, or does it need me? (owner, Oct 16: "why is he still here... what am I to do?")
   const verdict = (() => {
     if (request.status === 'deleted') return { tone: 'done', text: 'Deleted.', hint: 'Restore it if you need to answer.' };
     if (request.status === 'spam') return { tone: 'done', text: 'Marked as spam.', hint: 'Nothing to do.' };
     if (sending) return { tone: 'done', text: 'Sending now.', hint: 'Nothing else to do.' };
     if (row.stage === 'pitch') return { tone: 'done', text: 'Sales pitch.', hint: 'No reply needed.' };
-    if (row.stage === 'todo') return { tone: 'todo', text: sentCount ? 'Needs your reply.' : fromOrder ? 'Needs your first email.' : 'Needs your reply.', hint: 'Write it in the box below, or archive it if no answer is needed.' };
+    if (row.stage === 'todo') return { tone: 'todo', text: sentCount ? 'Needs your reply.' : fromOrder ? 'Needs your first email.' : 'Needs your reply.', hint: sentCount ? 'The customer wrote again.' : 'No reply sent yet.' };
     if (request.status === 'resolved') return { tone: 'done', text: 'Done. Nothing to do.', hint: `Archived. If ${firstName} writes back, it moves to Needs reply on its own.` };
     return { tone: 'done', text: `Waiting on ${firstName}.`, hint: `Nothing to do now. Archive it to clear it; if ${firstName} writes back, it moves to Needs reply on its own.` };
   })();
-  // More options stays out of the way unless it is in use: a COA request, the AI writing, dictation, or an instruction typed.
-  const moreOpen = isCoaRequest || listening || writing || Boolean(draft?.instruction.trim());
+  // Tools stay out of the way unless the AI is writing, dictation is active, or an instruction was typed.
+  const moreOpen = listening || writing || Boolean(draft?.instruction.trim());
   let status = '';
   if (sending) status = reply?.status === 'sending' ? 'Sending from ' + sender + '…' : 'Queued to send. Jarvis sends it within seconds while your Mac is awake.';
   else if (preparing) status = 'Saving…';
   else if (writing) status = reply?.mode === 'ai' ? 'AI is writing. This usually takes under a minute.' : 'Saving the draft…';
+  else if (draft?.edited) status = 'Not sent. Review your reply, then send when ready.';
   else if (reply?.status === 'ready' && reply.mode === 'ai' && !draft?.edited) status = 'AI draft. Edit anything, or tell the AI what to change.';
   else if (reply?.status === 'ready') status = 'Draft saved. Not sent.';
   return <section key={request.id} className={styles.pane} id={`request-reply-${request.id}`} aria-label={`Reply to ${name}`} aria-busy={writing || sending}>
     <header className={styles.paneHead}>
       <button type="button" className={styles.back} onClick={onClose}>Back to list</button>
-      <div className={styles.who}><h3>{name}</h3><p>{email || 'No email address saved'}{website && <> · <a href={website} target="_blank" rel="noopener noreferrer">Website</a></>}</p></div>
+      <div className={styles.who}><h3>{name}</h3>{(name !== email || website) && <p>{email || 'No email address saved'}{website && <> · <a href={website} target="_blank" rel="noopener noreferrer">Website</a></>}</p>}</div>
       <div className={styles.paneActions}>
-        {canForward && request.status !== 'deleted' && <button type="button" className={styles.action} aria-expanded={panel?.kind === 'forward'} disabled={disabled} onClick={() => onPanel(panel?.kind === 'forward' ? null : { kind: 'forward', error: '' })}>Forward</button>}
         {request.status === 'deleted'
           ? <button type="button" className={styles.action} disabled={disabled} onClick={() => onStatus('new')}>Restore</button>
           : request.status === 'spam' || request.status === 'resolved'
           ? <button type="button" className={styles.action} disabled={disabled} onClick={() => onStatus('new')}>Move to To reply</button>
-          : <><button type="button" className={styles.action} disabled={disabled} onClick={() => onStatus('resolved')}>Archive</button><button type="button" className={styles.link} disabled={disabled} onClick={() => onStatus('spam')}>Spam</button></>}
-        {request.status !== 'deleted' && <button type="button" className={styles.link} disabled={disabled} onClick={() => onPanel(panel?.kind === 'delete' ? null : { kind: 'delete', error: '' })}>Delete</button>}
+          : <button type="button" className={styles.action} disabled={disabled} onClick={() => onStatus('resolved')}>Archive</button>}
+        {request.status !== 'deleted' && <details className={styles.actionMenu}>
+          <summary>More actions</summary>
+          <div className={styles.menuItems}>
+            {canForward && <button type="button" className={styles.link} disabled={disabled} onClick={() => onPanel(panel?.kind === 'forward' ? null : { kind: 'forward', error: '' })}>Forward</button>}
+            {!['spam', 'resolved'].includes(request.status) && <button type="button" className={styles.link} disabled={disabled} onClick={() => onStatus('spam')}>Spam</button>}
+            <button type="button" className={styles.link} disabled={disabled} onClick={() => onPanel(panel?.kind === 'delete' ? null : { kind: 'delete', error: '' })}>Delete</button>
+          </div>
+        </details>}
       </div>
     </header>
-    {(row.stage === 'todo' || row.stage === 'pitch') && canMarkReplied && (markNote === null
-      ? <p className={styles.note}>Already answered by phone, text or another app? <button type="button" className={styles.link} disabled={disabled} onClick={() => onMarkNote('')}>Mark as replied</button></p>
-      : <div className={styles.confirm}><p>How did you reply? (optional)</p><input value={markNote} maxLength={1000} onChange={e => onMarkNote(e.target.value)} placeholder="e.g. Called him, he will wait for the restock"/><button type="button" className={styles.action} disabled={disabled} onClick={onMarkReplied}>Mark as replied</button><button type="button" className={styles.link} onClick={() => onMarkNote(null)}>Cancel</button></div>)}
     {row.stage === 'pitch' && <p className={styles.warning}>{row.label === 'Sales pitch' ? 'Tagged as a sales pitch. It stays out of Needs reply.' : 'This reads like a supplier or vendor pitch, so it is kept out of Needs reply.'} <button type="button" className={styles.link} onClick={() => onIssue({ issue: 'other' })}>Not a sales pitch</button>{row.label !== 'Sales pitch' && <> · <button type="button" className={styles.link} onClick={() => onIssue({ issue: 'vendor' })}>Yes, a sales pitch</button></>}</p>}
     {panel?.kind === 'delete' && <div className={styles.confirm} role="alertdialog" aria-label="Delete this request">
       <p>Delete this request from the inbox? It moves to Deleted, where you can restore it. Nothing is sent to the customer.</p>
@@ -628,52 +647,32 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
     </div>}
     <div className={styles.summary} data-waiting={verdict.tone === 'todo' ? 'true' : 'false'} role="status">
       <p className={styles.verdict}><strong>{verdict.text}</strong> {verdict.hint}</p>
-      <p>{summary.headline}</p>
-      {verdict.tone === 'todo' && summary.next && <p className={styles.summaryNext}>{summary.next}</p>}
     </div>
     {siblings.length > 0 && <p className={styles.note}>{siblings.length + 1} requests from this customer, shown as one conversation. One reply answers all of them.</p>}
-    <p className={styles.subjectLine}><strong>{subject}</strong> <span className={styles.note}>· Ref {request.id.slice(0, 8)}</span></p>{typeof request.data?.labelLot === 'string' && <p className={styles.vialLot}>Lot on the customer's vial: <strong>{request.data.labelLot}</strong>. Only the report for this lot can be attached.</p>}
-    {fromOrder && <p className={styles.orderNote}><strong>Order behind this conversation (only you see this):</strong> {text(request.data.message)}</p>}
-    <h4 className={styles.threadHead}>Emails in this conversation <span className={styles.note}>oldest first</span></h4>
-    <ol className={styles.thread} aria-label="Emails in this conversation">
-      {thread.map(message => <li key={message.id} data-direction={message.direction}>
-        <p className={styles.mailTitle}><strong>{message.title}</strong><span>{when(message.created)}</span></p>
-        <p className={styles.meta}>{message.detail}</p>
-        <p className={styles.message}>{message.body || 'No message text was included.'}</p>
-        {message.attachment && <p className={styles.mailAttachment}>Attached: {message.attachment}</p>}
-      </li>)}
-    </ol>
-    {canTag && <details className={styles.caseBox}>
-      <summary>Case notes for the AI <span className={styles.note}>(only you see these){issue?.issue ? ' · ' + issueLabel(issue.issue) + (issue.resolutions.length ? ' · ' + issue.resolutions.map(resolutionLabel).join(', ') : '') : ' · not filled in'}</span></summary>
-      <div className={styles.case}>
-      <label><span>What is this about?</span><select value={issue?.issue || ''} onChange={event => onIssue({ issue: event.target.value })}>
-        <option value="" disabled>Choose an issue</option>{issueTypes.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-      </select></label>
-      {issue?.issue && <fieldset><legend>How you handled it</legend>{resolutionTypes.map(([key, label]) => <label key={key} className={styles.check}><input type="checkbox" checked={issue.resolutions.includes(key)} onChange={event => onIssue({ resolutions: event.target.checked ? [...issue.resolutions, key] : issue.resolutions.filter(r => r !== key) })}/> {label}</label>)}</fieldset>}
-      {issue?.issue && <label className={styles.caseNote}><span>Case note</span><input value={issueNote} maxLength={1000} onChange={event => onIssueNote(event.target.value)} onBlur={() => { if (issueNote !== (issue.note || '')) onIssue({ note: issueNote }); }} placeholder="e.g. Waiting on restock; offered 30% off next order"/></label>}
-      {issue?.issue && <p className={styles.note}>The AI drafts with this decision and with your {issueLabel(issue.issue)} rules.</p>}
-      </div>
-    </details>}
-    {(() => {
-      // The full record of this request: received, replies (and PDFs) sent, forwards, archive/spam/delete/restore.
-      const local = forwards.filter(f => !activity.some(a => a.at === f.created)).map(f => ({ at: f.created, text: `${f.status === 'failed' ? 'Forward failed to' : f.status === 'accepted' ? 'Forwarded to' : 'Forward status unconfirmed to'} ${f.to} by ${f.by}` }));
-      const items = [{ at: request.created, text: fromOrder ? 'Conversation started from the order' + (request.data.startedBy ? ' by ' + text(request.data.startedBy) : '') : 'Received from the website' }, ...activity, ...local].sort((a, b) => a.at - b.at);
-      return <details className={styles.activity} open={row.stage === 'done' || row.stage === 'waiting' || row.stage === 'deleted'}><summary>Activity ({items.length})</summary><ol>{items.map((item, index) => <li key={index}><span className={styles.meta}>{when(item.at)}</span> {item.text}</li>)}</ol></details>;
-    })()}
+    {!coaForm && <p className={styles.subjectLine}><strong>{subject}</strong></p>}
+    {latestRequest && <section aria-label={latestRequest.direction === 'request' ? 'What they requested' : 'Customer message'}>
+      <h4 className={styles.threadHead}>{latestRequest.direction === 'request' ? 'What they requested' : 'Customer message'}</h4>
+      <ol className={styles.thread} aria-label="Latest customer request">{renderMessage(latestRequest)}</ol>
+    </section>}
+    {coaForm && <p className={styles.coaHelp}>The automatic COA email was not sent. Check the product and lot on the vial label before attaching a report.</p>}
     {request.status === 'deleted' && <p className={styles.warning}>This request is deleted. Restore it to reply.</p>}
     {request.kind === 'affiliate' && <p className={styles.note}>Partner application. Agree terms and create the code under Affiliate &amp; promo codes before promising one.</p>}
     {request.kind === 'stock' && <p className={styles.note}>Check stock under Products before promising a date.</p>}
     {previousCoa?.status === 'accepted' && <p className={styles.note}>An earlier automatic COA email to this customer was accepted by the mail provider.</p>}
     {request.status === 'deleted' ? null : !canReply ? <p className={styles.warning}>No usable email address was saved, so there is no way to reply.</p> : !draft ? null : <div className={styles.composer}>
-      <div className={styles.composeHead}><span>To {reply?.recipient || email}</span><span className={styles.note}>From {sender}</span></div>
+      <div className={styles.composeHead}><strong>Your reply</strong><span>To {reply?.recipient || email}</span><span className={styles.note}>From {sender}</span></div>
       {lastReplied && <p className={styles.replied} role="status">
         Already emailed {when(lastReplied.at)}{lastReplied.how ? ' ' + lastReplied.how : ''}. {row.stage === 'todo' ? firstName + ' wrote back since. ' : ''}Anything you write here goes out as a new email.
       </p>}
+      {coaForm && !sending && <div className={styles.quickReply}>
+        <button type="button" className={styles.action} disabled={locked || writing || conflict} onClick={() => onDraft({ body: 'Hi, could you send a clear photo of your vial label showing the product name and lot number? This will help us check which COA matches your vial. Thank you.', undo: draft.body || undefined, edited: true })}>Ask for a label photo</button>
+        <span className={styles.note}>Fills this box. Review before sending.</span>
+      </div>}
       <label className={styles.hidden} htmlFor={`reply-body-${request.id}`}>Message</label>
-      <textarea id={`reply-body-${request.id}`} ref={bodyField} name="replyBody" rows={9} maxLength={12000} value={draft.body} readOnly={writing} disabled={locked}
+      <textarea id={`reply-body-${request.id}`} ref={bodyField} name="replyBody" rows={5} maxLength={12000} value={draft.body} readOnly={writing} disabled={locked}
         onChange={event => onEdit('body', event.target.value)}
         placeholder={writing ? 'The AI is writing…' : lastReplied ? `Write a new message to ${firstName}…` : `Write your reply to ${firstName}…`} data-writing={writing ? 'true' : 'false'}/>
-      {status && <p className={styles.status} role="status">{status}{draft.undo && !writing && !sending && <> <button type="button" className={styles.link} onClick={() => onDraft({ body: draft.undo!, undo: undefined, edited: true })}>Undo AI change</button></>}</p>}
+      {(status || draft.undo) && <p className={styles.status} role="status">{status}{draft.undo && !writing && !sending && <> <button type="button" className={styles.link} onClick={() => onDraft({ body: draft.undo!, undo: undefined, edited: true })}>Undo change</button></>}</p>}
       {reply?.reason && reply.status !== 'sent' && !sending && <p className={styles.warning}>{friendlyReason(reply.reason)}</p>}
       <div className={styles.sendRow}>
         {canSend
@@ -682,7 +681,7 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
         <button type="button" className={styles.link} disabled={locked || conflict || writing || !draft.body.trim()} onClick={() => onSubmit('staff')}>Save draft</button>
       </div>
       <details className={styles.more} open={moreOpen || undefined}>
-        <summary>More options: AI help, discount codes, COA{templates.length ? ', win-back emails' : ''}</summary>
+        <summary>AI help &amp; attachments</summary>
         {templates.length > 0 && !sending && <div className={styles.templates}>
           <p className={styles.moreLabel}>Win-back emails</p>
           <ul>{templates.map(t => <li key={t.id}><button type="button" className={styles.action} disabled={locked || writing} onClick={() => onDraft({ body: t.body, undo: draft.body || undefined, edited: true })}>Use</button> <strong>{t.label}</strong><span className={styles.note}>{t.why}</span></li>)}</ul>
@@ -699,6 +698,7 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
           {templates.length > 0 && draft.body.trim() && <button type="button" className={styles.action} disabled={locked || conflict || writing} onClick={() => onSubmit('ai', false, 'Tailor this email to this customer and their order. Keep it short and personal, keep every code and link exactly, and do not add new offers.')}>Tailor</button>}
         </div>
         <label className={styles.remember}><input type="checkbox" checked={draft.remember} disabled={locked} onChange={event => onDraft({ remember: event.target.checked })}/> Remember this instruction for future replies</label>
+        {typeof request.data?.labelLot === 'string' && <p className={styles.vialLot}>Lot entered: <strong>{request.data.labelLot}</strong>. Attach only the report for this exact lot.</p>}
         <div className={styles.inserts}>
           <label><span>Insert code</span><select value="" disabled={locked || writing || !options?.codes.length} onChange={event => { const code = options?.codes.find(c => c.code === event.target.value); if (code) onInsert(`code ${code.code} (${code.percentOff}% off at checkout)`); }}>
             <option value="">{options ? (options.codes.length ? 'Choose a code' : 'No active codes') : 'Loading…'}</option>
@@ -723,6 +723,37 @@ function conversation({ row, draft, automation, options, canSend, disabled, list
       {draft.error && <p className={styles.error} role="alert">{draft.error}</p>}
       {draft.message && <p role="status" className={styles.note}>{draft.message}</p>}
     </div>}
-    <details className={styles.original}><summary>Everything the customer submitted</summary>{Object.entries(request.data).map(([key, value]) => <p key={key}><strong>{key}: </strong>{typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value ?? '')}</p>)}</details>
+    {earlierMessages.length > 0 && <details className={styles.earlier}>
+      <summary>Earlier messages and replies ({earlierMessages.length})</summary>
+      {lastOutItem && <p className={styles.note}>Last email: {when(lastOutItem.created)}, {lastOutItem.by}.</p>}
+      <ol className={styles.thread} aria-label="Earlier messages and replies">{earlierMessages.map(renderMessage)}</ol>
+    </details>}
+    <details className={styles.internal}>
+      <summary>Internal details &amp; actions</summary>
+    {(row.stage === 'todo' || row.stage === 'pitch') && canMarkReplied && (markNote === null
+      ? <p className={styles.note}>Already answered by phone, text or another app? <button type="button" className={styles.link} disabled={disabled} onClick={() => onMarkNote('')}>Mark as replied</button></p>
+      : <div className={styles.confirm}><p>How did you reply? (optional)</p><input value={markNote} maxLength={1000} onChange={e => onMarkNote(e.target.value)} placeholder="e.g. Called him, he will wait for the restock"/><button type="button" className={styles.action} disabled={disabled} onClick={onMarkReplied}>Mark as replied</button><button type="button" className={styles.link} onClick={() => onMarkNote(null)}>Cancel</button></div>)}
+      {fromOrder && <p className={styles.orderNote}><strong>Order behind this conversation (only you see this):</strong> {text(request.data.message)}</p>}
+      {siblings.length > 0 && <p className={styles.note}>{siblings.length + 1} requests from this customer, shown as one conversation. One reply answers all of them.</p>}
+    {canTag && <details className={styles.caseBox}>
+      <summary>Internal case notes <span className={styles.note}>(optional, not sent){issue?.issue ? ' · ' + issueLabel(issue.issue) + (issue.resolutions.length ? ' · ' + issue.resolutions.map(resolutionLabel).join(', ') : '') : ' · not filled in'}</span></summary>
+      <div className={styles.case}>
+      <label><span>What is this about?</span><select value={issue?.issue || ''} onChange={event => onIssue({ issue: event.target.value })}>
+        <option value="" disabled>Choose an issue</option>{issueTypes.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+      </select></label>
+      {issue?.issue && <fieldset><legend>How you handled it</legend>{resolutionTypes.map(([key, label]) => <label key={key} className={styles.check}><input type="checkbox" checked={issue.resolutions.includes(key)} onChange={event => onIssue({ resolutions: event.target.checked ? [...issue.resolutions, key] : issue.resolutions.filter(r => r !== key) })}/> {label}</label>)}</fieldset>}
+      {issue?.issue && <label className={styles.caseNote}><span>Case note</span><input value={issueNote} maxLength={1000} onChange={event => onIssueNote(event.target.value)} onBlur={() => { if (issueNote !== (issue.note || '')) onIssue({ note: issueNote }); }} placeholder="e.g. Waiting on restock; offered 30% off next order"/></label>}
+      {issue?.issue && <p className={styles.note}>The AI drafts with this decision and with your {issueLabel(issue.issue)} rules.</p>}
+      </div>
+    </details>}
+    {(() => {
+      // The full record of this request: received, replies (and PDFs) sent, forwards, archive/spam/delete/restore.
+      const local = forwards.filter(f => !activity.some(a => a.at === f.created)).map(f => ({ at: f.created, text: `${f.status === 'failed' ? 'Forward failed to' : f.status === 'accepted' ? 'Forwarded to' : 'Forward status unconfirmed to'} ${f.to} by ${f.by}` }));
+      const items = [{ at: request.created, text: fromOrder ? 'Conversation started from the order' + (request.data.startedBy ? ' by ' + text(request.data.startedBy) : '') : 'Received from the website' }, ...activity, ...local].sort((a, b) => a.at - b.at);
+      return <details className={styles.activity} open={row.stage === 'done' || row.stage === 'waiting' || row.stage === 'deleted'}><summary>Activity ({items.length})</summary><ol>{items.map((item, index) => <li key={index}><span className={styles.meta}>{when(item.at)}</span> {item.text}</li>)}</ol></details>;
+    })()}
+      <p className={styles.note}>Request reference: {request.id.slice(0, 8)}</p>
+      <details className={styles.original}><summary>Saved request details</summary>{Object.entries(request.data).map(([key, value]) => <p key={key}><strong>{key}: </strong>{typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value ?? '')}</p>)}</details>
+    </details>
   </section>;
 }

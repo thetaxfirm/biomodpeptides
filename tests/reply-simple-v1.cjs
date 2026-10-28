@@ -27,5 +27,5 @@ const sendAt=src.indexOf("onClick={() => onSubmit('staff', true)}"),moreAt=src.i
 assert(sendAt>0&&moreAt>sendAt,'Send comes before More options');
 const more=src.slice(moreAt,src.indexOf('</details>',moreAt));
 for(const tool of ['Win-back emails','replyInstruction','Dictate','Rewrite','Tailor','Remember this instruction','Insert code','Insert COA link','Attach COA PDF'])assert(more.includes(tool),tool+' is inside More options');
-assert.match(src,/const moreOpen = isCoaRequest \|\| listening \|\| writing/,'Opens itself for COA requests and while the AI or dictation is working');
+assert.match(src,/const moreOpen = listening \|\| writing/,'Opens for active AI or dictation; COA tools stay optional');
 console.log('reply-simple-v1: ok');
