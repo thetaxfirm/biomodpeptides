@@ -174,7 +174,8 @@ export async function retireStaleReplyDrafts(env:Env,actor:Actor){
  let retired=0;
  for(const row of before){
   const result=await dbFor(env,actor).prepare("UPDATE request_reply_drafts SET revision=revision+1,status='cancelled',reason='retired_reply_policy_v2',ready_id=NULL,lease_token=NULL,lease_until=NULL,approved_at=NULL,approved_by=NULL,updated=? WHERE id=? AND revision=? AND updated=? AND "+LEGACY_REPLY_WHERE).bind(Date.now(),row.id,row.revision,row.updated,LEGACY_REPLY_CUTOFF).run();
-  retired+=result.meta.changes||0;
+  // One primary-key CAS retires at most one draft; D1 changes can include its audit trigger.
+  if(result.meta.changes>0)retired++;
  }
  const remaining=await env.DB.prepare("SELECT SUM(CASE WHEN approved_at IS NOT NULL AND status NOT IN ('sent','cancelled') THEN 1 ELSE 0 END) approved,SUM(CASE WHEN status='sending' OR send_locked_at IS NOT NULL THEN 1 ELSE 0 END) locked FROM request_reply_drafts").first<{approved:number;locked:number}>();
  return {retired,changedSinceReview:before.length-retired,remainingApproved:remaining?.approved||0,pendingOutcomes:remaining?.locked||0};
