@@ -146,9 +146,17 @@ export function OrdersAdmin({ reloadToken, viewRequest, checkoutRecovery, allowe
     const [result, setResult] = useState<QueueResult | null>(null);
     const [rows, setRows] = useState<QueueRow[]>([]);
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
+    const [error, setError] = useState<{ key: string; message: string } | null>(null);
     const [selected, setSelected] = useState<QueueRow | null>(null);
+    const [loadedKey, setLoadedKey] = useState<string | null>(null);
     const sequence = useRef(0);
+    const viewKey = JSON.stringify([tab, input.trim(), reloadToken]);
+    const activeView = useRef(viewKey);
+    activeView.current = viewKey;
+    // A changed tab/search must never relabel the previous view's actionable rows.
+    const viewReady = Boolean(result && loadedKey === viewKey && input.trim() === q);
+    const viewError = error?.key === viewKey ? error.message : '';
+    const visibleRows = viewReady ? rows : [];
 
     useEffect(() => { if (viewRequest) { setTab(requestedTab(viewRequest.tab)); setInput(''); setQ(''); } }, [viewRequest?.revision]);
 
@@ -156,17 +164,20 @@ export function OrdersAdmin({ reloadToken, viewRequest, checkoutRecovery, allowe
     useEffect(() => { const t = setTimeout(() => setQ(input.trim()), 250); return () => clearTimeout(t); }, [input]);
 
     async function fetchPage(offset: number) {
+        const key = JSON.stringify([tab, q, reloadToken]);
+        if (key !== activeView.current) return;
         const request = ++sequence.current;
-        setLoading(true); setError('');
+        setLoading(true); setError(null);
         try {
             const page = await query({ tab, q, offset });
-            if (request !== sequence.current) return;
+            if (request !== sequence.current || key !== activeView.current) return;
             setResult(page);
+            setLoadedKey(key);
             setRows(previous => offset ? [...previous, ...page.orders] : page.orders);
         } catch {
-            if (request === sequence.current) setError('Orders could not load. Retry, or refresh administration.');
+            if (request === sequence.current && key === activeView.current) setError({ key, message: 'Orders could not load. Retry, or refresh administration.' });
         } finally {
-            if (request === sequence.current) setLoading(false);
+            if (request === sequence.current && key === activeView.current) setLoading(false);
         }
     }
     useEffect(() => { void fetchPage(0); }, [tab, q, reloadToken]);
@@ -175,7 +186,7 @@ export function OrdersAdmin({ reloadToken, viewRequest, checkoutRecovery, allowe
     useEffect(() => {
         if (!selected) return;
         let live = true;
-        query({ id: selected.id }).then(page => { if (live && page.orders[0]) setSelected(page.orders[0]); }).catch(() => undefined);
+        query({ id: selected.id }).then(page => { if (live && page.orders[0]) setSelected(current => current?.id === selected.id ? page.orders[0] : current); }).catch(() => undefined);
         return () => { live = false; };
     }, [reloadToken]);
 
@@ -279,8 +290,8 @@ export function OrdersAdmin({ reloadToken, viewRequest, checkoutRecovery, allowe
                 <details><summary>{holding.length ? `${rest} more ${rest === 1 ? 'product' : 'products'}` : `${result.noCoa.length} ${result.noCoa.length === 1 ? 'product' : 'products'}`} for sale without a COA</summary>{table(result.noCoa.filter(p => !p.waitingOrders))}</details>
             </div>;
         })()}
-        {error && <div className="notice error"><p role="alert">{error}</p><button type="button" className="text-button" onClick={() => fetchPage(0)}>Retry</button></div>}
-        {result?.mustGoOut && (() => {
+        {viewError && <div className="notice error"><p role="alert">{viewError}</p><button type="button" className="text-button" onClick={() => fetchPage(0)}>Retry</button></div>}
+        {viewReady && result?.mustGoOut && (() => {
             // The 2 p.m. Pacific same-day promise, counted across every tab (lib/ship-cutoff.ts).
             const { today, late } = result.mustGoOut, total = today + late;
             if (!total || tab !== 'to_ship') return null;
@@ -289,14 +300,14 @@ export function OrdersAdmin({ reloadToken, viewRequest, checkoutRecovery, allowe
                 <p><strong>{late > 0 ? `${late} overdue` : ''}{late > 0 && today > 0 ? ' · ' : ''}{today > 0 ? `${today} due today` : ''}</strong>. Pack the orders, hand them to the carrier, then record Dropped off.</p>
             </div>;
         })()}
-        {result && <p className={styles.summary} role="status">
+        {viewReady && result && <p className={styles.summary} role="status">
             {result.total} {result.total === 1 ? 'order' : 'orders'} in {current.label}{q ? ' matching “' + q + '”' : ''}{tab === 'to_ship' || tab === 'label' ? ', oldest first' : ', newest first'}.
             {result.truncated ? ' Only the most recent ' + result.scanned.toLocaleString() + ' orders are included.' : ''}
         </p>}
-        {!rows.length ? <p className={styles.empty}>{loading ? 'Loading orders…' : q ? 'No orders match this search in ' + current.label + '. Try All.' : 'No orders in ' + current.label + '.'}</p> :
+        {!viewReady ? <p className={styles.empty} role="status">{viewError ? 'Orders for this view are unavailable. Retry to load them.' : 'Loading orders…'}</p> : !visibleRows.length ? <p className={styles.empty}>{q ? 'No orders match this search in ' + current.label + '. Try All.' : 'No orders in ' + current.label + '.'}</p> :
             <table className={styles.table}>
                 <thead><tr><th>Order</th><th>Customer</th><th className={styles.number}>Items</th><th className={styles.number}>Total</th><th>Payment</th><th>Shipment</th><th>Last contact recorded</th><th>Next step</th></tr></thead>
-                <tbody>{rows.map(o => { const payment = orderPaymentStatus(o), shipment = orderShipmentStatus(o); const due = tabForOrder(o) === 'to_ship' ? shipDue(o) : null; const urgent = due && due.state !== 'upcoming'; return <tr key={o.id}>
+                <tbody>{visibleRows.map(o => { const payment = orderPaymentStatus(o), shipment = orderShipmentStatus(o); const due = tabForOrder(o) === 'to_ship' ? shipDue(o) : null; const urgent = due && due.state !== 'upcoming'; return <tr key={o.id}>
                     <td>{urgent && <span className={styles.star} role="img" aria-label={due.label} title={due.label}>★</span>}<button type="button" className={styles.orderButton} onClick={() => setSelected(o)}>{orderNumber(o.id)}</button>{due && <span className={urgent ? styles.dueUrgent : styles.sub}>{due.label}</span>}<span className={styles.sub}>{new Date(o.created).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span></td>
                     <td>{o.data?.address?.name || 'Name not recorded'}<span className={styles.sub}>{[place(o), o.data?.email].filter(Boolean).join(' · ')}</span></td>
                     <td data-label="Items" className={styles.number}>{units(o)}</td>
@@ -307,7 +318,7 @@ export function OrdersAdmin({ reloadToken, viewRequest, checkoutRecovery, allowe
                     <td className={styles.next}>{orderAttentionReason(o) && <span className={styles.attentionReason}>{orderAttentionReason(o)}</span>}{nextStep(o)}</td>
                 </tr>; })}</tbody>
             </table>}
-        {result?.hasMore && <div className={styles.more}><button type="button" className="button button-dark" disabled={loading} onClick={() => fetchPage(rows.length)}>{loading ? 'Loading…' : 'Load more (' + (result.total - rows.length) + ' left)'}</button></div>}
+        {viewReady && result?.hasMore && <div className={styles.more}><button type="button" className="button button-dark" disabled={loading} onClick={() => fetchPage(rows.length)}>{loading ? 'Loading…' : 'Load more (' + (result.total - rows.length) + ' left)'}</button></div>}
 
         <details className={styles.help}>
             <summary>Shipping and checkout help</summary>

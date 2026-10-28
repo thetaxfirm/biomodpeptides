@@ -1,13 +1,13 @@
 // Queue "Dropped off" handoff: real component, isolated fetch, no provider or network calls.
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),Module=require('node:module');
 const root=path.resolve(__dirname,'..'),ts=require('typescript'),React=require('react');
-let active;const hooks={...React,useState(v){const h=active,i=h.i++;if(!(i in h.s))h.s[i]=v;return[h.s[i],x=>h.s[i]=typeof x==='function'?x(h.s[i]):x];},useRef(v){const h=active,i=h.i++;if(!(i in h.s))h.s[i]={current:v};return h.s[i];},useEffect(){}};
-let toasts=[];
+let active;const hooks={...React,useState(v){const h=active,i=h.i++;if(!(i in h.s))h.s[i]=v;return[h.s[i],x=>h.s[i]=typeof x==='function'?x(h.s[i]):x];},useRef(v){const h=active,i=h.i++;if(!(i in h.s))h.s[i]={current:v};return h.s[i];},useEffect(callback,deps){if(active?.captureEffects)active.effects.push({callback,deps});}};
+let toasts=[],adminApi=()=>{throw Error('Test must not call the admin API');};
 function load(file){const name=path.join(root,file),m=new Module(name,module);m.filename=name;m.paths=Module._nodeModulePaths(root);m.require=id=>{
   if(id==='react')return hooks;
   if(id.endsWith('.module.css'))return{};
   if(id==='sonner')return{toast:{success(t){toasts.push(t);},info(t){toasts.push(t);},error(t){toasts.push(t);}}};
-  if(id==='./provider')return{api(){throw Error('Test must not call the admin API');},report(){}};
+  if(id==='./provider')return{api:(...args)=>adminApi(...args),report(){}};
   if(id==='./shipping-admin')return{ShippingLabel:()=>React.createElement('span',{'data-shipping-label-control':true},'Fixture label control')};
   if(id==='./order-admin')return{OrderDetails:()=>null};
   if(id==='@/lib/payment-check')return load('lib/payment-check.ts');
@@ -24,7 +24,7 @@ function load(file){const name=path.join(root,file),m=new Module(name,module);m.
   if(file.startsWith('lib/') && id.startsWith('./'))return load('lib/'+id.slice(2)+'.ts');
   return require(id);};
   m._compile(ts.transpileModule(fs.readFileSync(name,'utf8'),{compilerOptions:{module:1,target:9,jsx:4,esModuleInterop:true}}).outputText,name);return m.exports;}
-function mount(fn,props={},states=[]){const h={s:states,i:0,tree:null,render(){this.i=0;active=this;this.tree=fn(props);return this.tree;}};h.render();return h;}
+function mount(fn,props={},states=[],captureEffects=false){const h={s:states,i:0,tree:null,captureEffects,effects:[],render(){this.i=0;this.effects=[];active=this;this.tree=fn(props);return this.tree;}};h.render();return h;}
 
 const {canMarkDroppedOff,DroppedOff}=load('components/store/orders-admin.tsx');
 const may=p=>p==='orders:fulfill',mayNot=()=>false;
@@ -68,7 +68,7 @@ const {OrdersAdmin}=load('components/store/orders-admin.tsx');
 const queue=load('lib/order-queue.ts');
 const fixtureRows=[{id:'fixture-progress-order',status:'paid',created:Date.now(),total:1234,data:{address:{name:'Fixture Customer'},shipment:{status:'pre_transit'},handoff:{at:Date.now()}}}];
 const page=queue.queryOrders(fixtureRows,{tab:'all'});
-const screen=mount(OrdersAdmin,{reloadToken:0,allowed:may,busy:false,change,submit:()=>{},markDraft:()=>{},reload:()=>{},onWinBack:()=>{}},[{issue:'out_of_stock',note:''},'all','','',page,page.orders,false,'',null]);
+const screen=mount(OrdersAdmin,{reloadToken:0,allowed:may,busy:false,change,submit:()=>{},markDraft:()=>{},reload:()=>{},onWinBack:()=>{}},[{issue:'out_of_stock',note:''},'all','','',page,page.orders,false,null,null,JSON.stringify(['all','',0])]);
 const html=renderToStaticMarkup(screen.tree);
 for(const words of ['Pack &amp; ship','Payment to confirm','Needs attention','Track parcels','All orders','Payment</th>','Shipment</th>','Paid · recorded','Handed over','awaiting carrier scan','No contact recorded'])assert(html.includes(words),words);
 assert(!html.includes('Refunded / cancelled'));
@@ -78,14 +78,18 @@ assert(html.includes('value="refunded"')&&html.includes('value="cancelled"')&&ht
 const nodes=[];function walk(n){if(!n||typeof n!=='object')return;if(Array.isArray(n)){n.forEach(walk);return;}nodes.push(n);walk(n.props?.children);}walk(screen.tree);
 const recordSelect=nodes.find(n=>n.type==='select'&&n.props.value==='');
 recordSelect.props.onChange({target:{value:'refunded'}});screen.render();
-assert(renderToStaticMarkup(screen.tree).includes('Orders recorded as refunded'),'record selector actually changes the active view');
+const switched=renderToStaticMarkup(screen.tree);
+assert(switched.includes('Orders recorded as refunded'),'record selector actually changes the active view');
+assert(switched.includes('Loading orders'),'new view shows loading immediately');
+assert(!switched.includes('orders in Refunded')&&!switched.includes('Fixture Customer'),'previous total and actionable rows are hidden before the query effect');
+assert(switched.includes('value="refunded"')&&switched.includes('Refunded (0)'),'queue counts remain available while switching');
 console.log('PASS: real Orders screen separates payment and shipment, groups work and record views, shows evidence and avoids unsolicited recovery shortcuts.');
 
 // Payment review wins over a postage approval and blocks detail-panel fulfillment controls.
 for (const verification of ['failed','settled']) {
   const order={id:'fixture-verification-order',status:'paid',created:Date.now(),total:1234,data:{paymentVerified:{at:Date.now(),state:verification},labelApproval:{cents:2500,limitCents:1000}}};
   const result=queue.queryOrders([order],{tab:'all'});
-  const component=mount(OrdersAdmin,{reloadToken:0,allowed:may,busy:false,change,submit:()=>{},markDraft:()=>{},reload:()=>{}},[{issue:'out_of_stock',note:''},'all','','',result,result.orders,false,'',result.orders[0]]);
+  const component=mount(OrdersAdmin,{reloadToken:0,allowed:may,busy:false,change,submit:()=>{},markDraft:()=>{},reload:()=>{}},[{issue:'out_of_stock',note:''},'all','','',result,result.orders,false,null,result.orders[0],JSON.stringify(['all','',0])]);
   const rendered=renderToStaticMarkup(component.tree);
   if (verification==='failed') {
     assert(rendered.includes('Review payment'),'payment review is the row action even when label approval is needed');
@@ -99,3 +103,32 @@ for (const verification of ['failed','settled']) {
   }
 }
 console.log('PASS: failed payment verification takes action priority and blocks label, manual fulfillment and handoff controls until resolved.');
+
+// A delayed old response cannot populate the new tab; debounced search hides old actions at once.
+(async()=>{
+  const pending=[];adminApi=(action,params)=>new Promise((resolve,reject)=>pending.push({action,params,resolve,reject}));
+  const props={reloadToken:0,allowed:may,busy:false,change,submit:()=>{},markDraft:()=>{},reload:()=>{}};
+  const c=mount(OrdersAdmin,props,[{issue:'other',note:''},'all','','',page,page.orders,false,null,null,JSON.stringify(['all','',0])],true);
+  const runQuery=()=>c.effects.find(e=>e.deps?.length===3)?.callback();
+  runQuery();assert.equal(pending.length,1);
+  c.s[1]='refunded';c.render();runQuery();assert.equal(pending.length,2);
+  pending[0].resolve(page);await Promise.resolve();await Promise.resolve();c.render();
+  assert(!renderToStaticMarkup(c.tree).includes('Fixture Customer'),'late previous-tab result is ignored');
+  const empty=queue.queryOrders(fixtureRows,{tab:'refunded'});pending[1].resolve(empty);await Promise.resolve();await Promise.resolve();c.render();
+  assert(renderToStaticMarkup(c.tree).includes('0 orders in Refunded'),'new tab total appears only with matching result');
+  c.s[1]='all';c.s[4]=page;c.s[5]=page.orders;c.s[9]=JSON.stringify(['all','',0]);c.s[2]='fixture';c.render();
+  assert(renderToStaticMarkup(c.tree).includes('Loading orders'),'typing hides old rows during search debounce');
+  assert(!renderToStaticMarkup(c.tree).includes('Fixture Customer'),'old actionable rows are not exposed as search matches');
+  runQuery();assert.equal(pending.length,2,'stale debounced query is not requested');
+  c.s[3]='fixture';c.render();runQuery();assert.equal(pending[2].params.q,'fixture');
+  pending[2].reject(Error('fixture unavailable'));await Promise.resolve();await Promise.resolve();c.render();
+  const failed=renderToStaticMarkup(c.tree);assert(failed.includes('Orders for this view are unavailable'));assert(!failed.includes('Fixture Customer'),'failed new view never falls back to old actions');
+  for (const nextSelected of [null,{...page.orders[0],id:'other-fixture-order'}]) {
+    props.reloadToken++;c.s[8]=page.orders[0];c.render();
+    c.effects.find(e=>e.deps?.length===1&&e.deps[0]===props.reloadToken).callback();
+    const refresh=pending[pending.length-1];assert.equal(refresh.params.id,page.orders[0].id);
+    c.s[8]=nextSelected;refresh.resolve(page);await Promise.resolve();await Promise.resolve();
+    assert.equal(c.s[8],nextSelected,'delayed detail refresh preserves a closed or newly selected order');
+  }
+  console.log('PASS: immediate view/search loading, preserved counts and selection, matching totals, and stale-response rejection.');
+})().catch(error=>{console.error(error);process.exitCode=1;});
