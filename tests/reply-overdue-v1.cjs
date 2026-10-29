@@ -23,7 +23,11 @@ const {overdueCustomers,runOverdueDigest}=require('../lib/reply-overdue.ts');
  const orderReply=add({name:'Replying Customer',email:'return@example.invalid',origin:'order',subject:'Saved order',message:'Internal order context'},now-8*day);
  const incoming=(id,request,at)=>sql.prepare("INSERT INTO request_reply_messages(id,request_id,direction,body,created,provider_message_id,sender,recipient) VALUES(?,?,'incoming','Synthetic customer message',?,'fixture','return@example.invalid','contact@trybiomod.com')").run(id,request,at);
  incoming('recent-customer-message',orderReply,now-3600000);
- const waiting=await overdueCustomers(env,now);
+ // A missing sent receipt needs verification, never an overdue prompt to resend.
+ const uncertain=add({name:'Receipt review',email:'receipt@example.invalid',subject:'Q',message:'Question'},now-4*day);
+ sql.prepare("INSERT INTO request_reply_drafts(id,request_id,revision,status,mode,sender,recipient,subject,proposed_body,instruction,body,prepared_by,request_hash,coa_json,reason,created,updated) VALUES(?,?,1,'needs_review','staff','contact@trybiomod.com','receipt@example.invalid','Q','','','Already marked sent.','staff@example.invalid','fixture','{}','local_sent_without_provider_receipt',?,?)").run(randomUUID(),uncertain,now-day,now);
+ const held=sql.prepare('SELECT * FROM request_reply_drafts WHERE request_id=?').get(uncertain);
+ const waiting=await overdueCustomers(env,now);assert(!waiting.some(w=>w.email==='receipt@example.invalid'),'Today and the inbox agree that uncertain sends need receipt review, not another reply');assert.deepEqual(sql.prepare('SELECT * FROM request_reply_drafts WHERE request_id=?').get(uncertain),held,'Read-only overview preserves receipt evidence');
  assert.deepEqual(waiting.map(w=>[w.email,w.count]),[['albert@example.invalid',2]],'Only real customers with no reply, grouped by email');
  assert(!waiting.some(w=>['followup@example.invalid','return@example.invalid'].includes(w.email)),'internal conversation and recent actual reply do not create overdue urgency');
  const later=await overdueCustomers(env,now+2*day);
