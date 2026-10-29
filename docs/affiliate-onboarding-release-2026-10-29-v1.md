@@ -32,3 +32,11 @@ Migration `0033_affiliate_onboarding.sql` is additive. Full tax numbers and lice
 - No real partner, SSN, license, order, email or payment was used.
 
 Owner steps after deploy: publish the talking points (Admin, Affiliates), authorize the partner's email, send them https://trybiomod.com/account/affiliate, then Save offer for that partner. Have counsel/accountant confirm the talking points and 1099 threshold.
+
+## Live record
+
+- Source commit 204166f on main (author Ash Taha via Claude), pushed 2026-10-29 ~08:07 UTC; Cloudflare Worker `biomod-peptides` version e6593f2b-12c6-4d10-9291-4e7206b62828 at 08:09:35 UTC.
+- `AFFILIATE_VAULT_KEY` secret set before the push (value not recorded; backup in the owner's keychain).
+- Production D1 has all seven new tables. Read-only live checks: `/`, `/shop`, `/account/affiliate` 200; new onboarding, vault and contacts endpoints refuse signed-out and cross-origin requests.
+- Change-history import run with `--remote`.
+- Gap: no authenticated live check of the owner screens or a real partner submission; first real use is the owner's own walkthrough.
