@@ -168,10 +168,10 @@ export async function offerAffiliateSchedule(db:D1Database,actor:string,raw:unkn
 export async function acceptAffiliateSchedule(db:D1Database,owner:string,raw:unknown,now=Date.now()) {
  const input=z.object({scheduleId:z.string().uuid(),accepted:z.literal(true)}).parse(raw);
  const result=await db.batch([
- stmt(db,`INSERT OR IGNORE INTO affiliate_schedule_acceptances(schedule_id,owner,accepted) SELECT f.id,ss.owner,? FROM affiliate_schedule_state ss JOIN affiliate_schedules f ON f.id=ss.schedule_id JOIN affiliate_program_state ps ON ps.id=1 AND ps.agreement_id=f.agreement_id JOIN affiliate_members m ON m.owner=ss.owner AND m.agreement_id=f.agreement_id WHERE ss.owner=? AND ss.schedule_id=?`,now,owner,input.scheduleId),
+ stmt(db,`INSERT OR IGNORE INTO affiliate_schedule_acceptances(schedule_id,owner,accepted) SELECT f.id,ss.owner,? FROM affiliate_schedule_state ss JOIN affiliate_schedules f ON f.id=ss.schedule_id JOIN affiliate_program_state ps ON ps.id=1 AND ps.agreement_id=f.agreement_id JOIN affiliate_members m ON m.owner=ss.owner AND m.agreement_id=f.agreement_id WHERE ss.owner=? AND ss.schedule_id=? AND f.code IS NULL`,now,owner,input.scheduleId),
  stmt(db,`INSERT INTO affiliate_events(id,owner,actor,action,detail,created) SELECT ?,owner,?,'schedule.accepted',?,? FROM affiliate_schedule_acceptances WHERE schedule_id=? AND owner=? AND accepted=?`,crypto.randomUUID(),owner,JSON.stringify({scheduleId:input.scheduleId}),now,input.scheduleId,owner,now)
  ]);
- if(!result[0].meta.changes) throw Error('The agreement or schedule changed or was already accepted. Reload before continuing.');
+ if(!result[0].meta.changes) throw Error('The agreement or schedule changed or was already accepted, or this offer must be signed. Reload before continuing.');
  return {message:'Your individual financial terms are accepted.'};
 }
 

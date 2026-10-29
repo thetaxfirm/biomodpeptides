@@ -5,14 +5,14 @@ import os from 'node:os';
 import {fileURLToPath} from 'node:url';
 import {Miniflare,Log,LogLevel} from 'miniflare';
 import {migrationStatements} from './sql-migration-fixture.mjs';
-export async function shippingWorkerFixture({preview=false,port=3067}={}) {
+export async function shippingWorkerFixture({preview=false,port=3067,extraBindings={}}={}) {
  const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..'),built=path.join(root,'dist/server');
  const config=JSON.parse(await fs.readFile(path.join(built,'wrangler.json'),'utf8'));
  const files=(await fs.readdir(built,{recursive:true})).filter(n=>/\.(?:m?js)$/.test(n));
  const temporary=await fs.mkdtemp(path.join(os.tmpdir(),'biomod-shipping-worker-'));
  const owner='00000001-0000-4000-8000-000000000021',sessionId='00000001-0000-4000-8000-000000000022',email='shipping-fixture@example.invalid';
  const user={id:owner,email,email_confirmed_at:'2026-01-01',user_metadata:{name:'Synthetic shipping preview'}};
- const bindings={SUPABASE_URL:'https://auth.example.invalid',SUPABASE_ANON_KEY:'fixture-only',STORE_ADMIN_EMAILS:email,EASYPOST_API_KEY:'EZAK_isolated_fixture',AUTHORIZENET_ENVIRONMENT:'live',AUTHORIZENET_API_LOGIN_ID:'fixtureLogin',AUTHORIZENET_TRANSACTION_KEY:'A'.repeat(16),AUTHORIZENET_SIGNATURE_KEY:'B'.repeat(128),AUTHORIZENET_RETURN_URL:'https://trybiomod.com/payment/return',AUTHORIZENET_CONNECTION_VERIFIED:'true',COMMERCE_MODE:'live',COMMERCE_FULFILLMENT_VERIFIED:'true',FIXED_TAX_RATE:'8.375',FIXED_TAX_STATE:'NV'};
+ const bindings={SUPABASE_URL:'https://auth.example.invalid',SUPABASE_ANON_KEY:'fixture-only',STORE_ADMIN_EMAILS:email,EASYPOST_API_KEY:'EZAK_isolated_fixture',AUTHORIZENET_ENVIRONMENT:'live',AUTHORIZENET_API_LOGIN_ID:'fixtureLogin',AUTHORIZENET_TRANSACTION_KEY:'A'.repeat(16),AUTHORIZENET_SIGNATURE_KEY:'B'.repeat(128),AUTHORIZENET_RETURN_URL:'https://trybiomod.com/payment/return',AUTHORIZENET_CONNECTION_VERIFIED:'true',COMMERCE_MODE:'live',COMMERCE_FULFILLMENT_VERIFIED:'true',FIXED_TAX_RATE:'8.375',FIXED_TAX_STATE:'NV',...extraBindings};
  const calls={rates:0,buys:[],hosted:[],paymentReads:[],forbidden:0};
  const rates=[{id:'rate_ground',carrier:'USPS',service:'GroundAdvantage',rate:'9.00',currency:'USD',delivery_days:3},{id:'rate_expedited',carrier:'UPS',service:'2ndDayAir',rate:'15.00',currency:'USD',delivery_days:2},{id:'rate_overnight',carrier:'UPSDAP',service:'NextDayAir',rate:'25.00',currency:'USD',delivery_days:1}];
  const mf=new Miniflare({name:'isolated-shipping',...(preview?{host:'127.0.0.1',port}:{}),cf:false,modules:[config.main,...files.filter(n=>n!==config.main)].map(n=>({type:'ESModule',path:path.join(built,n)})),modulesRoot:built,compatibilityDate:config.compatibility_date,compatibilityFlags:config.compatibility_flags,assets:{directory:path.join(root,'dist/client'),binding:'ASSETS',routerConfig:{has_user_worker:true,invoke_user_worker_ahead_of_assets:false}},bindings,d1Databases:{DB:'isolated-shipping'},d1Persist:path.join(temporary,'d1'),outboundService:async req=>{

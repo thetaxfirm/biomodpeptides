@@ -51,6 +51,8 @@ const realNormalizeLot = require('../lib/coa-delivery.ts').normalizeLot, realHas
 const coaDeliveryStrict = new Proxy({}, { get: (_, key) => key === '__esModule' ? true : key === 'normalizeLot' ? realNormalizeLot : key === 'hasInvalidLabelLot' ? realHasInvalidLabelLot : forbidden('@/lib/coa-delivery:' + String(key)) });
 const dependencies = {
   '@/lib/coa-delivery': coaDeliveryStrict,
+  // Contact capture is best-effort and recorded only; it is not COA delivery.
+  '@/lib/contacts': { recordContact: async (db, input) => { note('contact:' + input.source); } },
   '@/lib/request-replies': (m=>Object.assign(m,{autoDraftNewRequest:(e,id)=>m.prepareRequestReply(e,{requestId:id,mode:'ai',expectedRevision:null},{email:'Website request automation',role:'system'})}))({
     summarizeRequestReplies: async(receivedEnv,ids)=>{checkedAdmin();assert.equal(receivedEnv,env);return {};},
     previewReplyAttachments: async(receivedEnv,input,actor)=>{

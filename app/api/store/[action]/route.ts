@@ -1,4 +1,5 @@
 import { replyBridgeRoute } from '@/lib/request-reply-route';
+import { recordContact } from '@/lib/contacts';
 import { queryOrders, scanLimit, orderBucket, canArchive, isArchived } from '@/lib/order-queue';
 import { publicCatalog } from '@/lib/public-catalog';
 import { batchRecordsFor, batchStatus, batchPath } from '@/lib/testing';
@@ -51,6 +52,8 @@ const j = (value: unknown, status = 200) => NextResponse.json(value, { status, h
 const cartImports = () => createCartImports({ db: database(), normalize: validateLines, validate: quote });
 // Start only this newly saved inquiry after the response. Durable jobs remain the
 // source of recipients/documents; the outbox keeps its leases, caps and retry policy.
+// Contact capture is secondary: it never changes the outcome of a sign-in or a form.
+async function captureContact(input: Parameters<typeof recordContact>[1]) { try { await recordContact(runtime().DB, input); } catch { /* ignore */ } }
 function scheduleInquiryDelivery(env: ReturnType<typeof runtime>, requestId: string, kind: 'contact' | 'affiliate') {
     try {
         const deliveryEnv = { ...env, DB: withAuditDb(env.DB, { source: 'system', actor: 'Inquiry delivery automation', actorType: 'system' }) } as ReturnType<typeof runtime>;
@@ -364,6 +367,7 @@ export async function POST(req: NextRequest, { params }: {
             if (typeof d.user?.id !== 'string') throw new Error('Please sign in again.');
             await cartImports().record(d.user.id, loginSession.id);
             await storeAuth(d, secure);
+            await captureContact({ email: d.user.email, owner: d.user.id, name: d.user.user_metadata?.name, phone: d.user.user_metadata?.phone, source: 'account' });
             c.delete(ANONYMOUS_SESSION_COOKIE);
             const returnTo = safeAuthReturn(b.returnTo ?? c.get(AUTH_RETURN_COOKIE)?.value);
             c.delete(AUTH_RETURN_COOKIE);
@@ -380,6 +384,7 @@ export async function POST(req: NextRequest, { params }: {
                 throw new Error('Passwords do not match.');
             // Supabase sends the verification email; unverified members cannot sign in (see customer() in lib/auth.ts).
             const d = await authCall('signup?redirect_to=' + encodeURIComponent(req.nextUrl.origin + '/login'), { email, password, data: { name, company, phone, business_type: businessType } });
+            await captureContact({ email, owner: typeof d?.user?.id === 'string' ? d.user.id : typeof d?.id === 'string' ? d.id : null, name, phone, source: 'account' });
             (await cookies()).set(AUTH_RETURN_COOKIE, safeAuthReturn(b.returnTo), { httpOnly: true, secure, sameSite: 'lax', path: '/', maxAge: AUTH_RETURN_MAX_AGE });
             return j({ message: 'Almost done. Check your email and click the link to verify your membership, then sign in.', verificationRequired: true });
         }
@@ -419,6 +424,7 @@ export async function POST(req: NextRequest, { params }: {
             const u = await customer();
             const id = uid();
             await run('INSERT INTO requests(id,owner,kind,data,created) VALUES(?,?,?,?,?)', id, u?.id || null, 'contact', JSON.stringify(data), timestamp());
+            await captureContact({ email: data.email, owner: u?.id || null, name: data.name, source: 'contact_form' });
             // The saved inquiry remains successful if mail setup or enqueueing is unavailable.
             await Promise.allSettled([enqueueCoaRequest(runtime(), id), enqueueRequestAlert(runtime(), id)]);
             scheduleInquiryDelivery(runtime(), id, 'contact');

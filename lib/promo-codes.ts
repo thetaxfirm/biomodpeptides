@@ -85,3 +85,20 @@ export async function storedPromotions(db?: D1Database | null, options: { throwO
     } else rows = await storedPromoList(db);
     return rows.filter(promo => promo.active).map(({ code, percentOff }) => ({ code, percentOff }));
 }
+
+/** Create or reprice one stored code with the same compare-and-swap as administration. Used when an
+ * affiliate offer names the partner's code and customer discount, so both live in one place. */
+export async function saveStoredPromo(db: D1Database, code: string, percentOff: number, by: string, now = Date.now()): Promise<'created' | 'updated' | 'unchanged'> {
+    if (!cleanPromoCode(code) || !cleanPercentOff(percentOff)) throw new Error('Codes are 3 to 40 letters and digits with a 1 to ' + MAX_PERCENT_OFF + '% discount.');
+    if (builtInCodes().includes(code)) throw new Error(code + ' is a built-in store code. Choose a different partner code.');
+    const before = await readStoredPromos(db), existing = before.rows.find(promo => promo.code === code);
+    if (existing && existing.percentOff === percentOff && existing.active) return 'unchanged';
+    if (!existing && before.rows.length >= MAX_STORED_PROMOS) throw new Error('There are already ' + MAX_STORED_PROMOS + ' saved codes. Delete one before adding another.');
+    const entry: StoredPromo = { code, percentOff, active: true, created: existing?.created || now, by: by.slice(0, 120) };
+    const value = JSON.stringify(existing ? before.rows.map(promo => promo.code === code ? entry : promo) : [...before.rows, entry]);
+    const written = before.value !== null
+        ? await db.prepare('UPDATE settings SET value=? WHERE key=? AND value=?').bind(value, PROMO_CODES_KEY, before.value).run()
+        : await db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO NOTHING').bind(PROMO_CODES_KEY, value).run();
+    if (!written.meta.changes) throw new Error('Promo codes changed while this page was open. Reload and try again.');
+    return existing ? 'updated' : 'created';
+}

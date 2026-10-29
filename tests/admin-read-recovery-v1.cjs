@@ -68,7 +68,7 @@ mod.require=id=>{
  if(id==='./primitives')return{Field,Check,Choice,Blank,formData:form=>form.fields};
  if(id==='@/components/ui/tabs')return{Tabs,TabsTrigger,TabsList:noop,TabsContent};
  if(id==='@/components/ui/dialog')return{Dialog,DialogContent:noop,DialogTitle:noop,DialogDescription:noop};
- if(['./traffic-diagnostics','./promo-analytics','./seo-admin','./sales-diagnostics','./order-admin','@/components/ui/tabs','@/components/ui/table'].includes(id))return new Proxy({}, {get:()=>noop});
+ if(['./contacts-admin','./traffic-diagnostics','./promo-analytics','./seo-admin','./sales-diagnostics','./order-admin','@/components/ui/tabs','@/components/ui/table'].includes(id))return new Proxy({}, {get:()=>noop});
  throw Error('Unexpected dependency '+id);
 };
 mod._compile(ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,filename);
