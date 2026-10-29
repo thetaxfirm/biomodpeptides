@@ -136,7 +136,7 @@ function stageOf(request: CustomerRequest, reply: ReplySummary | undefined, exte
   if (started) return { stage: 'followup', label: 'Optional follow-up · no customer message', since: request.created, when: 'Opened ' + shortDate(request.created), late: false };
   // Plain answer to "did we reply?" first, then what is waiting.
   const base = customerReplied ? `Replied ${shortDate(lastOut)}, then they wrote again` : 'Not replied yet';
-  const state = base + (working(reply) ? ' · AI is writing a draft' : reply?.status === 'ready' ? ' · draft ready for your approval' : reply?.status === 'needs_review' ? ' · draft needs a look' : '');
+  const state = base + (working(reply) ? (reply?.mode === 'ai' ? ' · AI is writing a draft' : ' · Saving draft') : reply?.status === 'ready' ? ' · draft ready for your approval' : reply?.status === 'needs_review' ? ' · draft needs a look' : '');
   const waited = now - lastIn;
   const days = Math.floor(waited / DAY);
   return { stage: 'todo', label: state, since: lastIn, when: (customerReplied ? 'Wrote ' : 'Received ') + shortDate(lastIn) + (days >= 1 ? ` · waiting ${days} day${days === 1 ? '' : 's'}` : ''), late: waited > DAY };
@@ -636,7 +636,7 @@ function conversation({ row, draft, automation, options, attachmentRead, onRetry
   const subject = text(request.data.subject) || (request.kind === 'affiliate' ? 'Partner application' : request.kind === 'stock' ? 'Product availability' : 'Website message');
   const website = websiteLink(request.data.website);
   const previousCoa = automation?.requests?.[request.id]?.coa;
-  const writing = working(reply), sending = sendPending(reply);
+  const writing = working(reply), aiWriting = writing && reply?.mode === 'ai', sending = sendPending(reply);
   const locked = disabled || preparing || sending;
   const conflict = Boolean(draft && draft.revision !== (reply?.revision ?? null));
   const fromOrder = request.data.origin === 'order';
@@ -787,10 +787,10 @@ function conversation({ row, draft, automation, options, attachmentRead, onRetry
       </p>}
       {coaForm && !attachedNow && !sending && <button type="button" className={styles.link} style={{ justifySelf: 'start' }} disabled={locked || writing || conflict} onClick={() => onDraft({ body: 'Hi, could you send a clear photo of your vial label showing the product name and lot number? I want to make sure I send you the correct lab report. Thank you.', coa: '', undo: draft.body || undefined, edited: true })}>Use a short request for a label photo</button>}
       {!draft.body.trim() && !writing && !attachedNow && <button type="button" className={styles.action} disabled={locked || conflict || (coaChoice !== '' && checkingAttachments)} onClick={() => onSubmit('ai')}>Create AI draft</button>}
-      <label className={styles.draftLabel} htmlFor={`reply-body-${request.id}`}>Email to send <span>{writing ? 'AI is writing…' : draft.body.trim() ? 'Review and edit before sending' : 'Create a draft or write here'}</span></label>
+      <label className={styles.draftLabel} htmlFor={`reply-body-${request.id}`}>Email to send <span>{writing ? (aiWriting ? 'AI is writing…' : 'Saving draft…') : draft.body.trim() ? 'Review and edit before sending' : 'Create a draft or write here'}</span></label>
       <textarea id={`reply-body-${request.id}`} ref={bodyField} name="replyBody" rows={7} maxLength={12000} value={draft.body} readOnly={writing} disabled={locked}
         onChange={event => onEdit('body', event.target.value)}
-        placeholder={writing ? 'The AI is writing…' : lastReplied ? `Write a new message to ${firstName}…` : 'Your AI draft will appear here. You can also write your own.'} data-writing={writing ? 'true' : 'false'}/>
+        placeholder={writing ? (aiWriting ? 'The AI is writing…' : 'Saving your draft…') : lastReplied ? `Write a new message to ${firstName}…` : 'Your AI draft will appear here. You can also write your own.'} data-writing={writing ? 'true' : 'false'}/>
       <p className={styles.note}>Kim C. · BioMod Customer Care · {sender}</p>
       {(status || draft.undo) && <p className={styles.status} role="status">{status}{draft.undo && !writing && !sending && <> <button type="button" className={styles.link} onClick={() => onDraft({ body: draft.undo!, undo: undefined, edited: true })}>Undo change</button></>}</p>}
       {reply?.reason && reply.status !== 'sent' && !sending && !(attachedNow && matchedCoaReplyProblem(reply.reason)) && <p className={styles.warning}>{friendlyReason(reply.reason)}</p>}
@@ -825,7 +825,7 @@ function conversation({ row, draft, automation, options, attachmentRead, onRetry
       </div>
       <details className={styles.more}><summary>Edit with AI (optional)</summary>
       <div className={styles.draftTools}>
-        <button type="button" className={styles.action} disabled={locked || conflict || writing || (coaChoice !== '' && checkingAttachments)} onClick={() => onSubmit('ai')}>{writing ? 'Creating AI draft…' : draft.body.trim() ? 'Apply changes' : 'Create AI draft'}</button>
+        <button type="button" className={styles.action} disabled={locked || conflict || writing || (coaChoice !== '' && checkingAttachments)} onClick={() => onSubmit('ai')}>{writing ? (aiWriting ? 'Creating AI draft…' : 'Saving draft…') : draft.body.trim() ? 'Apply changes' : 'Create AI draft'}</button>
         <span className={styles.note}>Changes the email above. Nothing is sent.</span>
         <label className={styles.aiInstruction}><span>Anything to add or change? (optional)</span><textarea name="replyInstruction" rows={1} maxLength={2000} value={draft.instruction} disabled={locked || writing} onChange={event => onEdit('instruction', event.target.value)} placeholder="For example: make it shorter"/></label>
         <button type="button" className={styles.link} aria-pressed={listening} disabled={locked && !listening} onClick={onDictate}>{listening ? 'Stop dictation' : 'Dictate instructions'}</button>

@@ -84,6 +84,20 @@ async function main(){
  const sends=preparations.filter(p=>p.send);assert.equal(sends.length,1,'Double click sends once');
  assert.deepEqual(sends[0],{id:'new-old',mode:'staff',purpose:'reply',body:'Hi there, use code BM10 (10% off at checkout)',instruction:'',expectedRevision:1,coaSha256:'a'.repeat(64),send:true});
  assert(text(host.tree).includes('Queued to send'));
+ // Pending work is labelled by its actual mode across the list, editor and AI tool.
+ for(const mode of ['staff','ai'])for(const pendingStatus of ['queued','preparing']){
+  const workId=mode+'-'+pendingStatus,workBody=mode==='staff'?'My exact staff-written reply.':'';
+  const workingHost=mount({...props,requests:[request(workId)],requestReplies:{[workId]:reply(workId,{mode,status:pendingStatus,body:workBody})}});await flush(workingHost);openRow(workingHost,workId);
+  const editorLabel=nodes(workingHost.tree).find(n=>n.type==='label'&&n.props.htmlFor==='reply-body-'+workId);
+  assert.match(text(card(workingHost,workId)),mode==='ai'?/AI is writing a draft/:/Saving draft/);
+  assert.match(text(editorLabel),mode==='ai'?/AI is writing/:/Saving draft/);
+  assert.equal(field(workingHost,'replyBody').props.placeholder,mode==='ai'?'The AI is writing…':'Saving your draft…');
+  assert.equal(field(workingHost,'replyBody').props.value,workBody,'Status copy never rewrites the reply');assert.equal(field(workingHost,'replyBody').props.readOnly,true);
+  assert(button(workingHost.tree,mode==='ai'?'Creating AI draft…':'Saving draft…').props.disabled);assert(button(workingHost.tree,'Save draft').props.disabled);
+  assert(text(workingHost.tree).includes(mode==='ai'?'AI is writing. This usually takes under a minute.':'Saving the draft…'));
+  if(mode==='staff')assert.doesNotMatch(text(workingHost.tree),/AI is writing|Creating AI draft/,'Saving staff text never claims AI is generating it');
+  workingHost.unmount();
+ }
  // Staff without send rights only save drafts.
  host=mount({...props,canSend:false});await flush(host);openRow(host,'new-young');
  assert(!nodes(host.tree).some(n=>n.type==='button'&&text(n).startsWith('Send email')));assert(text(host.tree).includes('An authorized sender can send from this screen'));
