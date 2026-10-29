@@ -136,7 +136,7 @@ function stageOf(request: CustomerRequest, reply: ReplySummary | undefined, exte
     const closed = [...activity].reverse().find(a => a.text.startsWith('Archived'));
     return { stage: 'done', label: 'Closed without reply' + (closed ? ` · ${shortDate(closed.at)}${closed.text.includes(' by ') ? ' by ' + personName(closed.text.split(' by ').pop()!, team) : ''}` : ''), since: closed?.at || request.created, when: 'Received ' + shortDate(request.created), late: false };
   }
-  if (started) return { stage: 'followup', label: 'Optional follow-up · no customer message', since: request.created, when: 'Opened ' + shortDate(request.created), late: false };
+  if (started) return { stage: 'followup', label: 'No message from customer', since: request.created, when: 'Opened ' + shortDate(request.created), late: false };
   // Plain answer to "did we reply?" first, then what is waiting.
   const base = customerReplied ? `Replied ${shortDate(lastOut)}, then they wrote again` : conversationReview ? 'Reply sent · check conversation' : 'No reply recorded';
   const state = base + (working(reply) ? (reply?.mode === 'ai' ? ' · AI is writing a draft' : ' · Saving draft') : reply?.status === 'ready' ? ' · draft ready for your approval' : reply?.status === 'needs_review' ? ' · draft needs a look' : '');
@@ -178,7 +178,6 @@ export function RequestInbox({ requests: initialRequests, activeTab = true, auto
   const [issues, setIssues] = useState<Record<string, RequestIssue>>({});
   const [issueDrafts, setIssueDrafts] = useState<Record<string, { note: string }>>({});
   const [cases, setCases] = useState<CaseEntry[] | null>(null);
-  const [templates, setTemplates] = useState<Record<string, { id: string; label: string; why: string; body: string }[]>>({});
   const [ruleIssue, setRuleIssue] = useState<string>('');
   const [panel, setPanel] = useState<{ id: string; kind: 'forward' | 'delete'; to: string; note: string; busy: boolean; error: string } | null>(null);
   const [pending, setPending] = useState<Record<string, boolean>>({});
@@ -324,15 +323,6 @@ export function RequestInbox({ requests: initialRequests, activeTab = true, auto
     setFilter(request.status === 'deleted' ? 'deleted' : 'all'); setQuery(''); setSelected(id);
     setDrafts(previous => previous[id] ? previous : { ...previous, [id]: newDraft(replyOf(id)) });
   }, [focusId, requestIds]);
-  // Order conversations get the win-back templates on the side.
-  useEffect(() => {
-    if (!selected || !onLoadTemplates || templates[selected]) return;
-    const request = requests.find(r => r.id === selected);
-    if (request?.data.origin !== 'order') return;
-    let alive = true;
-    onLoadTemplates(selected).then(list => { if (alive && mounted.current) setTemplates(previous => ({ ...previous, [selected]: list })); }, () => undefined);
-    return () => { alive = false; };
-  }, [selected, onLoadTemplates]);
   // A clean draft follows the newest saved/AI version; an edited one is never overwritten.
   useEffect(() => {
     setDrafts(previous => {
@@ -394,7 +384,7 @@ export function RequestInbox({ requests: initialRequests, activeTab = true, auto
     existing.count++; existing.members.push(row.request);
     if (row.request.created > existing.request.created) Object.assign(existing, { request: row.request, reply: row.reply, label: row.label, stage: row.stage });
   }
-  const views = [['todo', 'Needs reply'], ['followup', 'Optional follow-ups'], ['done', 'Replied & archive'], ['pitch', 'Sales pitches'], ['spam', 'Spam'], ['deleted', 'Deleted'], ['all', 'All']] as const;
+  const views = [['todo', 'Needs reply'], ['followup', 'Orders'], ['done', 'Replied & archive'], ['pitch', 'Sales pitches'], ['spam', 'Spam'], ['deleted', 'Deleted'], ['all', 'All']] as const;
 
   function open(id: string) {
     const reply = replyOf(id);
@@ -499,6 +489,23 @@ export function RequestInbox({ requests: initialRequests, activeTab = true, auto
     try { const next = await onSaveRule(input); if (mounted.current) { setOptions(next); setNewRule(''); } } catch { /* the rules list stays as loaded */ }
   }
 
+  const autoDrafted = useRef(new Set<string>());
+  useEffect(() => {
+    if (!activeTab || disabled || !selected || !selectedRequest || !selectedDraft || selectedDraft.edited || selectedDraft.body.trim() || selectedDraft.error || pendingIds.current.has(selected) || working(selectedReply) || sendPending(selectedReply)) return;
+    if (!Object.prototype.hasOwnProperty.call(customerEvidence, selected) || !options || !usableEmail(selectedRequest.data.email)) return;
+    const row = rows.find(row => row.request.id === selected);
+    if (!row || !['todo', 'followup'].includes(row.stage) || row.label.startsWith('Reply sent') || issues[selected]?.issue === 'owner_review' || selectedReply?.reason === 'local_sent_without_provider_receipt') return;
+    const check = attachmentRead?.key === attachmentKey ? attachmentRead : null;
+    if (onCheckAttachments && (!check?.result || check.error)) return;
+    // Matched COA requests are prepared locally from the verified original report.
+    if (selectedRequest.data.origin === 'coa-link' && check?.result?.coa.state === 'matched' && selectedChoice !== '') return;
+    const incoming = selectedReply?.history.filter(message => message.direction === 'incoming').map(message => message.id).join('|') || String(selectedRequest.created);
+    const key = selected + ':' + incoming;
+    if (autoDrafted.current.has(key)) return;
+    autoDrafted.current.add(key);
+    void submit(selectedRequest, 'ai');
+  }, [activeTab, disabled, selected, selectedDraft, selectedReply, selectedSource, customerEvidence, options, attachmentRead, attachmentKey, issues]);
+
   const bridgeQuiet = options?.bridgeSeen != null && now - options.bridgeSeen > 3 * 60000;
   // Jarvis heals a stuck pass within minutes; 15 minutes of silence means it needs a person (Oct 14 2026).
   const bridgeStopped = options?.bridgeSeen != null && now - options.bridgeSeen > 15 * 60000;
@@ -573,7 +580,7 @@ export function RequestInbox({ requests: initialRequests, activeTab = true, auto
         })}
       </div>
       {/* A plain render function (no hooks), so the open conversation is part of this tree. */}
-      {active ? conversation({ row: active, draft: drafts[active.request.id], automation, options, attachmentRead: attachmentRead?.key === attachmentKey ? attachmentRead : null, onRetryAttachments: () => setAttachmentRetry(v => v + 1), attachmentCheckingAvailable: Boolean(onCheckAttachments), canSend, disabled, listening: listening === active.request.id, preparing: Boolean(pending[active.request.id]), bodyField, now,
+      {active ? conversation({ row: active, draft: drafts[active.request.id], automation, options, attachmentRead: attachmentRead?.key === attachmentKey ? attachmentRead : null, onRetryAttachments: () => setAttachmentRetry(v => v + 1), attachmentCheckingAvailable: Boolean(onCheckAttachments), autoDrafting: Boolean(onRefreshReplies), canSend, disabled, listening: listening === active.request.id, preparing: Boolean(pending[active.request.id]), bodyField, now,
         onClose: () => setSelected(null),
         onEdit: (field, value) => editDraft(active.request.id, field, value),
         onDraft: patch => setDraft(active.request.id, patch),
@@ -585,7 +592,7 @@ export function RequestInbox({ requests: initialRequests, activeTab = true, auto
           const targets = [active.request, ...siblings.filter(r => r.status !== status && (status === 'new' ? ['resolved', 'spam', 'deleted'].includes(r.status) : !['spam', 'deleted'].includes(r.status)))];
           void (async () => { for (const target of targets) await onStatus(target, status); })(); },
         siblings: siblings.map(r => ({ request: r, reply: replyOf(r.id), external: external[r.id] || [] })),
-        templates: templates[active.request.id] || [], customerEvidence: customerEvidence[active.request.id],
+        customerEvidence: customerEvidence[active.request.id],
         external: external[active.request.id] || [], canMarkReplied: Boolean(onMarkReplied),
         markNote: replyNote?.id === active.request.id ? replyNote.note : null,
         onMarkNote: note => setReplyNote(note === null ? null : { id: active.request.id, note, busy: false }),
@@ -604,13 +611,12 @@ export function RequestInbox({ requests: initialRequests, activeTab = true, auto
 type ConversationProps = {
   row: { request: CustomerRequest; reply?: ReplySummary; stage: Stage; label: string; since: number; when: string; late: boolean };
   draft?: Draft; automation?: CoaAutomationReport | null; options: DeskOptions | null; canSend: boolean; disabled: boolean; listening: boolean; preparing: boolean; now: number;
-  attachmentRead: AttachmentRead | null; onRetryAttachments: () => void; attachmentCheckingAvailable: boolean;
+  attachmentRead: AttachmentRead | null; onRetryAttachments: () => void; attachmentCheckingAvailable: boolean; autoDrafting: boolean;
   bodyField: { current: HTMLTextAreaElement | null };
   onClose: () => void; onEdit: (field: 'body' | 'instruction', value: string) => void; onDraft: (patch: Partial<Draft>) => void; onInsert: (snippet: string) => void;
   onSubmit: (mode: 'ai' | 'staff', send?: boolean, instruction?: string) => void; onDictate: () => void; onStatus: (status: string) => void;
   forwards: RequestForward[]; team: TeamMember[]; canForward: boolean; activity: { at: number; text: string }[];
   siblings: { request: CustomerRequest; reply?: ReplySummary; external: ExternalReply[] }[];
-  templates: { id: string; label: string; why: string; body: string }[];
   customerEvidence?: CustomerContext | null;
   external: ExternalReply[]; canMarkReplied: boolean; markNote: string | null; onMarkNote: (note: string | null) => void; onMarkReplied: () => void;
   issue: RequestIssue | null; canTag: boolean; onIssue: (patch: Partial<{ issue: string; resolutions: string[]; note: string }>) => void; issueNote: string; onIssueNote: (note: string) => void;
@@ -623,20 +629,25 @@ export function coaProductLabel(coa: { productName?: string; strength?: string }
   const compact = (value: string) => value.toLowerCase().replace(/\s+/g, '');
   return !strength || compact(name).endsWith(compact(strength)) ? name : `${name} ${strength}`;
 }
-/** Only checkout follow-ups need a payment warning in the everyday reply flow. */
-export function replyPurchaseNotice(request: CustomerRequest, evidence?: CustomerContext | null): string | null {
-  if (request.data.origin !== 'order') return null;
-  if (!evidence || evidence.purchaseHistory.state !== 'available') return 'Purchase history could not be confirmed. Check payment before asking the customer to pay.';
+/** One compact order result; unavailable evidence never becomes a negative answer. */
+export function replyPurchaseNotice(request: CustomerRequest, evidence?: CustomerContext | null): string {
+  if (evidence === undefined) return 'Order: Checking…';
+  if (!evidence || evidence.purchaseHistory.state !== 'available') return 'Order: Unable to confirm.';
   const currentNumber = text(request.data.orderId).slice(0, 8).toUpperCase();
-  const paid = evidence.orders.find(order => order.environment === 'live' && order.status.startsWith('payment recorded'));
-  if (paid) return `${paid.number === currentNumber ? 'Payment is recorded for' : 'Another paid order is on file:'} #${paid.number}. Check that order before sending a payment reminder.`;
-  const refunded = evidence.orders.find(order => order.number === currentNumber && order.status === 'refunded');
-  if (refunded) return `Order #${refunded.number} was refunded. Check the refund before following up.`;
-  const current = evidence.orders.find(order => order.number === currentNumber);
-  if (current && /payment.*(?:not confirmed|pending|verification)/.test(current.status)) return `Payment is not confirmed for order #${current.number}. Check payment before asking the customer to pay.`;
-  return null;
+  const live = evidence.orders.filter(order => order.environment === 'live');
+  const paid = live.find(order => order.status.startsWith('payment recorded'));
+  if (paid) return `Order: Yes · #${paid.number} · ${paid.status.includes('delivery recorded') ? 'Delivered' : paid.status.includes('shipment recorded') ? 'Shipped' : 'Paid'}.`;
+  const current = live.find(order => order.number === currentNumber) || live[0];
+  if (current) {
+    const state = current.status === 'refunded' ? 'Refunded' : current.status === 'cancelled' ? 'Cancelled' : /verification|unrecognized/.test(current.status) ? 'Payment needs review' : 'Checkout started · payment not confirmed';
+    return `Order: #${current.number} · ${state}.`;
+  }
+  if (evidence.purchaseHistory.confirmedLivePurchases) return 'Order: Yes · purchase recorded.';
+  if (evidence.purchaseHistory.unclassifiedOrders) return 'Order: Needs review.';
+  return 'Order: None found in the store.';
 }
-function conversation({ row, draft, automation, options, attachmentRead, onRetryAttachments, attachmentCheckingAvailable, canSend, disabled, listening, preparing, bodyField, now, onClose, onEdit, onDraft, onInsert, onSubmit, onDictate, onStatus, forwards, team, canForward, panel, onPanel, onForward, activity, siblings, templates, customerEvidence, external, canMarkReplied, markNote, onMarkNote, onMarkReplied, issue, canTag, onIssue, issueNote, onIssueNote }: ConversationProps) {
+
+function conversation({ row, draft, automation, options, attachmentRead, onRetryAttachments, attachmentCheckingAvailable, autoDrafting, canSend, disabled, listening, preparing, bodyField, now, onClose, onEdit, onDraft, onInsert, onSubmit, onDictate, onStatus, forwards, team, canForward, panel, onPanel, onForward, activity, siblings, customerEvidence, external, canMarkReplied, markNote, onMarkNote, onMarkReplied, issue, canTag, onIssue, issueNote, onIssueNote }: ConversationProps) {
   const { request, reply } = row;
   const email = text(request.data.email), canReply = usableEmail(request.data.email);
   const name = text(request.data.name) || email || 'Customer';
@@ -659,7 +670,6 @@ function conversation({ row, draft, automation, options, attachmentRead, onRetry
   const checkingAttachments = attachmentCheckingAvailable && !attachmentRead?.result && !attachmentRead?.error;
   const attachmentsBlocked = coaChoice !== '' && (checkingAttachments || Boolean(attachmentRead?.error) || (Boolean(coaChoice) && !attachedNow));
   const draftProblem = attachedNow && draft?.body.trim() ? matchedCoaReplyProblem(draft.body) : null;
-  const nextPurchaseOffer = options?.codes.find(code => code.code === 'BIOMOD15' && code.percentOff === 15);
   const selectedHashes = coaChoice ? coaChoice.split(',') : attachedNow ? [attachedNow, ...(attachedNow.extras || [])].map(c => c.sha256).filter((sha): sha is string => Boolean(sha)) : [];
   const setChoice = (list: string[]) => onDraft({ coa: list.join(','), edited: true });
   const isCoaRequest = /\bCOA\b|certificate of analysis/i.test(subject);
@@ -685,12 +695,13 @@ function conversation({ row, draft, automation, options, attachmentRead, onRetry
     return { id: 'original:' + source.id, direction: form ? 'request' : 'incoming', created: source.created,
       title: form ? 'COA request form' : 'Customer message',
       detail: form ? 'Submitted from the website. No written message was included.' : 'From ' + (text(source.data.email) || email),
-      body: form ? [form.product ? 'COA requested: ' + form.product : 'Certificate of Analysis requested', form.lot ? 'Lot entered: ' + form.lot : 'Lot not recorded'].join('\n') : text(source.data.message) };
+      body: form ? [form.product ? 'COA requested: ' + form.product : 'Certificate of Analysis requested', form.lot ? 'Lot entered: ' + form.lot : 'Lot not recorded'].join('\n') : typeof source.data.message === 'string' ? source.data.message : '' };
   };
   const thread: Item[] = (() => {
     const seen = new Set<string>();
     const sources = [request, ...siblings.map(sib => sib.request)];
     const all: Item[] = [
+      ...(!fromOrder && !history.some(message => message.id === 'original:' + request.id) ? [originalItem(request)] : []),
       ...history.flatMap(m => {
         if (m.direction === 'outgoing') return [deskItem(m)];
         const original = sources.find(source => m.id === 'original:' + source.id);
@@ -720,24 +731,16 @@ function conversation({ row, draft, automation, options, attachmentRead, onRetry
     {attachmentEmail(message) && <a href={attachmentEmail(message)} target="_blank" rel="noopener noreferrer">Open original email</a>}
     {message.attachment && <p className={styles.mailAttachment}>Attached: {message.attachment}</p>}
   </li>;
-  // The first thing on the screen: is this done, or does it need me? (owner, Oct 16: "why is he still here... what am I to do?")
-  const verdict = (() => {
-    if (request.status === 'deleted') return { tone: 'done', text: 'Deleted.', hint: 'Restore it if you need to answer.' };
-    if (request.status === 'spam') return { tone: 'done', text: 'Marked as spam.', hint: 'Nothing to do.' };
-    if (uncertainSend) return { tone: 'done', text: 'Check sent status.', hint: 'Marked sent in Jarvis. Do not resend while we verify the receipt.' };
-    if (sending) return { tone: 'done', text: 'Sending now.', hint: 'Nothing else to do.' };
-    if (issue?.issue === 'owner_review' && request.status !== 'resolved') return { tone: 'todo', text: 'Owner review required.', hint: issue.note || 'An owner must review this case before sending.' };
-    if (row.stage === 'pitch') return { tone: 'done', text: 'Sales pitch.', hint: 'No reply needed.' };
-    if (fromOrder && !latestRequest) return { tone: 'done', text: 'Optional follow-up.', hint: outgoingContactCount ? 'Prior contact is recorded below. Check the purchase history before writing again.' : 'The customer has not written in. Check their history before contacting them.' };
-    if (row.stage === 'todo') return { tone: 'todo', text: sentCount ? 'Needs your reply.' : fromOrder ? 'Needs your first email.' : 'Needs your reply.', hint: sentCount ? (row.label.includes('then they wrote again') ? 'The customer wrote again.' : 'A reply was sent. Check the conversation before writing again.') : 'No reply is recorded for this request.' };
-    if (request.status === 'resolved') return { tone: 'done', text: 'Done. Nothing to do.', hint: `Archived. If ${firstName} writes back, it moves to Needs reply on its own.` };
-    return { tone: 'done', text: `Waiting on ${firstName}.`, hint: `Nothing to do now. Archive it to clear it; if ${firstName} writes back, it moves to Needs reply on its own.` };
-  })();
+  // Normal cases need no explanatory banner. Show only a real send/review exception.
+  const verdict = uncertainSend
+    ? { tone: 'done', text: 'Check sent status.', hint: 'Do not resend while we verify the receipt.' }
+    : sending ? { tone: 'done', text: 'Sending…', hint: '' }
+    : { tone: 'todo', text: 'Owner review required.', hint: issue?.note || 'An owner must review this case before sending.' };
   let status = '';
   if (sending) status = reply?.status === 'sending' ? 'Sending from ' + sender + '…' : 'Queued to send automatically. No second Send is needed in Jarvis. Your Mac must be awake.';
   else if (preparing) status = 'Saving…';
   else if (writing) status = reply?.mode === 'ai' ? 'AI is writing. This usually takes under a minute.' : 'Saving the draft…';
-  else if (draft?.edited) status = 'Not sent. Review your reply, then send when ready.';
+  else if (draft?.edited) status = 'Draft · not sent.';
   else if (reply?.status === 'ready' && reply.mode === 'ai' && !draft?.edited) status = 'Draft prepared. Not sent.';
   else if (reply?.status === 'ready') status = 'Draft saved. Not sent.';
   return <section key={request.id} className={styles.pane} id={`request-reply-${request.id}`} aria-label={`Reply to ${name}`} aria-busy={writing || sending}>
@@ -757,6 +760,22 @@ function conversation({ row, draft, automation, options, attachmentRead, onRetry
             {!['spam', 'resolved'].includes(request.status) && <button type="button" className={styles.link} disabled={disabled} onClick={() => onStatus('spam')}>Spam</button>}
             <button type="button" className={styles.link} disabled={disabled} onClick={() => onPanel(panel?.kind === 'delete' ? null : { kind: 'delete', error: '' })}>Delete</button>
           </div>
+{draft && canReply && <>
+      <details className={styles.more}><summary>Edit with AI</summary>
+      <div className={styles.draftTools}>
+        <button type="button" className={styles.action} disabled={locked || conflict || writing || (coaChoice !== '' && checkingAttachments)} onClick={() => onSubmit('ai')}>{writing ? (aiWriting ? 'Creating AI draft…' : 'Saving draft…') : draft.body.trim() ? 'Apply changes' : 'Create AI draft'}</button>
+        <span className={styles.note}>Changes the draft. Nothing is sent.</span>
+        <label className={styles.aiInstruction}><span>Anything to add or change? (optional)</span><textarea name="replyInstruction" rows={1} maxLength={2000} value={draft.instruction} disabled={locked || writing} onChange={event => onEdit('instruction', event.target.value)} placeholder="For example: make it shorter"/></label>
+        <button type="button" className={styles.link} aria-pressed={listening} disabled={locked && !listening} onClick={onDictate}>{listening ? 'Stop dictation' : 'Dictate instructions'}</button>
+      </div>
+      </details>
+      {canTag && request.status !== 'resolved' && issue?.issue !== 'owner_review' && <details className={styles.ownerReview}>
+        <summary>Needs an owner decision?</summary>
+        <label><span>Reason for owner review</span><textarea name="ownerReviewReason" rows={2} maxLength={1000} value={issueNote} disabled={locked} onChange={event => onIssueNote(event.target.value)} placeholder="Explain the decision needed, such as a payment dispute, safety concern or legal request."/></label>
+        <button type="button" className={styles.action} disabled={locked || !issueNote.trim()} onClick={() => onIssue({ issue: 'owner_review', note: (issue?.issue ? 'Previous issue: ' + issueLabel(issue.issue) + '. ' : '') + issueNote.trim() })}>Mark for owner review</button>
+        <p className={styles.note}>Keeps the case in Needs reply and records the reason. Does not email the customer.</p>
+      </details>}
+</>}
         </details>}
       </div>
     </header>
@@ -775,16 +794,17 @@ function conversation({ row, draft, automation, options, attachmentRead, onRetry
       {panel.error && <p className={styles.error} role="alert">{panel.error}</p>}
       <div className={styles.sendRow}><button type="button" className={styles.send} disabled={panel.busy || !panel.to} onClick={onForward}>{panel.busy ? 'Forwarding…' : 'Forward'}</button><button type="button" className={styles.link} onClick={() => onPanel(null)}>Cancel</button><span className={styles.note}>The customer is not emailed. Replies to the forward come back to you.</span></div>
     </div>}
-    <div className={styles.summary} data-waiting={verdict.tone === 'todo' ? 'true' : 'false'} role="status">
+    {(uncertainSend || sending || issue?.issue === 'owner_review') && <div className={styles.summary} data-waiting={verdict.tone === 'todo' ? 'true' : 'false'} role="status">
       <p className={styles.verdict}><strong>{verdict.text}</strong> {verdict.hint}</p>
-    </div>
+    </div>}
     {siblings.length > 0 && <p className={styles.note}>{siblings.length + 1} related records in this conversation.</p>}
     {!coaForm && <p className={styles.subjectLine}><strong>{subject}</strong></p>}
-    {replyPurchaseNotice(request, customerEvidence) && <p className={styles.warning} role="status">{replyPurchaseNotice(request, customerEvidence)}</p>}
     {latestRequest && <section aria-label={latestRequest.direction === 'request' ? 'What they requested' : 'Customer message'}>
       <h4 className={styles.threadHead}>{latestRequest.direction === 'request' ? 'What they requested' : 'Customer message'}</h4>
       <ol className={styles.thread} aria-label="Latest customer request">{renderMessage(latestRequest)}</ol>
     </section>}
+    {!latestRequest && <p className={styles.message}>No message from customer.</p>}
+    <p className={styles.orderResult} role="status">{replyPurchaseNotice(request, customerEvidence)}</p>
     {request.status === 'deleted' && <p className={styles.warning}>This request is deleted. Restore it to reply.</p>}
     {request.kind === 'affiliate' && <p className={styles.note}>Partner application. Agree terms and create the code under Affiliate &amp; promo codes before promising one.</p>}
     {request.kind === 'stock' && <p className={styles.note}>Check stock under Products before promising a date.</p>}
@@ -792,31 +812,32 @@ function conversation({ row, draft, automation, options, attachmentRead, onRetry
     {request.status === 'deleted' ? null : !canReply ? <p className={styles.warning}>No usable email address was saved, so there is no way to reply.</p> : !draft ? null : <div className={styles.composer}>
       <div className={styles.composeHead}><strong>Reply as Kim C.</strong><span>To {reply?.recipient || email}</span></div>
       {lastReplied && <p className={styles.replied} role="status">
-        Last recorded reply: {when(lastReplied.at)}{lastReplied.how ? ' ' + lastReplied.how : ''}. {row.label.includes('then they wrote again') ? firstName + ' wrote back since. ' : ''}Anything you write here goes out as a new email.
+        Last reply: {when(lastReplied.at)}{lastReplied.how ? ' ' + lastReplied.how : ''}.
       </p>}
       {coaForm && !attachedNow && !sending && <button type="button" className={styles.link} style={{ justifySelf: 'start' }} disabled={locked || writing || conflict} onClick={() => onDraft({ body: 'Hi, could you send a clear photo of your vial label showing the product name and lot number? I want to make sure I send you the correct lab report. Thank you.', coa: '', undo: draft.body || undefined, edited: true })}>Use a short request for a label photo</button>}
-      {!draft.body.trim() && !writing && !attachedNow && <button type="button" className={styles.action} disabled={locked || conflict || (coaChoice !== '' && checkingAttachments)} onClick={() => onSubmit('ai')}>Create AI draft</button>}
-      <label className={styles.draftLabel} htmlFor={`reply-body-${request.id}`}>Email to send <span>{writing ? (aiWriting ? 'AI is writing…' : 'Saving draft…') : draft.body.trim() ? 'Review and edit before sending' : 'Create a draft or write here'}</span></label>
-      <textarea id={`reply-body-${request.id}`} ref={bodyField} name="replyBody" rows={7} maxLength={12000} value={draft.body} readOnly={writing} disabled={locked}
+      {!draft.body.trim() && !writing && !attachedNow && (!autoDrafting || draft.error || reply?.status === 'needs_review') && <button type="button" className={styles.action} disabled={locked || conflict || (coaChoice !== '' && checkingAttachments)} onClick={() => onSubmit('ai')}>Create AI draft</button>}
+      <label className={styles.draftLabel} htmlFor={`reply-body-${request.id}`}>Reply <span>{writing ? (aiWriting ? 'AI is writing…' : 'Saving draft…') : draft.body.trim() ? 'Review and edit before sending' : autoDrafting ? 'Preparing reply…' : 'AI draft will appear here'}</span></label>
+      <textarea id={`reply-body-${request.id}`} ref={bodyField} name="replyBody" rows={5} maxLength={12000} value={draft.body} readOnly={writing} disabled={locked}
         onChange={event => onEdit('body', event.target.value)}
         placeholder={writing ? (aiWriting ? 'The AI is writing…' : 'Saving your draft…') : lastReplied ? `Write a new message to ${firstName}…` : 'Your AI draft will appear here. You can also write your own.'} data-writing={writing ? 'true' : 'false'}/>
-      <p className={styles.note}>Kim C. · BioMod Customer Care · {sender}</p>
       {(status || draft.undo) && <p className={styles.status} role="status">{status}{draft.undo && !writing && !sending && <> <button type="button" className={styles.link} onClick={() => onDraft({ body: draft.undo!, undo: undefined, edited: true })}>Undo change</button></>}</p>}
-      {reply?.reason && reply.status !== 'sent' && !sending && !(attachedNow && matchedCoaReplyProblem(reply.reason)) && <p className={styles.warning}>{friendlyReason(reply.reason)}</p>}
-      {nextPurchaseOffer && !new RegExp(`\\b${nextPurchaseOffer.code}\\b`, 'i').test(draft.body) && <button type="button" className={styles.link} disabled={locked || writing || conflict || !draft.body.trim()} onClick={() => onDraft({ body: appendNextPurchaseOffer(draft.body, nextPurchaseOffer), edited: true })}>Add 15% off the next purchase</button>}
+      {reply?.reason && reply.reason !== 'retired_reply_policy_v2' && reply.status !== 'sent' && !sending && !(attachedNow && matchedCoaReplyProblem(reply.reason)) && <p className={styles.warning}>{friendlyReason(reply.reason)}</p>}
       <section className={styles.coaPicker} aria-label="COA attachments" aria-busy={checkingAttachments}>
         <strong>{checkingAttachments && coaChoice !== '' ? 'Checking the original PDF…' : attachedNow ? `${1 + (attachedNow.extras?.length || 0)} PDF${attachedNow.extras?.length ? 's' : ''} attached to this draft` : 'No PDF attached'}</strong>
         {typeof request.data?.labelLot === 'string' && <p className={styles.note}>Requested lot: <strong>{request.data.labelLot}</strong></p>}
         {attachedNow && <ul className={styles.attachmentList}>{[attachedNow, ...(attachedNow.extras || [])].map((c, i) => <li key={c.sha256 || i}>
           <strong>{c.filename || 'Original COA.pdf'}</strong>{canSend && c.sha256 && <a href={`/api/store/admin-coa-original?ref=private:${c.sha256}`} target="_blank" rel="noopener noreferrer">View PDF</a>}<span>{coaProductLabel(c)} · lot {c.lot}</span>
-          <span className={styles.note}>Lot matched. This PDF will be sent with the email above.</span>
+          <span className={styles.note}>Lot matched</span>
         </li>)}</ul>}
-        {coaChoice !== '' && !attachedNow && !checkingAttachments && <p className={styles.attachmentProblem} role="status">{attachmentRead?.error || (checkedCoa?.state === 'needs_review' || checkedCoa?.state === 'already_sent' ? checkedCoa.reason : chosenList.length ? 'This selection has not been verified. It is not attached yet.' : isCoaRequest ? 'Choose a report below, or ask for a clear photo of the vial label.' : 'You can send this email without an attachment.')}</p>}
+        {coaChoice !== '' && !attachedNow && !checkingAttachments && <p className={styles.attachmentProblem} role="status">{attachmentRead?.error || (checkedCoa?.state === 'needs_review' || checkedCoa?.state === 'already_sent' ? checkedCoa.reason : chosenList.length ? 'This selection has not been verified. It is not attached yet.' : isCoaRequest ? 'Choose a report below, or ask for a clear photo of the vial label.' : '')}</p>}
         {chosenList.length > 0 && !attachedNow && <p className={styles.note}>Selected: {chosenList.map(coaProductLabel).join(', ')}{checkingAttachments ? '. Checking…' : '. Not attached.'}</p>}
         <div className={styles.attachmentActions}>
-          <label className={styles.reportSelect}><span>{attachedNow ? 'Add another COA PDF' : 'Attach COA PDF'}</span><select aria-label="Attach COA PDF" value="" disabled={locked || writing || conflict || !options} onChange={event => { const v = event.target.value; if (v && !selectedHashes.includes(v)) setChoice([...selectedHashes, v]); }}>
+          <label className={styles.reportSelect}><span>Add COA</span><select aria-label="Attach COA PDF" value="" disabled={locked || writing || conflict || !options} onChange={event => { const v = event.target.value; if (v && !selectedHashes.includes(v)) setChoice([...selectedHashes, v]); }}>
             <option value="">{options ? 'Choose product and lot…' : 'Loading reports…'}</option>
             {options?.coas.filter(coa => !selectedHashes.includes(coa.sha256)).map(coa => <option key={coa.sha256} value={coa.sha256} disabled={selectedHashes.length >= 5}>{coaProductLabel(coa)} · lot {coa.lot}{coa.current ? ' (current)' : ''}</option>)}
+          </select></label>
+          <label className={styles.reportSelect}><span>Add discount</span><select aria-label="Add discount" value="" disabled={locked || writing || !options?.codes.length || !draft.body.trim()} onChange={event => { const code = options?.codes.find(c => c.code === event.target.value); if (code) onDraft({ body: appendNextPurchaseOffer(draft.body, code), edited: true }); }}>
+            <option value="">Choose a code…</option>{options?.codes.map(code => <option key={code.code} value={code.code}>{code.code} · {code.percentOff}% off</option>)}
           </select></label>
           {(attachedNow || chosenList.length > 0) && <button type="button" className={styles.link} disabled={locked || writing} onClick={() => onDraft({ coa: '', edited: true })}>Remove {attachedNow ? 'PDFs' : 'selection'}</button>}
           {isCoaRequest && coaChoice !== null && <button type="button" className={styles.link} disabled={locked || writing} onClick={() => onDraft({ coa: null, edited: true })}>Find matching report</button>}
@@ -832,37 +853,8 @@ function conversation({ row, draft, automation, options, attachmentRead, onRetry
         <button type="button" className={styles.link} disabled={locked || conflict || writing || !draft.body.trim()} onClick={() => onSubmit('staff')}>Save draft</button>
         {draft.purpose === 'checkout_recovery' && <button type="button" className={styles.link} disabled={locked || conflict || writing} onClick={() => onDraft({ purpose: 'reply', body: '', instruction: '', undo: undefined, edited: true, message: 'New message. Write about the customer’s current question.' })}>Start a new message</button>}
       </div>
-      <details className={styles.more}><summary>Edit with AI (optional)</summary>
-      <div className={styles.draftTools}>
-        <button type="button" className={styles.action} disabled={locked || conflict || writing || (coaChoice !== '' && checkingAttachments)} onClick={() => onSubmit('ai')}>{writing ? (aiWriting ? 'Creating AI draft…' : 'Saving draft…') : draft.body.trim() ? 'Apply changes' : 'Create AI draft'}</button>
-        <span className={styles.note}>Changes the email above. Nothing is sent.</span>
-        <label className={styles.aiInstruction}><span>Anything to add or change? (optional)</span><textarea name="replyInstruction" rows={1} maxLength={2000} value={draft.instruction} disabled={locked || writing} onChange={event => onEdit('instruction', event.target.value)} placeholder="For example: make it shorter"/></label>
-        <button type="button" className={styles.link} aria-pressed={listening} disabled={locked && !listening} onClick={onDictate}>{listening ? 'Stop dictation' : 'Dictate instructions'}</button>
-      </div>
-      </details>
       {issue?.issue === 'owner_review' && <p className={styles.note}>{canSend ? 'You are reviewing this as the owner. Approve and send records your approval and sends the reply as Kim C.' : 'Save a draft for the owner. This case requires their approval.'}</p>}
-      {canTag && request.status !== 'resolved' && issue?.issue !== 'owner_review' && <details className={styles.ownerReview}>
-        <summary>Needs an owner decision?</summary>
-        <label><span>Reason for owner review</span><textarea name="ownerReviewReason" rows={2} maxLength={1000} value={issueNote} disabled={locked} onChange={event => onIssueNote(event.target.value)} placeholder="Explain the decision needed, such as a payment dispute, safety concern or legal request."/></label>
-        <button type="button" className={styles.action} disabled={locked || !issueNote.trim()} onClick={() => onIssue({ issue: 'owner_review', note: (issue?.issue ? 'Previous issue: ' + issueLabel(issue.issue) + '. ' : '') + issueNote.trim() })}>Mark for owner review</button>
-        <p className={styles.note}>Keeps the case in Needs reply and records the reason. Does not email the customer.</p>
-      </details>}
-      {canSend && <p className={styles.note}>{attachmentsBlocked ? 'Resolve the PDF check or remove the selection before sending.' : 'Send emails the text above and the listed PDFs. Replies to this email return here under Needs reply.'}</p>}
-      <details className={styles.more}>
-        <summary>Extra tools</summary>
-        {templates.length > 0 && !sending && <div className={styles.templates}>
-          <p className={styles.moreLabel}>Follow-up suggestions</p>
-          <ul>{templates.map(t => <li key={t.id}><button type="button" className={styles.action} disabled={locked || writing} onClick={() => onDraft({ purpose: 'checkout_recovery', body: t.body, undo: undefined, edited: true })}>Use</button> <strong>{t.label}</strong><span className={styles.note}>{t.why}</span></li>)}</ul>
-        </div>}
-        <div className={styles.inserts}>
-          <label><span>Insert code</span><select value="" disabled={locked || writing || !options?.codes.length} onChange={event => { const code = options?.codes.find(c => c.code === event.target.value); if (code) onInsert(`code ${code.code} (${code.percentOff}% off at checkout)`); }}>
-            <option value="">Choose a code</option>{options?.codes.map(code => <option key={code.code} value={code.code}>{code.code} · {code.percentOff}% off</option>)}
-          </select></label>
-          {Boolean(options?.links?.length) && <label><span>Insert public COA link (not a PDF attachment)</span><select value="" disabled={locked || writing} onChange={event => { const link = options?.links?.find(l => l.url === event.target.value); if (link) onInsert(`COA for ${link.label}: ${link.url}`); }}>
-            <option value="">Choose a product</option>{options?.links?.map(link => <option key={link.url} value={link.url}>{link.label}</option>)}
-          </select></label>}
-        </div>
-      </details>
+      {canSend && attachmentsBlocked && <p className={styles.note}>Check or remove the PDF before sending.</p>}
       {conflict && <div className={styles.conflict} role="alert"><p>Someone saved a newer version of this reply. Your text is kept.</p><button type="button" className={styles.action} disabled={locked} onClick={() => onDraft({ ...newDraft(reply), coa: ['sent', 'cancelled'].includes(reply?.status || '') ? '' : draft.coa })}>Use the newer version</button><button type="button" className={styles.action} disabled={locked} onClick={() => onDraft({ revision: reply?.revision ?? null, error: '', message: '' })}>Keep mine</button></div>}
       {draft.error && <p className={styles.error} role="alert">{draft.error}</p>}
       {draft.message && <p role="status" className={styles.note}>{draft.message}</p>}

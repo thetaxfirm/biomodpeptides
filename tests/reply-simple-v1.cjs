@@ -17,15 +17,15 @@ assert.equal(newDraft({status:'sent',body:'sent text',revision:4}).revision,4,'T
 assert.match(src,/draft\.body !== seedBody\(reply\)/);
 
 // Replied line from any channel, above the box; the old ambiguous status line is gone.
-assert.match(src,/Last recorded reply: \{when\(lastReplied\.at\)\}/);
-assert.match(src,/wrote back since/);
+assert.match(src,/Last reply: \{when\(lastReplied\.at\)\}/);
+assert.match(src,/then they wrote again/);
 assert.doesNotMatch(src,/'Sent ' \+ when\(reply\.updated\) \+ '\. Accepted by the mail provider\.'/);
 assert.doesNotMatch(src,/Last reply sent \{when/);
 assert.match(src,/Write a new message to \$\{firstName\}/);
 
-// The draft action is visible before the editor, outside optional tools.
-const sendAt=src.indexOf("onClick={() => onSubmit('staff', true)}"),moreAt=src.indexOf('<details className={styles.more}');
-assert(sendAt>0&&moreAt>sendAt);
+// The main flow prepares a draft automatically; rewriting stays under More actions.
+const sendAt=src.indexOf("onClick={() => onSubmit('staff', true)}");
+assert(sendAt>0);assert.match(src,/autoDrafted/);assert.match(src,/void submit\(selectedRequest, 'ai'\)/);
 assert(src.indexOf('Create AI draft')<src.indexOf('name="replyBody"'));
 assert(src.indexOf('aria-label="COA attachments"')<sendAt);
 const label=new Function(take('coaProductLabel')+';return coaProductLabel;')();

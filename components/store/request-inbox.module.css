@@ -210,3 +210,10 @@
 .composer .aiInstruction textarea { min-height: 44px; }
 .draftLabel { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; font-size: 14px; font-weight: 600; margin-top: 8px; }
 .draftLabel span { font-weight: 400; color: var(--muted); }
+
+/* Compact employee flow: message, order result, editable reply, attachments, Send. */
+.orderResult { margin: 12px 0; font-size: 14px; font-weight: 600; }
+.pane .composer { gap: 10px; }
+.pane .composeHead { margin: 0; }
+.pane .coaPicker { gap: 6px; }
+.pane .threadHead { margin-top: 8px; }

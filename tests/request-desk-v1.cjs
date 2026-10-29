@@ -60,15 +60,15 @@ async function main(){
  assert(!text(host.tree).includes("Past customers' replies are not reused as examples"),'Internal drafting policy is not frontloaded');assert(text(host.tree).includes('Issues & rules'),'Rules remain available behind their disclosure');
  // Opening a conversation never sends; it shows the thread, pickers and an owner Send.
  openRow(host,'new-old');assert.equal(preparations.length,0);
- assert(text(host.tree).includes('Synthetic request body only'));assert(text(host.tree).includes('contact@trybiomod.com'));
+ assert(text(host.tree).includes('Synthetic request body only'));assert(text(host.tree).includes('Reply as Kim C.'));
  assert.equal(field(host,'replyBody').props.maxLength,12000);
  const send=()=>nodes(host.tree).find(n=>n.type==='button'&&text(n).startsWith('Send email'));assert(send(),'Owner sees Send');assert.equal(send().props.disabled,true,'Empty reply cannot be sent');
  // Codes insert into the draft; the COA picker stages a chosen original.
- type(host,'replyBody','Hi there, use');select(host,'Insert code').props.onChange({target:{value:'BM10'}});host.render();
- assert.equal(field(host,'replyBody').props.value,'Hi there, use code BM10 (10% off at checkout)');
- type(host,'replyBody','');select(host,'Insert public COA link').props.onChange({target:{value:'https://trybiomod.com/testing/QA-LOT?product=1'}});host.render();assert.equal(field(host,'replyBody').props.value,'COA for Fixture material 10 mg · lot QA-LOT: https://trybiomod.com/testing/QA-LOT?product=1');
+ type(host,'replyBody','Hi there, use');select(host,'Add discount').props.onChange({target:{value:'BM10'}});host.render();
+ assert.match(field(host,'replyBody').props.value,/code BM10 for 10% off your next purchase/);
+ assert(!text(host.tree).includes('Insert public COA link'),'Only actual PDF attachments are offered in the main reply flow');
  type(host,'replyBody','Hi there, use code BM10 (10% off at checkout)');
- select(host,'Attach COA').props.onChange({target:{value:'a'.repeat(64)}});host.render();assert(text(host.tree).includes('Selected:'));
+ select(host,'Add COA').props.onChange({target:{value:'a'.repeat(64)}});host.render();assert(text(host.tree).includes('Selected:'));
  // AI rewrite carries the current draft and optional instruction; no rule is silently saved.
  type(host,'replyInstruction','um make it friendlier');
  nodes(host.tree).find(n=>n.type==='button'&&text(n)==='Apply changes').props.onClick();await flush(host);
@@ -149,7 +149,7 @@ async function main(){
  assert.equal(checks.length,1);assert(text(host.tree).includes('Checking the original PDF'));
  assert(button(host.tree,'Create AI draft').props.disabled,'Draft waits for current attachment evidence');
  type(host,'replyBody','Here is the requested report.');assert(button(host.tree,'Send email').props.disabled);
- select(host,'Attach COA').props.onChange({target:{value:'a'.repeat(64)}});await flush(host);assert.equal(checks.length,2);
+ select(host,'Add COA').props.onChange({target:{value:'a'.repeat(64)}});await flush(host);assert.equal(checks.length,2);
  checks[0].resolve(checked(checks[0],validPdf));await flush(host);
  assert(!text(host.tree).includes('1 PDF attached'),'Old automatic result cannot validate the newly selected report');
  checks[1].resolve(checked(checks[1],{state:'needs_review',reason:'The entered lot does not match this report.'}));await flush(host);
@@ -157,10 +157,10 @@ async function main(){
  button(host.tree,'Remove selection').props.onClick();await flush(host);
  assert(!button(host.tree,'Send email').props.disabled,'Explicit no attachment permits a plain email');
  checks.at(-1).resolve(checked(checks.at(-1),{state:'not_requested',reason:'No report selected'}));await flush(host);
- select(host,'Attach COA').props.onChange({target:{value:'a'.repeat(64)}});await flush(host);
+ select(host,'Add COA').props.onChange({target:{value:'a'.repeat(64)}});await flush(host);
  checks.at(-1).resolve(checked(checks.at(-1),validPdf));await flush(host);
  assert(text(host.tree).includes('1 PDF attached to this draft'));assert(text(host.tree).includes('QA-original.pdf'));assert(!button(host.tree,'Send email + PDF').props.disabled);
- button(host.tree,'Remove PDFs').props.onClick();await flush(host);select(host,'Attach COA').props.onChange({target:{value:'a'.repeat(64)}});await flush(host);
+ button(host.tree,'Remove PDFs').props.onClick();await flush(host);select(host,'Add COA').props.onChange({target:{value:'a'.repeat(64)}});await flush(host);
  checks.at(-1).reject(Error('Synthetic offline'));await flush(host);assert(text(host.tree).includes('PDF check could not finish'));assert(button(host.tree,'Send email').props.disabled);
  button(host.tree,'Retry PDF check').props.onClick();await flush(host);checks.at(-1).resolve(checked(checks.at(-1),validPdf));await flush(host);
  assert(!button(host.tree,'Send email + PDF').props.disabled);
@@ -178,10 +178,10 @@ async function main(){
   assert.match(body,/I've attached the laboratory report for Fixture 30mg, lot 102-30-0001/);assert(!body.includes("doesn't match"));assert(!body.includes('confirm the exact lot'));assert.equal(draftCalls.length,0,'Repair is local, with no AI call, save or send');
   assert(text(matchedHost.tree).includes('Matched-report reply prepared. Not sent.'));assert(text(matchedHost.tree).includes('fixture-30mg-102-30-0001.pdf'));
   const attachmentSection=nodes(matchedHost.tree).find(n=>n.props['aria-label']==='COA attachments');assert(nodes(matchedHost.tree).indexOf(field(matchedHost,'replyBody'))<nodes(matchedHost.tree).indexOf(attachmentSection),'Visible email comes before the exact PDF list');
-  const optionalAi=nodes(matchedHost.tree).find(n=>n.type==='details'&&text(n.props.children[0])==='Edit with AI (optional)');assert(optionalAi&&!optionalAi.props.open);assert(!controls(matchedHost.tree,'Create AI draft').length,'A prepared matched reply does not ask staff to generate another one');assert(!button(matchedHost.tree,'Send email + PDF').props.disabled);
+  const optionalAi=nodes(matchedHost.tree).find(n=>n.type==='details'&&text(n.props.children[0])==='Edit with AI');assert(optionalAi&&!optionalAi.props.open);assert(!controls(matchedHost.tree,'Create AI draft').length,'A prepared matched reply does not ask staff to generate another one');assert(!button(matchedHost.tree,'Send email + PDF').props.disabled);
   const pdfLink=nodes(attachmentSection).find(n=>n.type==='a'&&text(n)==='View PDF');assert.equal(pdfLink.props.href,'/api/store/admin-coa-original?ref=private:'+'a'.repeat(64));
-  assert(!body.includes('BIOMOD15'),'A next-purchase offer requires the staff action');button(matchedHost.tree,'Add 15% off the next purchase').props.onClick();matchedHost.render();
-  const offered=field(matchedHost,'replyBody').props.value;assert.match(offered,/code BIOMOD15 for 15% off your next purchase/);assert.equal((offered.match(/BIOMOD15/g)||[]).length,1);assert(!controls(matchedHost.tree,'Add 15% off the next purchase').length,'Offer action cannot duplicate the same code');assert.equal(draftCalls.length,0);
+  assert(!body.includes('BIOMOD15'),'A next-purchase offer requires the staff action');select(matchedHost,'Add discount').props.onChange({target:{value:'BIOMOD15'}});matchedHost.render();
+  const offered=field(matchedHost,'replyBody').props.value;assert.match(offered,/code BIOMOD15 for 15% off your next purchase/);assert.equal((offered.match(/BIOMOD15/g)||[]).length,1);select(matchedHost,'Add discount').props.onChange({target:{value:'BIOMOD15'}});matchedHost.render();assert.equal((field(matchedHost,'replyBody').props.value.match(/BIOMOD15/g)||[]).length,1,'A repeated code selection cannot duplicate the offer');assert.equal(draftCalls.length,0);
   type(matchedHost,'replyBody',offered+'\n\nMy careful staff edit.');matchedHost.props.requestReplies={'matched-form':reply('matched-form',{revision:2,status:'ready',body:staleBody,coa:matchedPdf,coaChoice:null})};matchedHost.render();await flush(matchedHost);fixtureChecks.at(-1).resolve(checked(fixtureChecks.at(-1),matchedPdf));await flush(matchedHost);assert(field(matchedHost,'replyBody').props.value.endsWith('My careful staff edit.'),'Refreshed evidence never overwrites staff typing');matchedHost.unmount();
   // A staff-edited contradiction is retained, clearly blocked, and corrected only on an explicit click.
   const editChecks=[];const editedHost=mount({...matchingProps,onCheckAttachments:input=>{const gate=deferred();editChecks.push({input,...gate});return gate.promise;}});await flush(editedHost);openRow(editedHost,'matched-form');await flush(editedHost);
@@ -228,12 +228,12 @@ async function main(){
  assert(text(latest()).includes('COA request form'));assert(text(latest()).includes('No written message was included.'));assert(text(latest()).includes('Lot entered: QA-100'));
  assert(!text(latest()).includes('SYSTEM NOTE'),'Generated processing notes are not presented as the customer message');
  assert(!nodes(latest()).some(n=>n.props?.['data-direction']==='incoming'),'A form submission is not a customer-written email');
- const tools=nodes(host.tree).find(n=>n.type==='details'&&text(n.props.children[0])==='Extra tools');assert(!tools.props.open);
- assert(!nodes(tools).some(n=>n.type==='button'&&text(n)==='Create AI draft'),'The main AI action is not hidden');
+ const tools=nodes(host.tree).find(n=>n.type==='details'&&text(n.props.children[0])==='More actions');assert(!tools.props.open);assert(!text(host.tree).includes('Extra tools'));
+ assert(!nodes(tools).some(n=>n.type==='select'&&n.props['aria-label']==='Add discount'),'Discount stays next to the reply');
  assert(button(host.tree,'Create AI draft'));
- const attachments=nodes(host.tree).find(n=>n.type==='section'&&n.props['aria-label']==='COA attachments');assert(attachments,'COA picker is visible beside the reply');assert(!nodes(tools).includes(attachments),'COA selection is independent of AI tools');assert(text(attachments).includes('Requested lot: QA-100'));assert(text(host.tree).includes('Kim C.'));assert(text(host.tree).includes('Send emails the text above and the listed PDFs.'));
+ const attachments=nodes(host.tree).find(n=>n.type==='section'&&n.props['aria-label']==='COA attachments');assert(attachments,'COA picker is visible beside the reply');assert(!nodes(tools).includes(attachments),'COA selection is independent of AI tools');assert(text(attachments).includes('Requested lot: QA-100'));assert(text(host.tree).includes('Kim C.'));assert(select(host,'Add discount'),'Discount is directly available beside Add COA');
  // Removing the last chosen PDF is explicit none, never a surprise automatic reattachment.
- select(host,'Attach COA').props.onChange({target:{value:'a'.repeat(64)}});host.render();
+ select(host,'Add COA').props.onChange({target:{value:'a'.repeat(64)}});host.render();
  button(host.tree,'Remove selection').props.onClick();host.render();assert(text(host.tree).includes('No PDF attached'));
  type(host,'replyBody','Please send a label photo.');button(host.tree,'Save draft').props.onClick();await flush(host);assert.equal(preparations.at(-1).coaSha256,'','Last removal saves explicit none');
  host.props.requestReplies={'coa-form':reply('coa-form',{status:'ready',revision:1,body:'Please send a label photo.',coaChoice:'',updated:Date.now()})};host.render();
@@ -253,10 +253,10 @@ async function main(){
  const recoveryContact={id:'recovery:fixture',source:'recovery',direction:'outgoing',body:'Checkout reminder accepted by provider. Delivery unconfirmed.',created:now-2*day};
  host=mount({...props,requests:[unanswered],requestReplies:{[unanswered.id]:reply(unanswered.id,{status:'ready',history:[recoveryContact]})}});await flush(host);
  assert.deepEqual(ids(host),[unanswered.id],'Recovery contact does not remove an unanswered form from Needs reply');openRow(host,unanswered.id);
- assert(text(host.tree).includes('No reply is recorded for this request.'),'Recovery contact does not count as a substantive reply');assert(text(host.tree).includes('Automatic checkout reminder'),'Recovery evidence stays visible in the timeline');assert(!text(host.tree).includes('Last recorded reply:'),'Acceptance is not mislabeled as a staff reply');
+ assert(text(host.tree).includes('No reply recorded'),'Recovery contact does not count as a substantive reply');assert(text(host.tree).includes('Automatic checkout reminder'),'Recovery evidence stays visible in the timeline');assert(!text(host.tree).includes('Last recorded reply:'),'Acceptance is not mislabeled as a staff reply');
  const recoverySibling=request('recovery-sibling','new','contact',{email:'recovery-fixture@example.invalid',origin:'order'});recoverySibling.created=now-4*day;
  host=mount({...props,requests:[unanswered,recoverySibling],requestReplies:{[recoverySibling.id]:reply(recoverySibling.id,{status:'ready',history:[recoveryContact]})}});await flush(host);
- assert.deepEqual(ids(host),[unanswered.id],'A recovery reminder on another case does not answer the customer question');openRow(host,unanswered.id);assert(text(host.tree).includes('No reply is recorded for this request.'));assert(!text(host.tree).includes('Automatic checkout reminder'),'Other cases do not appear as this conversation');
+ assert.deepEqual(ids(host),[unanswered.id],'A recovery reminder on another case does not answer the customer question');openRow(host,unanswered.id);assert(text(host.tree).includes('No reply recorded'));assert(!text(host.tree).includes('Automatic checkout reminder'),'Other cases do not appear as this conversation');
  // Order conversation: internal order notes stay staff-only; tagging the case saves issue and resolutions.
  const savedIssues=[];const orderReq=request('from-order','new','contact',{subject:'Your BioMod order #ABC',message:'Order #ABC. INTERNAL items list.',origin:'order',startedBy:'owner@example.invalid'});
  host=mount({...props,requests:[orderReq],requestReplies:{},onSaveIssue:async input=>{savedIssues.push(input);return {issue:input.issue,resolutions:input.resolutions,note:input.note,updated:now,updatedBy:'owner@example.invalid'};}});await flush(host);
@@ -267,11 +267,11 @@ async function main(){
  assert.deepEqual(savedIssues.at(-1),{id:'from-order',issue:'out_of_stock',resolutions:[],note:''});
  nodes(host.tree).find(n=>n.type==='label'&&text(n)==='Refunded').props.children[0].props.onChange({target:{checked:true}});await flush(host);
  assert.deepEqual(savedIssues.at(-1).resolutions,['refund']);
- // Win-back templates on the side: Use fills the draft (with undo), Tailor asks the AI to fit it to this customer.
- const tplCalls=[];host=mount({...props,requests:[orderReq],requestReplies:{},onLoadTemplates:async id=>{tplCalls.push(id);return [{id:'help',label:'Need a hand?',why:'Service first.',body:'Hi Synthetic, need a hand?'}];}});await flush(host);
- filter(host,'All');openRow(host,'from-order');await flush(host);await flush(host);assert.deepEqual(tplCalls,['from-order']);assert(text(host.tree).includes('Follow-up suggestions'));
- nodes(host.tree).find(n=>n.type==='button'&&text(n)==='Use').props.onClick();host.render();assert.equal(field(host,'replyBody').props.value,'Hi Synthetic, need a hand?');
- const before2=preparations.length;nodes(host.tree).find(n=>n.type==='button'&&text(n)==='Apply changes').props.onClick();await flush(host);
+ // Obsolete suggestions are neither fetched nor displayed; one editable draft remains.
+ const tplCalls=[];host=mount({...props,requests:[orderReq],requestReplies:{},onLoadTemplates:async id=>{tplCalls.push(id);return [];}});await flush(host);
+ filter(host,'All');openRow(host,'from-order');await flush(host);assert.deepEqual(tplCalls,[]);assert(!text(host.tree).includes('Follow-up suggestions'));assert(!text(host.tree).includes('Optional follow-up'));assert(text(host.tree).includes('No message from customer.'));
+ type(host,'replyBody','Hi Synthetic, need a hand?');
+ const before2=preparations.length;button(host.tree,'Apply changes').props.onClick();await flush(host);
  assert.equal(preparations.length,before2+1);assert.equal(preparations.at(-1).mode,'ai');assert.match(preparations.at(-1).instruction,/^Write a short, useful email/);assert.equal(preparations.at(-1).body,'Hi Synthetic, need a hand?');
  // Reply status at a glance: Mark as replied moves it out of Needs reply with who/how; pitches stay out of Needs reply; selection follows the tab.
  const pitch=request('pitch','new','contact',{subject:'High quality peptides and SARMs',message:'We are a leading manufacturer with competitive price.'});
@@ -313,13 +313,13 @@ async function main(){
  // Purchase evidence only adds an actionable checkout warning, never a COA purchase-count wall.
  const evidence={vip:false,orders:[],purchaseHistory:{state:'available',checkedAt:now,matchedOrders:0,confirmedLivePurchases:0,testOrders:0,unclassifiedOrders:0,note:'INTERNAL PURCHASE AUDIT'},communicationHistory:{state:'available',checkedAt:now,outgoingCount:0,incomingCount:1,lastOutgoingAt:null,lastIncomingAt:now,recent:[{at:now,source:'customer_request',direction:'incoming',status:'submitted_coa_form'}],note:'INTERNAL CONTACT AUDIT'}};
  const coaEvidenceRequest=request('history-coa','new','contact',{origin:'coa-link',subject:'COA request',labelLot:'QA-LOT'});
- assert.equal(replyPurchaseNotice(coaEvidenceRequest,evidence),null);assert.equal(replyPurchaseNotice(coaEvidenceRequest,null),null);
+ assert.equal(replyPurchaseNotice(coaEvidenceRequest,evidence),'Order: None found in the store.');assert.equal(replyPurchaseNotice(coaEvidenceRequest,null),'Order: Unable to confirm.');
  const followupRequest=request('history-order','new','contact',{origin:'order',orderId:'original-123'});
- assert.match(replyPurchaseNotice(followupRequest,null),/could not be confirmed/);
+ assert.match(replyPurchaseNotice(followupRequest,null),/Unable to confirm/);
  const orderEvidence={...evidence,orders:[{number:'PAID0001',placed:'2026-10-25',status:'payment recorded; awaiting fulfillment',environment:'live',items:'Fixture item',total:'$10.00'}]};
- assert.match(replyPurchaseNotice(followupRequest,orderEvidence),/Another paid order is on file: #PAID0001/);
- assert.equal(replyPurchaseNotice(followupRequest,{...orderEvidence,orders:[{...orderEvidence.orders[0],environment:'test'}]}),null,'A test order cannot become a paid-customer warning');
- assert.match(replyPurchaseNotice(followupRequest,{...evidence,orders:[{...orderEvidence.orders[0],number:'ORIGINAL',status:'payment not confirmed'}]}),/Payment is not confirmed for order #ORIGINAL/);
+ assert.match(replyPurchaseNotice(followupRequest,orderEvidence),/Order: Yes · #PAID0001 · Paid/);
+ assert.equal(replyPurchaseNotice(followupRequest,{...orderEvidence,orders:[{...orderEvidence.orders[0],environment:'test'}]}),'Order: None found in the store.','A test order cannot become a paid-customer warning');
+ assert.match(replyPurchaseNotice(followupRequest,{...evidence,orders:[{...orderEvidence.orders[0],number:'ORIGINAL',status:'payment not confirmed'}]}),/Order: #ORIGINAL · Checkout started · payment not confirmed/);
  // Actual inbox polling with a deterministic browser clock: no real timer, network or send.
  for(const previousHost of [...fixtureHosts])previousHost.unmount();
  for(let i=0;i<4;i++)await Promise.resolve();
@@ -359,6 +359,23 @@ async function main(){
   pulse('document','visibilitychange');pulse('window','focus');await flush(liveHost);assert.equal(readCalls.length,inactiveReads);
   liveHost.props={...liveHost.props,activeTab:true};liveHost.render();await nextTick();await flush(liveHost);assert.equal(readCalls.length,inactiveReads+1);assert.equal(field(liveHost,'replyBody').props.value,'My unsaved customer reply');
   liveHost.unmount();liveHost=null;assert.equal(scheduled.size,0);
+
+  // Opening a case prepares a draft only after fresh history and PDF checks finish.
+  {const autoRequest=request('auto-draft','new','contact',{message:'  Please help.\nExact customer words!  '});const checked=deferred();const calls=[];
+   const h=mount({...props,requests:[autoRequest],requestReplies:{},onRefreshReplies:async()=>({requests:[autoRequest],replies:{},customerContext:{requestId:autoRequest.id,context:evidence}}),onCheckAttachments:async()=>checked.promise,onPrepareReply:async input=>{calls.push(input);return reply(input.id,{status:'needs_review',revision:1,body:'',reason:'AI unavailable'});}});await flush(h);openRow(h,autoRequest.id);pulse('window','focus');await flush(h);assert.equal(calls.length,0,'Wait for attachment evidence');
+   assert(nodes(h.tree).some(n=>n.type==='p'&&n.props.children==='  Please help.\nExact customer words!  '),'Customer text is verbatim');
+   checked.resolve({requestId:autoRequest.id,revision:null,coaChoice:null,checkedAt:now,coa:{state:'not_requested',reason:'No PDF requested'}});await flush(h);await flush(h);
+   assert.equal(calls.length,1);assert.equal(calls[0].mode,'ai');assert(!calls[0].send,'Automatic drafting never authorizes sending');
+   pulse('window','focus');await flush(h);assert.equal(calls.length,1,'A failed AI response and polling cannot enqueue duplicate drafts');
+   h.props.requestReplies={'auto-draft':reply('auto-draft',{status:'ready',revision:1,updated:Date.now()+1000,body:'Here is the useful AI reply.'})};h.render();await flush(h);assert.equal(field(h,'replyBody').props.value,'Here is the useful AI reply.');
+   type(h,'replyBody','Kim edited this reply.');pulse('window','focus');await flush(h);assert.equal(field(h,'replyBody').props.value,'Kim edited this reply.');assert.equal(calls.length,1);h.unmount();assert.equal(scheduled.size,0);
+  }
+
+  for (const state of ['resolved', 'uncertain']) {
+   const r=request('auto-block-'+state,state==='resolved'?'resolved':'new');const calls=[];
+   const summary=reply(r.id,{status:state==='resolved'?'sent':'needs_review',reason:state==='uncertain'?'local_sent_without_provider_receipt':undefined,history:[]});
+   const h=mount({...props,requests:[r],requestReplies:{[r.id]:summary},onRefreshReplies:async()=>({requests:[r],replies:{[r.id]:summary},customerContext:{requestId:r.id,context:evidence}}),onPrepareReply:async input=>{calls.push(input);throw Error('Must not draft');}});await flush(h);filter(h,'All');openRow(h,r.id);pulse('window','focus');await flush(h);await flush(h);assert.equal(calls.length,0,'Answered or uncertain cases never auto-draft');h.unmount();assert.equal(scheduled.size,0);
+  }
 
   // Historical sent imports do not update a draft's revision/time: fresh history must still win.
   const oldHistoryRequest=request('history-refresh','in_progress');oldHistoryRequest.created=now-3*day;
