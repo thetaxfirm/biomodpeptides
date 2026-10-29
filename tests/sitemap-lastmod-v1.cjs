@@ -37,7 +37,7 @@ loaded._compile(transpile(filename), filename);
     assert(date >= siteLastmod, route + ' predates the sitewide header/footer change');
   }
   for (const r of pressReleases) assert(lastmodFor('/news/' + r.slug) >= r.date, r.slug + ' lastmod before publication');
-  for (const slug of release.productSlugs) assert.equal(lastmodFor('/product/' + slug), productLastmod > siteLastmod ? productLastmod : siteLastmod);
+  for (const slug of release.productSlugs) assert.equal(lastmodFor('/product/' + slug), [pageLastmod['/product/' + slug] || productLastmod, siteLastmod].sort().at(-1));
   for (const route of Object.keys(pageLastmod)) assert(paths.includes(route), route + ' dated but not in the sitemap');
   // A page whose visible content changed must not keep an older date, or Bing has no reason to
   // recrawl it. The guide pages ContentPage ends with the research vial index (628f8c0, October 16)

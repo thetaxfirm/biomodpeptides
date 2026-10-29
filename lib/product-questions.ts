@@ -19,6 +19,24 @@ export function productQuestions(product: Product): ProductQuestion[] {
   const documentation = status === 'on-request' ? coaRequestNoticeFor(batchFor(product.id, product)) : status === 'matched'
     ? 'The laboratory\'s original report for the lot printed on the vial label is published with this product. Open it for the full methods and results.'
     : 'The lab report for this lot is being updated. Contact BIOMOD anytime for the latest documentation.';
+  const nameQuestions: ProductQuestion[] = product.slug === 'bpc-157-10mg' ? [
+    { id: 'name-variants', question: 'Are BPC157, BPC 157 and BPC-157 the same product name?', answer: [
+      'BPC157 and BPC 157 are common spellings of BPC-157. This listing is BIOMOD BPC-157 10 mg, a single-compound vial. Check the strength, format and batch record when comparing listings; a similar name does not establish identical contents.',
+    ] },
+    { id: 'compare-blend', question: 'How does BPC-157 10 mg differ from Wolverine?', answer: [
+      'BPC-157 10 mg lists BPC-157 alone. Wolverine lists BPC-157 + TB-500 as a blend. A blend’s total weight is not the amount of each ingredient, so the two listings are not interchangeable.',
+    ] },
+  ] : product.slug === 'wolverine-10mg' ? [
+    { id: 'name-variants', question: 'What is the Wolverine peptide blend?', answer: [
+      'BIOMOD Wolverine combines BPC-157 + TB-500 in a lyophilized powder vial. Searches for Wolverine peptide, Wolverine stack or BPC157 TB500 can refer to this combination, but other sellers may use those names for different strengths or separate-vial bundles. Compare the actual listing and batch record.',
+    ] },
+    { id: 'blend-contents', question: 'Does Wolverine 10 mg contain 10 mg of each ingredient?', answer: [
+      'No. The listed 10 mg is the total blend content per vial, not 10 mg of BPC-157 plus 10 mg of TB-500. Use the matching batch record for reported component results; do not infer an equal split from the product name.',
+    ] },
+    { id: 'compare-blend', question: 'Is Wolverine the same as BPC-157 alone?', answer: [
+      'No. Wolverine is a BPC-157 + TB-500 blend. The separate BPC-157 10 mg listing contains BPC-157 alone. Compare compound identity as well as total vial contents when choosing a product.',
+    ] },
+  ] : [];
   return [
     { id: 'buy', question: `How do I buy ${productLabel(product)}?`, answer: [
       supportsPacks(product)
@@ -31,5 +49,6 @@ export function productQuestions(product: Product): ProductQuestion[] {
       `Pack sizes of ${packOptions} count complete vials. The listed contents apply to each vial. Availability and quantity limits apply.`,
     ] },
     { id: 'documentation', question: 'What documentation is available for this product?', answer: [documentation] },
+    ...nameQuestions,
   ];
 }

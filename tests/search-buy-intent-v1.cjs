@@ -41,9 +41,15 @@ const node = (data, type) => data['@graph'].find(item => item['@type'] === type)
   assert.match(pageInfo('/').description, /BPC-157 10mg/);
   const bpc = products.find(p => p.slug === 'bpc-157-10mg');
   assert.equal(productLabel(bpc), 'BPC-157 10mg');
-  assert.equal(pageInfo('/product/bpc-157-10mg').title, 'Buy BPC-157 10mg Research Vial');
+  const wolverine = products.find(p => p.slug === 'wolverine-10mg');
+  assert(productQuestions(bpc).some(q => q.answer.join(' ').includes('BPC157 and BPC 157')));
+  assert(productQuestions(wolverine).some(q => q.id === 'blend-contents' && q.answer.join(' ').includes('not 10 mg of BPC-157 plus 10 mg of TB-500')));
+  assert(productQuestions(bpc).some(q => q.id === 'compare-blend'));
+  assert(productQuestions(wolverine).some(q => q.id === 'compare-blend'));
+
+  assert.equal(pageInfo('/product/bpc-157-10mg').title, 'Buy BPC-157 10mg Vials');
   assert.equal(pageInfo('/product/bpc-157-10mg').name, 'BPC-157 10mg Research Vial');
-  assert.equal(routeMetadata('/product/bpc-157-10mg', new URLSearchParams(), config).title.absolute, 'Buy BPC-157 10mg Research Vial | Biomod Research Supply Company');
+  assert.equal(routeMetadata('/product/bpc-157-10mg', new URLSearchParams(), config).title.absolute, 'Buy BPC-157 10mg Vials | Biomod Research Supply Company');
   for (const path of sitemapPaths(config).filter(path => ['/', '/shop', '/faq'].includes(path) || path.startsWith('/product/'))) {
     const info = pageInfo(path), title = path === '/' ? info.title : info.title + ' | Biomod Research Supply Company';
     assert(title.length <= 70, 'Title fits a result line: ' + title);

@@ -73,6 +73,8 @@ export function pageInfo(path: string) {
     // Keep "Buy <product> Research Vial | <brand>" within a 70-character result line;
     // a long product name drops the word Research from the title only.
     const title = ('Buy ' + name + ' | Biomod Research Supply Company').length > 70 ? `Buy ${p.name}${strength} ${productFormat(p)}` : 'Buy ' + name;
+    if (p.slug === 'bpc-157-10mg') return { title: 'Buy BPC-157 10mg Vials', name,
+      description: 'BPC-157 (BPC157) 10 mg single-compound vials from BIOMOD. Compare packs, current pricing, batch records and the Wolverine blend. Research use only.', eligible: !productReviewBlocks[p.slug] };
     return { title, name, description: `Buy ${p.name}${strength} (${compound(p)}): single vials or 3, 5 and 10-packs, batch records and U.S. shipping. For laboratory research only.`, eligible: !productReviewBlocks[p.slug] };
   }
   return pageRecords[path] || { title: privatePath(path) ? 'Customer Services' : 'Page Not Found', description: 'BIOMOD customer services and research products.', eligible: false };

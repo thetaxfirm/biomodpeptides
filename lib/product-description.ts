@@ -37,5 +37,6 @@ export function productDescription(product: Product): string[] {
   const packs = supportsPacks(product)
     ? `Order a single ${packUnit(product)} or a ${packSizes.slice(1, -1).join(', ')} or ${packSizes.at(-1)}-pack; each pack price on this page is shown per ${packUnit(product)}.`
     : '';
-  return [listing, batch, packs].filter(Boolean);
+  const blendNote = product.slug === 'wolverine-10mg' ? 'Wolverine lists BPC-157 + TB-500 with 10 mg total blend content per vial, not 10 mg of each ingredient. It differs from the BPC-157 10 mg single-compound vial. The full-length versus fragment specification of the TB-500 component remains under review; contact BIOMOD for the current specification.' : '';
+  return [listing + (blendNote ? ' ' + blendNote : ''), batch, packs].filter(Boolean);
 }

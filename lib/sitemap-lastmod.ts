@@ -16,6 +16,7 @@ export const siteLastmod = '2026-10-23';
 // paragraphs from lib/product-description.ts (also in the Product structured data).
 export const productLastmod = '2026-10-19';
 export const pageLastmod: Record<string, string> = {
+  '/product/bpc-157-10mg': '2026-10-28',
   // October 14: initial homepage cards now include every publication-reviewed vial.
   '/': '2026-10-14',
   // fb54b09: batch status wording on shop cards, the FAQ, batch library and COA guide.
