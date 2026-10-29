@@ -7,20 +7,20 @@ import { activePromotions } from './promotions';
 import { openRequestsForBridge, recordMailboxReplies } from './request-external';
 import { isIssue, issueLabel, resolutionLabel, looksLikePitchText } from './request-issues';
 import { matchedCoaReplyProblem } from './reply-composer';
-import { followupStateStatements } from './request-followups';
+import { followupStateStatements, answeredFollowupStateStatements } from './request-followups';
 export const REPLY_SENDER = 'contact@trybiomod.com';
 type Env = { DB: D1Database };
 type Actor = { email: string; role: string };
 export type ReplyCoa = {state:'matched'|'needs_review'|'already_sent'|'not_requested';reason:string;extras?:ReplyCoa[];productName?:string;strength?:string;lot?:string;reportId?:string;chemicalIdentity?:string;sha256?:string;filename?:string};
 export type ReplyMessage = {id:string;direction:'incoming'|'outgoing';body:string;created:number;
  /** Outgoing only, so staff can see exactly what went where and who pressed Send. */
- from?:string;to?:string;subject?:string;sentBy?:string;attachment?:string;source?:'recovery'};
+ from?:string;to?:string;subject?:string;sentBy?:string;attachment?:string;source?:'recovery'|'mailbox'};
 // Who sent it and what was attached, read from the draft that produced the message.
-const MESSAGE_COLUMNS="m.id,m.direction,m.body,m.created,m.sender msg_from,m.recipient msg_to,m.attachment_hash,d.subject msg_subject,d.approved_by msg_by,d.coa_json msg_coa";
-type MessageRow=ReplyMessage&{msg_from?:string|null;msg_to?:string|null;attachment_hash?:string|null;msg_subject?:string|null;msg_by?:string|null;msg_coa?:string|null};
-function messageOf(row:MessageRow):ReplyMessage{const{msg_from,msg_to,attachment_hash,msg_subject,msg_by,msg_coa,...m}=row;const base:ReplyMessage={id:m.id,direction:m.direction,body:m.body,created:m.created};if(m.direction!=='outgoing')return base;
+const MESSAGE_COLUMNS="m.id,m.direction,m.body,m.created,m.sender msg_from,m.recipient msg_to,m.attachment_hash,CASE WHEN m.direction='outgoing' AND m.reply_job_id IS NULL THEN 'mailbox' END msg_source,d.subject msg_subject,d.approved_by msg_by,d.coa_json msg_coa";
+type MessageRow=ReplyMessage&{msg_source?:'mailbox'|null;msg_from?:string|null;msg_to?:string|null;attachment_hash?:string|null;msg_subject?:string|null;msg_by?:string|null;msg_coa?:string|null};
+function messageOf(row:MessageRow):ReplyMessage{const{msg_source,msg_from,msg_to,attachment_hash,msg_subject,msg_by,msg_coa,...m}=row;const base:ReplyMessage={id:m.id,direction:m.direction,body:m.body,created:m.created};if(m.direction!=='outgoing')return base;
  let attachment='';if(attachment_hash){try{const coa=JSON.parse(msg_coa||'{}');attachment=coa.sha256===attachment_hash?(coa.filename||coa.reportId||'Lab report PDF'):'Lab report PDF';}catch{attachment='Lab report PDF';}}
- return {...base,...(msg_from?{from:msg_from}:{}),...(msg_to?{to:msg_to}:{}),...(msg_subject?{subject:msg_subject}:{}),...(msg_by?{sentBy:msg_by}:{}),...(attachment?{attachment}:{})};}
+ return {...base,...(msg_source?{source:msg_source}:{}),...(msg_from?{from:msg_from}:{}),...(msg_to?{to:msg_to}:{}),...(msg_subject?{subject:msg_subject}:{}),...(msg_by?{sentBy:msg_by}:{}),...(attachment?{attachment}:{})};}
 export type ReplySummary = {id:string;requestId:string;revision:number;status:'queued'|'preparing'|'ready'|'needs_review'|'sending'|'sent'|'cancelled';mode:'ai'|'staff';sender:string;recipient:string;subject:string;body:string;preparedBy:string;updated:number;readyId?:string;model?:string;coa:ReplyCoa;history:ReplyMessage[];reason?:string;instruction?:string;purpose?:'checkout_recovery'|'reply';approvedAt?:number;approvedBy?:string;coaChoice?:string|null};
 type Row={id:string;request_id:string;revision:number;status:ReplySummary['status'];mode:'ai'|'staff';sender:string;recipient:string;subject:string;proposed_body:string;instruction:string;body:string;prepared_by:string;request_hash:string;coa_json:string;ready_id:string|null;model:string|null;reason:string|null;attempts:number;lease_token:string|null;lease_until:number|null;send_locked_at:number|null;send_body_hash:string|null;provider_message_id:string|null;provider_thread_id:string|null;sent_at:number|null;created:number;updated:number;approved_at:number|null;approved_by:string|null;ai_draft:string|null;coa_choice:string|null};
 type Inquiry={id:string;kind:string;data:string;created:number;status?:string};
@@ -168,6 +168,7 @@ export async function prepareRequestReply(env:Env,input:PrepareReplyRequest,acto
  validateCoaChoice(input.coaSha256);
  const request=await inquiryFor(env,requestId);if(!request)fail('Request not found.',404);if(request!.status==='deleted')fail('This request was deleted. Restore it before replying.');if(request!.status==='spam'&&!send)fail('Move this request out of spam before preparing a reply.');const incoming=source(request!);if(!incoming.email)fail('The original request needs a valid recipient.',400);
  const old=await env.DB.prepare('SELECT * FROM request_reply_drafts WHERE request_id=?').bind(requestId).first<Row>();
+ if(old?.reason==='local_sent_without_provider_receipt')fail('This email is marked sent in Jarvis. Verify its sent status before preparing or sending another reply.');
  if(old?.status==='sending'||old?.send_locked_at)fail('A send is awaiting confirmation. Review its outcome before replacing this reply.');
  if((old&&input.expectedRevision!==old.revision)||(!old&&input.expectedRevision!==null))fail('This reply changed. Refresh before preparing another revision.');
  if(input.purpose!==undefined&&!['checkout_recovery','reply'].includes(input.purpose))fail('Invalid reply purpose.',400);
@@ -270,14 +271,21 @@ export async function handleReplyBridge(env:Env,payload:unknown):Promise<Record<
  if(p.action==='sent'){const provider=reference(p.providerMessageId),readyId=reference(p.readyId),thread=p.providerThreadId===undefined?null:reference(p.providerThreadId),body=text(p.body,60000,true),sentAt=stamp(p.sentAt),oldAck=await env.DB.prepare('SELECT * FROM request_reply_messages WHERE reply_job_id=? AND reply_revision=? AND ready_id=?').bind(jobId,rev,readyId).first<any>();if(oldAck){if(oldAck.provider_message_id!==provider||oldAck.provider_thread_id!==thread||oldAck.body!==body||oldAck.created!==sentAt)fail('This provider acknowledgement conflicts with the saved send.');return {ok:true};}}
  if(p.action==='messages'){
   const readyId=reference(p.readyId),thread=reference(p.providerThreadId);
-  const sent=await env.DB.prepare("SELECT request_id,recipient,created FROM request_reply_messages WHERE reply_job_id=? AND reply_revision=? AND ready_id=? AND provider_thread_id=? AND direction='outgoing'").bind(jobId,rev,readyId,thread).first<{request_id:string;recipient:string;created:number}>();
+  const sent=await env.DB.prepare("SELECT request_id,sender,recipient,created FROM request_reply_messages WHERE reply_job_id=? AND reply_revision=? AND ready_id=? AND provider_thread_id=? AND direction='outgoing'").bind(jobId,rev,readyId,thread).first<{request_id:string;sender:string;recipient:string;created:number}>();
   if(!sent)fail('Import follow-ups only for the exact confirmed sent conversation.');if(!Array.isArray(p.messages)||p.messages.length>20)fail('Import at most 20 messages.',400);
-  const statements:D1PreparedStatement[]=[],incomingIds:string[]=[];for(const raw of p.messages){const m=object(raw),provider=reference(m.id),direction=m.direction;if(!['incoming','outgoing'].includes(direction))fail('Invalid message direction.',400);const body=text(m.body,60000,true),created=stamp(m.created);if(created<sent!.created)fail('Follow-up predates the confirmed sent conversation.');const messageId=await coaHash(REPLY_SENDER+':'+provider);const existing=await env.DB.prepare('SELECT request_id,direction,body,created,provider_thread_id FROM request_reply_messages WHERE id=?').bind(messageId).first<any>();if(existing){if(existing.request_id!==sent!.request_id||existing.direction!==direction||existing.body!==body||existing.created!==created||existing.provider_thread_id!==thread)fail('Message identifier already belongs to different content.');continue;}
-   statements.push(db.prepare('INSERT INTO request_reply_messages(id,request_id,direction,body,created,provider_message_id,provider_thread_id,sender,recipient,attachment_hash) VALUES(?,?,?,?,?,?,?,?,?,NULL)').bind(messageId,sent!.request_id,direction,body,created,provider,thread,direction==='incoming'?sent!.recipient:REPLY_SENDER,direction==='incoming'?REPLY_SENDER:sent!.recipient));
-   if(direction==='incoming')incomingIds.push(messageId);
-  }const stateChanges=followupStateStatements(db,sent!.request_id,incomingIds,now),results=statements.length?await db.batch([...statements,...stateChanges]):[];return {ok:true,imported:statements.length,incomingImported:incomingIds.length,draftInvalidated:stateChanges.length>0&&Boolean(results[results.length-1]?.meta?.changes)};
+  const statements:D1PreparedStatement[]=[],incomingIds:string[]=[],outgoingIds:string[]=[];for(const raw of p.messages){const m=object(raw),provider=reference(m.id),direction=m.direction;if(!['incoming','outgoing'].includes(direction))fail('Invalid message direction.',400);const body=text(m.body,60000,true),created=stamp(m.created);if(created<sent!.created)fail('Follow-up predates the confirmed sent conversation.');const messageId=await coaHash(sent!.sender+':'+provider);const existing=await env.DB.prepare('SELECT request_id,direction,body,created,provider_thread_id FROM request_reply_messages WHERE id=?').bind(messageId).first<any>();if(existing){if(existing.request_id!==sent!.request_id||existing.direction!==direction||existing.body!==body||existing.created!==created||existing.provider_thread_id!==thread)fail('Message identifier already belongs to different content.');continue;}
+   statements.push(db.prepare('INSERT INTO request_reply_messages(id,request_id,direction,body,created,provider_message_id,provider_thread_id,sender,recipient,attachment_hash) VALUES(?,?,?,?,?,?,?,?,?,NULL)').bind(messageId,sent!.request_id,direction,body,created,provider,thread,direction==='incoming'?sent!.recipient:sent!.sender,direction==='incoming'?sent!.sender:sent!.recipient));
+   if(direction==='incoming')incomingIds.push(messageId);else outgoingIds.push(messageId);
+  }const incomingChanges=followupStateStatements(db,sent!.request_id,incomingIds,now),outgoingChanges=answeredFollowupStateStatements(db,sent!.request_id,outgoingIds,now),stateChanges=[...incomingChanges,...outgoingChanges],results=statements.length?await db.batch([...statements,...stateChanges]):[];const draftInvalidated=Boolean((incomingChanges.length&&results[statements.length+1]?.meta?.changes)||(outgoingChanges.length&&results[statements.length+incomingChanges.length]?.meta?.changes));return {ok:true,imported:statements.length,incomingImported:incomingIds.length,outgoingImported:outgoingIds.length,draftInvalidated};
  }
  if(!row||row.revision!==rev)fail('Reply revision changed.');
+ if(p.action==='send_status_review'){
+  const readyId=reference(p.readyId);if(p.reason!=='local_sent_without_provider_receipt')fail('Invalid sent-status reason.',400);
+  if(row!.ready_id!==readyId)fail('Draft identity changed.');
+  if(row!.reason==='local_sent_without_provider_receipt')return {ok:true};
+  if(!['ready','needs_review'].includes(row!.status)||row!.send_locked_at||row!.provider_message_id||row!.sent_at)fail('A provider outcome already exists or is in progress.');
+  await db.prepare("UPDATE request_reply_drafts SET status='needs_review',approved_at=NULL,approved_by=NULL,reason='local_sent_without_provider_receipt',updated=? WHERE id=? AND revision=? AND ready_id=? AND status IN ('ready','needs_review') AND send_locked_at IS NULL AND provider_message_id IS NULL AND sent_at IS NULL").bind(now,jobId,rev,readyId).run();return {ok:true};
+ }
  if(p.action==='send_blocked'){
   // Jarvis refused an owner-approved send before any provider call. Clear the approval so the desk asks again.
   const readyId=reference(p.readyId);await db.prepare("UPDATE request_reply_drafts SET approved_at=NULL,approved_by=NULL,reason='send_blocked',updated=? WHERE id=? AND revision=? AND ready_id=? AND status='ready' AND send_locked_at IS NULL").bind(now,jobId,rev,readyId).run();return {ok:true};

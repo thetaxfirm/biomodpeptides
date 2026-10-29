@@ -125,13 +125,28 @@ const conflict=async(fn)=>assert.rejects(fn,e=>e.status===409);
   let claimed;if(phase!=='queued')claimed=(await r.bridge({action:'claim'})).job;
   if(phase==='ready')await r.bridge({action:'complete',id:claimed.id,revision:2,leaseToken:claimed.leaseToken,readyId:'second-ready-'+phase,body:claimed.proposedBody,model:'staff'});
   const payload={action:'messages',id:sentReply.job.id,revision:1,readyId:sentReply.readyId,providerThreadId:'thread-'+phase,messages:[{id:'new-incoming-'+phase,direction:'incoming',body:'I have a different question now.',created:sentAt+1}]};
-  assert.deepEqual(await r.bridge(payload),{ok:true,imported:1,incomingImported:1,draftInvalidated:true});let changed=r.row(pending.id);assert.equal(changed.status,'needs_review');assert.equal(changed.revision,3);assert.equal(changed.approved_at,null);assert.equal(changed.ready_id,null);assert.equal(changed.lease_token,null);assert.equal(changed.body||changed.proposed_body,'Earlier wording awaiting review.');
+  assert.deepEqual(await r.bridge(payload),{ok:true,imported:1,incomingImported:1,outgoingImported:0,draftInvalidated:true});let changed=r.row(pending.id);assert.equal(changed.status,'needs_review');assert.equal(changed.revision,3);assert.equal(changed.approved_at,null);assert.equal(changed.ready_id,null);assert.equal(changed.lease_token,null);assert.equal(changed.body||changed.proposed_body,'Earlier wording awaiting review.');
   assert.equal(r.sql.prepare('SELECT status FROM requests WHERE id=?').get(requestId).status,'in_progress');
-  assert.deepEqual(await r.bridge(payload),{ok:true,imported:0,incomingImported:0,draftInvalidated:false});assert.equal(r.row(pending.id).revision,3,'Repeated mailbox polling cannot invalidate twice');
+  assert.deepEqual(await r.bridge(payload),{ok:true,imported:0,incomingImported:0,outgoingImported:0,draftInvalidated:false});assert.equal(r.row(pending.id).revision,3,'Repeated mailbox polling cannot invalidate twice');
   await conflict(()=>api.prepareRequestReply(r.env,{requestId,mode:'staff',body:'Stale browser wording',expectedRevision:2,send:true},owner));
   if(claimed)await conflict(()=>r.bridge({action:'complete',id:claimed.id,revision:2,leaseToken:claimed.leaseToken,readyId:'stale-ready',body:claimed.proposedBody,model:'staff'}));
   await r.bridge(ack);assert.equal(r.row(pending.id).revision,3,'Historical sent acknowledgements remain idempotent');
  }
+
+ // Newly verified sent follow-ups close only their exact conversation and retire stale approvals.
+ {const r=setup(),requestId=r.request(),sentReply=await ready(r,requestId);await r.bridge(validate(sentReply));const at=Date.now();await r.bridge({action:'sent',id:sentReply.job.id,revision:1,readyId:sentReply.readyId,providerMessageId:'original-accepted',providerThreadId:'bound-thread',body:sentReply.body,sentAt:at});
+  const pending=await r.prepare(requestId,{expectedRevision:1});const base={action:'messages',id:sentReply.job.id,revision:1,readyId:sentReply.readyId,providerThreadId:'bound-thread'};
+  await r.bridge({...base,messages:[{id:'question-again',direction:'incoming',body:'Another question.',created:at+1}]});
+  const payload={...base,messages:[{id:'gmail-answer',direction:'outgoing',body:'Answered in Gmail.',created:at+2}]};const result=await r.bridge(payload);assert.equal(result.outgoingImported,1);assert.equal(result.draftInvalidated,true);assert.equal(r.sql.prepare('SELECT status FROM requests WHERE id=?').get(requestId).status,'resolved');const before=r.row(pending.id);assert.equal(before.reason,'answered_elsewhere');assert.equal(before.approved_at,null);assert.equal(before.ready_id,null);
+  const repeated=await r.bridge(payload);assert.equal(repeated.imported,0);assert.equal(repeated.draftInvalidated,false);assert.deepEqual(r.row(pending.id),before,'Repeated polling cannot invalidate or prepare another reply');
+  const m=r.sql.prepare('SELECT sender,recipient FROM request_reply_messages WHERE provider_message_id=?').get('gmail-answer');assert.equal(m.sender,api.REPLY_SENDER);assert.equal(m.recipient,sentReply.job.recipient);
+  await conflict(()=>r.bridge({...base,providerThreadId:'different-thread',messages:payload.messages}));
+ }
+ // A locally marked sent message without a receipt is held for review, never retried.
+ {const r=setup(),requestId=r.request(),x=await ready(r,requestId);const review={action:'send_status_review',id:x.job.id,revision:1,readyId:x.readyId,reason:'local_sent_without_provider_receipt'};
+  await conflict(()=>r.bridge({...review,readyId:'wrong-ready'}));await conflict(()=>r.bridge({...review,revision:2}));await r.bridge(review);const before=r.row(x.job.id);assert.equal(before.status,'needs_review');assert.equal(before.reason,review.reason);assert.equal(before.body,x.body);await r.bridge(review);assert.deepEqual(r.row(x.job.id),before);await conflict(()=>r.bridge(validate(x)));await conflict(()=>r.prepare(requestId,{expectedRevision:1}));
+ }
+ for(const state of ['sending','sent']){const r=setup(),x=await ready(r,r.request());r.sql.prepare('UPDATE request_reply_drafts SET status=?,send_locked_at=? WHERE id=?').run(state,Date.now(),x.job.id);const before=r.row(x.job.id);await conflict(()=>r.bridge({action:'send_status_review',id:x.job.id,revision:1,readyId:x.readyId,reason:'local_sent_without_provider_receipt'}));assert.deepEqual(r.row(x.job.id),before);}
  // A customer follow-up received while an actual send is locked survives its later provider acknowledgement.
  {const r=setup(),requestId=r.request(),sentReply=await ready(r,requestId);await r.bridge(validate(sentReply));
   const sentAt=Date.now(),ack={action:'sent',id:sentReply.job.id,revision:1,readyId:sentReply.readyId,providerMessageId:'accepted-before-race',providerThreadId:'thread-before-race',body:sentReply.body,sentAt};await r.bridge(ack);

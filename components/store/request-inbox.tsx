@@ -18,7 +18,7 @@ export type ReplySummary = {
   preparedBy: string; updated: number; readyId?: string; model?: string; reason?: string;
   instruction?: string; purpose?: 'checkout_recovery' | 'reply'; approvedAt?: number; approvedBy?: string; coaChoice?: string | null;
   coa: { state: 'matched' | 'needs_review' | 'already_sent' | 'not_requested'; reason: string; extras?: { productName?: string; strength?: string; lot?: string; sha256?: string; filename?: string }[]; productName?: string; strength?: string; lot?: string; reportId?: string; chemicalIdentity?: string; filename?: string; sha256?: string };
-  history: { id: string; direction: 'incoming' | 'outgoing'; body: string; created: number; from?: string; to?: string; subject?: string; sentBy?: string; attachment?: string; source?: 'recovery' }[];
+  history: { id: string; direction: 'incoming' | 'outgoing'; body: string; created: number; from?: string; to?: string; subject?: string; sentBy?: string; attachment?: string; source?: 'recovery' | 'mailbox' }[];
 };
 export type PrepareReplyInput = { id: string; mode: 'ai' | 'staff'; body?: string; instruction?: string; expectedRevision: number | null; coaSha256?: string | null; send?: boolean; purpose?: 'checkout_recovery' | 'reply' };
 export type AttachmentCheckInput = { id: string; expectedRevision: number | null; coaSha256: string | null };
@@ -118,30 +118,35 @@ function stageOf(request: CustomerRequest, reply: ReplySummary | undefined, exte
   const last = replies[replies.length - 1];
   const lastOut = last?.at || 0;
   const lastIn = Math.max(request.data.origin === 'order' ? 0 : request.created, ...history.filter(m => m.direction === 'incoming' && !(request.data.origin === 'order' && m.id.startsWith('original:'))).map(m => m.created));
-  const answeredOutside = outside.some(message => message.at >= lastIn);
-  const customerReplied = lastOut > 0 && (lastIn > lastOut || (request.status === 'in_progress' && !answeredOutside));
+  const answeredOutside = outside.some(message => message.at > lastIn);
+  const customerReplied = lastOut > 0 && lastIn >= lastOut;
+  const conversationReview = lastOut > 0 && request.status === 'in_progress' && !answeredOutside;
+  const uncertainSend = reply?.reason === 'local_sent_without_provider_receipt';
   // An order conversation is started by us, so the first email is not a "reply".
   const started = request.data.origin === 'order' && !history.some(m => m.direction === 'incoming' && !m.id.startsWith('original:'));
   const replied = last ? `${started ? 'You emailed them' : 'Replied'} ${when(last.at)} ${last.how}` : '';
   if (request.status === 'deleted') return { stage: 'deleted', label: 'Deleted', since: request.created, when: 'Received ' + shortDate(request.created), late: false };
   if (request.status === 'spam') return { stage: 'spam', label: 'Spam', since: request.created, when: 'Received ' + shortDate(request.created), late: false };
+  if (uncertainSend) return { stage: 'waiting', label: 'Check sent status · do not resend', since: reply!.updated, when: 'Marked sent in Jarvis; receipt needs verification', late: false };
   if (sendPending(reply)) return { stage: 'sending', label: 'Sending…', since: reply!.approvedAt || reply!.updated, when: 'Received ' + shortDate(request.created), late: false };
   if (issue === 'vendor' || (!issue && looksLikePitch(request))) return { stage: 'pitch', label: issue === 'vendor' ? 'Sales pitch' : 'Looks like a sales pitch', since: request.created, when: 'Received ' + shortDate(request.created), late: false };
   if (issue === 'owner_review' && request.status !== 'resolved') return { stage: 'todo', label: 'Owner review required', since: request.created, when: 'Received ' + shortDate(request.created), late: false };
-  if (lastOut && !customerReplied) return { stage: request.status === 'resolved' ? 'done' : 'waiting', label: (request.status === 'resolved' ? 'Done · ' : 'Waiting on them · ') + replied, since: lastOut, when: replied, late: false };
+  if (lastOut && !customerReplied && !conversationReview) return { stage: request.status === 'resolved' ? 'done' : 'waiting', label: (request.status === 'resolved' ? 'Done · ' : 'Waiting on them · ') + replied, since: lastOut, when: replied, late: false };
   if (request.status === 'resolved' && !customerReplied) {
     const closed = [...activity].reverse().find(a => a.text.startsWith('Archived'));
     return { stage: 'done', label: 'Closed without reply' + (closed ? ` · ${shortDate(closed.at)}${closed.text.includes(' by ') ? ' by ' + personName(closed.text.split(' by ').pop()!, team) : ''}` : ''), since: closed?.at || request.created, when: 'Received ' + shortDate(request.created), late: false };
   }
   if (started) return { stage: 'followup', label: 'Optional follow-up · no customer message', since: request.created, when: 'Opened ' + shortDate(request.created), late: false };
   // Plain answer to "did we reply?" first, then what is waiting.
-  const base = customerReplied ? `Replied ${shortDate(lastOut)}, then they wrote again` : 'Not replied yet';
+  const base = customerReplied ? `Replied ${shortDate(lastOut)}, then they wrote again` : conversationReview ? 'Reply sent · check conversation' : 'No reply recorded';
   const state = base + (working(reply) ? (reply?.mode === 'ai' ? ' · AI is writing a draft' : ' · Saving draft') : reply?.status === 'ready' ? ' · draft ready for your approval' : reply?.status === 'needs_review' ? ' · draft needs a look' : '');
+  if (conversationReview && !customerReplied) return { stage: 'todo', label: base, since: lastOut, when: replied, late: false };
   const waited = now - lastIn;
   const days = Math.floor(waited / DAY);
   return { stage: 'todo', label: state, since: lastIn, when: (customerReplied ? 'Wrote ' : 'Received ') + shortDate(lastIn) + (days >= 1 ? ` · waiting ${days} day${days === 1 ? '' : 's'}` : ''), late: waited > DAY };
 }
 function friendlyReason(reason?: string) {
+  if (reason === 'local_sent_without_provider_receipt') return 'Jarvis marks this email as sent, but its send receipt is missing. Check sent mail before contacting this customer again. Sending is blocked.';
   if (reason === 'answered_elsewhere') return 'This conversation was already answered. Review before sending another reply.';
   if (reason === 'customer_replied') return 'The customer wrote again. Review their latest message before sending a new reply.';
   if (reason === 'retired_reply_policy_v2') return 'Old draft removed. Check the current history before writing a new message.';
@@ -637,7 +642,8 @@ function conversation({ row, draft, automation, options, attachmentRead, onRetry
   const website = websiteLink(request.data.website);
   const previousCoa = automation?.requests?.[request.id]?.coa;
   const writing = working(reply), aiWriting = writing && reply?.mode === 'ai', sending = sendPending(reply);
-  const locked = disabled || preparing || sending;
+  const uncertainSend = reply?.reason === 'local_sent_without_provider_receipt';
+  const locked = disabled || preparing || sending || uncertainSend;
   const conflict = Boolean(draft && draft.revision !== (reply?.revision ?? null));
   const fromOrder = request.data.origin === 'order';
   const allHistory = reply?.history?.length ? reply.history : [{ id: 'original:' + request.id, direction: 'incoming' as const, body: text(request.data.message), created: request.created }];
@@ -664,10 +670,10 @@ function conversation({ row, draft, automation, options, attachmentRead, onRetry
     : lastExternal ? { at: lastExternal.at, how: lastExternal.source === 'manual' ? 'by phone or text' : 'from Gmail' } : null;
   const firstName = name === email ? 'the customer' : name.split(/\s+/)[0] || 'the customer';
   // One list of every email in this conversation, each labelled in plain words: who wrote it, to whom, how, and who sent it.
-  type Item = { id: string; direction: 'incoming' | 'outgoing' | 'request'; created: number; body: string; title: string; detail: string; by?: string; attachment?: string; source?: 'recovery' };
+  type Item = { id: string; direction: 'incoming' | 'outgoing' | 'request'; created: number; body: string; title: string; detail: string; by?: string; attachment?: string; source?: 'recovery' | 'mailbox' };
   const deskItem = (m: ReplySummary['history'][number]): Item => ({ id: m.id, direction: 'outgoing', created: m.created, body: m.body, ...(m.source ? { source: m.source } : {}), title: m.source === 'recovery' ? 'Automatic checkout reminder' : 'You emailed ' + firstName,
-    by: m.source === 'recovery' ? 'accepted by email provider; delivery unconfirmed' : m.sentBy ? 'sent by ' + personName(m.sentBy, team) : 'sent from this reply desk',
-    detail: m.source === 'recovery' ? 'Accepted by the email provider. Inbox delivery is not confirmed.' : ['From ' + (m.from || sender) + ' to ' + (m.to || email), m.sentBy ? 'Sent by ' + personName(m.sentBy, team) : 'Sent from this reply desk', m.subject ? 'Subject: ' + m.subject : ''].filter(Boolean).join(' · '),
+    by: m.source === 'recovery' ? 'accepted by email provider; delivery unconfirmed' : m.source === 'mailbox' ? 'sent from Gmail' : m.sentBy ? 'sent by ' + personName(m.sentBy, team) : 'sent from this reply desk',
+    detail: m.source === 'recovery' ? 'Accepted by the email provider. Inbox delivery is not confirmed.' : ['From ' + (m.from || sender) + ' to ' + (m.to || email), m.source === 'mailbox' ? 'Sent from Gmail' : m.sentBy ? 'Sent by ' + personName(m.sentBy, team) : 'Sent from this reply desk', m.subject ? 'Subject: ' + m.subject : ''].filter(Boolean).join(' · '),
     ...(m.attachment ? { attachment: m.attachment } : {}) });
   const outsideItems = (list: ExternalReply[], tag: string): Item[] => list.map((e, i) => e.source === 'manual'
     ? { id: 'ext-' + tag + i + '-' + e.at, direction: 'outgoing', created: e.at, body: e.body + (e.preview ? ' …' : ''), title: 'Answered outside email', by: 'by phone or text', detail: 'Logged as answered by phone or text by ' + personName(e.account, team) }
@@ -716,11 +722,12 @@ function conversation({ row, draft, automation, options, attachmentRead, onRetry
   const verdict = (() => {
     if (request.status === 'deleted') return { tone: 'done', text: 'Deleted.', hint: 'Restore it if you need to answer.' };
     if (request.status === 'spam') return { tone: 'done', text: 'Marked as spam.', hint: 'Nothing to do.' };
+    if (uncertainSend) return { tone: 'done', text: 'Check sent status.', hint: 'Marked sent in Jarvis. Do not resend while we verify the receipt.' };
     if (sending) return { tone: 'done', text: 'Sending now.', hint: 'Nothing else to do.' };
     if (issue?.issue === 'owner_review' && request.status !== 'resolved') return { tone: 'todo', text: 'Owner review required.', hint: issue.note || 'An owner must review this case before sending.' };
     if (row.stage === 'pitch') return { tone: 'done', text: 'Sales pitch.', hint: 'No reply needed.' };
     if (fromOrder && !latestRequest) return { tone: 'done', text: 'Optional follow-up.', hint: outgoingContactCount ? 'Prior contact is recorded below. Check the purchase history before writing again.' : 'The customer has not written in. Check their history before contacting them.' };
-    if (row.stage === 'todo') return { tone: 'todo', text: sentCount ? 'Needs your reply.' : fromOrder ? 'Needs your first email.' : 'Needs your reply.', hint: sentCount ? 'The customer wrote again.' : 'No reply sent yet.' };
+    if (row.stage === 'todo') return { tone: 'todo', text: sentCount ? 'Needs your reply.' : fromOrder ? 'Needs your first email.' : 'Needs your reply.', hint: sentCount ? (row.label.includes('then they wrote again') ? 'The customer wrote again.' : 'A reply was sent. Check the conversation before writing again.') : 'No reply is recorded for this request.' };
     if (request.status === 'resolved') return { tone: 'done', text: 'Done. Nothing to do.', hint: `Archived. If ${firstName} writes back, it moves to Needs reply on its own.` };
     return { tone: 'done', text: `Waiting on ${firstName}.`, hint: `Nothing to do now. Archive it to clear it; if ${firstName} writes back, it moves to Needs reply on its own.` };
   })();
@@ -783,7 +790,7 @@ function conversation({ row, draft, automation, options, attachmentRead, onRetry
     {request.status === 'deleted' ? null : !canReply ? <p className={styles.warning}>No usable email address was saved, so there is no way to reply.</p> : !draft ? null : <div className={styles.composer}>
       <div className={styles.composeHead}><strong>Reply as Kim C.</strong><span>To {reply?.recipient || email}</span></div>
       {lastReplied && <p className={styles.replied} role="status">
-        Last recorded reply: {when(lastReplied.at)}{lastReplied.how ? ' ' + lastReplied.how : ''}. {row.stage === 'todo' ? firstName + ' wrote back since. ' : ''}Anything you write here goes out as a new email.
+        Last recorded reply: {when(lastReplied.at)}{lastReplied.how ? ' ' + lastReplied.how : ''}. {row.label.includes('then they wrote again') ? firstName + ' wrote back since. ' : ''}Anything you write here goes out as a new email.
       </p>}
       {coaForm && !attachedNow && !sending && <button type="button" className={styles.link} style={{ justifySelf: 'start' }} disabled={locked || writing || conflict} onClick={() => onDraft({ body: 'Hi, could you send a clear photo of your vial label showing the product name and lot number? I want to make sure I send you the correct lab report. Thank you.', coa: '', undo: draft.body || undefined, edited: true })}>Use a short request for a label photo</button>}
       {!draft.body.trim() && !writing && !attachedNow && <button type="button" className={styles.action} disabled={locked || conflict || (coaChoice !== '' && checkingAttachments)} onClick={() => onSubmit('ai')}>Create AI draft</button>}

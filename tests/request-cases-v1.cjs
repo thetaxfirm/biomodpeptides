@@ -93,6 +93,42 @@ const cases=require('../lib/request-cases.ts'),replies=require('../lib/request-r
  await replies.handleReplyBridge(env,{action:'external_replies',replies:[{...found,messageId:'gmail-legacy',subject:'Re: '+found.subject}]});
  legacy=(await ext.externalRepliesFor(env,[found.requestId]))[found.requestId].find(e=>e.body==='Preserved old contact');assert.equal(legacy.verified,true,'Exact recheck upgrades the link without rewriting saved mail');
  await assert.rejects(()=>replies.handleReplyBridge(env,{action:'external_replies',replies:[{...found,requestId:'not-a-uuid'}]}),e=>e.status===400);
+ // A reply in an older order thread can answer a duplicate website inquiry
+ // only with exact provider/account/recipient/order AND customer-text evidence.
+ const orderInquiry=()=>{
+  const requestId=randomUUID(),linkedId=randomUUID(),orderId=randomUUID(),threadId=randomUUID(),messageId=randomUUID(),email=requestId+'@example.invalid',created=Date.now()-10000;
+  const message='My order is under review. Is anything needed from me? Order '+orderId.slice(0,8);
+  const subject='Order '+orderId.slice(0,8),answer='Your order '+orderId.slice(0,8)+' is being checked by our team.';
+  sql.prepare('INSERT INTO orders(id,owner,request_key,status,total,data,created,updated) VALUES(?,?,?,?,?,?,?,?)').run(orderId,randomUUID(),randomUUID(),'review',1200,JSON.stringify({email,environment:'authorizenet:live'}),created-1000,created-1000);
+  sql.prepare("INSERT INTO requests(id,owner,kind,data,status,created) VALUES(?,NULL,'contact',?,'in_progress',?)").run(requestId,JSON.stringify({email,subject,message}),created);
+  sql.prepare("INSERT INTO requests(id,owner,kind,data,status,created) VALUES(?,NULL,'contact',?,'in_progress',?)").run(linkedId,JSON.stringify({email,subject:'Your fixture order is saved',origin:'order',orderId,message:'Internal order context'}),created-1000);
+  const incomingId=randomUUID(),incoming={body:message,created:created+1000,sender:email,recipient:'research@biomodpeptides.com'};
+  sql.prepare("INSERT INTO request_reply_messages(id,request_id,direction,body,created,provider_message_id,provider_thread_id,sender,recipient) VALUES(?,?,'outgoing',?,?,?,?,?,?)").run(randomUUID(),linkedId,answer,created+2000,messageId,threadId,'research@biomodpeptides.com',email);
+  return {requestId,linkedId,orderId,incomingId,incoming,insertIncoming(){sql.prepare("INSERT INTO request_reply_messages(id,request_id,direction,body,created,provider_message_id,provider_thread_id,sender,recipient) VALUES(?,?,'incoming',?,?,?,?,?,?)").run(incomingId,linkedId,incoming.body,incoming.created,randomUUID(),threadId,incoming.sender,incoming.recipient);},threadId,created,message,email,receipt:{requestId,recipient:email,subject:'Re: Your fixture order is saved',account:'research@biomodpeptides.com',messageId,providerThreadId:threadId,sentAt:created+2000,body:answer,preview:false}};
+ };
+ const matched=orderInquiry();matched.insertIncoming();assert.equal((await ext.recordMailboxReplies(env,[matched.receipt])).saved,1,'Exact inquiry in a verified linked order thread answers a changed-subject copy');
+ assert.equal(sql.prepare('SELECT status FROM requests WHERE id=?').get(matched.requestId).status,'resolved');assert.equal(sql.prepare('SELECT status FROM requests WHERE id=?').get(matched.linkedId).status,'in_progress','Association never changes the source thread case');
+ assert.equal((await ext.externalRepliesFor(env,[matched.requestId]))[matched.requestId][0].verified,true);
+ assert.equal((await ext.recordMailboxReplies(env,[matched.receipt])).saved,0,'Linked-thread receipt is idempotent');
+ const typography=orderInquiry();typography.incoming.body='  '+typography.message.toUpperCase().replaceAll(' ', '\n')+'  ';typography.insertIncoming();assert.equal((await ext.recordMailboxReplies(env,[typography.receipt])).saved,1,'Whitespace and case differences are not different inquiries');
+ for(const [label,change] of [
+  ['missing provider thread',x=>delete x.receipt.providerThreadId],
+  ['different provider thread',x=>x.receipt.providerThreadId=randomUUID()],
+  ['preview only',x=>x.receipt.preview=true],
+  ['different mailbox',x=>x.receipt.account='contact@trybiomod.com'],
+  ['different reply body',x=>x.receipt.body='Different saved content'],
+  ['unverified provider message',x=>x.receipt.messageId=randomUUID()],
+  ['different question about same order',x=>x.incoming.body='Please refund order '+x.orderId.slice(0,8)],
+  ['old inquiry only quoted',x=>x.incoming.body='A different question.\nOn Monday someone wrote:\n'+x.message],
+  ['customer asked again after answer',x=>x.incoming.created=x.receipt.sentAt+1],
+  ['inquiry predates the submitted question',x=>x.incoming.created=x.created-120000],
+  ['wrong incoming sender',x=>x.incoming.sender='other@example.invalid'],
+  ['wrong incoming mailbox',x=>x.incoming.recipient='contact@trybiomod.com'],
+  ['order belongs to another customer',x=>sql.prepare("UPDATE orders SET data=json_set(data,'$.email','other@example.invalid') WHERE id=?").run(x.orderId)],
+  ['thread belongs to another order',x=>sql.prepare("UPDATE requests SET data=json_set(data,'$.orderId',?) WHERE id=?").run(randomUUID(),x.linkedId)],
+  ['ambiguous duplicate support inquiry',x=>sql.prepare("INSERT INTO requests(id,owner,kind,data,status,created) SELECT ?,NULL,'contact',data,'new',created FROM requests WHERE id=?").run(randomUUID(),x.requestId)],
+  ['ambiguous short order number',x=>sql.prepare('INSERT INTO orders(id,owner,request_key,status,total,data,created,updated) SELECT ?,?,?,status,total,data,created,updated FROM orders WHERE id=?').run(x.orderId.slice(0,8)+randomUUID().slice(8),randomUUID(),randomUUID(),x.orderId)],
+ ]){const candidate=orderInquiry();change(candidate);candidate.insertIncoming();assert.equal((await ext.recordMailboxReplies(env,[candidate.receipt])).saved,0,label+' does not prove an answer');assert.equal(sql.prepare('SELECT status FROM requests WHERE id=?').get(candidate.requestId).status,'in_progress',label+' preserves case state');}
  await assert.rejects(()=>ext.markReplied(env,{requestId:wb.requestId},{email:'f@example.invalid',role:'fulfillment'}),e=>e.status===403);
  await ext.markReplied(env,{requestId:wb.requestId,note:'Called him'},owner);extList=(await ext.externalRepliesFor(env,[wb.requestId]))[wb.requestId];assert.equal(extList.find(e=>e.source==='manual').body,'Called him');
  // A verified outside answer retires only this case's pending approval, atomically with the receipt.
@@ -111,6 +147,7 @@ const cases=require('../lib/request-cases.ts'),replies=require('../lib/request-r
   else {assert.equal(after.status,'needs_review');assert.equal(after.revision,before.revision+1);assert.equal(after.body,before.body);assert.equal(after.proposed_body,before.proposed_body);assert.equal(after.reason,'answered_elsewhere');for(const k of ['ready_id','approved_at','approved_by','lease_token','lease_until'])assert.equal(after[k],null,k+' is invalidated');}
   assert.equal(sql.prepare('SELECT status FROM requests WHERE id=?').get(c.requestId).status,'resolved');
  }
+ const uncertain=await externalCase('needs_review');sql.prepare("UPDATE request_reply_drafts SET reason='local_sent_without_provider_receipt' WHERE id=?").run(uncertain.id);const uncertainBefore=uncertain.read();await ext.recordMailboxReplies(env,[uncertain.receipt]);assert.deepEqual(uncertain.read(),uncertainBefore,'Outside answers preserve unresolved local-send evidence');
  const own=await externalCase(),other=await externalCase();
  // Same email cannot collapse unrelated questions or their send approvals.
  sql.prepare("UPDATE requests SET data=json_set(data,'$.email',?) WHERE id=?").run(own.receipt.recipient,other.requestId);
