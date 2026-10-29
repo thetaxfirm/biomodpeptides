@@ -76,13 +76,59 @@ const cases=require('../lib/request-cases.ts'),replies=require('../lib/request-r
  const ext=require('../lib/request-external.ts');
  const open=(await replies.handleReplyBridge(env,{action:'open_requests'})).requests;assert(open.some(r=>r.id===wb.requestId&&r.email==='cart@example.invalid'));
  const created=sql.prepare('SELECT created FROM requests WHERE id=?').get(wb.requestId).created;
- const found={requestId:wb.requestId,account:'contact@trybiomod.com',messageId:'gmail-1',sentAt:created+1000,body:'Sent from Gmail',preview:false};
+ const found={recipient:'cart@example.invalid',subject:JSON.parse(sql.prepare('SELECT data FROM requests WHERE id=?').get(wb.requestId).data).subject,requestId:wb.requestId,account:'contact@trybiomod.com',messageId:'gmail-1',sentAt:created+1000,body:'Sent from Gmail',preview:false};
  await replies.handleReplyBridge(env,{action:'external_replies',replies:[found,found,{...found,messageId:'gmail-old',sentAt:created-3600000}]});
  sql.prepare("INSERT INTO request_reply_messages(id,request_id,direction,body,created,provider_message_id,provider_thread_id,sender,recipient) VALUES('m1',?,'outgoing','desk',?,'gmail-desk',NULL,'contact@trybiomod.com','cart@example.invalid')").run(wb.requestId,created+5);
  await replies.handleReplyBridge(env,{action:'external_replies',replies:[{...found,messageId:'gmail-desk'}]});
+ await replies.handleReplyBridge(env,{action:'external_replies',replies:[{...found,messageId:'unrelated-subject',subject:'Unrelated question'},{...found,messageId:'wrong-recipient',recipient:'other@example.invalid'},{...found,messageId:'personal-mailbox',account:'personal@example.invalid'},{...found,messageId:'missing-subject',subject:undefined}]});
  let extList=(await ext.externalRepliesFor(env,[wb.requestId]))[wb.requestId];assert.equal(extList.length,1,'One per message; old mail and desk sends ignored');assert.equal(extList[0].account,'contact@trybiomod.com');
+ assert.equal(extList[0].verified,true,'Exact-subject business reply is verified for this case');
+ const duplicateReply=await replies.handleReplyBridge(env,{action:'external_replies',replies:[found]});assert.equal(duplicateReply.saved,0,'Repeated checked message has no new mutation');
+ const ambiguous=randomUUID();sql.prepare("INSERT INTO requests(id,owner,kind,data,status,created) VALUES(?,NULL,'contact',?,'new',?)").run(ambiguous,JSON.stringify({email:found.recipient,subject:'Re: '+found.subject,message:'Another case'}),created);
+ await replies.handleReplyBridge(env,{action:'external_replies',replies:[{...found,messageId:'ambiguous-case'}]});assert.equal(sql.prepare("SELECT COUNT(*) n FROM request_external_replies WHERE message_id='ambiguous-case'").get().n,0,'Same-subject cases are not guessed');
+ sql.prepare('DELETE FROM requests WHERE id=?').run(ambiguous);
+ const legacyId=await require('../lib/coa-delivery.ts').coaHash('mailbox:'+found.account+':gmail-legacy:'+found.requestId);
+ sql.prepare("INSERT INTO request_external_replies(id,request_id,source,account,message_id,sent_at,body,preview,recorded_by,created) VALUES(?,?,'mailbox',?,'gmail-legacy',?,'Preserved old contact',0,'Jarvis mailbox check',?)").run(legacyId,found.requestId,found.account,found.sentAt,created);
+ let legacy=(await ext.externalRepliesFor(env,[found.requestId]))[found.requestId].find(e=>e.body==='Preserved old contact');assert.equal(legacy.verified,false,'Old email-only associations remain visible but are not proof of an answer');
+ await replies.handleReplyBridge(env,{action:'external_replies',replies:[{...found,messageId:'gmail-legacy',subject:'Re: '+found.subject}]});
+ legacy=(await ext.externalRepliesFor(env,[found.requestId]))[found.requestId].find(e=>e.body==='Preserved old contact');assert.equal(legacy.verified,true,'Exact recheck upgrades the link without rewriting saved mail');
  await assert.rejects(()=>replies.handleReplyBridge(env,{action:'external_replies',replies:[{...found,requestId:'not-a-uuid'}]}),e=>e.status===400);
  await assert.rejects(()=>ext.markReplied(env,{requestId:wb.requestId},{email:'f@example.invalid',role:'fulfillment'}),e=>e.status===403);
  await ext.markReplied(env,{requestId:wb.requestId,note:'Called him'},owner);extList=(await ext.externalRepliesFor(env,[wb.requestId]))[wb.requestId];assert.equal(extList.find(e=>e.source==='manual').body,'Called him');
+ // A verified outside answer retires only this case's pending approval, atomically with the receipt.
+ const externalCase=async(status='ready')=>{
+  const requestId=randomUUID(),created=Date.now()-10000,email=requestId+'@example.invalid',subject='Outside answer '+requestId;
+  sql.prepare("INSERT INTO requests(id,owner,kind,data,status,created) VALUES(?,NULL,'contact',?,'in_progress',?)").run(requestId,JSON.stringify({email,subject,message:'Synthetic request'}),created);
+  const draft=await replies.prepareRequestReply(env,{requestId,mode:'staff',body:'Preserved draft',expectedRevision:null},owner);
+  sql.prepare('UPDATE request_reply_drafts SET status=?,body=?,approved_at=?,approved_by=?,ready_id=?,lease_token=?,lease_until=?,send_locked_at=? WHERE id=?').run(status,'Preserved draft',created+1,owner.email,randomUUID(),randomUUID(),Date.now()+60000,status==='sending'?created+2:null,draft.id);
+  return {requestId,id:draft.id,read:()=>sql.prepare('SELECT * FROM request_reply_drafts WHERE id=?').get(draft.id),receipt:{requestId,recipient:email,subject,account:'contact@trybiomod.com',messageId:randomUUID(),sentAt:created+1000,body:'Actual outside answer',preview:false}};
+ };
+ for(const status of ['queued','preparing','ready','needs_review','sent','sending','cancelled']){
+  const c=await externalCase(status),before=c.read();
+  const receipt=await ext.recordMailboxReplies(env,[c.receipt]);assert.equal(receipt.saved,1);
+  const after=c.read();
+  if(['sent','sending','cancelled'].includes(status))assert.deepEqual(after,before,'External contact preserves '+status+' history and uncertain outcomes');
+  else {assert.equal(after.status,'needs_review');assert.equal(after.revision,before.revision+1);assert.equal(after.body,before.body);assert.equal(after.proposed_body,before.proposed_body);assert.equal(after.reason,'answered_elsewhere');for(const k of ['ready_id','approved_at','approved_by','lease_token','lease_until'])assert.equal(after[k],null,k+' is invalidated');}
+  assert.equal(sql.prepare('SELECT status FROM requests WHERE id=?').get(c.requestId).status,'resolved');
+ }
+ const own=await externalCase(),other=await externalCase();
+ // Same email cannot collapse unrelated questions or their send approvals.
+ sql.prepare("UPDATE requests SET data=json_set(data,'$.email',?) WHERE id=?").run(own.receipt.recipient,other.requestId);
+ const unrelatedBefore=other.read();await ext.markReplied(env,{requestId:own.requestId,note:'Answered by phone'},owner);
+ assert.equal(own.read().reason,'answered_elsewhere');assert.deepEqual(other.read(),unrelatedBefore);assert.equal(sql.prepare('SELECT status FROM requests WHERE id=?').get(other.requestId).status,'in_progress');
+ const replay=await externalCase();await ext.recordMailboxReplies(env,[replay.receipt]);
+ await replies.prepareRequestReply(env,{requestId:replay.requestId,mode:'staff',body:'Intentional newer reply',expectedRevision:replay.read().revision,send:true},owner);
+ const newBefore=replay.read();assert.equal((await ext.recordMailboxReplies(env,[replay.receipt])).saved,0);assert.deepEqual(replay.read(),newBefore,'Duplicate mailbox import never retires a newly prepared reply');assert.equal(sql.prepare('SELECT status FROM requests WHERE id=?').get(replay.requestId).status,'in_progress');
+ await assert.rejects(()=>ext.recordMailboxReplies(env,[{...replay.receipt,sentAt:replay.receipt.sentAt+1}]),e=>e.status===409,'A receipt cannot change its timestamp to supersede newer messages');assert.deepEqual(replay.read(),newBefore);
+ for(const offset of [0,1]){
+  const delayed=await externalCase();sql.prepare("INSERT INTO request_reply_messages(id,request_id,direction,body,created,sender,recipient,provider_message_id) VALUES(?,?,'incoming','New question',?,?,?,?)").run(randomUUID(),delayed.requestId,delayed.receipt.sentAt+offset,delayed.receipt.recipient,'contact@trybiomod.com',randomUUID());
+  const before=delayed.read();await ext.recordMailboxReplies(env,[delayed.receipt]);assert.deepEqual(delayed.read(),before,'Older or equal-time external mail does not answer the latest question');assert.equal(sql.prepare('SELECT status FROM requests WHERE id=?').get(delayed.requestId).status,'in_progress');
+ }
+ const upgraded=await externalCase();const upgradeId=await require('../lib/coa-delivery.ts').coaHash('mailbox:'+upgraded.receipt.account+':'+upgraded.receipt.messageId+':'+upgraded.requestId);
+ sql.prepare("INSERT INTO request_external_replies(id,request_id,source,account,message_id,sent_at,body,preview,recorded_by,created) VALUES(?,?,'mailbox',?,?,?,'Preserve legacy evidence',1,'Jarvis mailbox check',?)").run(upgradeId,upgraded.requestId,upgraded.receipt.account,upgraded.receipt.messageId,upgraded.receipt.sentAt,upgraded.receipt.sentAt);
+ assert.equal((await ext.recordMailboxReplies(env,[upgraded.receipt])).saved,1);assert.equal(upgraded.read().reason,'answered_elsewhere');assert.equal(sql.prepare('SELECT body FROM request_external_replies WHERE id=?').get(upgradeId).body,'Preserve legacy evidence');
+ const rollback=await externalCase(),beforeRollback=rollback.read();sql.exec("CREATE TRIGGER fixture_reject_outside BEFORE INSERT ON request_external_replies BEGIN SELECT RAISE(ABORT,'Fixture receipt failure'); END");
+ await assert.rejects(()=>ext.recordMailboxReplies(env,[rollback.receipt]),/Fixture receipt failure/);assert.deepEqual(rollback.read(),beforeRollback);assert.equal(sql.prepare('SELECT status FROM requests WHERE id=?').get(rollback.requestId).status,'in_progress','Failed recording rolls back both draft and case changes');sql.exec('DROP TRIGGER fixture_reject_outside');
+ assert.equal(sql.prepare('SELECT COUNT(*) n FROM change_context').get().n,0);
  console.log('PASS: one conversation per order with staff-only order context, order subject kept, issue + resolutions validated, issue-scoped rules and the decided case reach the AI, case log for rules. Isolated SQLite, no email.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

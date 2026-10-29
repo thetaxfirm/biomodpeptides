@@ -41,11 +41,17 @@ const {overdueCustomers,runOverdueDigest}=require('../lib/reply-overdue.ts');
  add({name:'Clock reset',email:'reset@example.invalid',subject:'New follow-up',message:'New question'},now-3600000);
  assert(!(await overdueCustomers(env,now)).some(w=>w.email==='reset@example.invalid'),'Old answered row cannot make a recent question overdue');
  const resetWait=(await overdueCustomers(env,now+2*day)).find(w=>w.email==='reset@example.invalid');assert(resetWait);assert.equal(resetWait.since,now-3600000);assert.equal(resetWait.subject,'New follow-up');assert.equal(resetWait.count,1,'Only unanswered requests count');
- // A reply or phone note recorded on a closed sibling still answers the same customer's earlier question.
+ // A reply or phone note on another case is contact history, not proof this case was answered.
  const stillOpen=add({name:'Sibling answered',email:'sibling@example.invalid',subject:'Question',message:'Question'},now-5*day);
  const closedSibling=add({name:'Sibling answered',email:' SIBLING@EXAMPLE.INVALID ',subject:'Related question',message:'Related'},now-4*day,'resolved');
  sql.prepare("INSERT INTO request_external_replies(id,request_id,source,account,sent_at,body,recorded_by,created) VALUES('closed-sibling-note',?,'manual','owner@example.invalid',?,'Synthetic call note','owner@example.invalid',?)").run(closedSibling,now-3*day,now);
- assert(!(await overdueCustomers(env,now)).some(w=>w.email==='sibling@example.invalid'),'Closed-sibling contact is considered without merging other customers');
+ assert((await overdueCustomers(env,now)).some(w=>w.email==='sibling@example.invalid'),'A separate case stays unanswered even for the same email');
+ // Legacy email-only mailbox associations are not proof that a case was answered.
+ const legacy=add({name:'Legacy association',email:'legacy@example.invalid',subject:'Unanswered question',message:'Question'},now-3*day);
+ sql.prepare("INSERT INTO request_external_replies(id,request_id,source,account,sent_at,body,recorded_by,created) VALUES('legacy-mail',?,'mailbox','contact@trybiomod.com',?,'Unrelated email','Jarvis mailbox check',?)").run(legacy,now-2*day,now);
+ assert((await overdueCustomers(env,now)).some(w=>w.email==='legacy@example.invalid'));
+ sql.prepare("UPDATE request_external_replies SET recorded_by='Jarvis exact conversation check' WHERE id='legacy-mail'").run();
+ assert(!(await overdueCustomers(env,now)).some(w=>w.email==='legacy@example.invalid'));
  // The sent conversation remains resolved in storage when mailbox follow-ups arrive; real unanswered replies still surface.
  const repliedAgain=add({name:'Wrote again',email:'return@example.invalid',origin:'order',subject:'A real later question',message:'Internal context'},now-8*day,'resolved');
  sql.prepare("INSERT INTO request_reply_messages(id,request_id,direction,body,created,provider_message_id,sender,recipient) VALUES('closed-answer',?,'outgoing','Synthetic answer',?,'closed-answer','contact@trybiomod.com','return@example.invalid')").run(repliedAgain,now-4*day);

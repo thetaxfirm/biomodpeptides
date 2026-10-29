@@ -1,0 +1,15 @@
+# Matched COA replies and conversation tracking, October 28, 2026
+
+The owner reported that a verified, attached COA still produced a draft asking the customer to confirm a matching lot number. This release removes the obsolete writer instruction and makes verified current attachment facts authoritative over old generated notes and drafts. Lot comparison continues to ignore dashes and spaces without changing digits or letters.
+
+A matched website COA form now prepares a factual Kim C. reply in the visible email editor. Untouched obsolete mismatch text is replaced; employee edits are preserved. Contradictory text is blocked in the editor and in server preparation/send validation. The full email grows to fit its content. Immediately below it, the employee sees the verified PDF filename, product, printed lot and original-PDF preview, followed by one Send action. AI rewriting is optional. The generic existing BIOMOD15 offer can be added explicitly for 15% off a next purchase. Its pricing rules are unchanged; no expiry or single-use restriction is invented.
+
+The visible inbox refreshes connection status while it is open, so an old cached heartbeat cannot falsely say Jarvis has stopped. Refreshing does not replace unsaved replies.
+
+Each request has its own conversation and completion state. A response to another case from the same email address does not close this one. Verified returns reopen the correct request and invalidate stale unsent drafts and approvals, while retaining message history and protecting in-flight provider outcomes. Duplicate import retries do not invalidate a newer draft. Later verified outside answers are considered before reopening delayed mail. Legacy email-only associations remain internal evidence rather than proof that a specific request was answered.
+
+The local Jarvis bridge preserves verified reply threading. Missing cached text is read from the same verified business mailbox, message and thread. Attachment-only returns become a visible notice with an original-email link; no attachment contents are inferred. Entirely new threads or different sender addresses are not automatically guessed into an existing case. Mailbox synchronization must be current; unavailable access is not treated as no replies. The Mac must be awake and online for the local bridge.
+
+Affected consumers: /admin?tab=requests, /admin?tab=today, request draft/approval/send endpoints, overdue counts and the local Jarvis reply bridge. Original COA bytes, historical messages, purchase records, pricing, stock, credentials and roles are preserved. No real email or test order is sent by verification, and no customer-specific external AI test is performed. The stopped change-history importer is not run.
+
+Verification uses isolated component, SQLite and provider mocks, the complete release gate, production build, built Worker checks, and desktop/mobile preview. Exact source, deployment, activation checks and remaining authenticated/provider gaps are recorded separately in the versioned release receipt. Provider acceptance is not inbox delivery. No unattended customer sending is enabled.
