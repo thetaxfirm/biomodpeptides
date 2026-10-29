@@ -1,0 +1,112 @@
+{
+  "checked_at": "2026-10-29T08:28:45.611905+00:00",
+  "method": "HEAD",
+  "results": [
+    {
+      "url": "https://biomodpeptides.com/shop/",
+      "headers": [
+        "HTTP/2 301 ",
+        "content-type: text/html",
+        "location: https://trybiomod.com/shop",
+        "HTTP/2 200 ",
+        "content-type: text/html; charset=utf-8"
+      ],
+      "exit_code": 0
+    },
+    {
+      "url": "https://www.biomodpeptides.com/shop/",
+      "headers": [
+        "HTTP/2 301 ",
+        "content-type: text/html",
+        "location: https://trybiomod.com/shop",
+        "HTTP/2 200 ",
+        "content-type: text/html; charset=utf-8"
+      ],
+      "exit_code": 0
+    },
+    {
+      "url": "https://biomodpeptides.com/product/bpc-157-10mg/",
+      "headers": [
+        "HTTP/2 301 ",
+        "content-type: text/html",
+        "location: https://trybiomod.com/product/bpc-157-10mg",
+        "HTTP/2 200 ",
+        "content-type: text/html; charset=utf-8"
+      ],
+      "exit_code": 0
+    },
+    {
+      "url": "https://biomodpeptides.com/faq/",
+      "headers": [
+        "HTTP/2 301 ",
+        "content-type: text/html",
+        "location: https://trybiomod.com/faq",
+        "HTTP/2 200 ",
+        "content-type: text/html; charset=utf-8"
+      ],
+      "exit_code": 0
+    },
+    {
+      "url": "https://biomodpeptides.com/shop/?measurement=off&source=redirect-check",
+      "headers": [
+        "HTTP/2 301 ",
+        "content-type: text/html",
+        "location: https://trybiomod.com/shop?measurement=off&source=redirect-check",
+        "HTTP/2 200 ",
+        "content-type: text/html; charset=utf-8"
+      ],
+      "exit_code": 0
+    },
+    {
+      "url": "http://biomodpeptides.com/shop/",
+      "headers": [
+        "HTTP/1.1 301 Moved Permanently",
+        "Content-Type: text/html",
+        "Location: https://biomodpeptides.com/shop/",
+        "HTTP/2 301 ",
+        "content-type: text/html",
+        "location: https://trybiomod.com/shop",
+        "HTTP/2 200 ",
+        "content-type: text/html; charset=utf-8"
+      ],
+      "exit_code": 0
+    },
+    {
+      "url": "https://biomodpeptides.com/coa/",
+      "headers": [
+        "HTTP/2 301 ",
+        "content-type: text/html",
+        "location: https://trybiomod.com/coa",
+        "HTTP/2 308 ",
+        "location: /testing",
+        "HTTP/2 200 ",
+        "content-type: text/html; charset=utf-8"
+      ],
+      "exit_code": 0
+    },
+    {
+      "url": "https://biomodpeptides.com/googlecfdf6da9aff93def.html",
+      "headers": [
+        "HTTP/2 200 ",
+        "content-type: text/html"
+      ],
+      "exit_code": 0
+    },
+    {
+      "url": "https://www.biomodpeptides.com/googlecfdf6da9aff93def.html",
+      "headers": [
+        "HTTP/2 200 ",
+        "content-type: text/html"
+      ],
+      "exit_code": 0
+    },
+    {
+      "url": "https://biomodpeptides.com/wp-content/uploads/2026/05/BPC-157_10-mg.pdf",
+      "headers": [
+        "HTTP/2 200 ",
+        "content-type: application/pdf"
+      ],
+      "exit_code": 0
+    }
+  ]
+}
