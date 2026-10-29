@@ -47,12 +47,18 @@ const checkedAdmin = () => assert(called('admin-ok').length, 'Admin authorizatio
 const status = value => ({ status: value, reason: value === 'accepted' ? 'accepted_by_email_provider' : 'fixture', acceptedAt: value === 'accepted' ? now : null, canProcess: value === 'queued' });
 // The contact route reads the customer's vial lot with the real parser; every other COA-delivery call stays forbidden here.
 if (!require.extensions['.ts']) require.extensions['.ts'] = (m, f) => m._compile(ts.transpileModule(fs.readFileSync(f, 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText, f);
-const realNormalizeLot = require('../lib/coa-delivery.ts').normalizeLot;
-const coaDeliveryStrict = new Proxy({}, { get: (_, key) => key === '__esModule' ? true : key === 'normalizeLot' ? realNormalizeLot : forbidden('@/lib/coa-delivery:' + String(key)) });
+const realNormalizeLot = require('../lib/coa-delivery.ts').normalizeLot, realHasInvalidLabelLot = require('../lib/coa-delivery.ts').hasInvalidLabelLot;
+const coaDeliveryStrict = new Proxy({}, { get: (_, key) => key === '__esModule' ? true : key === 'normalizeLot' ? realNormalizeLot : key === 'hasInvalidLabelLot' ? realHasInvalidLabelLot : forbidden('@/lib/coa-delivery:' + String(key)) });
 const dependencies = {
   '@/lib/coa-delivery': coaDeliveryStrict,
   '@/lib/request-replies': (m=>Object.assign(m,{autoDraftNewRequest:(e,id)=>m.prepareRequestReply(e,{requestId:id,mode:'ai',expectedRevision:null},{email:'Website request automation',role:'system'})}))({
     summarizeRequestReplies: async(receivedEnv,ids)=>{checkedAdmin();assert.equal(receivedEnv,env);return {};},
+    previewReplyAttachments: async(receivedEnv,input,actor)=>{
+      checkedAdmin();assert.equal(receivedEnv,env);assert.deepEqual(input,{id:requestId,requestId,expectedRevision:null,coaSha256:''});assert.equal(actor.email,account.email);note('preview-attachments',input);
+      if(scenario.previewFailure==='conflict')throw Object.assign(Error('Reply revision changed.'),{status:409});
+      if(scenario.previewFailure==='unexpected')throw Error('PRIVATE_ATTACHMENT_FAILURE');
+      return {requestId,revision:null,coaChoice:'',coa:{state:'not_requested',reason:'No report attached.'},checkedAt:now};
+    },
     prepareRequestReply: async(receivedEnv,input,actor)=>{
       assert.deepEqual(receivedEnv,env);assert(saved.has(input.requestId));
       if(scenario.publicRequest){assert(draining && responseReturned);assert.deepEqual(actor,{email:'Website request automation',role:'system'});assert.deepEqual(input,{requestId,mode:'ai',expectedRevision:null});}
@@ -135,7 +141,7 @@ const dependencies = {
 };
 // Staff-role compatibility: the routes call requireStaff(permission); these fixtures model an
 // owner (full access), so delegate to the existing requireAdmin stub and its call log.
-dependencies['@/lib/auth'].requireStaff = async () => ({ ...(await dependencies['@/lib/auth'].requireAdmin()), role: 'owner' });
+dependencies['@/lib/auth'].requireStaff = async permission => { if(scenario.attachmentCheck)assert.equal(permission,'requests:write');return { ...(await dependencies['@/lib/auth'].requireAdmin()), role: 'owner' }; };
 dependencies['@/lib/auth'].staffRole = async () => null;
 dependencies['@/lib/staff'] = require('./staff-module-fixture.cjs').loadStaffModule();
 dependencies['@/lib/staff-store'] = { staffDirectory: async () => { checkedAdmin(); return { ready: true, owners: [], staff: [], audit: [] }; }, saveStaffMember: async () => { throw Error('Staff writes are outside this suite'); } };
@@ -197,6 +203,12 @@ async function request(action, data, headers = {}) {
     assert.deepEqual(JSON.parse(saved.get(requestId).data), contact); assert.equal(saved.get(requestId).owner, null); assert.equal(saved.get(requestId).kind, 'contact');
     assert(!JSON.stringify(result.body).includes('PRIVATE_')); assert(!Object.hasOwn(result.body, 'status'));
     await drainAfter(); assertBackground('contact');
+  }
+  for(const labelLot of ['102300001','102 30 0001']) {
+    reset({role:'signedout',publicRequest:true});result=await request('contact',{...contact,labelLot});assert.equal(result.status,200);assert.equal(JSON.parse(saved.get(requestId).data).labelLot,realNormalizeLot(labelLot));await drainAfter();
+  }
+  for(const labelLot of ['102/30/0001','102.30.0001','102\n30\n0001',123]) {
+    reset({role:'signedout',publicRequest:true});result=await request('contact',{...contact,labelLot});assert.equal(result.status,400);assert.equal(called('persist').length,0);assert.equal(called('enqueue-coa').length,0);assert.equal(afterJobs.length,0,'Invalid lot cannot be dropped and replaced by the subject lot');
   }
   // Queue persistence must settle before callback registration; otherwise a fast
   // callback could run before its durable job exists and miss the first attempt.
@@ -265,6 +277,12 @@ async function request(action, data, headers = {}) {
     assert.equal(result.status,prepareFailure?409:200);assert.equal(called('prepare-reply').length,1);assert.equal(called('process-coa').length,0);
     if(!prepareFailure)assert.equal(result.body.reply.status,'queued');
   }
+  // Attachment checks use normal staff authorization and same-origin protection, with no draft/send side effect.
+  const previewInput={id:requestId,expectedRevision:null,coaSha256:''};
+  for(const role of ['signedout','customer']){reset({role,attachmentCheck:true});result=await request('admin-reply-attachments',previewInput);assert.equal(result.status,400);assert.equal(called('preview-attachments').length,0);}
+  reset({attachmentCheck:true});result=await request('admin-reply-attachments',previewInput,{origin:'https://outside.example.invalid'});assert.equal(result.status,403);assert.equal(calls.length,0);
+  for(const input of [{...previewInput,id:'bad'},{...previewInput,expectedRevision:0},{...previewInput,coaSha256:'x'.repeat(331)},{id:requestId}]){reset({attachmentCheck:true});result=await request('admin-reply-attachments',input);assert.equal(result.status,400);assert.equal(called('preview-attachments').length,0);}
+  for(const previewFailure of [false,'conflict','unexpected']){reset({attachmentCheck:true,previewFailure});result=await request('admin-reply-attachments',{...previewInput,recipient:'intruder@example.invalid',sender:'forged@example.invalid',send:true,body:'Must not draft'});assert.equal(result.status,previewFailure==='conflict'?409:previewFailure==='unexpected'?500:200);assert.equal(called('preview-attachments').length,1);assert.equal(called('prepare-reply').length,0);assert.equal(called('process-coa').length,0);assert.equal(called('after-register').length,0);assert(!JSON.stringify(result.body).includes('PRIVATE_ATTACHMENT_FAILURE'));if(!previewFailure)assert.equal(result.body.coa.state,'not_requested');}
   assert.equal(forbiddenCalls, 0);
   console.log('PASS: actual COA API routes authorize before sensitive reads/writes; same-origin/body gates; validated settings and request ID only; inquiry persistence survives enqueue/registration/background failures; explicit after-response per-inquiry delivery; draft-only review queue and retired direct-send rejection; no network, real records or commerce mutations.');
 })().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => { global.fetch = oldFetch; });

@@ -1,5 +1,5 @@
 // Simple reply box: the box empties after a send, a clear "You replied" line, and the
-// AI tools sit under one toggle; COAs stay visible beside the reply. Source-level checks, no network.
+// AI creation and verified COAs are visible before sending. Source-level checks, no network.
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),ts=require('typescript');
 const src=fs.readFileSync(path.join(__dirname,'..','components/store/request-inbox.tsx'),'utf8');
 const take=name=>{const m=src.match(new RegExp('function '+name+'\\([\\s\\S]*?\\n}\\n'));assert(m,name+' exists');return ts.transpileModule(m[0],{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText;};
@@ -23,12 +23,13 @@ assert.doesNotMatch(src,/'Sent ' \+ when\(reply\.updated\) \+ '\. Accepted by th
 assert.doesNotMatch(src,/Last reply sent \{when/);
 assert.match(src,/Write a new message to \$\{firstName\}/);
 
-// Attachments stay visible before Send; AI writing remains optional.
+// The draft action is visible before the editor, outside optional tools.
 const sendAt=src.indexOf("onClick={() => onSubmit('staff', true)}"),moreAt=src.indexOf('<details className={styles.more}');
-assert(sendAt>0&&moreAt>sendAt,'Send comes before More options');
-const more=src.slice(moreAt,src.indexOf('</details>',moreAt));
-for(const tool of ['Follow-up suggestions','replyInstruction','Dictate','Rewrite','Tailor','Remember this instruction','Insert code'])assert(more.includes(tool),tool+' is inside More options');
-assert.match(src,/const moreOpen = listening \|\| writing/,'Opens for active AI or dictation');
-assert(src.indexOf('aria-label="COA attachments"')<sendAt,'COAs appear before sending');
-assert(!more.includes('Attach COA PDF'),'COA selection is not hidden with AI tools');
+assert(sendAt>0&&moreAt>sendAt);
+assert(src.indexOf('Create AI draft')<src.indexOf('name="replyBody"'));
+assert(src.indexOf('aria-label="COA attachments"')<sendAt);
+const label=new Function(take('coaProductLabel')+';return coaProductLabel;')();
+assert.equal(label({productName:'Fixture 30mg',strength:'30 mg'}),'Fixture 30mg');
+assert.equal(label({productName:'Fixture',strength:'30 mg'}),'Fixture 30 mg');
+assert.equal(newDraft({status:'sent',revision:2,coaChoice:'old-sha'}).coa,'','A sent attachment is not silently reused');
 console.log('reply-simple-v1: ok');

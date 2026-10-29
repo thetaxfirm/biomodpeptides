@@ -1,7 +1,7 @@
 // Owner request, October 13, 2026: "Request by email" sends the customer a private link to the
-// original COA right away. Only the original report attached to the product's current lot is ever
-// linked, the link expires, and the PDF is served only after its hash is re-verified.
-import { coaEmail, coaHash, coaReportByHash, coaSender, normalizeLot, readCoaOriginal, verifiedCoaAttachment, type OriginalCoaMetadata } from './coa-delivery';
+// original COA right away. The report follows the lot on the customer's vial; the link
+// expires, and the PDF is served only after its hash is re-verified.
+import { coaEmail, coaHash, coaReportByHash, coaSender, normalizeLot, resolveLotOriginal, readCoaOriginal, verifiedCoaAttachment, type OriginalCoaMetadata } from './coa-delivery';
 export { normalizeLot } from './coa-delivery';
 import { loadCoaBatchContext } from './product-batch';
 import { customerMailFrom, CUSTOMER_MAIL_SIGNATURE_TEXT, CUSTOMER_MAIL_SIGNATURE_HTML } from './customer-mail';
@@ -30,11 +30,10 @@ export async function currentCoaFor(db: D1Database, productId: number): Promise<
  */
 export async function coaForLabelLot(db: D1Database, productId: number, lot: string): Promise<{ report: OriginalCoaMetadata | null; current: OriginalCoaMetadata | null }> {
     const current = await currentCoaFor(db, productId);
-    if (current && current.lot.toUpperCase() === lot) return { report: current, current };
     const { originals, associations } = await loadCoaBatchContext(db);
-    const candidates = originals.filter(r => r.lot.toUpperCase() === lot && Number.isSafeInteger(r.productId) && associations.some(a => a.productId === r.productId));
-    // Two different reports claiming one lot is a records problem for a person, not a guess.
-    return { report: candidates.length === 1 ? candidates[0] : null, current };
+    const report = resolveLotOriginal(lot, originals, associations);
+    // Duplicate lot records require one explicit saved association, never a first-match guess.
+    return { report: report && Number.isSafeInteger(report.productId) && associations.some(a => a.productId === report.productId) ? report : null, current };
 }
 
 export function coaLinkEmail(report: OriginalCoaMetadata, link: string) {

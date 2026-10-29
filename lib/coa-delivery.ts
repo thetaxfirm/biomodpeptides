@@ -10,7 +10,7 @@ export type OriginalCoa = {
 export const COA_TEMPLATE_VERSION = 'original-coa-v1';
 export const COA_MAX_BYTES = 8 * 1024 * 1024;
 export type OriginalCoaMetadata = Omit<OriginalCoa,'base64'|'sourceBasename'>;
-export type CoaBatchAssociation = {productId:number;lot:string|null;reportRef:string|null;coaAvailable:boolean};
+export type CoaBatchAssociation = {productId:number;lot:string|null;reportRef:string|null;coaAvailable:boolean;explicit?:boolean};
 const canonical = (value: string) => value.trim().toLowerCase();
 export const coaEmail = (value: unknown): string | null => typeof value === 'string' && value.length <= 254 && !/[\x00-\x1f\x7f]/.test(value) && /^[^\s<>@,;]+@[^\s<>@,;]+\.[^\s<>@,;]+$/.test(value.trim()) ? value.trim().toLowerCase() : null;
 export function coaSender(value: unknown): string | null {
@@ -21,25 +21,47 @@ export function coaSender(value: unknown): string | null {
 export const isCoaRequest = (subject: unknown) => typeof subject === 'string' && /\bCOA\b|certificate of analysis/i.test(subject);
 /** The lot as printed on a vial label ("LOT: 102-30-0001"), normalized; null when it cannot be a lot. */
 export function normalizeLot(value: unknown): string | null {
-  if (typeof value !== 'string' || value.length > 60) return null;
-  const lot = value.trim().toUpperCase().replace(/^LOT\s*(?:NO\.?|NUMBER|#)?\s*[:#]?\s*/, '').replace(/[\s_\u2010-\u2015]+/g, '-').replace(/-{2,}/g, '-').replace(/^-|-$/g, '');
+  if (typeof value !== 'string' || value.length > 60 || /[\x00-\x1f\x7f]/.test(value) || /[^A-Za-z0-9\s_\u2010-\u2015:#.\-]/.test(value)) return null;
+  const lot = value.trim().toUpperCase().replace(/^LOT(?=\s|[:#]|$)\s*(?:NO\.?|NUMBER|#)?\s*[:#]?\s*/, '').replace(/[\s_\u2010-\u2015]+/g, '-').replace(/-{2,}/g, '-').replace(/^-|-$/g, '');
   return /^[A-Z0-9][A-Z0-9-]{2,31}$/.test(lot) ? lot : null;
 }
+/** Comparison ignores label separators only; digits, letters and leading zeroes remain exact. */
+export const lotComparisonKey = (value: unknown): string | null => normalizeLot(value)?.replace(/-/g, '') || null;
+/** A supplied malformed lot must never fall back to the subject or page's current report. */
+export const hasInvalidLabelLot = (data: unknown): boolean => {
+  if (!data || typeof data !== 'object') return false;
+  const value = (data as Record<string, unknown>).labelLot;
+  return value !== undefined && value !== null && value !== '' && !normalizeLot(value);
+};
 /** The lot the customer read off their own vial, when they gave one (owner rule, Oct 14 2026). */
 export const labelLotOf = (data: unknown): string | null => data && typeof data === 'object' ? normalizeLot((data as Record<string, unknown>).labelLot) : null;
 /** A report may go to a customer only for the lot printed on their vial. Returns the reason to stop, or null. */
 export function labelLotMismatch(labelLot: string | null, reportLot: string): string | null {
-  return labelLot && reportLot.trim().toUpperCase() !== labelLot ? `The customer's vial says lot ${labelLot}, but this report is for lot ${reportLot}. Attach the report for lot ${labelLot}, or confirm the lot with the customer first.` : null;
+  const requested = lotComparisonKey(labelLot), report = lotComparisonKey(reportLot);
+  return labelLot && (!requested || !report || requested !== report) ? `The customer's vial says lot ${labelLot}, but this report is for lot ${reportLot}. Attach the report for lot ${labelLot}, or confirm the lot with the customer first.` : null;
+}
+/** Resolve a lot without guessing between originals. Only a persisted, exact association can resolve duplicates. */
+export function resolveLotOriginal(lot: string, originals: readonly OriginalCoaMetadata[], associations?: readonly CoaBatchAssociation[]): OriginalCoaMetadata | null {
+  const key = lotComparisonKey(lot);
+  if (!key) return null;
+  const candidates = originals.filter(report => lotComparisonKey(report.lot) === key);
+  if (candidates.length === 1) return candidates[0];
+  const selected = candidates.filter(report => associations?.some(item => item.explicit === true && item.productId === report.productId && item.coaAvailable && item.lot === report.lot && item.reportRef === 'private:' + report.sha256));
+  return selected.length === 1 ? selected[0] : null;
 }
 /** The approved report for the lot on the customer's vial, whatever product page they asked from. */
 export function reportForLabelLot(lot: string, originals: readonly OriginalCoaMetadata[], associations?: readonly CoaBatchAssociation[]): OriginalCoaMetadata | null {
-  const candidates = originals.filter(report => report.lot.trim().toUpperCase() === lot);
-  if (candidates.length !== 1) return null;
-  return exactCoaReport(`COA request: ${candidates[0].productName} / ${candidates[0].lot}`, originals, associations);
+  const report = resolveLotOriginal(lot, originals, associations);
+  return report ? exactCoaReport(`COA request: ${report.productName} / ${report.lot}`, originals, associations) : null;
 }
 export function exactCoaReport(subject: unknown, originals: readonly OriginalCoaMetadata[], associations?:readonly CoaBatchAssociation[]): OriginalCoaMetadata | null {
   if (typeof subject !== 'string') return null;
-  const matches = originals.filter(report => canonical(subject) === canonical(`COA request: ${report.productName} / ${report.lot}`) && (!associations || associations.some(item => item.productId === report.productId && item.coaAvailable && item.lot === report.lot && item.reportRef === 'private:' + report.sha256)));
+  const requested = /^COA request:\s*(.*?)\s*\/\s*(.*?)\s*$/i.exec(subject.trim());
+  const lotKey = requested && lotComparisonKey(requested[2]);
+  if (!requested || !lotKey) return null;
+  const candidate = resolveLotOriginal(requested[2], originals, associations);
+  if (!candidate) return null;
+  const matches = [candidate].filter(report => canonical(requested[1]) === canonical(report.productName) && (!associations || associations.some(item => item.productId === report.productId && item.coaAvailable && item.lot === report.lot && item.reportRef === 'private:' + report.sha256)));
   if (matches.length !== 1) return null;
   const report = matches[0], product = products.find(item => item.id === report.productId), batch = batchFor(report.productId);
   const association = associations?.find(item => item.productId === report.productId);

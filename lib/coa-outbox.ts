@@ -1,5 +1,5 @@
 // Backend only: immutable original reports are read from private D1 at the send boundary.
-import { exactCoaReport, labelLotOf, reportForLabelLot, approvedCoaReportCount, coaReportByHash, readCoaOriginal, type OriginalCoaMetadata, type CoaBatchAssociation, coaEmail, coaSender, isCoaRequest, coaHash, verifiedCoaAttachment, coaMessage, COA_TEMPLATE_VERSION } from './coa-delivery';
+import { exactCoaReport, labelLotOf, hasInvalidLabelLot, reportForLabelLot, approvedCoaReportCount, coaReportByHash, readCoaOriginal, type OriginalCoaMetadata, type CoaBatchAssociation, coaEmail, coaSender, isCoaRequest, coaHash, verifiedCoaAttachment, coaMessage, COA_TEMPLATE_VERSION } from './coa-delivery';
 import { loadCoaBatchContext } from './product-batch';
 import { looksLikePitchText } from './request-issues';
 export type CoaEnvironment = Record<string, string | undefined> & { DB: D1Database };
@@ -48,7 +48,7 @@ async function makePlan(env:CoaEnvironment,request:StoredRequest,config:CoaConfi
  const data=parse(request.data); if(!data||typeof data!=='object')return null;
  // Owner rule (Oct 14 2026): the lot printed on the customer's vial decides the report, never the subject alone.
  const labelLot=labelLotOf(data);
- const report=purpose==='coa'&&request.kind==='contact'?(labelLot?reportForLabelLot(labelLot,originals,associations):exactCoaReport(data.subject,originals,associations)):null;
+ const report=purpose==='coa'&&request.kind==='contact'&&!hasInvalidLabelLot(data)?(labelLot?reportForLabelLot(labelLot,originals,associations):exactCoaReport(data.subject,originals,associations)):null;
  if(purpose==='coa'&&(request.kind!=='contact'||!isCoaRequest(data.subject)))return null;
  if(purpose==='request-alert'&&(!config.notifyTo||request.created<now-300000||request.created>now))return null;
  const recipient=purpose==='coa'?coaEmail(data.email):config.notifyTo;
@@ -116,8 +116,8 @@ async function mark(env:CoaEnvironment,row:Row,status:Row['status'],reason:strin
  return env.DB.prepare('UPDATE coa_delivery_outbox SET status=?,reason=?,provider_id=?,accepted_at=?,lease_token=NULL,lease_until=NULL,updated=? WHERE id=? AND lease_token=? AND status=\'sending\'').bind(status,reason,acceptedId||null,acceptedId?now:null,now,row.id,row.lease_token).run().then(result=>result.meta.changes>0);
 }
 export async function processCoaOutbox(env:CoaEnvironment,options:{requestId?:string;purpose?:Purpose;limit?:number}={},deps:Dependencies={}){
- // Customer COAs now require Ash's approval in Jarvis. Never retry the retired
- // direct-send queue, including jobs created by an older deployed client.
+ // Reviewed replies are sent from the website through the reply bridge. Never retry
+ // the retired direct-send queue, including jobs created by an older deployed client.
  if(options.purpose==='coa')return {processed:0,accepted:0,review:0};
  const config=await readCoaConfig(env);if(!config.enabled||!mailReady(env))return {processed:0,accepted:0,review:0};
  if(options.requestId!==undefined&&!validId(options.requestId))throw new Error('Choose an existing request.');

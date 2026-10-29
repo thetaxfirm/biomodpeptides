@@ -1,5 +1,5 @@
 // Private operational correspondence. These functions never send email.
-import { coaEmail, coaHash, coaMessage, exactCoaReport, labelLotMismatch, labelLotOf, reportForLabelLot, coaReportByHash, readCoaOriginal, verifiedCoaAttachment, isCoaRequest, type OriginalCoaMetadata } from './coa-delivery';
+import { coaEmail, coaHash, coaMessage, exactCoaReport, labelLotMismatch, labelLotOf, hasInvalidLabelLot, lotComparisonKey, resolveLotOriginal, reportForLabelLot, coaReportByHash, readCoaOriginal, verifiedCoaAttachment, isCoaRequest, type OriginalCoaMetadata } from './coa-delivery';
 import { customerContext, orderFollowUp, type CustomerContext } from './customer-context';
 import { loadCoaBatchContext } from './product-batch';
 import { withAuditDb, type AuditActor } from './change-history';
@@ -62,8 +62,15 @@ async function coaForOne(env:Env,request:Inquiry,ignoreId?:string,choice:string|
  if(choice==='')return {coa:{state:'not_requested',reason:'No report is attached to this reply.'}};
  if(!chosen&&!isCoaRequest(inquiry.subject))return {coa:{state:'not_requested',reason:'No COA was requested in this inquiry.'}};
  try{
+  if(hasInvalidLabelLot(parse(request.data)))return {coa:{state:'needs_review',reason:'The vial lot contains invalid characters. Confirm the lot with the customer before attaching a report.'}};
   const context=await loadCoaBatchContext(env.DB),picked=chosen?context.originals.filter(item=>item.sha256===choice):[],labelLot=labelLotOf(parse(request.data)),report=chosen?(picked.length===1?picked[0]:null):labelLot?reportForLabelLot(labelLot,context.originals,context.associations):exactCoaReport(inquiry.subject,context.originals,context.associations);
   if(chosen&&!report)return {coa:{state:'needs_review',reason:'The chosen report is no longer an approved original. Choose another report.'}};
+  const comparisonLot=labelLot||report?.lot;
+  if(comparisonLot&&context.originals.filter(item=>lotComparisonKey(item.lot)===lotComparisonKey(comparisonLot)).length>1){
+   const resolved=resolveLotOriginal(comparisonLot,context.originals,context.associations);
+   if(!resolved)return {coa:{state:'needs_review',reason:'More than one approved report uses this lot number. Resolve the report records before attaching a COA.'}};
+   if(chosen&&report?.sha256!==resolved.sha256)return {coa:{state:'needs_review',reason:'This lot has a different approved report selected in product records. Choose that original before sending.'}};
+  }
   // Owner rule (Oct 14 2026), after a wrong-lot COA: never attach a report for a lot other than the one on the customer's vial.
   const wrongLot=report?labelLotMismatch(labelLot,report.lot):null;if(wrongLot)return {coa:{state:'needs_review',reason:wrongLot}};
   // Preserve old accepted/uncertain outcomes even if the current catalog association has changed.
@@ -79,6 +86,7 @@ async function coaForOne(env:Env,request:Inquiry,ignoreId?:string,choice:string|
   if(locked)return {coa:{state:'needs_review',reason:'Another reply with this report to this customer is sending right now. Wait for it to finish.',...facts(report)}};
   const original=await readCoaOriginal(env.DB,report);if(!original)throw Error('missing');const attachment=await verifiedCoaAttachment(original);
   const current=await loadCoaBatchContext(env.DB);if(chosen?current.originals.filter(item=>item.sha256===report.sha256).length!==1:!coaReportByHash(report.sha256,current.originals,current.associations))throw Error('changed');
+  if(comparisonLot&&current.originals.filter(item=>lotComparisonKey(item.lot)===lotComparisonKey(comparisonLot)).length>1&&resolveLotOriginal(comparisonLot,current.originals,current.associations)?.sha256!==report.sha256)throw Error('changed');
   return {coa:{state:'matched',reason:(resend?'This report was emailed to this customer before; it is attached again. ':'')+(chosen?'Chosen approved original. Its PDF hash is verified again before sending.':'Exact approved product, strength, form, lot and original PDF hash verified.'),...facts(report)},report,attachment:{filename:attachment.filename,sha256:report.sha256,base64:attachment.content}};
  }catch{return {coa:{state:'needs_review',reason:'The original report cannot be verified. Review the product, strength, lot and original document before attaching it.'}};}
 }
@@ -91,7 +99,16 @@ const visibleMessage=(m:ReplyMessage):ReplyMessage=>({...m,body:readableMessage(
 async function eligibilityRevision(env:Env){const r=await env.DB.prepare('SELECT revision FROM request_reply_coa_guard WHERE id=1').first<{revision:number}>();if(!r||!Number.isSafeInteger(r.revision))fail('Original-report send safeguards are unavailable.');return r!.revision;}
 // Other requests from the same customer (email, any letter case): their messages belong to one conversation.
 const inquiryMessages=(request:Inquiry):ReplyMessage[]=>{const d=parse(request.data);if(d.origin==='order')return [];const incoming=source(request);const body=d.origin==='coa-link'?'COA request form submitted. No written customer message was included.\n'+incoming.subject+(typeof d.labelLot==='string'?'\nLot entered: '+d.labelLot:''):incoming.message;return [{id:'original:'+request.id,direction:'incoming',body,created:request.created}];};
-async function siblingMessages(env:Env,request:Inquiry):Promise<ReplyMessage[]>{const email=source(request).email;if(!email)return [];const rows=(await env.DB.prepare("SELECT id,kind,data,created FROM requests WHERE id!=? AND kind IN ('contact','affiliate','stock') AND lower(json_extract(data,'$.email'))=? AND status NOT IN ('spam','deleted') AND created>? ORDER BY created DESC LIMIT 10").bind(request.id,email,Date.now()-90*86400000).all<Inquiry>()).results;return rows.flatMap(inquiryMessages).filter(m=>m.body.trim());}
+async function siblingMessages(env:Env,request:Inquiry):Promise<ReplyMessage[]>{
+ const email=source(request).email;if(!email)return [];const since=Date.now()-90*86400000;
+ const [requests,messages]=await Promise.all([
+  env.DB.prepare("SELECT id,kind,data,created FROM requests WHERE id!=? AND kind IN ('contact','affiliate','stock') AND lower(trim(json_extract(data,'$.email')))=? AND status NOT IN ('spam','deleted') AND created>? ORDER BY created DESC LIMIT 10").bind(request.id,email,since).all<Inquiry>(),
+  // Prior answers matter as much as prior questions. Both the request identity and message envelope
+  // must match this customer; a name, account similarity or another customer's message is not evidence.
+  env.DB.prepare(`SELECT ${MESSAGE_COLUMNS} FROM request_reply_messages m JOIN requests r ON r.id=m.request_id LEFT JOIN request_reply_drafts d ON d.id=m.reply_job_id WHERE r.id!=? AND r.kind IN ('contact','affiliate','stock') AND lower(trim(json_extract(r.data,'$.email')))=? AND r.status NOT IN ('spam','deleted') AND m.created>? AND ((m.direction='outgoing' AND lower(trim(m.recipient))=?) OR (m.direction='incoming' AND lower(trim(m.sender))=?)) ORDER BY m.created DESC,m.id DESC LIMIT 20`).bind(request.id,email,since,email,email).all<MessageRow>(),
+ ]);
+ return [...requests.results.flatMap(inquiryMessages),...messages.results.map(r=>visibleMessage(messageOf(r)))].filter(m=>m.body.trim());
+}
 async function recoveryMessages(env:Env,request:Inquiry):Promise<ReplyMessage[]>{
  const email=source(request).email;if(!email)return [];
  const rows=(await env.DB.prepare("SELECT c.order_id,c.accepted_at,c.savings AS savings_cents FROM checkout_recovery c JOIN orders o ON o.id=c.order_id WHERE lower(trim(json_extract(o.data,'$.email')))=? AND c.status='accepted' AND c.accepted_at IS NOT NULL ORDER BY c.accepted_at DESC LIMIT 20").bind(email).all<{order_id:string;accepted_at:number;savings_cents:number}>()).results;
@@ -106,12 +123,36 @@ export async function summarizeRequestReplies(env:Env,ids:string[]):Promise<Reco
  for(let offset=0;offset<unique.length;offset+=60){const chunk=unique.slice(offset,offset+60),marks=chunk.map(()=>'?').join(',');const rows=(await env.DB.prepare(`SELECT * FROM request_reply_drafts WHERE request_id IN (${marks})`).bind(...chunk).all<Row>()).results;if(!rows.length)continue;
   const sources=(await env.DB.prepare(`SELECT id,kind,data,created FROM requests WHERE id IN (${marks})`).bind(...chunk).all<Inquiry>()).results;
   const messages=(await env.DB.prepare(`SELECT m.request_id,${MESSAGE_COLUMNS} FROM (SELECT *,ROW_NUMBER() OVER(PARTITION BY request_id ORDER BY created DESC,id DESC) AS rn FROM request_reply_messages WHERE request_id IN (${marks})) m LEFT JOIN request_reply_drafts d ON d.id=m.reply_job_id WHERE m.rn<=20 ORDER BY m.created,m.id`).bind(...chunk).all<MessageRow&{request_id:string}>()).results;
-  for(const row of rows){const request=sources.find(r=>r.id===row.request_id);if(request)out[row.request_id]=summary(row,[...await recoveryMessages(env,request),...inquiryMessages(request),...messages.filter(m=>m.request_id===row.request_id).map(({request_id:_,...m})=>visibleMessage(messageOf(m)))]);}
+  for(const row of rows){const request=sources.find(r=>r.id===row.request_id);if(request)out[row.request_id]=summary(row,[...await recoveryMessages(env,request),...await siblingMessages(env,request),...inquiryMessages(request),...messages.filter(m=>m.request_id===row.request_id).map(({request_id:_,...m})=>visibleMessage(messageOf(m)))].sort((a,b)=>a.created-b.created).slice(-21));}
  }return out;
 }
 export async function replyCustomerContext(env:Env,requestId:string):Promise<CustomerContext|null>{
  const request=await inquiryFor(env,requestId);if(!request)return null;const incoming=source(request);
  return customerContext(env.DB as any,incoming.email,incoming.subject+'\n'+incoming.message);
+}
+export type ReplyAttachmentInput={requestId:string;expectedRevision:number|null;coaSha256?:string|null};
+export type ReplyAttachmentPreview={requestId:string;revision:number|null;coaChoice:string|null;coa:ReplyCoa;checkedAt:number};
+function validateCoaChoice(choice:unknown){
+ if(choice!==undefined&&choice!==null&&choice!==''&&(typeof choice!=='string'||choice.split(',').length>5||!choice.split(',').every(v=>HASH.test(v))))fail('Choose a valid report.',400);
+}
+/** Read-only attachment check for the current composer. Never saves a draft, approves or sends. */
+export async function previewReplyAttachments(env:Env,input:ReplyAttachmentInput,actor:Actor):Promise<ReplyAttachmentPreview>{
+ if(!['owner','manager','support'].includes(actor.role)||!coaEmail(actor.email))fail('Reply attachment checks are not permitted.',403);
+ const requestId=id(input.requestId);validateCoaChoice(input.coaSha256);
+ if(input.expectedRevision!==null&&(!Number.isSafeInteger(input.expectedRevision)||input.expectedRevision<1))fail('Choose the current reply revision.',400);
+ const request=await inquiryFor(env,requestId);if(!request)fail('Request not found.',404);
+ const available=(inquiry:Inquiry|null)=>{if(!inquiry||['spam','deleted'].includes(inquiry.status||''))fail('Restore this request before checking attachments.');if(!source(inquiry!).email)fail('The original request needs a valid recipient.',400);};
+ available(request);
+ const old=await env.DB.prepare('SELECT * FROM request_reply_drafts WHERE request_id=?').bind(requestId).first<Row>();
+ const current=(row:Row|null)=>{if((row?.revision??null)!==input.expectedRevision)fail('This reply changed. Refresh before checking attachments.');if(row?.status==='sending'||row?.send_locked_at)fail('A send is awaiting confirmation. Review its outcome before changing attachments.');};
+ current(old);
+ const choice=input.coaSha256===undefined?(old?.coa_choice??null):input.coaSha256;
+ const plan=await coaFor(env,request!,old?.id,choice);
+ // A slow original-PDF read must not label an older request or reply as verified.
+ const [latestRequest,latestReply]=await Promise.all([inquiryFor(env,requestId),env.DB.prepare('SELECT * FROM request_reply_drafts WHERE request_id=?').bind(requestId).first<Row>()]);
+ available(latestRequest);current(latestReply);
+ if(latestRequest!.data!==request!.data)fail('The customer request changed. Refresh before checking attachments.');
+ return {requestId,revision:old?.revision??null,coaChoice:choice,coa:plan.coa,checkedAt:Date.now()};
 }
 export type PrepareReplyRequest={requestId:string;mode:'ai'|'staff';body?:string;instruction?:string;expectedRevision:number|null;coaSha256?:string|null;send?:boolean;purpose?:'checkout_recovery'|'reply'};
 export async function prepareRequestReply(env:Env,input:PrepareReplyRequest,actor:Actor):Promise<ReplySummary>{
@@ -120,7 +161,7 @@ export async function prepareRequestReply(env:Env,input:PrepareReplyRequest,acto
  if(!['ai','staff'].includes(input.mode))fail('Choose AI or staff drafting.',400);const body=text(input.body??'',12000,input.mode==='staff'),userInstruction=text(input.instruction??'',2000);
  // Sending is the owner's decision. Staff save drafts; only an owner's click approves the send.
  const send=input.send===true;if(send&&(actor.role!=='owner'||input.mode!=='staff'))fail('Only the owner can send a reply.',403);
- if(input.coaSha256!==undefined&&input.coaSha256!==null&&input.coaSha256!==''&&(typeof input.coaSha256!=='string'||input.coaSha256.split(',').length>5||!input.coaSha256.split(',').every(v=>HASH.test(v))))fail('Choose a valid report.',400);
+ validateCoaChoice(input.coaSha256);
  const request=await inquiryFor(env,requestId);if(!request)fail('Request not found.',404);if(request!.status==='deleted')fail('This request was deleted. Restore it before replying.');if(request!.status==='spam'&&!send)fail('Move this request out of spam before preparing a reply.');const incoming=source(request!);if(!incoming.email)fail('The original request needs a valid recipient.',400);
  const old=await env.DB.prepare('SELECT * FROM request_reply_drafts WHERE request_id=?').bind(requestId).first<Row>();
  if(old?.status==='sending'||old?.send_locked_at)fail('A send is awaiting confirmation. Review its outcome before replacing this reply.');
@@ -148,7 +189,13 @@ export async function prepareRequestReply(env:Env,input:PrepareReplyRequest,acto
 const matchReady=(row:Row|null,p:Record<string,any>)=>{if(!row||row.revision!==revision(p.revision)||row.ready_id!==reference(p.readyId))fail('This Ready to Send draft is no longer current.');return row!;};
 async function currentRequest(env:Env,row:Row){const request=await inquiryFor(env,row.request_id);const review=await env.DB.prepare("SELECT updated FROM request_issues WHERE request_id=? AND issue='owner_review'").bind(row.request_id).first<{updated:number}>();if(review&&row.approved_at&&review.updated>row.approved_at)fail('This case was marked for owner review after approval. Review the reason and approve the current reply again.');if(recoveryPurpose(row)&&request){const check=await orderFollowUp(env.DB as any,String(parse(request.data).orderId||''));if(!check.eligible)fail(check.reason);}
  if(!request||['spam','resolved','deleted'].includes(request.status||''))fail('The request is unavailable or closed. Reopen it and prepare a new reply.');if(await coaHash(request!.data)!==row.request_hash||source(request!).email!==row.recipient)fail('The original request or recipient changed. Prepare a new reply.');return request!;}
-async function currentCoa(env:Env,row:Row){const request=await currentRequest(env,row);const plan=await coaFor(env,request!,row.id,row.coa_choice??null),saved=storedCoa(row);const shas=(c:ReplyCoa)=>(c.extras||[]).map(e=>e.sha256).join(',');if(saved.state==='matched'&&(plan.coa.state!=='matched'||saved.sha256!==plan.coa.sha256||shas(saved)!==shas(plan.coa)))return {coa:{...saved,state:'needs_review' as const,reason:'The originally prepared report changed or has a prior send. Prepare a new reviewed draft.'}};return plan;}
+async function currentCoa(env:Env,row:Row):Promise<CoaPlan&{requiresNewReview?:boolean}>{
+ const request=await currentRequest(env,row),plan=await coaFor(env,request!,row.id,row.coa_choice??null),saved=storedCoa(row);const shas=(c:ReplyCoa)=>(c.extras||[]).map(e=>e.sha256).join(',');
+ if(saved.state==='matched'&&(plan.coa.state!=='matched'||saved.sha256!==plan.coa.sha256||shas(saved)!==shas(plan.coa)))return {coa:{...saved,state:'needs_review',reason:'The originally prepared report changed. Review the attachment and prepare a new reply.'},requiresNewReview:true};
+ // A new match (including a separator-only match after an update) cannot enlarge an older draft's attachments or approval.
+ if(saved.state!=='matched'&&plan.coa.state==='matched')return {coa:{...saved,state:'needs_review',reason:'A matching report is now available. Review the attachment and prepare a new reply before sending.'},requiresNewReview:true};
+ return plan;
+}
 const plainReply=(html:string)=>readableMessage(html.replace(/<blockquote[\s\S]*<\/blockquote>/gi,'')).replace(/\n{3,}/g,'\n\n').trim();
 const squash=(value:string)=>value.replace(/\s+/g,' ').trim().toLowerCase();
 // A private record of the AI's wording next to what the owner actually sent. Never shown publicly.
@@ -206,6 +253,7 @@ export async function handleReplyBridge(env:Env,payload:unknown):Promise<Record<
   // A request closed in the meantime (archived by a reply to the same customer, spam, deleted) never blocks the queue.
   if(!request||['spam','resolved','deleted'].includes(request.status||'')){await db.prepare("UPDATE request_reply_drafts SET status='cancelled',reason='request_closed',lease_token=NULL,lease_until=NULL,updated=? WHERE id=? AND revision=? AND lease_token=?").bind(Date.now(),row.id,row.revision,token).run();return {job:null};}
   const plan=await currentCoa(env,row);
+  if(plan.requiresNewReview){await db.prepare("UPDATE request_reply_drafts SET status='needs_review',reason=?,approved_at=NULL,approved_by=NULL,lease_token=NULL,lease_until=NULL,updated=? WHERE id=? AND revision=? AND status='preparing' AND lease_token=?").bind(plan.coa.reason,Date.now(),row.id,row.revision,token).run();return {job:null};}
   const written=await db.prepare("UPDATE request_reply_drafts SET coa_json=?,updated=? WHERE id=? AND revision=? AND status='preparing' AND lease_token=?").bind(JSON.stringify(plan.coa),Date.now(),row.id,row.revision,token).run();if(!written.meta.changes)fail('Draft changed during preparation.');
   return {job:{id:row.id,requestId:row.request_id,revision:row.revision,leaseToken:token,mode:row.mode,sender:row.sender,recipient:row.recipient,subject:row.subject,instruction:draftInstruction(row),proposedBody:row.proposed_body,request:source(request!),history:(await historyFor(env,request!)).map(({id,direction,body,created})=>({id,direction,body,created})),coa:plan.coa,...('attachment' in plan&&plan.attachment?{attachment:plan.attachment}:{}),...(plan.extras?.length?{extraAttachments:plan.extras}:{}),preparedBy:row.prepared_by,...(row.mode==='ai'?{customer:await customerContext(env.DB as any,source(request!).email,source(request!).subject+'\n'+source(request!).message).catch(()=>undefined)}:{}),...(row.approved_at?{approved:{by:row.approved_by||'',at:row.approved_at}}:{}),...(row.mode==='ai'?await (async()=>{const c=await env.DB.prepare('SELECT issue,resolutions,note FROM request_issues WHERE request_id=?').bind(row.request_id).first<{issue:string;resolutions:string;note:string}>().catch(()=>null);let res:string[]=[];try{res=c?JSON.parse(c.resolutions):[];}catch{res=[];}
    return {style:await replyStyle(env,c?.issue||null),codes:activePromotions(),...(c?{caseInfo:`Issue: ${issueLabel(c.issue)}.${res.length?' Recorded resolution: '+res.map(resolutionLabel).join(', ')+'.':''}${c.note?' Staff note: '+c.note.slice(0,500):''}`}:{})};})():{})}};
@@ -241,6 +289,7 @@ export async function handleReplyBridge(env:Env,payload:unknown):Promise<Record<
   if(p.sender!==REPLY_SENDER||p.sender!==current.sender||coaEmail(p.recipient)!==current.recipient||p.recipient!==current.recipient)fail('The sender or recipient changed.');
   if(p.attachmentSha256!==null&&(typeof p.attachmentSha256!=='string'||!HASH.test(p.attachmentSha256)))fail('Invalid original attachment.');
   const guardRevision=await eligibilityRevision(env),validatedRequest=await currentRequest(env,current),plan=await currentCoa(env,current),expected=storedCoa(current);const extraShas=(c:ReplyCoa)=>(c.extras||[]).map(e=>e.sha256||'');const sentExtras=Array.isArray(p.extraSha256s)?p.extraSha256s:[];if(sentExtras.some((v:unknown)=>typeof v!=='string'||!HASH.test(v as string)))fail('Invalid original attachment.');
+  if(plan.requiresNewReview)fail(plan.coa.reason);
   if(expected.state==='matched'&&(plan.coa.state!=='matched'||p.attachmentSha256!==expected.sha256||plan.coa.sha256!==expected.sha256||sentExtras.join(',')!==extraShas(expected).join(',')||extraShas(plan.coa).join(',')!==extraShas(expected).join(',')))fail('The original report changed or cannot be verified. Prepare a new draft.');
   if(expected.state!=='matched'){if(p.attachmentSha256!==null||sentExtras.length)fail('No original attachment is approved for this reply.');noAttachmentClaim(body);}
   const r=await db.prepare("UPDATE request_reply_drafts SET status='sending',send_locked_at=?,send_body_hash=?,reason='Owner send authorized; awaiting provider outcome. Do not resend.',updated=? WHERE id=? AND revision=? AND ready_id=? AND status='ready' AND send_locked_at IS NULL AND EXISTS(SELECT 1 FROM request_reply_coa_guard WHERE id=1 AND revision=?) AND EXISTS(SELECT 1 FROM requests WHERE requests.id=request_reply_drafts.request_id AND requests.data=? AND requests.status NOT IN ('spam','resolved','deleted')) AND NOT EXISTS(SELECT 1 FROM request_issues review WHERE review.request_id=request_reply_drafts.request_id AND review.issue='owner_review' AND request_reply_drafts.approved_at IS NOT NULL AND review.updated>request_reply_drafts.approved_at) AND NOT EXISTS(SELECT 1 FROM request_reply_drafts other WHERE other.id!=? AND other.status='sending' AND other.recipient=request_reply_drafts.recipient AND json_extract(other.coa_json,'$.sha256')=json_extract(request_reply_drafts.coa_json,'$.sha256') AND json_extract(request_reply_drafts.coa_json,'$.state')='matched')").bind(now,await coaHash(body),now,jobId,rev,p.readyId,guardRevision,validatedRequest.data,jobId).run();if(!r.meta.changes)fail('Another send or revision now needs review. Do not resend.');return {ok:true,coa:plan.coa};

@@ -80,12 +80,36 @@ try {
   // Validation and cross-site protection.
   assert.equal((await post({ productId: 745, email: 'not-an-email', lot: '102-30-0001' }, { ip: 4 })).status, 400);
   assert.equal((await post({ productId: 745, email: 'x@example.invalid', lot: '102-30-0001' }, { origin: 'https://evil.example', ip: 5 })).status, 403);
+  // Separator-only differences use the exact same original; digits and letters are never guessed.
+  for (const [index, lot] of ['102300001', '102 30 0001', '102-300001'].entries()) {
+    r = await post({ productId: 1389, email: `format-${index}@example.invalid`, lot }, { ip: 30 + index });
+    assert.equal(r.status, 200, JSON.stringify(r.body)); assert.equal(sent.at(-1).subject, 'Your COA: HEAT-R 30mg / lot 102-30-0001');
+    file = await mf.dispatchFetch(origin + linkIn(sent.at(-1)));
+    assert.equal(file.status, 200); assert.equal(createHash('sha256').update(Buffer.from(await file.arrayBuffer())).digest('hex'), heatR30.sha256);
+  }
+  const beforeInvalid = sent.length;
+  for (const [index, lot] of ['1023000001', '10230001', '0102300001', '1O2300001'].entries()) {
+    r = await post({ productId: 745, email: `wrong-${index}@example.invalid`, lot }, { ip: 40 + index }); assert.equal(r.status, 202); assert.equal(r.body.review, true);
+  }
+  for (const [index, lot] of ['102/30/0001', '102.30.0001', '<b>102300001</b>'].entries()) {
+    r = await post({ productId: 745, email: `invalid-${index}@example.invalid`, lot }, { ip: 50 + index }); assert.equal(r.status, 400);
+  }
+  assert.equal(sent.length, beforeInvalid, 'Wrong or malformed lots send nothing');
   // Provider failure: customer told to retry, link never becomes usable.
   providerOk = false; r = await post({ productId: 745, email: 'fail@example.invalid', lot: '102-30-0001' }, { ip: 6 }); assert.equal(r.status, 502);
   const failed = sent.at(-1); assert.equal((await mf.dispatchFetch(origin + linkIn(failed))).status, 404, 'Unsent link stays dead'); providerOk = true;
   // Rate limit per email address.
   let last; for (let i = 0; i < 5; i++) last = await post({ productId: 745, email: 'repeat@example.invalid', lot: '102-30-0001' }, { ip: 10 + i });
   assert.equal(last.status, 429);
+  const beforeAmbiguous = sent.length;
+  await DB.prepare('INSERT INTO coa_original_reports VALUES(?,?,1)').bind('f'.repeat(64), JSON.stringify({ ...heatR30, lot: '102300001', sha256: 'f'.repeat(64) })).run();
+  r = await post({ productId: 1389, email: 'ambiguous@example.invalid', lot: '102300001' }, { ip: 60 });
+  assert.equal(r.status, 202); assert.equal(r.body.review, true); assert.equal(sent.length, beforeAmbiguous, 'Canonical lot collisions cannot select an automatic report');
+  // A saved exact report association resolves the collision; a manual hash or default cannot.
+  await DB.prepare('INSERT INTO product_overrides(id,data) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET data=json_set(product_overrides.data,\'$.batch\',json_extract(excluded.data,\'$.batch\'))').bind(heatR30.productId, JSON.stringify({batch:{lot:heatR30.lot,reportRef:'private:'+heatR30.sha256,coaAvailable:true}})).run();
+  r = await post({ productId: 1389, email: 'resolved@example.invalid', lot: '102300001' }, { ip: 61 });
+  assert.equal(r.status, 200); assert.equal(sent.length, beforeAmbiguous + 1);
+  file = await mf.dispatchFetch(origin + linkIn(sent.at(-1)));assert.equal(file.status,200);assert.equal(createHash('sha256').update(Buffer.from(await file.arrayBuffer())).digest('hex'),heatR30.sha256);
   assert.equal(forbidden, 0);
   console.log('PASS: built Worker Request by email: the vial lot decides the report (wrong-page lot sends the right report, unknown lot goes to review, lot required), instant email with a private link (no attachment, no compound name), link serves the verified original, tampered/unknown/expired/unsent links refused, no-COA product sends nothing, validation, origin guard, provider failure and per-email rate limit. Synthetic fixtures only.');
 } finally { await mf.dispose(); await fs.rm(temporary, { recursive: true, force: true }); }

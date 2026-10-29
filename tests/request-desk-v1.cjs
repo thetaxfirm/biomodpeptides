@@ -13,7 +13,7 @@ const issuesLib=(()=>{const f=path.join(root,'lib/request-issues.ts'),m=new Modu
 const filename=path.join(root,'components/store/request-inbox.tsx'),mod=new Module(filename,module);mod.filename=filename;mod.paths=Module._nodeModulePaths(root);
 mod.require=id=>{if(id==='@/lib/customer-context')return (()=>{const m={exports:{}};new Function('exports',require('typescript').transpileModule(require('node:fs').readFileSync(require('node:path').join(__dirname,'..','lib/customer-context.ts'),'utf8'),{compilerOptions:{module:1,target:9}}).outputText)(m.exports);return m.exports;})();if(id==='@/lib/request-issues')return issuesLib;if(id==='react')return hooks;if(id==='react/jsx-runtime')return projectRequire(id);if(id.endsWith('.module.css'))return {__esModule:true,default:new Proxy({},{get:(_,key)=>String(key)})};throw Error('Unexpected dependency: '+id);};
 mod._compile(ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,filename);
-const {RequestInbox}=mod.exports;
+const {RequestInbox,replyPurchaseNotice}=mod.exports;
 global.fetch=()=>{throw Error('Live I/O forbidden');};
 function nodes(tree,out=[]){if(Array.isArray(tree))tree.forEach(item=>nodes(item,out));else if(tree&&typeof tree==='object'&&tree.props){out.push(tree);nodes(tree.props.children,out);}return out;}
 function text(tree){if(tree==null||typeof tree==='boolean')return'';if(Array.isArray(tree))return tree.map(text).join(' ').replace(/\s+/g,' ').trim();return typeof tree==='object'?text(tree.props?.children):String(tree);}
@@ -56,24 +56,22 @@ async function main(){
  openRow(host,'answered');assert(text(host.tree).includes('Activity ('));assert(text(host.tree).includes('Received from the website'));openRow(host,'answered');
  filter(host,'Spam');assert.deepEqual(rowIds(),['junk']);
  filter(host,'Needs reply');query(host,'NEW-YOUNG@EXAMPLE');assert.deepEqual(rowIds(),['new-young']);query(host,'');
- assert(text(host.tree).includes("Past customers' replies are not reused as examples"),'Unrelated customer examples are retired');
+ assert(!text(host.tree).includes("Past customers' replies are not reused as examples"),'Internal drafting policy is not frontloaded');assert(text(host.tree).includes('Issues & rules'),'Rules remain available behind their disclosure');
  // Opening a conversation never sends; it shows the thread, pickers and an owner Send.
  openRow(host,'new-old');assert.equal(preparations.length,0);
  assert(text(host.tree).includes('Synthetic request body only'));assert(text(host.tree).includes('contact@trybiomod.com'));
  assert.equal(field(host,'replyBody').props.maxLength,12000);
- const send=()=>nodes(host.tree).find(n=>n.type==='button'&&text(n)==='Send');assert(send(),'Owner sees Send');assert.equal(send().props.disabled,true,'Empty reply cannot be sent');
+ const send=()=>nodes(host.tree).find(n=>n.type==='button'&&text(n).startsWith('Send email'));assert(send(),'Owner sees Send');assert.equal(send().props.disabled,true,'Empty reply cannot be sent');
  // Codes insert into the draft; the COA picker stages a chosen original.
  type(host,'replyBody','Hi there, use');select(host,'Insert code').props.onChange({target:{value:'BM10'}});host.render();
  assert.equal(field(host,'replyBody').props.value,'Hi there, use code BM10 (10% off at checkout)');
- type(host,'replyBody','');select(host,'Insert COA link').props.onChange({target:{value:'https://trybiomod.com/testing/QA-LOT?product=1'}});host.render();assert.equal(field(host,'replyBody').props.value,'COA for Fixture material 10 mg · lot QA-LOT: https://trybiomod.com/testing/QA-LOT?product=1');
+ type(host,'replyBody','');select(host,'Insert public COA link').props.onChange({target:{value:'https://trybiomod.com/testing/QA-LOT?product=1'}});host.render();assert.equal(field(host,'replyBody').props.value,'COA for Fixture material 10 mg · lot QA-LOT: https://trybiomod.com/testing/QA-LOT?product=1');
  type(host,'replyBody','Hi there, use code BM10 (10% off at checkout)');
- select(host,'Attach COA').props.onChange({target:{value:'a'.repeat(64)}});host.render();assert(text(host.tree).includes('Selected for this reply'));
- // AI rewrite carries the current draft and the dictated instruction; remember saves a rule first.
+ select(host,'Attach COA').props.onChange({target:{value:'a'.repeat(64)}});host.render();assert(text(host.tree).includes('Selected:'));
+ // AI rewrite carries the current draft and optional instruction; no rule is silently saved.
  type(host,'replyInstruction','um make it friendlier');
- nodes(host.tree).find(n=>n.type==='input'&&n.props.type==='checkbox').props.onChange({target:{checked:true}});host.render();
- nodes(host.tree).find(n=>n.type==='button'&&text(n)==='Rewrite').props.onClick();await flush(host);
- assert.deepEqual(preparations[0],{rule:{rule:'um make it friendlier'}});
- assert.deepEqual(preparations[1],{id:'new-old',mode:'ai',purpose:'reply',body:'Hi there, use code BM10 (10% off at checkout)',instruction:'um make it friendlier',expectedRevision:null,coaSha256:'a'.repeat(64)});
+ nodes(host.tree).find(n=>n.type==='button'&&text(n)==='Improve AI draft').props.onClick();await flush(host);
+ assert.deepEqual(preparations[0],{id:'new-old',mode:'ai',purpose:'reply',body:'Hi there, use code BM10 (10% off at checkout)',instruction:'um make it friendlier',expectedRevision:null,coaSha256:'a'.repeat(64)});
  assert(text(host.tree).includes('AI is writing'));assert.equal(field(host,'replyBody').props.readOnly,true);
  type(host,'replyBody','ignored while writing');assert.equal(field(host,'replyBody').props.value,'Hi there, use code BM10 (10% off at checkout)');
  // The finished AI draft replaces the text, with undo back to what was there.
@@ -87,7 +85,7 @@ async function main(){
  assert(text(host.tree).includes('Queued to send'));
  // Staff without send rights only save drafts.
  host=mount({...props,canSend:false});await flush(host);openRow(host,'new-young');
- assert(!nodes(host.tree).some(n=>n.type==='button'&&text(n)==='Send'));assert(text(host.tree).includes('An authorized sender can send from this screen'));
+ assert(!nodes(host.tree).some(n=>n.type==='button'&&text(n).startsWith('Send email')));assert(text(host.tree).includes('An authorized sender can send from this screen'));
  // Serious cases are explicitly flagged, with an owner-only approval control and recorded reason.
  const issueSaves=[];
  host=mount({...props,requests:[reqs[0]],requestReplies:{},onSaveIssue:async input=>{issueSaves.push(input);return {...input,updated:now,updatedBy:'support@example.invalid'};}});await flush(host);openRow(host,'new-old');
@@ -127,6 +125,60 @@ async function main(){
   host.unmount();
  } finally {global.document=savedDocument;global.setTimeout=savedSetTimeout;global.clearTimeout=savedClearTimeout;}
 
+ // Attachment validation is automatic, read-only and bound to the exact current selection.
+ const checks=[],checkReq=request('check-pdf','new','contact',{subject:'COA request',labelLot:'QA-LOT'});
+ const checkProps={...props,requests:[checkReq],requestReplies:{},onCheckAttachments:input=>{const gate=deferred();checks.push({input,...gate});return gate.promise;}};
+ const checked=(entry,coa)=>({requestId:entry.input.id,revision:entry.input.expectedRevision,coaChoice:entry.input.coaSha256,checkedAt:now,coa});
+ const validPdf={state:'matched',reason:'Original verified',productName:'Fixture material',strength:'10 mg',lot:'QA-LOT',filename:'QA-original.pdf',sha256:'a'.repeat(64)};
+ host=mount(checkProps);await flush(host);openRow(host,'check-pdf');await flush(host);
+ assert.equal(checks.length,1);assert(text(host.tree).includes('Checking the original PDF'));
+ assert(button(host.tree,'Create AI draft').props.disabled,'Draft waits for current attachment evidence');
+ type(host,'replyBody','Here is the requested report.');assert(button(host.tree,'Send email').props.disabled);
+ select(host,'Attach COA').props.onChange({target:{value:'a'.repeat(64)}});await flush(host);assert.equal(checks.length,2);
+ checks[0].resolve(checked(checks[0],validPdf));await flush(host);
+ assert(!text(host.tree).includes('1 PDF ready'),'Old automatic result cannot validate the newly selected report');
+ checks[1].resolve(checked(checks[1],{state:'needs_review',reason:'The entered lot does not match this report.'}));await flush(host);
+ assert(text(host.tree).includes('No PDF attached'));assert(text(host.tree).includes('does not match'));assert(button(host.tree,'Send email').props.disabled);
+ button(host.tree,'Remove selection').props.onClick();await flush(host);
+ assert(!button(host.tree,'Send email').props.disabled,'Explicit no attachment permits a plain email');
+ checks.at(-1).resolve(checked(checks.at(-1),{state:'not_requested',reason:'No report selected'}));await flush(host);
+ select(host,'Attach COA').props.onChange({target:{value:'a'.repeat(64)}});await flush(host);
+ checks.at(-1).resolve(checked(checks.at(-1),validPdf));await flush(host);
+ assert(text(host.tree).includes('1 PDF ready to send'));assert(text(host.tree).includes('QA-original.pdf'));assert(!button(host.tree,'Send email + PDF').props.disabled);
+ button(host.tree,'Remove PDFs').props.onClick();await flush(host);select(host,'Attach COA').props.onChange({target:{value:'a'.repeat(64)}});await flush(host);
+ checks.at(-1).reject(Error('Synthetic offline'));await flush(host);assert(text(host.tree).includes('PDF check could not finish'));assert(button(host.tree,'Send email').props.disabled);
+ button(host.tree,'Retry PDF check').props.onClick();await flush(host);checks.at(-1).resolve(checked(checks.at(-1),validPdf));await flush(host);
+ assert(!button(host.tree,'Send email + PDF').props.disabled);
+ // A new draft never inherits the PDF from the last sent message.
+ host.props.requestReplies={'check-pdf':reply('check-pdf',{status:'sent',revision:2,coaChoice:'a'.repeat(64),coa:validPdf})};host.render();
+ assert(!text(host.tree).includes('1 PDF ready'),'New revision invalidates previous PDF evidence');host.unmount();
+ // Automatic selection failures do not trap a plain email behind an unavailable PDF check.
+ const plainChecks=[];
+ host=mount({...props,requests:[request('plain-pdf-error')],requestReplies:{},onCheckAttachments:input=>{const gate=deferred();plainChecks.push({input,...gate});return gate.promise;}});await flush(host);openRow(host,'plain-pdf-error');await flush(host);
+ type(host,'replyBody','I can help with your question.');plainChecks[0].reject(Error('Synthetic PDF check unavailable'));await flush(host);
+ assert(button(host.tree,'Send email').props.disabled,'A failed automatic check is not silently treated as no attachment');
+ button(host.tree,'Reply without a PDF').props.onClick();await flush(host);
+ assert.equal(plainChecks.at(-1).input.coaSha256,'','The explicit choice clears automatic attachment selection');
+ assert(!button(host.tree,'Send email').props.disabled,'A plain reply does not wait for an optional PDF service');
+ assert(!button(host.tree,'Improve AI draft').props.disabled,'Plain-email drafting also works while the no-PDF check is pending');host.unmount();
+ // An unmatched automatic COA can be explicitly declined without pretending it attached.
+ host=mount({...props,requests:[request('unmatched-pdf','new','contact',{subject:'COA request'})],requestReplies:{},onCheckAttachments:async input=>({...input,requestId:input.id,revision:input.expectedRevision,coaChoice:input.coaSha256,checkedAt:now,coa:{state:'needs_review',reason:'No matching report'}})});await flush(host);openRow(host,'unmatched-pdf');await flush(host);
+ assert(text(host.tree).includes('No matching report'));button(host.tree,'Reply without a PDF').props.onClick();await flush(host);assert(text(host.tree).includes('No PDF attached'));host.unmount();
+ // Adding another PDF retains the already verified automatic primary.
+ const multiChecks=[];
+ host=mount({...props,requests:[request('multi-pdf','new','contact',{subject:'COA request'})],requestReplies:{},onLoadOptions:async()=>({...options,coas:[...options.coas,{...options.coas[0],sha256:'b'.repeat(64)}]}),onCheckAttachments:input=>{const gate=deferred();multiChecks.push({input,...gate});return gate.promise;}});await flush(host);openRow(host,'multi-pdf');await flush(host);
+ multiChecks.at(-1).resolve(checked(multiChecks.at(-1),validPdf));await flush(host);
+ nodes(host.tree).find(n=>n.type==='select'&&n.props['aria-label']==='Attach COA PDF').props.onChange({target:{value:'b'.repeat(64)}});await flush(host);
+ assert.equal(multiChecks.at(-1).input.coaSha256,'a'.repeat(64)+','+'b'.repeat(64));host.unmount();
+ // Cancelling a blank AI draft at the same revision still clears its old PDF.
+ const terminalChecks=[];
+ host=mount({...props,requests:[request('cancel-empty','new','contact',{subject:'COA request'})],requestReplies:{'cancel-empty':reply('cancel-empty',{status:'queued',revision:1,body:'',coaChoice:'a'.repeat(64),coa:validPdf})},onCheckAttachments:async input=>{terminalChecks.push(input);return{requestId:input.id,revision:input.expectedRevision,coaChoice:input.coaSha256,checkedAt:now,coa:input.coaSha256===''?{state:'not_requested',reason:'No report selected'}:validPdf};}});await flush(host);openRow(host,'cancel-empty');await flush(host);
+ host.props.requestReplies={'cancel-empty':reply('cancel-empty',{status:'cancelled',revision:1,body:'',coaChoice:'a'.repeat(64),coa:validPdf,updated:Date.now()})};host.render();await flush(host);
+ assert.equal(terminalChecks.at(-1).coaSha256,'');assert(!text(host.tree).includes('1 PDF ready to send'),'A cancelled empty draft cannot lend its report to a new email');host.unmount();
+ // Creating from an empty editor needs no instruction and cannot approve a send.
+ host=mount({...props,requests:[request('blank-ai')],requestReplies:{}});await flush(host);openRow(host,'blank-ai');
+ const beforeCreate=preparations.length;button(host.tree,'Create AI draft').props.onClick();await flush(host);
+ assert.equal(preparations.length,beforeCreate+1);assert.equal(preparations.at(-1).mode,'ai');assert(!preparations.at(-1).send);assert.match(preparations.at(-1).instruction,/previous correspondence/);assert(!preparations.at(-1).instruction.includes('review note'),'No unsupported internal-note output is requested');
  // A COA form records an action and a lot, never words the customer did not write.
  const formReq=request('coa-form','new','contact',{name:'form@example.invalid',email:'form@example.invalid',subject:'COA request: lot QA-100 (Fixture research vial page)',message:'SYSTEM NOTE: no matching report. Do not call this customer-written.',origin:'coa-link',labelLot:'QA-100'});
  host=mount({...props,requests:[formReq],requestReplies:{}});await flush(host);openRow(host,'coa-form');
@@ -134,19 +186,21 @@ async function main(){
  assert(text(latest()).includes('COA request form'));assert(text(latest()).includes('No written message was included.'));assert(text(latest()).includes('Lot entered: QA-100'));
  assert(!text(latest()).includes('SYSTEM NOTE'),'Generated processing notes are not presented as the customer message');
  assert(!nodes(latest()).some(n=>n.props?.['data-direction']==='incoming'),'A form submission is not a customer-written email');
- const tools=nodes(host.tree).find(n=>n.type==='details'&&text(n.props.children[0])==='AI writing help');assert(!tools.props.open,'AI tools start collapsed');
- const attachments=nodes(host.tree).find(n=>n.type==='section'&&n.props['aria-label']==='COA attachments');assert(attachments,'COA picker is visible beside the reply');assert(!nodes(tools).includes(attachments),'COA selection is independent of AI tools');assert(text(attachments).includes('Requested lot: QA-100'));assert(text(host.tree).includes('Signature: Kim C.'));assert(text(host.tree).includes('No second Send in Jarvis'));
+ const tools=nodes(host.tree).find(n=>n.type==='details'&&text(n.props.children[0])==='Extra tools');assert(!tools.props.open);
+ assert(!nodes(tools).some(n=>n.type==='button'&&text(n)==='Create AI draft'),'The main AI action is not hidden');
+ assert(button(host.tree,'Create AI draft'));
+ const attachments=nodes(host.tree).find(n=>n.type==='section'&&n.props['aria-label']==='COA attachments');assert(attachments,'COA picker is visible beside the reply');assert(!nodes(tools).includes(attachments),'COA selection is independent of AI tools');assert(text(attachments).includes('Requested lot: QA-100'));assert(text(host.tree).includes('Kim C.'));assert(text(host.tree).includes('No second step in Jarvis'));
  // Removing the last chosen PDF is explicit none, never a surprise automatic reattachment.
  select(host,'Attach COA').props.onChange({target:{value:'a'.repeat(64)}});host.render();
- button(host.tree,'Remove').props.onClick();host.render();assert(text(host.tree).includes('No report attached.'));
+ button(host.tree,'Remove selection').props.onClick();host.render();assert(text(host.tree).includes('No PDF attached'));
  type(host,'replyBody','Please send a label photo.');button(host.tree,'Save draft').props.onClick();await flush(host);assert.equal(preparations.at(-1).coaSha256,'','Last removal saves explicit none');
  host.props.requestReplies={'coa-form':reply('coa-form',{status:'ready',revision:1,body:'Please send a label photo.',coaChoice:'',updated:Date.now()})};host.render();
- button(host.tree,'Match the requested lot').props.onClick();host.render();assert(text(host.tree).includes('Automatic matching is selected'));
+ button(host.tree,'Find matching report').props.onClick();host.render();assert(text(host.tree).includes('No PDF attached'));
 
  const internal=nodes(host.tree).find(n=>n.type==='details'&&text(n.props.children[0])==='Internal details & actions');assert(!internal.props.open);assert(text(internal).includes('SYSTEM NOTE'),'The original stored record remains available internally');
  const all=nodes(host.tree);assert(all.indexOf(latest())<all.indexOf(field(host,'replyBody')));assert(all.indexOf(internal)>all.indexOf(field(host,'replyBody')),'Optional administration follows the reply');
  type(host,'replyBody','My existing unsaved reply');const beforeQuick=preparations.length;
- button(host.tree,'Ask for a label photo').props.onClick();host.render();assert.match(field(host,'replyBody').props.value,/clear photo.*product name and lot number/);assert.equal(preparations.length,beforeQuick,'Quick reply fills locally; it neither saves nor sends');
+ button(host.tree,'Use a short request for a label photo').props.onClick();host.render();assert.match(field(host,'replyBody').props.value,/clear photo.*product name and lot number/);assert.equal(preparations.length,beforeQuick,'Quick reply fills locally; it neither saves nor sends');
  button(host.tree,'Undo change').props.onClick();host.render();assert.equal(field(host,'replyBody').props.value,'My existing unsaved reply','Quick reply replacement is reversible');
  host.props.requestReplies={'coa-form':reply('coa-form',{status:'sent',history:[{id:'original:coa-form',direction:'incoming',body:formReq.data.message,created:formReq.created},{id:'real-incoming',direction:'incoming',body:'Here is the label photo. Is this the right report?',created:now}]})};host.render();
  assert(text(latest()).includes('Here is the label photo.'));assert(text(latest()).includes('Customer message'),'A real later email remains clearly visible');
@@ -175,8 +229,8 @@ async function main(){
  const tplCalls=[];host=mount({...props,requests:[orderReq],requestReplies:{},onLoadTemplates:async id=>{tplCalls.push(id);return [{id:'help',label:'Need a hand?',why:'Service first.',body:'Hi Synthetic, need a hand?'}];}});await flush(host);
  filter(host,'All');openRow(host,'from-order');await flush(host);await flush(host);assert.deepEqual(tplCalls,['from-order']);assert(text(host.tree).includes('Follow-up suggestions'));
  nodes(host.tree).find(n=>n.type==='button'&&text(n)==='Use').props.onClick();host.render();assert.equal(field(host,'replyBody').props.value,'Hi Synthetic, need a hand?');
- const before2=preparations.length;nodes(host.tree).find(n=>n.type==='button'&&text(n)==='Tailor').props.onClick();await flush(host);
- assert.equal(preparations.length,before2+1);assert.equal(preparations.at(-1).mode,'ai');assert.match(preparations.at(-1).instruction,/^Tailor this email/);assert.equal(preparations.at(-1).body,'Hi Synthetic, need a hand?');
+ const before2=preparations.length;nodes(host.tree).find(n=>n.type==='button'&&text(n)==='Improve AI draft').props.onClick();await flush(host);
+ assert.equal(preparations.length,before2+1);assert.equal(preparations.at(-1).mode,'ai');assert.match(preparations.at(-1).instruction,/^Write a short, useful email/);assert.equal(preparations.at(-1).body,'Hi Synthetic, need a hand?');
  // Reply status at a glance: Mark as replied moves it out of Needs reply with who/how; pitches stay out of Needs reply; selection follows the tab.
  const pitch=request('pitch','new','contact',{subject:'High quality peptides and SARMs',message:'We are a leading manufacturer with competitive price.'});
  const marked=[];host=mount({...props,requests:[request('phone','new'),pitch],requestReplies:{},onMarkReplied:async input=>{marked.push(input);return {at:now,source:'manual',account:'owner@example.invalid',body:input.note||'Replied outside email (phone or text).',preview:false};}});await flush(host);
@@ -200,6 +254,16 @@ async function main(){
  for(const email of ['a@example.invalid\r\nBcc:x@example.invalid','a@example.invalid,b@example.invalid']){const h=mount({...props,requests:[request('bad','new','contact',{email})],requestReplies:{}});openRow(h,'bad');assert(text(h.tree).includes('no way to reply'));assert(!nodes(h.tree).some(n=>n.type==='textarea'));}
  const escaped=render({...props,requests:[request('escape','new','contact',{name:'<script>Fixture</script>',message:'<b>x</b>'})],requestReplies:{}});assert(!escaped.includes('<script>'));assert(!escaped.includes('<b>x'));
 
+ // Purchase evidence only adds an actionable checkout warning, never a COA purchase-count wall.
+ const evidence={vip:false,orders:[],purchaseHistory:{state:'available',checkedAt:now,matchedOrders:0,confirmedLivePurchases:0,testOrders:0,unclassifiedOrders:0,note:'INTERNAL PURCHASE AUDIT'},communicationHistory:{state:'available',checkedAt:now,outgoingCount:0,incomingCount:1,lastOutgoingAt:null,lastIncomingAt:now,recent:[{at:now,source:'customer_request',direction:'incoming',status:'submitted_coa_form'}],note:'INTERNAL CONTACT AUDIT'}};
+ const coaEvidenceRequest=request('history-coa','new','contact',{origin:'coa-link',subject:'COA request',labelLot:'QA-LOT'});
+ assert.equal(replyPurchaseNotice(coaEvidenceRequest,evidence),null);assert.equal(replyPurchaseNotice(coaEvidenceRequest,null),null);
+ const followupRequest=request('history-order','new','contact',{origin:'order',orderId:'original-123'});
+ assert.match(replyPurchaseNotice(followupRequest,null),/could not be confirmed/);
+ const orderEvidence={...evidence,orders:[{number:'PAID0001',placed:'2026-10-25',status:'payment recorded; awaiting fulfillment',environment:'live',items:'Fixture item',total:'$10.00'}]};
+ assert.match(replyPurchaseNotice(followupRequest,orderEvidence),/Another paid order is on file: #PAID0001/);
+ assert.equal(replyPurchaseNotice(followupRequest,{...orderEvidence,orders:[{...orderEvidence.orders[0],environment:'test'}]}),null,'A test order cannot become a paid-customer warning');
+ assert.match(replyPurchaseNotice(followupRequest,{...evidence,orders:[{...orderEvidence.orders[0],number:'ORIGINAL',status:'payment not confirmed'}]}),/Payment is not confirmed for order #ORIGINAL/);
  // Actual inbox polling with a deterministic browser clock: no real timer, network or send.
  const savedBrowser={document:global.document,window:global.window,setTimeout:global.setTimeout,clearTimeout:global.clearTimeout};
  const scheduled=new Map(),listeners={document:new Map(),window:new Map()};let sequence=0;
@@ -224,7 +288,7 @@ async function main(){
   response={requests:[incoming,request('arrived-later')],replies:{incoming:reply('incoming',{status:'ready',body:'Newer server draft',revision:2})}};
   await nextTick();await flush(liveHost);
   assert.deepEqual(ids(liveHost),['incoming','arrived-later']);assert.equal(field(liveHost,'replyBody').props.value,'My unsaved customer reply');assert.equal(field(liveHost,'replyInstruction').props.value,'Keep this instruction');
-  assert(text(liveHost.tree).includes('Requests checked '),'Successful read timestamp is visible');
+  assert(text(liveHost.tree).includes('Updated '),'Successful read timestamp is visible');assert(!text(liveHost.tree).includes('New requests refresh automatically every 30 seconds'),'Refresh status stays concise');
   fail=true;await nextTick();await flush(liveHost);assert(text(liveHost.tree).includes('Could not refresh requests. Showing the last loaded information; retrying automatically.'));assert.deepEqual(ids(liveHost),['incoming','arrived-later']);assert.equal(field(liveHost,'replyBody').props.value,'My unsaved customer reply');
   fail=false;await nextTick();await flush(liveHost);assert(!text(liveHost.tree).includes('Could not refresh requests.'));assert.equal(field(liveHost,'replyBody').props.value,'My unsaved customer reply');
   // Hidden browser tabs do not poll; focus/visibility resumption refreshes once, with one request in flight.
@@ -238,6 +302,14 @@ async function main(){
   liveHost.props={...liveHost.props,activeTab:true};liveHost.render();await nextTick();await flush(liveHost);assert.equal(readCalls.length,inactiveReads+1);assert.equal(field(liveHost,'replyBody').props.value,'My unsaved customer reply');
   liveHost.unmount();liveHost=null;assert.equal(scheduled.size,0);
 
+  // Audit records remain inside the collapsed internal details, after the real reply workflow.
+  liveHost=mount({...readonlyProps,requests:[coaEvidenceRequest],onRefreshReplies:async()=>({replies:{},customerContext:{requestId:coaEvidenceRequest.id,context:evidence}})});openRow(liveHost,coaEvidenceRequest.id);await nextTick();await flush(liveHost);
+  const internalHistory=nodes(liveHost.tree).find(n=>n.type==='details'&&text(n.props.children[0])==='Internal details & actions');
+  const records=nodes(liveHost.tree).find(n=>n.type==='details'&&text(n.props.children[0])==='Purchase and contact records');
+  assert(internalHistory&&records);assert(nodes(internalHistory).includes(records));assert(!internalHistory.props.open&&!records.props.open);
+  assert(!text(liveHost.tree).includes('purchases recorded in the live store'));assert(!text(liveHost.tree).includes('What was checked'));assert(!text(liveHost.tree).includes('INTERNAL PURCHASE AUDIT'));
+  assert(nodes(liveHost.tree).indexOf(field(liveHost,'replyBody'))<nodes(liveHost.tree).indexOf(records),'The reply comes before diagnostic records');
+  liveHost.unmount();liveHost=null;assert.equal(scheduled.size,0);
   // A linked supplier or deleted request opens after a fresh snapshot loads it, even outside the initial list.
   for(const state of ['pitch','deleted','older']){
    const linked=request('linked-'+state,state==='deleted'?'deleted':'new','contact',state==='pitch'?{subject:'Wholesale peptide offer',message:'We are a peptide manufacturer. Contact us for a wholesale price list.'}:{});
@@ -281,6 +353,6 @@ async function main(){
  } finally {
   liveHost?.unmount();global.document=savedBrowser.document;global.window=savedBrowser.window;global.setTimeout=savedBrowser.setTimeout;global.clearTimeout=savedBrowser.clearTimeout;
  }
- console.log('PASS: reply desk queue order (oldest unanswered first, customer replies resurface), waiting/done/spam views, learning progress, code insert, COA pick, AI rewrite with draft+instruction+remembered rule, undo, single owner Send, staff draft-only, plain failure text, unsafe addresses blocked. Isolated fixtures, no I/O.');
+ console.log('PASS: reply desk queue order (oldest unanswered first, customer replies resurface), waiting/done/spam views, learning progress, code insert, COA pick, AI draft creation, verified PDFs, race-safe checks, rewrite with draft+instruction, undo, single owner Send, staff draft-only, plain failure text, unsafe addresses blocked. Isolated fixtures, no I/O.');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

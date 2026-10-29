@@ -13,27 +13,29 @@ const pacificHour = (now: number) => Number(new Intl.DateTimeFormat('en-US', { t
 export type Waiting = { name: string; email: string; subject: string; since: number; count: number };
 /** Customers (grouped by email) whose newest message is over a day old with no reply from the desk, Gmail or a phone note. */
 export async function overdueCustomers(env: CoaEnvironment, now = Date.now()): Promise<Waiting[]> {
-  const rows = (await env.DB.prepare("SELECT r.id,r.data,r.created,(SELECT issue FROM request_issues i WHERE i.request_id=r.id) issue,(SELECT MAX(created) FROM request_reply_messages m WHERE m.request_id=r.id AND m.direction='incoming') incoming_at FROM requests r WHERE r.kind IN ('contact','affiliate','stock') AND r.status IN ('new','in_progress','reviewed') AND r.created>? ORDER BY r.created").bind(now - 60 * DAY).all<{ id: string; data: string; created: number; issue: string | null; incoming_at: number | null }>()).results;
-  const groups = new Map<string, Waiting & { ids: string[]; newest: number }>();
+  const rows = (await env.DB.prepare("SELECT r.id,r.data,r.created,r.status,(SELECT issue FROM request_issues i WHERE i.request_id=r.id) issue,(SELECT MAX(created) FROM request_reply_messages m WHERE m.request_id=r.id AND m.direction='incoming') incoming_at FROM requests r WHERE r.kind IN ('contact','affiliate','stock') AND r.status IN ('new','in_progress','reviewed','resolved') AND r.created>? ORDER BY r.created").bind(now - 60 * DAY).all<{ id: string; data: string; created: number; status: string; issue: string | null; incoming_at: number | null }>()).results;
+  const groups = new Map<string, { email: string; pending: (Omit<Waiting, 'email' | 'count'> & { closed: boolean })[] }>();
   for (const r of rows) {
     let d: any = {}; try { d = JSON.parse(r.data); } catch { d = {}; }
     const email = coaEmail(d.email); if (!email) continue;
     // Starting an order follow-up is an internal action, not a message from the customer.
     const incoming = Number.isFinite(r.incoming_at) ? Number(r.incoming_at) : null;
-    if (d.origin === 'order' && incoming === null) continue;
+    if ((d.origin === 'order' || r.status === 'resolved') && incoming === null) continue;
     const since = incoming === null ? r.created : Math.max(d.origin === 'order' ? 0 : r.created, incoming);
     if (r.issue === 'vendor' || (!r.issue && d.origin !== 'order' && looksLikePitchText(String(d.subject || ''), String(d.message || '')))) continue;
-    const g = groups.get(email) || { name: String(d.name || '').slice(0, 80), email, subject: String(d.subject || 'Website message').slice(0, 120), since, newest: since, count: 0, ids: [] };
-    g.count++; g.ids.push(r.id); g.since = Math.min(g.since, since); g.newest = Math.max(g.newest, since); groups.set(email, g);
+    const g = groups.get(email) || { email, pending: [] };
+    g.pending.push({ name: String(d.name || '').slice(0, 80), subject: String(d.subject || 'Website message').slice(0, 120), since, closed: r.status === 'resolved' });
+    groups.set(email, g);
   }
   const out: Waiting[] = [];
   for (const g of groups.values()) {
-    const marks = g.ids.map(() => '?').join(',');
-    const answered = await env.DB.prepare(`SELECT MAX(at) at FROM (SELECT created at FROM request_reply_messages WHERE direction='outgoing' AND (request_id IN (${marks}) OR lower(recipient)=?) UNION ALL SELECT sent_at at FROM request_external_replies WHERE request_id IN (${marks}))`).bind(...g.ids, g.email, ...g.ids).first<{ at: number | null }>();
-    const newest = g.newest;
-    if (answered?.at && answered.at >= newest) continue;
-    if (now - newest <= DAY && now - g.since <= DAY) continue;
-    out.push({ name: g.name, email: g.email, subject: g.subject, since: g.since, count: g.count });
+    const answered = await env.DB.prepare(`SELECT MAX(at) at FROM (SELECT created at FROM request_reply_messages WHERE direction='outgoing' AND lower(trim(recipient))=? UNION ALL SELECT e.sent_at at FROM request_external_replies e JOIN requests r ON r.id=e.request_id WHERE r.kind IN ('contact','affiliate','stock') AND lower(trim(json_extract(r.data,'$.email')))=?)`).bind(g.email, g.email).first<{ at: number | null }>();
+    // A previous answer closes older waiting periods even if an old request row stayed open.
+    // A later customer follow-up starts its own clock instead of inheriting that old urgency.
+    const pending = g.pending.filter(item => (!item.closed || Boolean(answered?.at)) && (!answered?.at || item.since > answered.at)).sort((a, b) => a.since - b.since);
+    if (!pending.length || now - pending[0].since <= DAY) continue;
+    const { closed: _, ...waiting } = pending[0];
+    out.push({ ...waiting, email: g.email, count: pending.length });
   }
   return out.sort((a, b) => a.since - b.since);
 }

@@ -131,5 +131,5 @@ export async function resolveProductBatches(db: D1Database, products: Product[])
 /** Delivery rechecks the selected original. A later lot edit never substitutes another attachment. */
 export async function loadCoaBatchContext(db: D1Database): Promise<{ originals: OriginalCoaMetadata[]; associations: CoaBatchAssociation[] }> {
     const [originals, values] = await Promise.all([loadCoaReports(db), overrides(db)]);
-    return { originals, associations: sourceProducts.map(product => ({ productId: product.id, ...effective(product, originals, values) })) };
+    return { originals, associations: sourceProducts.map(product => ({ productId: product.id, ...effective(product, originals, values), explicit: values.has(product.id) })) };
 }

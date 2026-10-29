@@ -35,6 +35,28 @@ const {overdueCustomers,runOverdueDigest}=require('../lib/reply-overdue.ts');
  const r=await runOverdueDigest(env,now,{fetch:fake});assert.equal(r.sent,true);assert.equal(sent.length,1);
  assert.deepEqual(sent[0].to,['owner@example.invalid']);assert.match(sent[0].subject,/1 customer is waiting/);assert.match(sent[0].text,/Albert A \(albert@example.invalid\): Cart \(\+1 more\), waiting 6 days/);assert.match(sent[0].text,/admin\?tab=requests/);
  assert.equal((await runOverdueDigest(env,now+3600000,{fetch:fake})).reason,'already_today');assert.equal(sent.length,1,'Once a day');
+ // A new follow-up must not inherit urgency from a request already answered.
+ const earlier=add({name:'Clock reset',email:'reset@example.invalid',subject:'Older question',message:'Old'},now-10*day);
+ sql.prepare("INSERT INTO request_reply_messages(id,request_id,direction,body,created,provider_message_id,sender,recipient) VALUES('reset-answer',?,'outgoing','Synthetic answer',?,'reset-answer','contact@trybiomod.com',' RESET@EXAMPLE.INVALID ')").run(earlier,now-2*day);
+ add({name:'Clock reset',email:'reset@example.invalid',subject:'New follow-up',message:'New question'},now-3600000);
+ assert(!(await overdueCustomers(env,now)).some(w=>w.email==='reset@example.invalid'),'Old answered row cannot make a recent question overdue');
+ const resetWait=(await overdueCustomers(env,now+2*day)).find(w=>w.email==='reset@example.invalid');assert(resetWait);assert.equal(resetWait.since,now-3600000);assert.equal(resetWait.subject,'New follow-up');assert.equal(resetWait.count,1,'Only unanswered requests count');
+ // A reply or phone note recorded on a closed sibling still answers the same customer's earlier question.
+ const stillOpen=add({name:'Sibling answered',email:'sibling@example.invalid',subject:'Question',message:'Question'},now-5*day);
+ const closedSibling=add({name:'Sibling answered',email:' SIBLING@EXAMPLE.INVALID ',subject:'Related question',message:'Related'},now-4*day,'resolved');
+ sql.prepare("INSERT INTO request_external_replies(id,request_id,source,account,sent_at,body,recorded_by,created) VALUES('closed-sibling-note',?,'manual','owner@example.invalid',?,'Synthetic call note','owner@example.invalid',?)").run(closedSibling,now-3*day,now);
+ assert(!(await overdueCustomers(env,now)).some(w=>w.email==='sibling@example.invalid'),'Closed-sibling contact is considered without merging other customers');
+ // The sent conversation remains resolved in storage when mailbox follow-ups arrive; real unanswered replies still surface.
+ const repliedAgain=add({name:'Wrote again',email:'return@example.invalid',origin:'order',subject:'A real later question',message:'Internal context'},now-8*day,'resolved');
+ sql.prepare("INSERT INTO request_reply_messages(id,request_id,direction,body,created,provider_message_id,sender,recipient) VALUES('closed-answer',?,'outgoing','Synthetic answer',?,'closed-answer','contact@trybiomod.com','return@example.invalid')").run(repliedAgain,now-4*day);
+ incoming('closed-customer-followup',repliedAgain,now-2*day);
+ const reopenedWait=(await overdueCustomers(env,now)).find(w=>w.email==='return@example.invalid');assert(reopenedWait);assert.equal(reopenedWait.since,now-2*day,'A true follow-up after an answer remains actionable even if the storage status is resolved');
+ const archivedWithoutAnswer=add({name:'Archived without reply',email:'archived@example.invalid',subject:'Archived',message:'Old'},now-8*day,'resolved');incoming('archived-incoming',archivedWithoutAnswer,now-2*day);assert(!(await overdueCustomers(env,now)).some(w=>w.email==='archived@example.invalid'),'An explicit closure with no earlier answer stays closed');
+ // A message addressed elsewhere is not evidence that this customer was answered.
+ const untouched=add({name:'Unanswered',email:'untouched@example.invalid',subject:'Still unanswered',message:'Question'},now-3*day);
+ sql.prepare("INSERT INTO request_reply_messages(id,request_id,direction,body,created,provider_message_id,sender,recipient) VALUES('wrong-recipient-answer',?,'outgoing','Synthetic unrelated message',?,'wrong-recipient-answer','contact@trybiomod.com','elsewhere@example.invalid')").run(untouched,now-2*day);
+ assert((await overdueCustomers(env,now)).some(w=>w.email==='untouched@example.invalid'),'Recipient identity is required for an email to clear a waiting customer');
+ sql.prepare("INSERT INTO request_reply_messages(id,request_id,direction,body,created,provider_message_id,sender,recipient) VALUES('final-answer',?,'outgoing','Synthetic final answer',?,'final-answer','contact@trybiomod.com','return@example.invalid')").run(repliedAgain,now+1);
  sql.exec("UPDATE requests SET status='resolved'");assert.equal((await runOverdueDigest(env,now+day,{fetch:fake})).reason,'nobody_waiting');assert.equal(sent.length,1,'No email when nobody waits');
  console.log('PASS: daily owner digest lists real customers waiting over a day (grouped by email; pitches, answered, phoned and closed excluded), mornings only, once a day, nothing when nobody waits. Mocked provider.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

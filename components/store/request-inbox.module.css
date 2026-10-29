@@ -197,3 +197,16 @@
 .ownerReview { font-size: 14px; }
 .ownerReview summary { cursor: pointer; padding: 6px 0; }
 .ownerReview label { display: grid; gap: 4px; margin: 8px 0; }
+
+/* Drafting follows the evidence; PDF readiness is checked independently of saving. */
+.attachmentList { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.attachmentList li { display: grid; gap: 3px; padding: 10px 12px; background: #eef3ee; border-radius: 6px; }
+.attachmentProblem { margin: 0; font-size: 14px; line-height: 1.5; color: #5e3b0c; }
+.attachmentActions { display: flex; flex-wrap: wrap; align-items: end; gap: 8px 16px; }
+.reportSelect { display: grid; gap: 4px; flex: 1 1 280px; max-width: 560px; min-width: 0; }
+.reportSelect select { font: inherit; min-height: 42px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: white; color: var(--ink); width: 100%; }
+.draftTools { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; padding: 14px 0 4px; }
+.aiInstruction { display: grid; gap: 4px; flex: 1 1 100%; font-size: 13px; color: var(--muted); }
+.composer .aiInstruction textarea { min-height: 44px; }
+.draftLabel { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; font-size: 14px; font-weight: 600; margin-top: 8px; }
+.draftLabel span { font-weight: 400; color: var(--muted); }

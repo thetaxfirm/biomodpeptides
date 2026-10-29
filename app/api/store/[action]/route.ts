@@ -6,9 +6,9 @@ import { externalRepliesFor, markReplied } from '@/lib/request-external';
 import { startOrderConversation, saveRequestIssue, issuesFor, caseLog, setOrderHold, startWinBack, winBackPreview } from '@/lib/request-cases';
 import { orderMessageLogs } from '@/lib/order-messages';
 import { forwardRequest, forwardsFor, teamMembers, activityFor } from '@/lib/request-forward';
-import { retireStaleReplyDrafts, replyCustomerContext, summarizeRequestReplies, prepareRequestReply, autoDraftNewRequest, replyDeskOptions, saveReplyRule } from '@/lib/request-replies';
+import { retireStaleReplyDrafts, replyCustomerContext, summarizeRequestReplies, prepareRequestReply, previewReplyAttachments, autoDraftNewRequest, replyDeskOptions, saveReplyRule } from '@/lib/request-replies';
 import { adminBatchRecords, validateBatchEdit } from '@/lib/product-batch';
-import { coaHash, loadCoaReports, readCoaOriginal, verifiedCoaAttachment, normalizeLot } from '@/lib/coa-delivery';
+import { coaHash, loadCoaReports, readCoaOriginal, verifiedCoaAttachment, normalizeLot, hasInvalidLabelLot } from '@/lib/coa-delivery';
 import { changeHistory, auditRun, withAuditDb, recordChange, type AuditActor } from '@/lib/change-history';
 import { recoveryAdminStatus } from '@/lib/checkout-recovery';
 import { coaAutomationStatus, enqueueCoaRequest, enqueueRequestAlert, processCoaOutbox, saveCoaConfig } from '@/lib/coa-outbox';
@@ -43,7 +43,7 @@ export const dynamic = 'force-dynamic';
 // What each admin write needs. An admin action missing here requires the owner.
 const adminActionPermission: Record<string, StaffPermission> = {
     'admin-orders': 'orders:read', 'admin-order': 'orders:fulfill', 'admin-order-archive': 'orders:fulfill', 'admin-order-handoff': 'orders:fulfill', 'admin-reconcile': 'orders:reconcile',
-    'admin-request': 'requests:write', 'admin-request-reply': 'requests:write', 'admin-reply-desk': 'requests:write', 'admin-request-replies': 'requests:write', 'admin-reply-rule': 'requests:write', 'admin-retire-reply-drafts': 'requests:write', 'admin-request-forward': 'requests:write', 'admin-order-conversation': 'requests:write', 'admin-order-hold': 'requests:write', 'admin-win-back': 'requests:write', 'admin-mark-replied': 'requests:write', 'admin-win-back-preview': 'requests:write', 'admin-request-issue': 'requests:write', 'admin-case-log': 'requests:write', 'admin-coa-process': 'requests:write',
+    'admin-request': 'requests:write', 'admin-request-reply': 'requests:write', 'admin-reply-attachments': 'requests:write', 'admin-reply-desk': 'requests:write', 'admin-request-replies': 'requests:write', 'admin-reply-rule': 'requests:write', 'admin-retire-reply-drafts': 'requests:write', 'admin-request-forward': 'requests:write', 'admin-order-conversation': 'requests:write', 'admin-order-hold': 'requests:write', 'admin-win-back': 'requests:write', 'admin-mark-replied': 'requests:write', 'admin-win-back-preview': 'requests:write', 'admin-request-issue': 'requests:write', 'admin-case-log': 'requests:write', 'admin-coa-process': 'requests:write',
     'admin-config': 'store:write', 'admin-product': 'store:write', 'admin-campaign': 'store:write', 'admin-reward': 'store:write', 'admin-coa-config': 'store:write',
     'admin-staff': 'team:manage',
 };
@@ -412,6 +412,7 @@ export async function POST(req: NextRequest, { params }: {
         if (action === 'contact') {
             // labelLot: the lot the customer reads off their own vial; it decides any COA (owner rule, Oct 14 2026).
             const labelLot = normalizeLot(b.labelLot);
+            if (hasInvalidLabelLot(b)) throw new Error('Enter a valid lot number using letters, numbers, spaces or dashes.');
             const data = { name: str(b.name, 100), email: z.string().email().parse(b.email), subject: str(b.subject, 150), message: str(b.message, 5000), ...(labelLot ? { labelLot } : {}) };
             if (b.website)
                 return j({ ok: true });
@@ -551,6 +552,14 @@ export async function POST(req: NextRequest, { params }: {
                 const settings = z.object({ enabled: z.boolean(), replyTo: z.string().email(), notifyTo: z.string().email().nullable().optional() }).parse(b);
                 await saveCoaConfig(auditEnv(), settings);
                 return j({ message: 'COA email settings saved.' });
+            }
+            if (action === 'admin-reply-attachments') {
+                const input = z.object({ id: z.string().uuid(), expectedRevision: z.number().int().positive().nullable(), coaSha256: z.string().max(330).nullable().optional() }).parse(b);
+                try { return j(await previewReplyAttachments(runtime(), { ...input, requestId: input.id }, actor)); }
+                catch (error) {
+                    const status = (error as Error & { status?: number }).status;
+                    return j({ error: status ? (error as Error).message : 'Attachments could not be checked. Try again.' }, status || 500);
+                }
             }
             if (action === 'admin-request-reply') {
                 const input = z.object({ id: z.string().uuid(), mode: z.enum(['ai', 'staff']), body: z.string().max(12000).optional(), instruction: z.string().max(2000).optional(), expectedRevision: z.number().int().positive().nullable(), coaSha256: z.string().max(330).nullable().optional(), send: z.boolean().optional(), purpose: z.enum(['checkout_recovery', 'reply']).optional() }).parse(b);

@@ -79,7 +79,7 @@ try {
   ]);
   const seed = async (report = registry.reports[0], options = {}) => {
     const id = requestId();
-    await DB.prepare('INSERT INTO requests(id,kind,data,created) VALUES(?,?,?,?)').bind(id, 'contact', JSON.stringify({ name: 'Synthetic inquiry', email: `customer-fixture-${requestCounter}@example.invalid`, subject: options.subject || `COA request: ${report.productName} / ${report.lot}`, message: 'PRIVATE_FIXTURE_REQUEST_TEXT' }), now).run();
+    await DB.prepare('INSERT INTO requests(id,kind,data,created) VALUES(?,?,?,?)').bind(id, 'contact', JSON.stringify({ name: 'Synthetic inquiry', email: `customer-fixture-${requestCounter}@example.invalid`, subject: options.subject || `COA request: ${report.productName} / ${report.lot}`, message: 'PRIVATE_FIXTURE_REQUEST_TEXT', ...(options.labelLot ? {labelLot:options.labelLot} : {}) }), now).run();
     return id;
   };
   const snapshot = async () => {
@@ -92,14 +92,16 @@ try {
     const body = await result.text(); assert.equal(result.status, 200, 'Built scheduled handler must finish: ' + body.slice(0, 500));
   };
   // Cron cannot create messages by scanning old/unprocessed inquiries.
-  const unqueued = await seed();
+  const unqueued = await seed(registry.reports.find(r => r.productId === 745), {labelLot:'102300001'});
   await cron(); assert.equal(calls.length, 0); assert.equal((await snapshot()).length, 0);
   await saveCoaConfig(env, settings);
   const requests = [];
   for (const report of registry.reports) { const id = await seed(report); requests.push(id); await enqueueCoaRequest(env, id); }
   await enqueueRequestAlert(env, requests[0]);
-  const unmatched = await seed(undefined, { subject: 'COA request: HEAT-R 20mg / 102-30-0001' });
+  // Simulate a prior deployment's rejected compact lot: it now has a unique match, but must remain untouched.
+  const unmatched = await seed(registry.reports.find(r => r.productId === 745), {labelLot:'102300001'});
   await enqueueCoaRequest(env, unmatched);
+  await DB.prepare("UPDATE coa_delivery_outbox SET status='manual_review',reason='no_exact_original',document_hash=NULL,attachment_name=NULL,product_name=NULL,strength=NULL,lot=NULL,report_id=NULL WHERE request_id=? AND purpose='coa'").bind(unmatched).run();
   let rows = await snapshot(); assert.equal(rows.length, 5); assert.equal(rows.filter(row => row.status === 'queued').length, 4);
   const oldCoas = rows.filter(row => row.purpose === 'coa');
   await saveCoaConfig(env, { ...settings, enabled: false });
@@ -139,7 +141,11 @@ try {
   const emailChanges = history.filter(event => event.entity_type === 'email_job' && event.action === 'email_job.update');
   assert.equal(emailChanges.filter(event => JSON.parse(event.changes).some(change => change.field === 'Status' && change.after === 'sending')).length, 7, 'Actual UPDATE RETURNING claims must be audited');
   assert.equal(emailChanges.filter(event => JSON.parse(event.changes).some(change => change.field === 'Status' && change.after === 'accepted')).length, 7);
-  for (const event of emailChanges) { assert.equal(event.actor, 'COA email scheduler'); assert.equal(event.actor_type, 'system'); assert.equal(event.source, 'system'); }
+  const legacyFixtureId = oldCoas.find(row => row.request_id === unmatched).id;
+  const fixtureChanges = emailChanges.filter(event => event.entity_id === legacyFixtureId);
+  assert.equal(fixtureChanges.length, 1, 'Only the explicit fixture setup changed the old review row');
+  assert.equal(fixtureChanges[0].actor, 'Unattributed database change', 'Fixture SQL has no scheduler attribution');
+  for (const event of emailChanges.filter(event => event.entity_id !== legacyFixtureId)) { assert.equal(event.actor, 'COA email scheduler'); assert.equal(event.actor_type, 'system'); assert.equal(event.source, 'system'); }
   assert.equal((await DB.prepare('SELECT COUNT(*) n FROM change_context').first()).n, 0);
   for (const privateValue of ['PRIVATE_FIXTURE_REQUEST_TEXT', 'customer-fixture', settings.replyTo, settings.notifyTo, calls[0].providerId, registry.reports[0].base64]) assert(!JSON.stringify(history).includes(privateValue), 'Audit history excludes private mail content and delivery references');
   console.log('PASS: actual built Worker five-minute staff-alert cron, isolated D1 queue only, retired COA queue unchanged and no attachments, immutable sender/reply-to, mocked acceptance persisted once, disabled no-send, five-job bound, and unaffected daily traffic/shopping retention. No real mail, customer records or production calls.');

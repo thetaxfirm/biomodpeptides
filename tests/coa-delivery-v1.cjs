@@ -81,6 +81,15 @@ if(!isMainThread){workerMain().catch(error=>{parentPort.postMessage({error:error
   await assert.rejects(()=>delivery.verifiedCoaAttachment({...registry.reports[0],base64:Buffer.from('%PDF-corrupt').toString('base64')}));
   // Generic alert snapshots still fail closed if their stored body is changed.
   f=await setup();request=f.seed();await outbox.enqueueRequestAlert(f.env,request,f.deps);f.db.sql.prepare("UPDATE coa_delivery_outbox SET body='tampered' WHERE request_id=?").run(request);m=mailer();await outbox.processCoaOutbox(f.env,{}, {...f.deps,fetch:m.fetch});assert.equal(m.calls.length,0);assert.equal(f.alertRow(request).status,'manual_review');assert.equal(f.alertRow(request).reason,'snapshot_integrity_failed');
+  // Shared lot matching also governs the historical queue plan; processing remains retired.
+  for(const labelLot of ['102300001','102 30 0001']) {
+   const q=await setup(),report=registry.reports.find(r=>r.productId===745),key=q.seed(report,{data:{labelLot}});
+   assert.equal((await outbox.enqueueCoaRequest(q.env,key,q.deps)).status,'queued');assert.equal(q.row(key).document_hash,report.sha256);assert.equal(q.row(key).lot,'102-30-0001');
+   const noMail=mailer();await outbox.processCoaOutbox(q.env,{purpose:'coa'},{...q.deps,fetch:noMail.fetch});assert.equal(noMail.calls.length,0,'Matching changes do not enable automation');
+  }
+  for(const labelLot of ['1023000001','10230001','1O2300001','102/30/0001']) {
+   const q=await setup(),key=q.seed(registry.reports.find(r=>r.productId===745),{data:{labelLot}});assert.equal((await outbox.enqueueCoaRequest(q.env,key,q.deps)).status,'manual_review');assert.equal(q.row(key).document_hash,null,'Malformed lot never falls back to the subject');
+  }
   // Wrong lots/strengths and unresolved reports never attach anything.
   f=await setup();m=mailer();for(const subject of ['COA request: HEAT-R 20mg / 102-30-0001','COA request: T-HEAT 20mg / 103-20-0001','COA request: C-HEAT-S 10mg / 105-10-0001']){request=f.seed(undefined,{data:{subject}});assert.equal((await outbox.enqueueCoaRequest(f.env,request,f.deps)).status,'manual_review');}await outbox.processCoaOutbox(f.env,{}, {...f.deps,fetch:m.fetch});assert.equal(m.calls.length,0);
   // New-request alert only; generic body, no customer text or report attachment; purpose unique.
