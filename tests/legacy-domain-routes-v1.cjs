@@ -55,6 +55,11 @@ const mappings = {
   '/nevada-research-peptides-a-selection-guide': '/choosing-a-research-supplier',
   '/research-peptides/blends': '/shop',
   '/tag/nevada-research-supply': '/about',
+  // Listed by Bing on October 28, 2026 and still ending in a 404.
+  '/tag/peptides': '/shop',
+  '/peptide-softgel-starter-kit-beginners': '/softgels',
+  '/peptide-softgels-inflammation-joint-pain-research': '/softgels',
+  '/laboratory-research-supplies-in-north-las-vegas-a-peptide-procurement-guide-2026': '/choosing-a-research-supplier',
 };
 
 (async () => {
@@ -69,7 +74,7 @@ const mappings = {
       await assert.rejects(handler(props(form)), error => error.digest === `NEXT_REDIRECT;replace;${destination};308;`, form + ' must permanently redirect');
     }
   }
-  for (const unknown of ['/not-a-real-old-post', '/product-tag/not-a-tag', '/product-tag/blends/extra', '/tag/not-a-tag', '/tag/reproducibility/extra', '/research-peptides', '/research-peptides/not-a-category', '/tag/nevada-research-supply/extra']) {
+  for (const unknown of ['/not-a-real-old-post', '/product-tag/not-a-tag', '/product-tag/blends/extra', '/tag/not-a-tag', '/tag/reproducibility/extra', '/research-peptides', '/research-peptides/not-a-category', '/tag/nevada-research-supply/extra', '/tag/peptides/extra', '/peptide-softgel-starter-kit']) {
     for (const handler of [generateMetadata, Page]) {
       await assert.rejects(handler(props(unknown)), error => error.digest === 'NEXT_HTTP_ERROR_FALLBACK;404', unknown + ' must remain a genuine 404');
     }

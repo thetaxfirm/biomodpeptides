@@ -44,4 +44,10 @@ export const legacyRoutes: Record<string, string> = {
   'nevada-research-peptides-a-selection-guide': '/choosing-a-research-supplier',
   'research-peptides/blends': '/shop',
   'tag/nevada-research-supply': '/about',
+  // Old-domain URLs listed by Bing on October 28, 2026 that still ended in a 404.
+  // The first two rank for brand searches ("biomod peptides", "biomod softgels").
+  'tag/peptides': '/shop',
+  'peptide-softgel-starter-kit-beginners': '/softgels',
+  'peptide-softgels-inflammation-joint-pain-research': '/softgels',
+  'laboratory-research-supplies-in-north-las-vegas-a-peptide-procurement-guide-2026': '/choosing-a-research-supplier',
 };
