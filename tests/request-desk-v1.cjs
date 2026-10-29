@@ -360,6 +360,13 @@ async function main(){
   liveHost.props={...liveHost.props,activeTab:true};liveHost.render();await nextTick();await flush(liveHost);assert.equal(readCalls.length,inactiveReads+1);assert.equal(field(liveHost,'replyBody').props.value,'My unsaved customer reply');
   liveHost.unmount();liveHost=null;assert.equal(scheduled.size,0);
 
+  // Historical sent imports do not update a draft's revision/time: fresh history must still win.
+  const oldHistoryRequest=request('history-refresh','in_progress');oldHistoryRequest.created=now-3*day;
+  const sameDraft=reply('history-refresh',{status:'sent',revision:1,updated:now-day,history:[{id:'old-out',direction:'outgoing',body:'Earlier answer.',created:now-2*day},{id:'old-in',direction:'incoming',body:'Follow-up.',created:now-day}]});
+  let historyResponse={requests:[oldHistoryRequest],replies:{'history-refresh':sameDraft}};
+  liveHost=mount({...readonlyProps,requests:[oldHistoryRequest],requestReplies:{'history-refresh':sameDraft},onRefreshReplies:async()=>historyResponse});await nextTick();await flush(liveHost);assert.deepEqual(ids(liveHost),['history-refresh']);openRow(liveHost,'history-refresh');type(liveHost,'replyBody','Keep my unsaved notes');
+  historyResponse={requests:[{...oldHistoryRequest,status:'resolved'}],replies:{'history-refresh':{...sameDraft,history:[...sameDraft.history,{id:'found-out',source:'mailbox',direction:'outgoing',body:'Already answered in Gmail.',created:now-day+1000}]}}};
+  await nextTick();await flush(liveHost);assert.deepEqual(ids(liveHost),[],'Fresh sent history closes the visible queue without reloading the page');filter(liveHost,'Replied & archive');if(!nodes(liveHost.tree).some(n=>n.props.id==='request-reply-history-refresh'))openRow(liveHost,'history-refresh');assert.equal(field(liveHost,'replyBody').props.value,'Keep my unsaved notes','A status refresh never replaces employee edits');assert(text(liveHost.tree).includes('Already answered in Gmail.'));liveHost.unmount();liveHost=null;
   // Connection evidence refreshes while the inbox stays open, without touching the reply.
   let optionCalls=0,optionGate=null;const optionRequest=request('heartbeat');
   const loadOptions=async()=>{optionCalls++;return optionGate?optionGate.promise:{...options,bridgeSeen:optionCalls===1?now-20*60000:Date.now()};};

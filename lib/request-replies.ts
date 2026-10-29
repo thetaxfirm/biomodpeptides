@@ -278,14 +278,18 @@ export async function handleReplyBridge(env:Env,payload:unknown):Promise<Record<
    if(direction==='incoming')incomingIds.push(messageId);else outgoingIds.push(messageId);
   }const incomingChanges=followupStateStatements(db,sent!.request_id,incomingIds,now),outgoingChanges=answeredFollowupStateStatements(db,sent!.request_id,outgoingIds,now),stateChanges=[...incomingChanges,...outgoingChanges],results=statements.length?await db.batch([...statements,...stateChanges]):[];const draftInvalidated=Boolean((incomingChanges.length&&results[statements.length+1]?.meta?.changes)||(outgoingChanges.length&&results[statements.length+incomingChanges.length]?.meta?.changes));return {ok:true,imported:statements.length,incomingImported:incomingIds.length,outgoingImported:outgoingIds.length,draftInvalidated};
  }
- if(!row||row.revision!==rev)fail('Reply revision changed.');
  if(p.action==='send_status_review'){
   const readyId=reference(p.readyId);if(p.reason!=='local_sent_without_provider_receipt')fail('Invalid sent-status reason.',400);
-  if(row!.ready_id!==readyId)fail('Draft identity changed.');
+  if(!row)fail('Reply revision changed.');
+  // Policy retirement discards an unsent draft's Ready link. It must not discard
+  // a trusted companion's older Sent flag or permit that uncertain email again.
+  const retired=Boolean(row!.revision>rev&&row!.status==='cancelled'&&row!.ready_id===null&&['retired_reply_policy_v2','local_sent_without_provider_receipt'].includes(row!.reason||''));
+  if(!retired&&(row!.revision!==rev||row!.ready_id!==readyId))fail('Draft identity changed.');
+  if(row!.send_locked_at||row!.provider_message_id||row!.sent_at||(!retired&&!['ready','needs_review'].includes(row!.status)))fail('A provider outcome already exists or is in progress.');
   if(row!.reason==='local_sent_without_provider_receipt')return {ok:true};
-  if(!['ready','needs_review'].includes(row!.status)||row!.send_locked_at||row!.provider_message_id||row!.sent_at)fail('A provider outcome already exists or is in progress.');
-  await db.prepare("UPDATE request_reply_drafts SET status='needs_review',approved_at=NULL,approved_by=NULL,reason='local_sent_without_provider_receipt',updated=? WHERE id=? AND revision=? AND ready_id=? AND status IN ('ready','needs_review') AND send_locked_at IS NULL AND provider_message_id IS NULL AND sent_at IS NULL").bind(now,jobId,rev,readyId).run();return {ok:true};
+  const changed=await db.prepare("UPDATE request_reply_drafts SET status=?,approved_at=NULL,approved_by=NULL,reason='local_sent_without_provider_receipt',updated=? WHERE id=? AND revision=? AND status=? AND ready_id IS ? AND reason IS ? AND send_locked_at IS NULL AND provider_message_id IS NULL AND sent_at IS NULL").bind(retired?'cancelled':'needs_review',now,jobId,row!.revision,row!.status,row!.ready_id,row!.reason).run();if(!changed.meta.changes)fail('Draft changed.');return {ok:true};
  }
+ if(!row||row.revision!==rev)fail('Reply revision changed.');
  if(p.action==='send_blocked'){
   // Jarvis refused an owner-approved send before any provider call. Clear the approval so the desk asks again.
   const readyId=reference(p.readyId);await db.prepare("UPDATE request_reply_drafts SET approved_at=NULL,approved_by=NULL,reason='send_blocked',updated=? WHERE id=? AND revision=? AND ready_id=? AND status='ready' AND send_locked_at IS NULL").bind(now,jobId,rev,readyId).run();return {ok:true};

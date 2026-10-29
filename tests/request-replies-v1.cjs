@@ -146,6 +146,13 @@ const conflict=async(fn)=>assert.rejects(fn,e=>e.status===409);
  {const r=setup(),requestId=r.request(),x=await ready(r,requestId);const review={action:'send_status_review',id:x.job.id,revision:1,readyId:x.readyId,reason:'local_sent_without_provider_receipt'};
   await conflict(()=>r.bridge({...review,readyId:'wrong-ready'}));await conflict(()=>r.bridge({...review,revision:2}));await r.bridge(review);const before=r.row(x.job.id);assert.equal(before.status,'needs_review');assert.equal(before.reason,review.reason);assert.equal(before.body,x.body);await r.bridge(review);assert.deepEqual(r.row(x.job.id),before);await conflict(()=>r.bridge(validate(x)));await conflict(()=>r.prepare(requestId,{expectedRevision:1}));
  }
+
+ // Retiring an old draft cannot erase an earlier local Sent outcome or enable a resend.
+ {const r=setup(),requestId=r.request(),x=await ready(r,requestId);r.sql.prepare("UPDATE request_reply_drafts SET revision=2,status='cancelled',ready_id=NULL,reason='retired_reply_policy_v2' WHERE id=?").run(x.job.id);const review={action:'send_status_review',id:x.job.id,revision:1,readyId:x.readyId,reason:'local_sent_without_provider_receipt'};
+  await r.bridge(review);const held=r.row(x.job.id);assert.equal(held.status,'cancelled');assert.equal(held.revision,2);assert.equal(held.body,x.body);assert.equal(held.ready_id,null);assert.equal(held.reason,review.reason);await r.bridge(review);assert.deepEqual(r.row(x.job.id),held);await conflict(()=>r.prepare(requestId,{expectedRevision:2}));
+ }
+ // An older uncertain event cannot overwrite newer work, unrelated cancellations or provider outcomes.
+ for(const state of ['ready','needs_review','sending','sent','cancelled']){const r=setup(),x=await ready(r,r.request());r.sql.prepare("UPDATE request_reply_drafts SET revision=2,status=?,reason='other_reason' WHERE id=?").run(state,x.job.id);const before=r.row(x.job.id);await conflict(()=>r.bridge({action:'send_status_review',id:x.job.id,revision:1,readyId:x.readyId,reason:'local_sent_without_provider_receipt'}));assert.deepEqual(r.row(x.job.id),before);}
  for(const state of ['sending','sent']){const r=setup(),x=await ready(r,r.request());r.sql.prepare('UPDATE request_reply_drafts SET status=?,send_locked_at=? WHERE id=?').run(state,Date.now(),x.job.id);const before=r.row(x.job.id);await conflict(()=>r.bridge({action:'send_status_review',id:x.job.id,revision:1,readyId:x.readyId,reason:'local_sent_without_provider_receipt'}));assert.deepEqual(r.row(x.job.id),before);}
  // A customer follow-up received while an actual send is locked survives its later provider acknowledgement.
  {const r=setup(),requestId=r.request(),sentReply=await ready(r,requestId);await r.bridge(validate(sentReply));

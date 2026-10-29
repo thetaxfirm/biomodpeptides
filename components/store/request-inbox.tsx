@@ -199,7 +199,9 @@ export function RequestInbox({ requests: initialRequests, activeTab = true, auto
   const mounted = useRef(true);
   const speech = useRef<Speech | null>(null);
   const bodyField = useRef<HTMLTextAreaElement | null>(null);
-  const replyOf = (id: string) => newestReply(newestReply(requestReplies[id], liveReplies[id]), preparedReplies[id]);
+  // A historical message import changes history without revising the saved draft.
+  // On equal revisions/timestamps, the fresh polling result beats initial page data.
+  const replyOf = (id: string) => newestReply(newestReply(liveReplies[id], requestReplies[id]), preparedReplies[id]);
   const replyRef = useRef(replyOf);
   replyRef.current = replyOf;
   const selectedReply = selected ? replyOf(selected) : undefined;
