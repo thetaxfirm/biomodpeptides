@@ -1,6 +1,7 @@
 import { products, compound, size, productFormat, type Product } from './catalog';
 
 import specificationReviews from './product-specification-review-v1.json';
+import { productNameVariants } from './product-names';
 import { pressReleases } from './press-releases';
 
 export const previewOrigin = 'https://trybiomod.com';
@@ -75,7 +76,7 @@ export function pageInfo(path: string) {
     const title = ('Buy ' + name + ' | Biomod Research Supply Company').length > 70 ? `Buy ${p.name}${strength} ${productFormat(p)}` : 'Buy ' + name;
     if (p.slug === 'bpc-157-10mg') return { title: 'Buy BPC-157 10mg Vials', name,
       description: 'BPC-157 (BPC157) 10 mg single-compound vials from BIOMOD. Compare packs, current pricing, batch records and the Wolverine blend. Research use only.', eligible: !productReviewBlocks[p.slug] };
-    return { title, name, description: `Buy ${p.name}${strength} (${compound(p)}): single vials or 3, 5 and 10-packs, batch records and U.S. shipping. For laboratory research only.`, eligible: !productReviewBlocks[p.slug] };
+    return { title, name, description: `Buy ${p.name}${strength} (${[compound(p), ...(productNameVariants[p.slug] || [])].filter((n, i, all) => all.findIndex(x => x.toLowerCase() === n.toLowerCase()) === i && (i > 0 || !productNameVariants[p.slug] || n.toLowerCase() !== p.name.replace(/\s+\d+\s*mg$/i, '').toLowerCase())).join(', ')}): single vials or 3, 5 and 10-packs, batch records and U.S. shipping. For laboratory research only.`, eligible: !productReviewBlocks[p.slug] };
   }
   return pageRecords[path] || { title: privatePath(path) ? 'Customer Services' : 'Page Not Found', description: 'BIOMOD customer services and research products.', eligible: false };
 }

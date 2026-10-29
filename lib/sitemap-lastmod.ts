@@ -17,6 +17,17 @@ export const siteLastmod = '2026-10-23';
 export const productLastmod = '2026-10-19';
 export const pageLastmod: Record<string, string> = {
   '/product/bpc-157-10mg': '2026-10-28',
+  // October 29: product-name variant answers (lib/product-names.ts) and descriptions.
+  '/product/mots-c-10mg': '2026-10-29',
+  '/product/mots-c-40mg': '2026-10-29',
+  '/product/ss-31-10mg': '2026-10-29',
+  '/product/ss-31-50mg': '2026-10-29',
+  '/product/epitalon-50mg': '2026-10-29',
+  '/product/aod-9604-10mg': '2026-10-29',
+  '/product/dsip-10mg': '2026-10-29',
+  '/product/kisspeptin-10mg': '2026-10-29',
+  '/product/pt-141-10mg': '2026-10-29',
+  '/product/thymosin-alpha-1-10mg': '2026-10-29',
   // October 14: initial homepage cards now include every publication-reviewed vial.
   '/': '2026-10-14',
   // fb54b09: batch status wording on shop cards, the FAQ, batch library and COA guide.

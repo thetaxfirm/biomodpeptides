@@ -1,6 +1,7 @@
 import { type Product } from './catalog';
 import { packContents, packSizes, supportsPacks } from './packs';
 import { batchFor, batchStatus, coaRequestNoticeFor } from './testing';
+import { productNameVariants } from './product-names';
 
 // Product page questions. The visible "Product questions" section and the FAQPage
 // structured data both read this list, so the markup can never drift from the page.
@@ -11,6 +12,10 @@ export function productLabel(product: Product) {
   const contents = packContents(product).replace(/\s*\/\s*(vial|bottle)/i, '');
   return contents && !product.name.toLowerCase().includes(contents.toLowerCase()) ? `${product.name} ${contents}` : product.name;
 }
+
+// "MOTS-C" for "MOTS-C 40mg": the compound name without a strength suffix.
+const baseName = (product: Product) => product.name.replace(/\s+\d+(\.\d+)?\s*mg$/i, '');
+const capitalized = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 export function productQuestions(product: Product): ProductQuestion[] {
   const packOptions = packSizes.slice(0, -1).join(', ') + ' or ' + packSizes.at(-1);
@@ -35,6 +40,14 @@ export function productQuestions(product: Product): ProductQuestion[] {
     ] },
     { id: 'compare-blend', question: 'Is Wolverine the same as BPC-157 alone?', answer: [
       'No. Wolverine is a BPC-157 + TB-500 blend. The separate BPC-157 10 mg listing contains BPC-157 alone. Compare compound identity as well as total vial contents when choosing a product.',
+    ] },
+  ] : product.slug === 'kisspeptin-10mg' ? [
+    { id: 'name-variants', question: 'Is this Kisspeptin-10 (Kisspeptin 10)?', answer: [
+      'Yes. This listing is BIOMOD Kisspeptin 10 mg, and its listed compound is Kisspeptin-10, also written Kisspeptin 10. The name kisspeptin alone can also refer to longer forms of the peptide, so check the compound, strength and batch record when comparing listings; a similar name does not establish identical contents.',
+    ] },
+  ] : productNameVariants[product.slug] ? [
+    { id: 'name-variants', question: `Are ${[...productNameVariants[product.slug], baseName(product)].join(', ').replace(/, ([^,]+)$/, ' and $1')} the same product name?`, answer: [
+      `${capitalized(productNameVariants[product.slug].join(' and '))} ${productNameVariants[product.slug].length > 1 ? 'are other written forms' : 'is another written form'} of ${baseName(product)}. This listing is BIOMOD ${productLabel(product)}, a single-compound vial. Check the strength, format and batch record when comparing listings; a similar name does not establish identical contents.`,
     ] },
   ] : [];
   return [

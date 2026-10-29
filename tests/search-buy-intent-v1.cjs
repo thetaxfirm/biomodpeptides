@@ -47,6 +47,27 @@ const node = (data, type) => data['@graph'].find(item => item['@type'] === type)
   assert(productQuestions(bpc).some(q => q.id === 'compare-blend'));
   assert(productQuestions(wolverine).some(q => q.id === 'compare-blend'));
 
+  // Name variants: only eligible, unheld listings; each spelling reaches the visible answer, the
+  // FAQ markup source and the meta description; kisspeptin keeps its narrower wording.
+  const { productNameVariants } = require('../lib/product-names.ts');
+  const { productReviewBlocks } = require('../lib/seo-policy.ts');
+  for (const [slug, names] of Object.entries(productNameVariants)) {
+    assert(publication.productSlugs.includes(slug) && !productReviewBlocks[slug], slug + ' must be an eligible, unheld listing');
+    const product = products.find(p => p.slug === slug);
+    const question = productQuestions(product).find(q => q.id === 'name-variants');
+    const description = pageInfo('/product/' + slug).description;
+    for (const name of names) {
+      assert((question.question + ' ' + question.answer.join(' ')).includes(name), slug + ' answer names ' + name);
+      assert(description.includes(name), slug + ' description names ' + name);
+    }
+    assert(/^[A-Z0-9]/.test(question.answer[0]) && question.answer[0].includes('similar name does not establish identical contents'));
+    assert(description.endsWith('For laboratory research only.'));
+  }
+  assert.match(productQuestions(products.find(p => p.slug === 'kisspeptin-10mg')).find(q => q.id === 'name-variants').answer[0], /kisspeptin alone can also refer to longer forms/);
+  for (const slug of Object.keys(productReviewBlocks)) {
+    const held = products.find(p => p.slug === slug);
+    if (held && slug !== 'wolverine-10mg') assert(!productQuestions(held).some(q => q.id === 'name-variants'), slug + ' is held: no name-variant promotion');
+  }
   assert.equal(pageInfo('/product/bpc-157-10mg').title, 'Buy BPC-157 10mg Vials');
   assert.equal(pageInfo('/product/bpc-157-10mg').name, 'BPC-157 10mg Research Vial');
   assert.equal(routeMetadata('/product/bpc-157-10mg', new URLSearchParams(), config).title.absolute, 'Buy BPC-157 10mg Vials | Biomod Research Supply Company');
