@@ -19,7 +19,7 @@ const productAliases: Readonly<Record<string, readonly string[]>> = {
 
 // Only these two documented blends use Oxy as the alias for oxytocin (CAS 50-56-6).
 // Treat the parenthetical disclosure as one ingredient, never two components or a dose.
-const oxyBlendSlugs = new Set(['ignite-pt-141-oxytocin-spray', 'noctis-blend-spray']);
+const oxyBlendSlugs = new Set(['ignite-pt-141-oxy-spray', 'noctis-blend-spray']);
 function ingredientSearchText(product: Product, value: string): string {
   return oxyBlendSlugs.has(product.slug)
     ? value.replace(/\boxy\s*\(oxytocin\)/gi, 'oxytocin').replace(/\boxy\b/gi, 'oxytocin')

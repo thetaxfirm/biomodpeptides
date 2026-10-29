@@ -35,7 +35,7 @@ for (const [slug, cas] of Object.entries({
 // Preserve the owner-selected Oxy alias without obscuring the scientific ingredient.
 // CAS 50-56-6 is oxytocin: https://www.ncbi.nlm.nih.gov/mesh/68010121
 // URLs, image filenames and original laboratory PDFs remain untouched.
-for (const slug of ['ignite-pt-141-oxytocin-spray', 'noctis-blend-spray']) {
+for (const slug of ['ignite-pt-141-oxy-spray', 'noctis-blend-spray']) {
   const p = bySlug[slug], r = records.find(record => record.product_slug === slug);
   assert(r, slug + ' batch metadata');
   for (const text of [p.identity, p.description, p.shortDescription, editorial[slug].identity,

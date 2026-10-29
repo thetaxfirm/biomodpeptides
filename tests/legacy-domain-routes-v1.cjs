@@ -107,6 +107,16 @@ const mappings = {
       await assert.rejects(handler(props(form)), error => error.digest === `NEXT_REDIRECT;replace;${destination};308;`, form + ' must permanently redirect');
     }
   }
+  // A renamed product keeps its publication hold: the old address redirects to the
+  // new one without entering the sitemap (owner, October 29, 2026).
+  {
+    const source = '/product/ignite-pt-141-oxytocin-spray', destination = '/product/ignite-pt-141-oxy-spray';
+    assert.equal(legacyRoutes[source.slice(1)], destination);
+    assert(!sitemap.includes(source) && !sitemap.includes(destination), 'IGNITE stays out of the sitemap while held');
+    for (const form of [source, source + '/']) for (const handler of [generateMetadata, Page]) {
+      await assert.rejects(handler(props(form)), error => error.digest === `NEXT_REDIRECT;replace;${destination};308;`, form + ' must permanently redirect');
+    }
+  }
   for (const unknown of ['/not-a-real-old-post', '/product-tag/not-a-tag', '/product-tag/blends/extra', '/tag/not-a-tag', '/tag/reproducibility/extra', '/research-peptides', '/research-peptides/not-a-category', '/tag/nevada-research-supply/extra', '/tag/peptides/extra', '/peptide-softgel-starter-kit']) {
     for (const handler of [generateMetadata, Page]) {
       await assert.rejects(handler(props(unknown)), error => error.digest === 'NEXT_HTTP_ERROR_FALLBACK;404', unknown + ' must remain a genuine 404');

@@ -1,6 +1,8 @@
 // Exact old URLs observed in the original storefront or indexed search results.
 // Keep redirects relevant; unknown content still returns a genuine 404.
 export const legacyRoutes: Record<string, string> = {
+  // IGNITE renamed so its address no longer says oxytocin (owner, October 29, 2026).
+  'product/ignite-pt-141-oxytocin-spray': '/product/ignite-pt-141-oxy-spray',
   // Former Spanish pages verified in public source pages and search records.
   // The current equivalents are English; unknown /es paths remain 404.
   'es': '/',
