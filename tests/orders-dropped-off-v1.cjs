@@ -70,7 +70,9 @@ const fixtureRows=[{id:'fixture-progress-order',status:'paid',created:Date.now()
 const page=queue.queryOrders(fixtureRows,{tab:'all'});
 const screen=mount(OrdersAdmin,{reloadToken:0,allowed:may,busy:false,change,submit:()=>{},markDraft:()=>{},reload:()=>{},onWinBack:()=>{}},[{issue:'out_of_stock',note:''},'all','','',page,page.orders,false,null,null,JSON.stringify(['all','',0])]);
 const html=renderToStaticMarkup(screen.tree);
-for(const words of ['Pack &amp; ship','Payment to confirm','Needs attention','Track parcels','All orders','Payment</th>','Shipment</th>','Paid · recorded','Handed over','awaiting carrier scan','No contact recorded'])assert(html.includes(words),words);
+// Owner, Oct 30 2026: Back order joins the main row; Abandoned carts moves to the records dropdown.
+for(const words of ['Pack &amp; ship','Back order','Needs attention','Track parcels','All orders','Abandoned carts','Payment</th>','Shipment</th>','Paid · recorded','Handed over','awaiting carrier scan','No contact recorded'])assert(html.includes(words),words);
+assert(!html.includes('Payment to confirm'),'the old tab name is gone');
 assert(!html.includes('Refunded / cancelled'));
 assert(!html.includes('Win back'));
 assert(!html.includes('Not contacted'));

@@ -91,9 +91,45 @@ assert.equal(q.orderBucket(order('stall7', 'paid', { shipment: { status: 'pre_tr
 assert.equal(fulfillment.stalledLabel(order('stall8', 'paid', { shipment: { status: 'pre_transit' }, labelCreatedAt: 'nonsense' })), false, 'a corrupt timestamp never raises a stall');
 assert.equal(q.orderBucket(order('stall11', 'paid', { shipment: { status: 'pre_transit' }, labelCreatedAt: stale, handoff: handed, hold: { issue: 'x' } })), 'review', 'a hold still outranks everything');
 
+// --- Back order and Abandoned carts (owner, Oct 30 2026). ---
+// Waiting on stock is neither a decision nor a box to pack, so it leaves both work queues.
+const preorderLine = { id: 1, quantity: 1, product: { name: 'Fixture vial', activePreorder: { percentOff: 10, ships: 'early November 2026', basePrice: 9999 } } };
+const oos = { issue: 'out_of_stock', note: 'not in yet', by: 'fixture', at: 1 };
+assert.equal(q.tabForOrder(order('bo1', 'paid', { hold: oos })), 'backorder', 'an out-of-stock hold is a back order, not Needs attention');
+assert.equal(q.tabForOrder(order('bo2', 'paid', { items: [preorderLine] })), 'backorder', 'a preorder line is a back order');
+assert.equal(q.tabForOrder(order('bo3', 'paid', { items: [preorderLine], shipment: { status: 'pre_transit' }, labelCreatedAt: Date.now() })), 'backorder', 'buying the label early does not make a preorder packable');
+assert.equal(fulfillment.backOrdered(order('bo4', 'paid', { hold: oos })), true);
+assert.equal(fulfillment.backOrdered(order('bo5', 'paid', { hold: { issue: 'website' } })), false, 'another hold reason is still a decision');
+assert.equal(fulfillment.backOrdered(order('bo6', 'paid', {})), false, 'an ordinary order is not back-ordered');
+// Once the carrier has it, stock is no longer what it is waiting on.
+assert.equal(q.tabForOrder(order('bo7', 'paid', { items: [preorderLine], shipment: { status: 'in_transit' } })), 'shipped', 'a moving preorder is a parcel');
+assert.equal(q.tabForOrder(order('bo8', 'paid', { items: [preorderLine], shipment: { status: 'delivered' } })), 'delivered');
+assert.equal(q.tabForOrder(order('bo9', 'shipped', { hold: oos, shipment: { status: 'return_to_sender' } })), 'review', 'a carrier problem outranks a stock hold');
+assert.equal(q.tabForOrder(order('bo10', 'refunded', { hold: oos })), 'refunded', 'a closed order never lands in Back order');
+assert.equal(q.tabForOrder(order('bo11', 'paid', { hold: oos, internalTest: true })), 'test');
+
+// An expired checkout is an abandoned cart, not a decision to cancel.
+assert.equal(q.tabForOrder(order('ab1', 'cancelled', { releasedReason: 'unpaid_checkout_expired' })), 'unpaid', 'an expired checkout joins the unpaid ones');
+assert.equal(q.tabForOrder(order('ab2', 'cancelled', {})), 'cancelled', 'a cancellation somebody decided on stays put');
+assert.equal(q.tabForOrder(order('ab3', 'awaiting_payment', {})), 'unpaid');
+assert.equal(q.tabForOrder(order('ab4', 'refunded', { releasedReason: 'unpaid_checkout_expired' })), 'refunded', 'a refund is never an abandoned cart');
+assert.equal(q.tabForOrder(order('ab5', 'failed', { releasedReason: 'unpaid_checkout_expired' })), 'failed', 'nor is an unsuccessful payment');
+assert.equal(q.tabForOrder(order('ab6', 'cancelled', { releasedReason: 'owner_cancelled' })), 'cancelled', 'only a released checkout moves');
+// Still archivable from its new home: the bucket is unchanged, only the tab moved.
+assert.equal(q.canArchive(q.orderBucket(order('ab7', 'cancelled', { releasedReason: 'unpaid_checkout_expired' }))), true);
+const abandoned = q.queryOrders([...rows, order('ab8', 'cancelled', { releasedReason: 'unpaid_checkout_expired' })], { tab: 'unpaid' });
+assert.equal(abandoned.total, 3, 'the tab lists both the unpaid and the expired');
+assert.equal(abandoned.counts.cancelled, 0, 'and Cancelled no longer counts it');
+// The tab row itself: Back order is work, Abandoned carts is filed away.
+assert.equal(q.queueTabs.find(t => t.id === 'backorder').label, 'Back order');
+assert.equal(q.queueTabs.find(t => t.id === 'backorder').secondary, undefined, 'Back order is a main tab');
+assert.equal(q.queueTabs.find(t => t.id === 'unpaid').label, 'Abandoned carts');
+assert.equal(q.queueTabs.find(t => t.id === 'unpaid').secondary, true, 'Abandoned carts moves out of the main row');
+assert.equal(q.requestedTab('unpaid'), 'unpaid', 'an old link still resolves');
+
 // Action queues separate delivery, refund and cancellation without changing stored status.
 const all = q.queryOrders(rows, { tab: 'all' });
-assert.deepEqual(all.counts, { to_ship: 4, review: 2, unpaid: 2, shipped: 2, all: 13, delivered: 2, refunded: 1, cancelled: 0, failed: 0, test: 1, archived: 0 });
+assert.deepEqual(all.counts, { to_ship: 4, review: 2, backorder: 0, unpaid: 2, shipped: 2, all: 13, delivered: 2, refunded: 1, cancelled: 0, failed: 0, test: 1, archived: 0 });
 assert.equal(q.queryOrders(rows, { tab: 'shipped' }).orders.length, 2, 'tracking excludes completed deliveries');
 assert.equal(q.queryOrders(rows, { tab: 'delivered' }).orders.length, 2);
 assert.equal(q.queryOrders(rows, { tab: 'refunded' }).orders[0].status, 'refunded');

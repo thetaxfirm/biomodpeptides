@@ -34,7 +34,11 @@ const orders = [
   const work = orderAttention(orders, products, now);
   const byId = Object.fromEntries(work.map(w => [w.id, w]));
   assert.equal(byId.to_ship.count, 3); assert.equal(byId.to_ship.tone, 'urgent', 'Oldest paid order waiting 3 days is urgent'); assert.match(byId.to_ship.detail, /3 days/); assert(!/COA/.test(byId.to_ship.detail), 'COA shipping rule removed Oct 14: no blocked count');
-  assert.equal(byId.label, undefined, 'label-ready orders belong to the same Pack & ship count'); assert.equal(byId.review.count, 1, 'Held order needs review'); assert.equal(byId.unpaid.count, 2, 'Dashboard and queue include the same unarchived checkouts');
+  assert.equal(byId.label, undefined, 'label-ready orders belong to the same Pack & ship count');
+  // Owner, Oct 30 2026: an out-of-stock hold is a back order, with its own card, not attention.
+  assert.equal(byId.review, undefined, 'the held order is no longer counted as attention');
+  assert.equal(byId.backorder.count, 1, 'it is counted as waiting on stock'); assert.match(byId.backorder.title, /waiting on stock/);
+  assert.equal(byId.unpaid.count, 2, 'Dashboard and queue include the same unarchived checkouts'); assert.match(byId.unpaid.title, /abandoned cart/);
   assert(!work.some(w => w.id === 'test'), 'Internal tests never count');
   const { queryOrders } = require('../lib/order-queue.ts');
   const mixed = [...orders,
