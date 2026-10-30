@@ -162,7 +162,8 @@ export type PrepareReplyRequest={requestId:string;mode:'ai'|'staff';body?:string
 export async function prepareRequestReply(env:Env,input:PrepareReplyRequest,actor:Actor):Promise<ReplySummary>{
  const requestId=id(input.requestId);if(!['owner','manager','support'].includes(actor.role)&&!(actor.role==='system'&&actor.email==='Website request automation'))fail('Reply drafting is not permitted.',403);
  if(actor.role!=='system'&&!coaEmail(actor.email))fail('Invalid staff identity.',403);
- if(!['ai','staff'].includes(input.mode))fail('Choose AI or staff drafting.',400);const body=text(input.body??'',12000,input.mode==='staff'),userInstruction=text(input.instruction??'',2000);
+ if(!['ai','staff'].includes(input.mode))fail('Choose AI or staff drafting.',400);
+ if(input.mode==='ai'&&await aiDraftingPaused(env))fail('AI drafting is paused by the owner. Write this reply yourself.',409);const body=text(input.body??'',12000,input.mode==='staff'),userInstruction=text(input.instruction??'',2000);
  // Sending is the owner's decision. Staff save drafts; only an owner's click approves the send.
  const send=input.send===true;if(send&&(actor.role!=='owner'||input.mode!=='staff'))fail('Only the owner can send a reply.',403);
  validateCoaChoice(input.coaSha256);
@@ -329,8 +330,16 @@ export async function handleReplyBridge(env:Env,payload:unknown):Promise<Record<
  return fail('Unknown reply bridge action.',400);
 }
 
+/** Owner pause (Oct 30 2026): AI drafts were wrong too often. While settings.reply_ai_v1.paused is true no AI draft is
+ * prepared, automatically or from the desk; staff-written replies and sending are unaffected. A failed read counts as paused. */
+export async function aiDraftingPaused(env:Env){
+ try{const row=await env.DB.prepare("SELECT value FROM settings WHERE key='reply_ai_v1'").first<{value:string}>();return Boolean(row&&JSON.parse(row.value)?.paused===true);}
+ catch{return true;}
+}
+
 /** New website message: the AI drafts a reply for customers only. Supplier sales pitches get no automatic draft. */
 export async function autoDraftNewRequest(env:Env,requestId:string){
+ if(await aiDraftingPaused(env))return null;
  const request=await inquiryFor(env,id(requestId));if(!request)return null;const d=source(request);
  if(looksLikePitchText(d.subject,d.message))return null;
  return prepareRequestReply(env,{requestId,mode:'ai',expectedRevision:null},{email:'Website request automation',role:'system'});

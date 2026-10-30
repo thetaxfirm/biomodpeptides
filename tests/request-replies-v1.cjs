@@ -214,6 +214,17 @@ const conflict=async(fn)=>assert.rejects(fn,e=>e.status===409);
  f=setup();f.registry();for(const subject of [`COA request: ${report.productName} / wrong-lot`,'COA request: BPC-157 / 201-10-0001']){request=f.request({subject});draft=await f.prepare(request);job=(await f.bridge({action:'claim'})).job;assert.equal(job.coa.state,'needs_review');assert.equal(job.attachment,undefined);await f.bridge({action:'fail',id:job.id,revision:1,leaseToken:job.leaseToken,reason:'manual_review'});}
  // Controlled internal automation only queues drafts; no customer text can grant a staff identity.
  request=f.request();draft=await api.prepareRequestReply(f.env,{requestId:request,mode:'ai',expectedRevision:null},{email:'Website request automation',role:'system'});assert.equal(draft.status,'queued');await assert.rejects(()=>api.prepareRequestReply(f.env,{requestId:f.request(),mode:'ai',expectedRevision:null},{email:'arbitrary system',role:'system'}),e=>e.status===403);
+ // Owner pause (Oct 30 2026): no AI draft, automatic or from the desk; staff replies still save; a bad setting fails closed.
+ {const r=setup(),owner={email:'owner@example.invalid',role:'owner'};
+  r.sql.prepare("INSERT INTO settings(key,value) VALUES('reply_ai_v1',?)").run(JSON.stringify({paused:true}));
+  await assert.rejects(()=>api.prepareRequestReply(r.env,{requestId:r.request(),mode:'ai',expectedRevision:null},owner),e=>e.status===409&&/paused by the owner/.test(e.message));
+  assert.equal(await api.autoDraftNewRequest(r.env,r.request()),null);
+  assert.equal(r.sql.prepare("SELECT COUNT(*) n FROM request_reply_drafts WHERE mode='ai'").get().n,0,'Paused: no AI job is created');
+  const manual=await api.prepareRequestReply(r.env,{requestId:r.request(),mode:'staff',body:'Thanks, we are checking your order now.',expectedRevision:null},owner);assert.equal(manual.status,'queued');
+  r.sql.prepare("UPDATE settings SET value='not json' WHERE key='reply_ai_v1'").run();
+  await assert.rejects(()=>api.prepareRequestReply(r.env,{requestId:r.request(),mode:'ai',expectedRevision:null},owner),e=>e.status===409);
+  r.sql.prepare("UPDATE settings SET value=? WHERE key='reply_ai_v1'").run(JSON.stringify({paused:false}));
+  assert.equal((await api.prepareRequestReply(r.env,{requestId:r.request(),mode:'ai',expectedRevision:null},owner)).status,'queued','Unpaused: AI drafting resumes');}
  // An owner-review reason added after approval invalidates that approval before any send lock.
  {const r=setup(),requestId=r.request(),owner={email:'owner@example.invalid',role:'owner'};
   const approved=await api.prepareRequestReply(r.env,{requestId,mode:'staff',body:'We are reviewing your concern.',expectedRevision:null,send:true},owner);
