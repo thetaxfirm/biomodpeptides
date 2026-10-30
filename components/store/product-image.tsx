@@ -1,3 +1,4 @@
+import { preload } from 'react-dom';
 import { type Product } from '@/lib/catalog';
 import { listingImage } from '@/lib/product-imagery';
 import measuredFrames from '@/lib/vial-image-frames-v14.json';
@@ -16,6 +17,9 @@ export function ProductImage({ product, alt = product.name, width = 480, height 
   zoom?: boolean;
 }) {
   const frame = product.categories.some(category => category.slug === 'research-compounds') && frames[product.image.filename];
+  // SVG <image> ignores loading and fetchpriority, so the eager (above-the-fold)
+  // image is announced to the browser as a high-priority preload instead.
+  if (loading === 'eager') preload(listingImage(product), { as: 'image', fetchPriority: 'high' });
   if (!frame) return <img src={listingImage(product)} alt={alt} width={width} height={height} loading={loading}/>;
   const [x, y, w, h] = frame.bounds;
   const scale = 760 / h;
