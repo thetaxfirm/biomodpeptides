@@ -42,8 +42,16 @@ export function orderAttention(orders: OverviewOrder[], products: Product[], now
     }
     const review = bucketed.filter(o => o.work === 'review');
     if (review.length) out.push({ id: 'review', tab: 'orders', count: review.length, tone: 'urgent', title: (review.length === 1 ? '1 order needs' : review.length + ' orders need') + ' attention', detail: 'Check the reason on each order: payment, order hold, label approval or delivery issue.' });
+    // Waiting on stock has its own card, or an order held for a batch that never arrives would
+    // leave the dashboard entirely the moment it stopped counting as attention (owner, Oct 30 2026).
+    const backorder = bucketed.filter(o => o.work === 'backorder');
+    if (backorder.length) {
+        const oldest = Math.min(...backorder.map(o => o.created));
+        out.push({ id: 'backorder', tab: 'orders', count: backorder.length, tone: now - oldest > 14 * DAY ? 'urgent' : 'normal', title: plural(backorder.length, 'order') + ' waiting on stock',
+            detail: `Oldest waiting ${ago(now, oldest)}. Held for an item not in stock, or carrying a preorder line. None can be packed until the batch arrives.` });
+    }
     const unpaid = bucketed.filter(o => o.work === 'unpaid');
-    if (unpaid.length) out.push({ id: 'unpaid', tab: 'orders', count: unpaid.length, tone: 'normal', title: plural(unpaid.length, 'checkout') + ' with payment to confirm', detail: 'Check payment and customer history before preparing a follow-up. An unfinished checkout is not proof of a failed purchase.' });
+    if (unpaid.length) out.push({ id: 'unpaid', tab: 'orders', count: unpaid.length, tone: 'normal', title: plural(unpaid.length, 'abandoned cart'), detail: 'Started and never paid, or expired. Check payment and customer history before preparing a follow-up. An unfinished checkout is not proof of a failed purchase.' });
     return out;
 }
 

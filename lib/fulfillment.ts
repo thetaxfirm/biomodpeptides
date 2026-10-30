@@ -101,6 +101,22 @@ export const carrierWords: Record<string, string> = {
     return_to_sender: 'Returning to sender', failure: 'Delivery failed', cancelled: 'Label cancelled', error: 'Carrier error',
 };
 const problems = new Set(['return_to_sender', 'failure', 'cancelled', 'error']);
+/**
+ * Goods we cannot ship yet: an order held because the item is not in stock, or one carrying a
+ * preorder line whose batch has not arrived. Both wait on stock, not on a decision, so they belong
+ * together rather than padding Needs attention and Pack & ship, where every other row is work
+ * somebody can actually do today (owner, Oct 30 2026).
+ *
+ * Once the carrier has the parcel this stops applying, whatever the order still says about stock:
+ * a box that is moving is not back-ordered, and a delivery or a carrier problem outranks it.
+ */
+export function backOrdered(order: FulfillmentOrder): boolean {
+    const carrier = order.data?.shipment?.status;
+    if (carrier && (moving.has(carrier) || carrier === 'delivered' || problems.has(carrier))) return false;
+    if (order.status === 'delivered') return false;
+    const hold = order.data?.hold as { issue?: unknown } | undefined;
+    return (Boolean(hold) && hold?.issue === 'out_of_stock') || orderHasPreorder(order.data);
+}
 export function fulfillmentLabel(order: FulfillmentOrder): string {
     if (order.data?.internalTest) return 'Internal test: not a customer sale';
     if (['refunded','cancelled','canceled','failed'].includes(order.status)) return ({refunded:'Refunded',cancelled:'Cancelled',canceled:'Cancelled',failed:'Payment unsuccessful'} as Record<string,string>)[order.status];

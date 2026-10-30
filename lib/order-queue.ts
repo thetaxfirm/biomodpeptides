@@ -1,32 +1,43 @@
 // Admin order queue: one short status per order, status tabs with counts, search and paging.
 // Shared by the admin-orders route and the Orders tab, and the customer order list labels.
-import { queueBucket, paymentVerificationFailed, type FulfillmentOrder, type OrderBucket } from './fulfillment';
+import { queueBucket, paymentVerificationFailed, backOrdered, type FulfillmentOrder, type OrderBucket } from './fulfillment';
 import { shipDue } from './ship-cutoff';
 export { orderBucket, queueBucket, dismissibleReview, flagDismissed, carrierState, bucketStatus, customerOrderStatus, type OrderBucket, type Tone } from './fulfillment';
 
 // Work queues describe what staff need to do. Payment and parcel evidence are shown
 // independently; neither a refund nor a dismissed flag can invent a carrier event.
-export type QueueTab = OrderBucket | 'all' | 'archived' | 'refunded' | 'cancelled' | 'failed';
+export type QueueTab = OrderBucket | 'all' | 'archived' | 'refunded' | 'cancelled' | 'failed' | 'backorder';
 export const queueTabs: { id: QueueTab; label: string; detail: string; secondary?: boolean }[] = [
     { id: 'to_ship', label: 'Pack & ship', detail: 'Paid orders awaiting a label, packing or handoff.' },
     { id: 'review', label: 'Needs attention', detail: 'An order, payment or delivery issue needs a decision. Each row explains why.' },
-    { id: 'unpaid', label: 'Payment to confirm', detail: 'Payment is not confirmed for this checkout. Check purchase and contact history before following up.' },
+    { id: 'backorder', label: 'Back order', detail: 'Waiting on stock: held because an item is not in stock, or carrying a preorder line whose batch has not arrived. Nothing here can be packed yet.' },
     { id: 'shipped', label: 'Track parcels', detail: 'Parcels handed over, moving, or with an acknowledged carrier issue. The shipment column states the evidence.' },
     { id: 'all', label: 'All orders', detail: 'Unarchived customer orders, including completed and closed orders. Internal tests are separate.' },
+    { id: 'unpaid', label: 'Abandoned carts', detail: 'Checkouts that never became a payment: started and not paid, or expired. Payment is not confirmed for any of them.', secondary: true },
     { id: 'delivered', label: 'Delivered', detail: 'Delivery recorded by the carrier or store; the shipment column distinguishes them.', secondary: true },
     { id: 'refunded', label: 'Refunded', detail: 'Orders recorded as refunded. Refunds do not establish where the parcel is.', secondary: true },
-    { id: 'cancelled', label: 'Cancelled', detail: 'Cancelled orders and expired checkouts. This does not mean a refund was issued.', secondary: true },
+    { id: 'cancelled', label: 'Cancelled', detail: 'Orders cancelled after a decision. Expired checkouts are under Abandoned carts. This does not mean a refund was issued.', secondary: true },
     { id: 'failed', label: 'Payment unsuccessful', detail: 'Orders recorded with an unsuccessful payment. This is separate from cancellation and refund.', secondary: true },
     { id: 'test', label: 'Internal tests', detail: 'Orders explicitly marked as internal tests.', secondary: true },
     { id: 'archived', label: 'Archived', detail: 'Filed records. Their payment and shipment history is unchanged.', secondary: true },
 ];
 const mergedAway: Readonly<Record<string, QueueTab>> = Object.freeze({ label: 'to_ship', closed: 'all' });
+/** An unpaid checkout the store released on its own, rather than an order anybody cancelled. */
+const expiredCheckout = (order: FulfillmentOrder & { data?: Record<string, any> }): boolean =>
+    typeof order.data?.releasedReason === 'string' && order.data.releasedReason.startsWith('unpaid_checkout');
 
 /** One shared work destination for the list, counters and dashboard. */
 export function tabForOrder(order: FulfillmentOrder, now = Date.now()): QueueTab {
     const bucket = queueBucket(order, now);
     if (bucket === 'test') return 'test';
-    if (bucket === 'closed') return order.status === 'refunded' ? 'refunded' : order.status === 'failed' ? 'failed' : 'cancelled';
+    // A checkout that expired without ever being paid is an abandoned cart, not a decision to
+    // cancel. It sits with the other unpaid checkouts so every one of them is in one place, and
+    // Cancelled is left holding only orders somebody actually cancelled (owner, Oct 30 2026).
+    if (bucket === 'closed') return order.status === 'cancelled' && expiredCheckout(order) ? 'unpaid'
+        : order.status === 'refunded' ? 'refunded' : order.status === 'failed' ? 'failed' : 'cancelled';
+    // Waiting on stock outranks the work queues: it is neither a decision to make nor a box to
+    // pack, and leaving it in either one is what made both lists untrustworthy.
+    if (backOrdered(order)) return 'backorder';
     if (paymentVerificationFailed(order)) return 'review';
     if (bucket === 'label' && Number.isFinite(order.data?.handoff?.at)) return 'shipped';
     if (bucket === 'label') return 'to_ship';
