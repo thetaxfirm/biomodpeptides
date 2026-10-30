@@ -147,6 +147,7 @@ function stageOf(request: CustomerRequest, reply: ReplySummary | undefined, exte
 }
 function friendlyReason(reason?: string) {
   if (reason === 'local_sent_without_provider_receipt') return 'Jarvis marks this email as sent, but its send receipt is missing. Check sent mail before contacting this customer again. Sending is blocked.';
+  if (reason === 'answered_in_mailbox') return 'Someone already emailed this customer after they last wrote (found in a connected mailbox). No AI draft was written. Check that email first.';
   if (reason === 'answered_elsewhere') return 'This conversation was already answered. Review before sending another reply.';
   if (reason === 'customer_replied') return 'The customer wrote again. Review their latest message before sending a new reply.';
   if (reason === 'retired_reply_policy_v2') return 'Old draft removed. Check the current history before writing a new message.';

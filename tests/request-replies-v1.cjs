@@ -280,7 +280,8 @@ const conflict=async(fn)=>assert.rejects(fn,e=>e.status===409);
   await api.saveReplyRule(f.env,{rule:'Use the customer-care signature.'},owner);
   // Another case from the same email remains open; this response must not archive unrelated questions.
   assert.equal(f.sql.prepare('SELECT status FROM requests WHERE id=?').get(first).status,'new');
-  const earlierClaim=(await f.bridge({action:'claim'})).job;assert.equal(earlierClaim.requestId,first);await f.bridge({action:'fail',id:earlierClaim.id,revision:earlierClaim.revision,leaseToken:earlierClaim.leaseToken,reason:'fixture'});
+  // Certainty gate (owner, Oct 30 2026): the customer was answered after this question arrived, so no AI draft; a person checks first.
+  assert.equal((await f.bridge({action:'claim'})).job,null);const firstDraft=f.sql.prepare('SELECT status,reason FROM request_reply_drafts WHERE request_id=?').get(first);assert.equal(firstDraft.status,'needs_review');assert.match(firstDraft.reason,/^Already answered on /);
   const other=f.request({email:'other-customer@example.invalid'});await f.prepare(other);
   claimed=(await f.bridge({action:'claim'})).job;assert.equal(claimed.requestId,other);
   const sib=f.request({email:'OTHER-customer@example.invalid',subject:'Earlier question',message:'SIBLING_TEXT first message'});f.sql.prepare('UPDATE requests SET created=? WHERE id=?').run(Date.now()-86400000,sib);

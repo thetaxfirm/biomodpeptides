@@ -167,5 +167,14 @@ const cases=require('../lib/request-cases.ts'),replies=require('../lib/request-r
  const rollback=await externalCase(),beforeRollback=rollback.read();sql.exec("CREATE TRIGGER fixture_reject_outside BEFORE INSERT ON request_external_replies BEGIN SELECT RAISE(ABORT,'Fixture receipt failure'); END");
  await assert.rejects(()=>ext.recordMailboxReplies(env,[rollback.receipt]),/Fixture receipt failure/);assert.deepEqual(rollback.read(),beforeRollback);assert.equal(sql.prepare('SELECT status FROM requests WHERE id=?').get(rollback.requestId).status,'in_progress','Failed recording rolls back both draft and case changes');sql.exec('DROP TRIGGER fixture_reject_outside');
  assert.equal(sql.prepare('SELECT COUNT(*) n FROM change_context').get().n,0);
+ // Certainty gate (owner, Oct 30 2026): an AI draft is never written for a cancelled order (the rejected "your order is saved" email).
+ {const cancelledId='ord_'+randomUUID().slice(0,12);
+  sql.prepare('INSERT INTO orders(id,owner,request_key,status,total,data,created,updated) VALUES(?,?,?,?,?,?,?,?)').run(cancelledId,'synthetic-owner-2','rk-'+cancelledId,'cancelled',39206,JSON.stringify({email:'cancelled-buyer@example.invalid',address:{name:'Cancelled Buyer'},items:[{id:1,quantity:10,product:{name:'Fixture vial'}}]}),Date.now(),Date.now());
+  const convo=await cases.startOrderConversation(env,cancelledId,owner);
+  while((await replies.handleReplyBridge(env,{action:'claim'})).job){}
+  await replies.prepareRequestReply(env,{requestId:convo.requestId,mode:'ai',expectedRevision:null},owner);
+  assert.equal((await replies.handleReplyBridge(env,{action:'claim'})).job,null,'No AI job is handed out for a cancelled order');
+  const stopped=sql.prepare('SELECT status,reason FROM request_reply_drafts WHERE request_id=?').get(convo.requestId);
+  assert.equal(stopped.status,'needs_review');assert.match(stopped.reason,/^No AI follow-up: Order [A-Z0-9_]{8} is cancelled\./);}
  console.log('PASS: one conversation per order with staff-only order context, order subject kept, issue + resolutions validated, issue-scoped rules and the decided case reach the AI, case log for rules. Isolated SQLite, no email.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

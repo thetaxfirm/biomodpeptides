@@ -7,6 +7,7 @@ import { activePromotions } from './promotions';
 import { openRequestsForBridge, recordMailboxReplies } from './request-external';
 import { isIssue, issueLabel, resolutionLabel, looksLikePitchText } from './request-issues';
 import { matchedCoaReplyProblem } from './reply-composer';
+import { aiDraftGate, looksLikeSolicitation, type GateResult } from './reply-gate';
 import { followupStateStatements, answeredFollowupStateStatements } from './request-followups';
 export const REPLY_SENDER = 'contact@trybiomod.com';
 type Env = { DB: D1Database };
@@ -259,14 +260,40 @@ export async function handleReplyBridge(env:Env,payload:unknown):Promise<Record<
   if(!row)return {job:null};const request=await inquiryFor(env,row.request_id);
   // A request closed in the meantime (archived, spam, deleted) never blocks the queue.
   if(!request||['spam','resolved','deleted'].includes(request.status||'')){await db.prepare("UPDATE request_reply_drafts SET status='cancelled',reason='request_closed',lease_token=NULL,lease_until=NULL,updated=? WHERE id=? AND revision=? AND lease_token=?").bind(Date.now(),row.id,row.revision,token).run();return {job:null};}
+  // AI drafts are checked against current facts at the moment of writing (owner, Oct 30 2026). Owner-approved sends are not.
+  let gate:GateResult|null=null;
+  if(row.mode==='ai'&&!row.approved_at){
+   const d=parse(request.data);
+   gate=await aiDraftGate(env.DB as any,request as any,now,async()=>{
+    // Order conversations: never about a cancelled or refunded order; an unpaid one only while a checkout follow-up is still right.
+    const orderId=typeof d.orderId==='string'?d.orderId:'';const o=await env.DB.prepare('SELECT status FROM orders WHERE id=?').bind(orderId).first<{status:string}>();
+    if(!o)return {eligible:false,reason:'This order is no longer available.'};
+    if(['cancelled','refunded','released','failed'].includes(o.status))return {eligible:false,reason:`Order ${orderId.slice(0,8).toUpperCase()} is ${o.status}.`};
+    if(['creating','awaiting_payment','pending','review'].includes(o.status)){const f=await orderFollowUp(env.DB as any,orderId,now);return {eligible:f.eligible,reason:f.reason};}
+    return {eligible:true,reason:''};
+   });
+   const paused=await aiDraftingPaused(env);
+   if(paused||gate.stop){
+    await db.prepare("UPDATE request_reply_drafts SET status='needs_review',reason=?,lease_token=NULL,lease_until=NULL,updated=? WHERE id=? AND revision=? AND status='preparing' AND lease_token=?").bind(paused?'AI drafting is paused by the owner. Write this reply yourself.':gate.stop,Date.now(),row.id,row.revision,token).run();
+    if(!paused&&looksLikeSolicitation(String(d.subject||''),String(d.message||'')))await db.prepare("UPDATE requests SET status='spam' WHERE id=? AND status IN ('new','in_progress')").bind(row.request_id).run();
+    return {job:null};
+   }
+  }
   const plan=await currentCoa(env,row);
   if(plan.requiresNewReview){await db.prepare("UPDATE request_reply_drafts SET status='needs_review',reason=?,approved_at=NULL,approved_by=NULL,lease_token=NULL,lease_until=NULL,updated=? WHERE id=? AND revision=? AND status='preparing' AND lease_token=?").bind(plan.coa.reason,Date.now(),row.id,row.revision,token).run();return {job:null};}
   const written=await db.prepare("UPDATE request_reply_drafts SET coa_json=?,updated=? WHERE id=? AND revision=? AND status='preparing' AND lease_token=?").bind(JSON.stringify(plan.coa),Date.now(),row.id,row.revision,token).run();if(!written.meta.changes)fail('Draft changed during preparation.');
-  return {job:{id:row.id,requestId:row.request_id,revision:row.revision,leaseToken:token,mode:row.mode,sender:row.sender,recipient:row.recipient,subject:row.subject,instruction:draftInstruction(row),proposedBody:row.proposed_body,request:source(request!),history:(await historyFor(env,request!)).map(({id,direction,body,created})=>({id,direction,body,created})),coa:plan.coa,...('attachment' in plan&&plan.attachment?{attachment:plan.attachment}:{}),...(plan.extras?.length?{extraAttachments:plan.extras}:{}),preparedBy:row.prepared_by,...(row.mode==='ai'?{customerHistory:(await customerHistoryFor(env,request!)).map(({id,direction,body,created})=>({id,direction,body,created})),customer:await customerContext(env.DB as any,source(request!).email,source(request!).subject+'\n'+source(request!).message).catch(()=>undefined)}:{}),...(row.approved_at?{approved:{by:row.approved_by||'',at:row.approved_at}}:{}),...(row.mode==='ai'?await (async()=>{const c=await env.DB.prepare('SELECT issue,resolutions,note FROM request_issues WHERE request_id=?').bind(row.request_id).first<{issue:string;resolutions:string;note:string}>().catch(()=>null);let res:string[]=[];try{res=c?JSON.parse(c.resolutions):[];}catch{res=[];}
+  return {job:{id:row.id,requestId:row.request_id,revision:row.revision,leaseToken:token,mode:row.mode,sender:row.sender,recipient:row.recipient,subject:row.subject,instruction:draftInstruction(row),proposedBody:row.proposed_body,request:source(request!),history:(await historyFor(env,request!)).map(({id,direction,body,created})=>({id,direction,body,created})),coa:plan.coa,...('attachment' in plan&&plan.attachment?{attachment:plan.attachment}:{}),...(plan.extras?.length?{extraAttachments:plan.extras}:{}),preparedBy:row.prepared_by,...(gate?{latestIncomingAt:gate.latestIncomingAt,linkedEmails:gate.linkedEmails,linkedOrders:gate.linkedOrders}:{}),...(row.mode==='ai'?{customerHistory:(await customerHistoryFor(env,request!)).map(({id,direction,body,created})=>({id,direction,body,created})),customer:await customerContext(env.DB as any,source(request!).email,source(request!).subject+'\n'+source(request!).message).catch(()=>undefined)}:{}),...(row.approved_at?{approved:{by:row.approved_by||'',at:row.approved_at}}:{}),...(row.mode==='ai'?await (async()=>{const c=await env.DB.prepare('SELECT issue,resolutions,note FROM request_issues WHERE request_id=?').bind(row.request_id).first<{issue:string;resolutions:string;note:string}>().catch(()=>null);let res:string[]=[];try{res=c?JSON.parse(c.resolutions):[];}catch{res=[];}
    return {style:await replyStyle(env,c?.issue||null),codes:activePromotions(),...(c?{caseInfo:`Issue: ${issueLabel(c.issue)}.${res.length?' Recorded resolution: '+res.map(resolutionLabel).join(', ')+'.':''}${c.note?' Staff note: '+c.note.slice(0,500):''}`}:{})};})():{})}};
  }
  if(p.action==='retired_drafts')return {drafts:(await env.DB.prepare("SELECT id,revision FROM request_reply_drafts WHERE status='cancelled' AND reason='retired_reply_policy_v2' ORDER BY updated DESC LIMIT 200").all<{id:string;revision:number}>()).results};
  if(p.action==='open_requests')return {requests:await openRequestsForBridge(env)};
+ // Jarvis drops a Ready to Send copy once its website draft is no longer ready or its request closed.
+ if(p.action==='draft_states'){
+  const ids=Array.isArray(p.ids)?p.ids.filter((v:unknown):v is string=>typeof v==='string'&&/^[a-f0-9-]{36}$/.test(v)).slice(0,100):[];
+  if(!ids.length)return {drafts:[]};
+  const rows=(await env.DB.prepare(`SELECT d.id,d.revision,d.status,d.ready_id,r.status request_status FROM request_reply_drafts d LEFT JOIN requests r ON r.id=d.request_id WHERE d.id IN (${ids.map(()=>'?').join(',')})`).bind(...ids).all<{id:string;revision:number;status:string;ready_id:string|null;request_status:string|null}>()).results;
+  return {drafts:rows.map(r=>({id:r.id,revision:r.revision,readyId:r.ready_id,live:r.status==='ready'&&!['spam','resolved','deleted',null].includes(r.request_status as any)}))};
+ }
  if(p.action==='external_replies')return recordMailboxReplies(env,p.replies);
  const jobId=id(p.id),rev=revision(p.revision),row=await rowFor(env,jobId);
  if(p.action==='sent'){const provider=reference(p.providerMessageId),readyId=reference(p.readyId),thread=p.providerThreadId===undefined?null:reference(p.providerThreadId),body=text(p.body,60000,true),sentAt=stamp(p.sentAt),oldAck=await env.DB.prepare('SELECT * FROM request_reply_messages WHERE reply_job_id=? AND reply_revision=? AND ready_id=?').bind(jobId,rev,readyId).first<any>();if(oldAck){if(oldAck.provider_message_id!==provider||oldAck.provider_thread_id!==thread||oldAck.body!==body||oldAck.created!==sentAt)fail('This provider acknowledgement conflicts with the saved send.');return {ok:true};}}
@@ -339,8 +366,9 @@ export async function aiDraftingPaused(env:Env){
 
 /** New website message: the AI drafts a reply for customers only. Supplier sales pitches get no automatic draft. */
 export async function autoDraftNewRequest(env:Env,requestId:string){
- if(await aiDraftingPaused(env))return null;
  const request=await inquiryFor(env,id(requestId));if(!request)return null;const d=source(request);
- if(looksLikePitchText(d.subject,d.message))return null;
+ // Supplier pitches go to Spam and are never answered (owner, Oct 30 2026).
+ if(looksLikePitchText(d.subject,d.message)||looksLikeSolicitation(d.subject,d.message)){await dbFor(env,{email:'Website request automation',role:'system'}).prepare("UPDATE requests SET status='spam' WHERE id=? AND status='new'").bind(request.id).run();return null;}
+ if(await aiDraftingPaused(env))return null;
  return prepareRequestReply(env,{requestId,mode:'ai',expectedRevision:null},{email:'Website request automation',role:'system'});
 }
