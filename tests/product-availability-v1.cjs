@@ -31,7 +31,7 @@ const deps={'@/lib/packs':require('../lib/packs.ts'),
  '@/lib/runtime':runtime,
  '@/lib/change-history':history,
  '@/lib/inventory-statements.json':require('../lib/inventory-statements.json'),
- '@/lib/auth':{session:async()=>({id:'fixture-session'}),rateLimit:async()=>{},requireStaff:async permission=>{assert.equal(permission,'store:write');if(!['owner','manager'].includes(staffRole))throw Error('Store access required');authorized=true;return {email:'fixture-owner@example.invalid',role:staffRole};}},
+ '@/lib/auth':{session:async()=>({id:'fixture-session'}),rateLimit:async()=>{},requireStaff:async permission=>{assert.equal(permission,'catalog:write');if(!['owner','manager','catalog'].includes(staffRole))throw Error('Store access required');authorized=true;return {email:'fixture-owner@example.invalid',role:staffRole};}},
 };
 const filename=path.join(root,'app/api/store/[action]/route.ts'),mod=new Module(filename,module);mod.filename=filename;mod.paths=Module._nodeModulePaths(path.dirname(filename));const localRequire=Module.createRequire(filename);
 mod.require=name=>Object.hasOwn(deps,name)?deps[name]:name.startsWith('@/')||name==='next/headers'?new Proxy({},{get:(_,key)=>key==='__esModule'?true:()=>{throw Error('Unexpected dependency '+name+':'+String(key));}}):localRequire(name);
@@ -75,6 +75,17 @@ const payload=(product=p,extra={})=>({id:product.id,...base,expectedStock:8,...e
  result=await post(payload(preorder,{availability:'coming_soon',preorder:saved(preorder).preorder}));assert.equal(result.status,200);assert(saved(preorder).preorder.enabled,'Availability edit retains separate initial preorder offer');
  store(p,base);result=await post(payload(p,{expectedStock:999}));assert.equal(result.status,400);assert.equal(saved(p).stockQuantity,8);
  for(const role of ['support','fulfillment','customer']){staffRole=role;result=await post(payload());assert.equal(result.status,400);assert(!authorized);}staffRole='owner';
+ // Catalog role (owner, Oct 30 2026): prices and sales save; stock, availability, limits and release attempts never do.
+ store(p,{...base,availability:'available'});staffRole='catalog';
+ result=await post(payload(p,{price:12345,packPricingMode:'custom',packPrices:{3:30000},sale:null,availability:'unavailable',inStock:false,purchasable:false,stockQuantity:999,maxQuantity:1}));
+ assert.equal(result.status,200,result.error);assert(authorized);
+ assert.equal(saved(p).price,12345);assert.equal(saved(p).packPrices['3'],30000);assert.equal(saved(p).sale,null,'Catalog may change sales');
+ assert.deepEqual([saved(p).availability,saved(p).inStock,saved(p).purchasable,saved(p).stockQuantity,saved(p).maxQuantity],['available',true,true,8,8],'Catalog cannot change availability, stock or limits');
+ store(preorder,{...base,preorder:{enabled:true,percentOff:15,ships:'early November 2026'}});
+ result=await post(payload(preorder,{preorder:{enabled:false,percentOff:50,ships:'never'}}));assert.equal(result.status,200,result.error);
+ assert.deepEqual(saved(preorder).preorder,{enabled:true,percentOff:15,ships:'early November 2026'},'Catalog cannot change preorder terms');
+ result=await post(payload(held,{availability:'available',releaseReviewed:true,releaseReason:'Catalog attempt at a release'}));assert.equal(result.status,400);assert.match(result.error,/Only an owner/);
+ staffRole='owner';store(p,base);
  result=await post(payload(), 'https://elsewhere.example.invalid');assert.equal(result.status,403);assert(!authorized);
 
  // New migration leaves history immutable, emits precise enum differences, and never copies invalid private content.

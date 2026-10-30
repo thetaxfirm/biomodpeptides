@@ -168,10 +168,10 @@ async function recovery(email, endpoint, normalized = email.trim().toLowerCase()
     // Each role reaches only its own permissions; the server re-checks on every request.
     const signedIn = email => { response = { status: 200, body: { id: 'isolated-staff', email, email_confirmed_at: '2026-10-10T00:00:00Z', user_metadata: {} } }; };
     const allowed = [
-      ['packer@biomodcompounds.com', 'fulfillment', ['orders:read', 'orders:fulfill', 'orders:reconcile'], ['requests:write', 'store:write', 'reports:read', 'team:manage']],
-      ['helpdesk@biomodcompounds.com', 'support', ['orders:read', 'orders:reconcile', 'requests:write'], ['orders:fulfill', 'store:write', 'reports:read', 'team:manage']],
-      ['manager@biomodcompounds.com', 'manager', ['orders:read', 'orders:fulfill', 'orders:reconcile', 'requests:write', 'store:write', 'reports:read'], ['team:manage']],
-      ['ash@biomodcompounds.com', 'owner', ['orders:read', 'orders:fulfill', 'orders:reconcile', 'requests:write', 'store:write', 'reports:read', 'team:manage'], []],
+      ['packer@biomodcompounds.com', 'fulfillment', ['orders:read', 'orders:fulfill', 'orders:reconcile'], ['requests:write', 'store:write', 'catalog:write', 'reports:read', 'team:manage']],
+      ['helpdesk@biomodcompounds.com', 'support', ['orders:read', 'orders:reconcile', 'requests:write'], ['orders:fulfill', 'store:write', 'catalog:write', 'reports:read', 'team:manage']],
+      ['manager@biomodcompounds.com', 'manager', ['orders:read', 'orders:fulfill', 'orders:reconcile', 'requests:write', 'store:write', 'catalog:write', 'reports:read'], ['team:manage']],
+      ['ash@biomodcompounds.com', 'owner', ['orders:read', 'orders:fulfill', 'orders:reconcile', 'requests:write', 'store:write', 'catalog:write', 'reports:read', 'team:manage'], []],
     ];
     for (const [email, role, yes, no] of allowed) {
       for (const permission of yes) { signedIn(email); assert.equal((await auth.requireStaff(permission)).role, role, email + ' holds ' + permission); }

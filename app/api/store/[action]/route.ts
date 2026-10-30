@@ -22,7 +22,7 @@ import { after, NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createCartImports } from '@/lib/cart-import';
 import { z } from 'zod';
-import { session, customer, requireCustomer, requireStaff, staffRole, authReady, authCall, storeAuth, rateLimit, requestPasswordRecovery } from '@/lib/auth';
+import { session, customer, requireCustomer, requireStaff, requireStaffAny, staffRole, authReady, authCall, storeAuth, rateLimit, requestPasswordRecovery } from '@/lib/auth';
 import { presentationData } from '@/lib/private-presentation';
 import { adminOrderView, currentCart, currentProductId, currentSelection, orderView, unavailableOrder } from '@/lib/catalog-visibility';
 import { catalog, config, quote, validateLines } from '@/lib/commerce';
@@ -45,7 +45,7 @@ export const dynamic = 'force-dynamic';
 const adminActionPermission: Record<string, StaffPermission> = {
     'admin-orders': 'orders:read', 'admin-order': 'orders:fulfill', 'admin-order-archive': 'orders:fulfill', 'admin-order-handoff': 'orders:fulfill', 'admin-reconcile': 'orders:reconcile',
     'admin-request': 'requests:write', 'admin-request-reply': 'requests:write', 'admin-reply-attachments': 'requests:write', 'admin-reply-desk': 'requests:write', 'admin-request-replies': 'requests:write', 'admin-reply-rule': 'requests:write', 'admin-retire-reply-drafts': 'requests:write', 'admin-request-forward': 'requests:write', 'admin-order-conversation': 'requests:write', 'admin-order-hold': 'requests:write', 'admin-win-back': 'requests:write', 'admin-mark-replied': 'requests:write', 'admin-win-back-preview': 'requests:write', 'admin-request-issue': 'requests:write', 'admin-case-log': 'requests:write', 'admin-coa-process': 'requests:write',
-    'admin-config': 'store:write', 'admin-product': 'store:write', 'admin-campaign': 'store:write', 'admin-reward': 'store:write', 'admin-coa-config': 'store:write',
+    'admin-config': 'store:write', 'admin-product': 'catalog:write', 'admin-campaign': 'store:write', 'admin-reward': 'store:write', 'admin-coa-config': 'store:write',
     'admin-staff': 'team:manage',
 };
 const j = (value: unknown, status = 200) => NextResponse.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -104,7 +104,7 @@ export async function GET(req: NextRequest, { params }: {
     try {
         const { action } = await params;
         if (action === 'admin-coa-original') {
-            try { await requireStaff('store:write'); } catch { try { await requireStaff('requests:write'); } catch { return j({ error: 'Administrator product access required.' }, 403); } }
+            try { await requireStaff('catalog:write'); } catch { try { await requireStaff('requests:write'); } catch { return j({ error: 'Administrator product access required.' }, 403); } }
             const ref = req.nextUrl.searchParams.get('ref') || '';
             if (!/^private:[a-f0-9]{64}$/.test(ref)) return j({ error: 'Original report not found.' }, 404);
             const report = (await loadCoaReports(database())).find(r => 'private:' + r.sha256 === ref);
@@ -245,14 +245,14 @@ export async function GET(req: NextRequest, { params }: {
             return j({ error: 'Use POST for the order queue.' }, 405);
         }
         if (action === 'admin') {
-            // Every role sees orders; other sections are sent only to roles that hold them.
-            const { role } = await requireStaff('orders:read');
+            // Each section is sent only to roles that hold it. Catalog staff get products and lot reports, never orders.
+            const { role } = await requireStaffAny(['orders:read', 'catalog:write']);
             const allowed = (permission: StaffPermission) => can(role, permission);
             const requests = allowed('requests:write') ? await all<{ id: string; data: string }>("SELECT * FROM requests WHERE kind IN ('contact','stock','affiliate') ORDER BY created DESC LIMIT 200") : [];
-            const adminProducts = await catalog(false, allowed('store:write'));
-            return j({ role, permissions: permissionsFor(role), batchRecords: allowed('store:write') ? await adminBatchRecords(database(), adminProducts) : [], checkoutRecovery: await recoveryAdminStatus(runtime()), searchPublishing: allowed('reports:read') ? searchReport(seoConfig(runtime())) : null, config: await config(), products: adminProducts, orders: (await all<{
+            const adminProducts = await catalog(false, allowed('catalog:write'));
+            return j({ role, permissions: permissionsFor(role), batchRecords: allowed('catalog:write') ? await adminBatchRecords(database(), adminProducts) : [], checkoutRecovery: await recoveryAdminStatus(runtime()), searchPublishing: allowed('reports:read') ? searchReport(seoConfig(runtime())) : null, config: await config(), products: adminProducts, orders: allowed('orders:read') ? (await all<{
                     data: string;
-                }>('SELECT id,owner,status,total,data,created FROM orders ORDER BY created DESC LIMIT 200')).map(o => ({ ...o, data: adminOrderView(parse(o.data, {})) })), requests: requests.map(o => ({ ...o, data: parse(o.data, {}) })), requestReplies: allowed('requests:write') ? await summarizeRequestReplies(runtime(), requests.map(r => r.id)) : {}, coaAutomation: allowed('requests:write') ? await coaAutomationStatus(runtime(), requests.map(r => r.id)) : null, campaigns: allowed('store:write') ? (await all<{
+                }>('SELECT id,owner,status,total,data,created FROM orders ORDER BY created DESC LIMIT 200')).map(o => ({ ...o, data: adminOrderView(parse(o.data, {})) })) : [], requests: requests.map(o => ({ ...o, data: parse(o.data, {}) })), requestReplies: allowed('requests:write') ? await summarizeRequestReplies(runtime(), requests.map(r => r.id)) : {}, coaAutomation: allowed('requests:write') ? await coaAutomationStatus(runtime(), requests.map(r => r.id)) : null, campaigns: allowed('store:write') ? (await all<{
                     data: string;
                 }>('SELECT * FROM campaigns')).map<Record<string, any>>(o => { const {data, ...row}=o; return { ...row, ...parse<Record<string, any>>(data, {}) }; }).filter(c=>currentSelection(c.productIds)).map(c=>presentationData(c)) : [], team: allowed('team:manage') ? await staffDirectory(runtime()) : null });
         }
@@ -685,6 +685,17 @@ export async function POST(req: NextRequest, { params }: {
                 if (Object.keys(data.packPrices || {}).some(n => !['3','5','10'].includes(n))) throw new Error('Unknown pack size.');
                 const currentProduct = (await catalog(false, true)).find(p => p.id === b.id);
                 if (!currentProduct) throw new Error('Product not found.');
+                if (actor.role === 'catalog') {
+                    // Catalog staff change prices, sales and lot/COA links only (catalogEditableFields).
+                    // Stock, availability, preorders and limits keep their current values whatever the request says.
+                    if (b.releaseReviewed === true) throw new Error('Only an owner can release a product review hold.');
+                    if (currentProduct.availability !== undefined) data.availability = currentProduct.availability; else delete data.availability;
+                    if (currentProduct.preorder !== undefined) data.preorder = currentProduct.preorder; else delete data.preorder;
+                    data.inStock = currentProduct.inStock;
+                    data.purchasable = currentProduct.purchasable;
+                    data.stockQuantity = currentProduct.stockQuantity ?? null;
+                    data.maxQuantity = currentProduct.maxQuantity ?? data.maxQuantity;
+                }
                 const savedRow = await one<{data:string}>('SELECT data FROM product_overrides WHERE id=?', b.id);
                 if (typeof b.expectedVersion !== 'string' || b.expectedVersion !== currentProduct.editVersion || b.expectedVersion !== await coaHash(savedRow?.data || '')) throw new Error('This product changed or the editor is outdated. Refresh administration and review the latest values before saving.');
                 const previousBatch = (await adminBatchRecords(database(), [currentProduct]))[0];

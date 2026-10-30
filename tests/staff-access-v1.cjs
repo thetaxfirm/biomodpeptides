@@ -55,7 +55,7 @@ function d1(db) {
     await assert.rejects(save({ email, role: 'support', active: false }), /already an owner/);
   for (const email of ['', 'not-an-email', 'two@example.invalid,three@example.invalid', 'a b@example.invalid'])
     await assert.rejects(save({ email, role: 'support', active: true }), /one valid email/);
-  await assert.rejects(save({ email: 'x@example.invalid', role: 'owner', active: true }), /Manager, Fulfillment or Support/);
+  await assert.rejects(save({ email: 'x@example.invalid', role: 'owner', active: true }), /Manager, Fulfillment, Support or Catalog/);
   // The database refuses an owner row even if application checks were bypassed.
   assert.throws(() => db.prepare("INSERT INTO staff VALUES('raw@example.invalid','', 'owner',1,1,1,'x')").run(), /CHECK constraint/);
   assert.throws(() => db.prepare("INSERT INTO staff VALUES('Raw@Example.invalid','', 'support',1,1,1,'x')").run(), /CHECK constraint/);

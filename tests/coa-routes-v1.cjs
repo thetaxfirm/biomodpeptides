@@ -144,6 +144,8 @@ const dependencies = {
 // Staff-role compatibility: the routes call requireStaff(permission); these fixtures model an
 // owner (full access), so delegate to the existing requireAdmin stub and its call log.
 dependencies['@/lib/auth'].requireStaff = async permission => { if(scenario.attachmentCheck)assert.equal(permission,'requests:write');return { ...(await dependencies['@/lib/auth'].requireAdmin()), role: 'owner' }; };
+// The dashboard load accepts any of several permissions (Catalog staff have no orders); same owner stub and call log.
+dependencies['@/lib/auth'].requireStaffAny = async permissions => { assert.deepEqual(permissions, ['orders:read', 'catalog:write']); return { ...(await dependencies['@/lib/auth'].requireAdmin()), role: 'owner' }; };
 dependencies['@/lib/auth'].staffRole = async () => null;
 dependencies['@/lib/staff'] = require('./staff-module-fixture.cjs').loadStaffModule();
 dependencies['@/lib/staff-store'] = { staffDirectory: async () => { checkedAdmin(); return { ready: true, owners: [], staff: [], audit: [] }; }, saveStaffMember: async () => { throw Error('Staff writes are outside this suite'); } };

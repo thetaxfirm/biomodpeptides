@@ -45,6 +45,8 @@ type BatchRecord = { productId: number; lot: string | null; reportRef: string | 
 type Props = {
     batchRecords?: BatchRecord[];
     canRelease?: boolean;
+    /** Catalog staff: prices, sales and lot/COA only. The server keeps stock and availability regardless. */
+    limited?: boolean;
     products: Product[];
     edited: Product | null;
     query: string;
@@ -105,7 +107,7 @@ export function AdminProducts(props: Props) {
     </section>;
 }
 
-function ProductEditor({ product: p, busy, onEdit, onCancel, onDraft, onSave, batchRecords = [], canRelease = false }: Props & { product: Product }) {
+function ProductEditor({ product: p, busy, onEdit, onCancel, onDraft, onSave, batchRecords = [], canRelease = false, limited = false }: Props & { product: Product }) {
     const batch = batchRecords.find(record => record.productId === p.id);
     const [batchDraft, setBatchDraft] = useState(() => ({ lot: batch?.lot || '', reportRef: batch?.reportRef || '', coaAvailable: Boolean(batch?.coaAvailable) }));
     const [releaseReviewed, setReleaseReviewed] = useState(false);
@@ -200,14 +202,15 @@ function ProductEditor({ product: p, busy, onEdit, onCancel, onDraft, onSave, ba
                         </section>
                     </div>
                     <div className={styles.sideColumn}>
+                        {limited && <p className={styles.help} role="note">Your Catalog role can change prices, sales and the lot and COA link. Availability, preorders and stock are set by an owner or manager.</p>}
                         <section className={styles.panel}><fieldset className={styles.statusChoices}><legend>Availability</legend>{states.map(state => <label key={state.value} className={`${styles.statusChoice} ${styles[state.value]}`} data-selected={selected === state.value}>
-                            <input type="radio" name="availability" value={state.value} checked={selected === state.value} disabled={busy} onChange={() => status(state.value)}/><span><strong>{state.label}</strong><small>{state.description}</small></span>
+                            <input type="radio" name="availability" value={state.value} checked={selected === state.value} disabled={busy || limited} onChange={() => status(state.value)}/><span><strong>{state.label}</strong><small>{state.description}</small></span>
                         </label>)}</fieldset>{held && <><p className={styles.explanation}>Publication hold: {productAvailabilityLabel(batchProduct)}. Selecting Available requires a separate owner review of the current lot; it does not release the product until saved successfully.</p>{selected === 'available' && (canRelease ? <div className={styles.releaseReview}><h4>Owner release review</h4><p>Verify the replacement lot, inventory and supporting records. The earlier held lot remains blocked.</p><label className={styles.toggle}><input name="releaseReviewed" type="checkbox" required checked={releaseReviewed} onChange={e => { if (busy) return; setReleaseReviewed(e.target.checked); setError(''); onDraft(); }}/><span>I reviewed this lot and approve opening orders.</span></label><label className={styles.field}><span>Review reason</span><textarea name="releaseReason" minLength={10} maxLength={500} rows={3} required value={releaseReason} onChange={e => { if (busy) return; setReleaseReason(e.target.value); setError(''); onDraft(); }}/></label></div> : <p className={styles.explanation}>Only an owner can release a held product. Ask an owner to review the current lot.</p>)}</>}
                             {selected === 'available' && draft.stockQuantity !== '' && Number(draft.stockQuantity) <= 0 && <p className={styles.explanation}>Verified stock is zero. Customers will see Sold out until a positive quantity is saved.</p>}
                             {selected !== 'available' && <p className={styles.help}>Changing availability does not change your inventory count. Customers cannot order this product.</p>}
                         </section>
-                        {p.preorder && <section className={styles.panel} aria-labelledby="product-preorder-title"><h3 id="product-preorder-title">Initial-run preorder</h3><label className={styles.toggle}><input type="checkbox" checked={preorderEnabled} onChange={e => { if (!busy && p.preorder) onEdit({ ...p, preorder: { ...p.preorder, enabled: e.target.checked } }); }}/><span>Offer as preorder</span></label>
-                            <p>Available preorders accept payment now for later dispatch. Coming soon does not accept orders.</p><div className={styles.twoColumns}><label className={styles.field}><span>Preorder discount (%)</span><input name="preorderPercent" type="number" min="0.01" max="99" step="0.01" required value={draft.preorderPercent} onChange={e => field('preorderPercent', e.target.value)}/></label><label className={styles.field}><span>Estimated dispatch</span><input name="preorderShips" maxLength={120} required value={draft.preorderShips} onChange={e => field('preorderShips', e.target.value)}/></label></div><p className={styles.help}>Disable when ready to ship. Existing orders retain their saved dispatch estimate.</p>
+                        {p.preorder && <section className={styles.panel} aria-labelledby="product-preorder-title"><h3 id="product-preorder-title">Initial-run preorder</h3><label className={styles.toggle}><input type="checkbox" disabled={limited} checked={preorderEnabled} onChange={e => { if (!busy && p.preorder) onEdit({ ...p, preorder: { ...p.preorder, enabled: e.target.checked } }); }}/><span>Offer as preorder</span></label>
+                            <p>Available preorders accept payment now for later dispatch. Coming soon does not accept orders.</p><div className={styles.twoColumns}><label className={styles.field}><span>Preorder discount (%)</span><input name="preorderPercent" readOnly={limited} type="number" min="0.01" max="99" step="0.01" required value={draft.preorderPercent} onChange={e => field('preorderPercent', e.target.value)}/></label><label className={styles.field}><span>Estimated dispatch</span><input name="preorderShips" readOnly={limited} maxLength={120} required value={draft.preorderShips} onChange={e => field('preorderShips', e.target.value)}/></label></div><p className={styles.help}>Disable when ready to ship. Existing orders retain their saved dispatch estimate.</p>
                         </section>}
                         <section className={styles.panel} aria-labelledby="product-batch-title"><h3 id="product-batch-title">Lot & original COA</h3>
                             <label className={styles.field}><span>Current product lot</span><input name="batchLot" maxLength={100} value={batchDraft.lot} required={held && selected === 'available'} onChange={e => changeLot(e.target.value)} placeholder="Enter the lot printed on this stock"/></label>
@@ -219,7 +222,7 @@ function ProductEditor({ product: p, busy, onEdit, onCancel, onDraft, onSave, ba
                             <p className={styles.help}>This controls availability of the attached original under its existing sharing policy. It does not certify purity or change the laboratory report.</p>
                             {failedLot && <p className={styles.explanation}>Lot 702-20-0001 is held and cannot be released. A reviewed replacement lot is required.</p>}
                         </section>
-                        <section className={styles.panel} aria-labelledby="product-inventory-title"><h3 id="product-inventory-title">Inventory</h3><div className={styles.twoColumns}><label className={styles.field}><span>Verified inventory quantity</span><input name="stockQuantity" type="number" min="0" max="100000" step="1" value={draft.stockQuantity} onChange={e => field('stockQuantity', e.target.value)}/></label><label className={styles.field}><span>Maximum per order</span><input name="maxQuantity" type="number" min="1" max="100000" step="1" required value={draft.maxQuantity} onChange={e => field('maxQuantity', e.target.value)}/></label></div><p className={styles.help}>Blank stock means not set. Saving checks for inventory changes and stock already reserved by orders.</p></section>
+                        <section className={styles.panel} aria-labelledby="product-inventory-title"><h3 id="product-inventory-title">Inventory</h3><div className={styles.twoColumns}><label className={styles.field}><span>Verified inventory quantity</span><input name="stockQuantity" readOnly={limited} type="number" min="0" max="100000" step="1" value={draft.stockQuantity} onChange={e => field('stockQuantity', e.target.value)}/></label><label className={styles.field}><span>Maximum per order</span><input name="maxQuantity" readOnly={limited} type="number" min="1" max="100000" step="1" required value={draft.maxQuantity} onChange={e => field('maxQuantity', e.target.value)}/></label></div><p className={styles.help}>Blank stock means not set. Saving checks for inventory changes and stock already reserved by orders.</p></section>
                     </div>
                 </div>
             </fieldset>

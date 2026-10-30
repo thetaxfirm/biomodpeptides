@@ -64,6 +64,11 @@ export async function requireStaff(permission: StaffPermission) { const u = awai
     if (!role) throw new Error('Administrator access is required.');
     if (!can(role, permission)) throw new Error('Your administrator role does not include this.');
     return { ...u, role }; }
+/** Any one of several permissions, for shared admin views (the dashboard load). */
+export async function requireStaffAny(permissions: StaffPermission[]) { const u = await requireCustomer(); const role = await staffRole(u.email);
+    if (!role) throw new Error('Administrator access is required.');
+    if (!permissions.some(permission => can(role, permission))) throw new Error('Your administrator role does not include this.');
+    return { ...u, role }; }
 // Full store administration (owners and managers).
 export const requireAdmin = () => requireStaff('store:write');
 export async function rateLimit(key: string, limit = 30) { const now = timestamp(); const row = await one<{

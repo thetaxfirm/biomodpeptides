@@ -22,7 +22,7 @@ export async function staffDirectory(env: StaffEnvironment) {
 export async function saveStaffMember(env: StaffEnvironment, actorEmail: string, change: StaffChange, now = Date.now()) {
   const email = normalizeStaffEmail(change.email);
   if (!validStaffEmail(email)) throw new Error('Enter one valid email address.');
-  if (!assignableRoles.includes(change.role)) throw new Error('Choose Manager, Fulfillment or Support.');
+  if (!assignableRoles.includes(change.role)) throw new Error('Choose Manager, Fulfillment, Support or Catalog.');
   if (owners(env).includes(email)) throw new Error('This address is already an owner. Owners are changed in Cloudflare (STORE_ADMIN_EMAILS).');
   const name = (change.name || '').trim().slice(0, 100);
   const actor = normalizeStaffEmail(actorEmail);
