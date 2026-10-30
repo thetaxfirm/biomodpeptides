@@ -14,22 +14,23 @@ export type StaffPermission =
   | 'orders:fulfill'   // buy labels, tracking, shipped/delivered confirmation
   | 'orders:reconcile' // re-check a payment with the provider
   | 'requests:write'   // customer request inbox and sending original COAs
+  | 'requests:send'    // send desk replies to customers directly (owner request Oct 30 2026; staff sends are blind-copied to the owner)
   | 'store:write'      // settings, products, prices, stock, presales, rewards, COA email settings
   | 'reports:read'     // promo/affiliate, sales, traffic, search and change reports
   | 'team:manage';     // add, change or remove staff
 
 const permissions: Record<StaffRole, readonly StaffPermission[]> = {
-  owner: ['orders:read', 'orders:fulfill', 'orders:reconcile', 'requests:write', 'store:write', 'reports:read', 'team:manage'],
+  owner: ['orders:read', 'orders:fulfill', 'orders:reconcile', 'requests:write', 'requests:send', 'store:write', 'reports:read', 'team:manage'],
   manager: ['orders:read', 'orders:fulfill', 'orders:reconcile', 'requests:write', 'store:write', 'reports:read'],
   fulfillment: ['orders:read', 'orders:fulfill', 'orders:reconcile'],
-  support: ['orders:read', 'orders:reconcile', 'requests:write'],
+  support: ['orders:read', 'orders:reconcile', 'requests:write', 'requests:send'],
 };
 
 export const roleDetails: Record<StaffRole, { label: string; description: string }> = {
   owner: { label: 'Owner', description: 'Everything, including staff access. Set in Cloudflare, not here.' },
   manager: { label: 'Manager', description: 'Runs the store: orders, products, prices, promos, reports and requests. Cannot manage staff.' },
   fulfillment: { label: 'Fulfillment', description: 'Sees orders and ships them: labels, tracking and delivery status.' },
-  support: { label: 'Support', description: 'Sees orders and answers customer requests. Cannot ship, edit products or see reports.' },
+  support: { label: 'Support', description: 'Sees orders and answers customer requests, and can send replies (the owner gets a blind copy). Cannot ship, edit products or see reports.' },
 };
 
 export const isStaffRole = (value: unknown): value is StaffRole => staffRoles.includes(value as StaffRole);

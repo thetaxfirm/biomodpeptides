@@ -30,3 +30,12 @@ Owner request (chat, Oct 30 2026): the pending AI customer-service drafts were w
 ## Gaps
 - Drafting remains paused; the gate has not run on live requests. The owner reviews before it is turned back on.
 - Mailbox check covers connected mailboxes only (texts, calls and unconnected accounts are not seen).
+
+## Later the same day: drafting resumed; Support staff can send (blind copy to the owner)
+- Owner: "ai drafting can be turned on" — settings.reply_ai_v1 set to {"paused":false} (attributed change event).
+- Owner: give Bryan (bryan@biomodpeptides.com) customer-service access; he may send replies to customers directly; blind-copy the owner; he may see customers and orders.
+- New permission requests:send (owner, support). Managers still save drafts only. Cases tagged Owner review required stay owner-send only.
+- A send approved by a staff row (owners are never staff rows) carries bcc = settings.reply_staff_send_v1.bcc, default ash@biomodcompounds.com. Jarvis stores it on the Ready to Send item and its draft row, sends it through Gmail, and refuses any other or missing BCC on that reply.
+- Support can open private original COA PDFs from the desk (admin-coa-original accepts requests:write).
+- Tests: request-replies-v1 (support sends, BCC, owner sends without BCC, owner-review block, managers cannot send); Jarvis trybiomodReplies.test.ts 73/73. check:release 112 suites passed; build passed.
+- Deploy order: Jarvis restarted first (PID 96937) so no staff send could go out without the copy.

@@ -104,7 +104,7 @@ export async function GET(req: NextRequest, { params }: {
     try {
         const { action } = await params;
         if (action === 'admin-coa-original') {
-            try { await requireStaff('store:write'); } catch { return j({ error: 'Administrator product access required.' }, 403); }
+            try { await requireStaff('store:write'); } catch { try { await requireStaff('requests:write'); } catch { return j({ error: 'Administrator product access required.' }, 403); } }
             const ref = req.nextUrl.searchParams.get('ref') || '';
             if (!/^private:[a-f0-9]{64}$/.test(ref)) return j({ error: 'Original report not found.' }, 404);
             const report = (await loadCoaReports(database())).find(r => 'private:' + r.sha256 === ref);

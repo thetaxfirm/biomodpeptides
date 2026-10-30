@@ -214,6 +214,19 @@ const conflict=async(fn)=>assert.rejects(fn,e=>e.status===409);
  f=setup();f.registry();for(const subject of [`COA request: ${report.productName} / wrong-lot`,'COA request: BPC-157 / 201-10-0001']){request=f.request({subject});draft=await f.prepare(request);job=(await f.bridge({action:'claim'})).job;assert.equal(job.coa.state,'needs_review');assert.equal(job.attachment,undefined);await f.bridge({action:'fail',id:job.id,revision:1,leaseToken:job.leaseToken,reason:'manual_review'});}
  // Controlled internal automation only queues drafts; no customer text can grant a staff identity.
  request=f.request();draft=await api.prepareRequestReply(f.env,{requestId:request,mode:'ai',expectedRevision:null},{email:'Website request automation',role:'system'});assert.equal(draft.status,'queued');await assert.rejects(()=>api.prepareRequestReply(f.env,{requestId:f.request(),mode:'ai',expectedRevision:null},{email:'arbitrary system',role:'system'}),e=>e.status===403);
+ // Support staff send directly (owner, Oct 30 2026); their sends carry a blind copy to the owner. Owner sends carry none.
+ {const r=setup(),owner={email:'owner@example.invalid',role:'owner'},bryan={email:'support-sender@example.invalid',role:'support'};
+  r.sql.prepare("INSERT INTO staff(email,name,role,active,created,updated,updated_by) VALUES(?,?,?,?,?,?,?)").run(bryan.email,'Support','support',1,1,1,owner.email);
+  const req=r.request();await api.prepareRequestReply(r.env,{requestId:req,mode:'staff',body:'Thanks, your order shipped today.',expectedRevision:null,send:true},bryan);
+  let j=(await r.bridge({action:'claim'})).job;assert.equal(j.approved.by,bryan.email);assert.equal(j.bcc,'ash@biomodcompounds.com','Staff send is blind-copied to the owner');
+  r.sql.prepare("INSERT INTO settings(key,value) VALUES('reply_staff_send_v1',?)").run(JSON.stringify({bcc:'Owner.Copy@Example.invalid'}));
+  const req2=r.request();await api.prepareRequestReply(r.env,{requestId:req2,mode:'staff',body:'Thanks, checking now.',expectedRevision:null,send:true},bryan);
+  j=(await r.bridge({action:'claim'})).job;assert.equal(j.bcc,'owner.copy@example.invalid');
+  const req3=r.request();await api.prepareRequestReply(r.env,{requestId:req3,mode:'staff',body:'Owner reply.',expectedRevision:null,send:true},owner);
+  j=(await r.bridge({action:'claim'})).job;assert.equal(j.bcc,undefined,'Owner sends have no blind copy');
+  const held=r.request();r.sql.prepare("INSERT INTO request_issues(request_id,issue,resolutions,note,updated,updated_by) VALUES(?,?,?,?,?,?)").run(held,'owner_review','[]','Refund decision.',1,owner.email);
+  await assert.rejects(()=>api.prepareRequestReply(r.env,{requestId:held,mode:'staff',body:'Refund approved.',expectedRevision:null,send:true},bryan),e=>e.status===403&&/owner's review/.test(e.message));
+  assert.equal((await api.prepareRequestReply(r.env,{requestId:held,mode:'staff',body:'Refund approved.',expectedRevision:null},bryan)).status,'queued','Staff can still save the draft for the owner');}
  // Owner pause (Oct 30 2026): no AI draft, automatic or from the desk; staff replies still save; a bad setting fails closed.
  {const r=setup(),owner={email:'owner@example.invalid',role:'owner'};
   r.sql.prepare("INSERT INTO settings(key,value) VALUES('reply_ai_v1',?)").run(JSON.stringify({paused:true}));
@@ -257,7 +270,7 @@ const conflict=async(fn)=>assert.rejects(fn,e=>e.status===409);
  {const owner={email:'synthetic-owner@example.invalid',role:'owner'};
   f=setup();f.registry();const first=f.request(),second=f.request({subject:'General question'});
   await f.prepare(first);
-  await assert.rejects(()=>api.prepareRequestReply(f.env,{requestId:second,mode:'staff',body:'Hi',expectedRevision:null,send:true},staff),e=>e.status===403,'Support cannot send');
+  await assert.rejects(()=>api.prepareRequestReply(f.env,{requestId:second,mode:'staff',body:'Hi',expectedRevision:null,send:true},{email:'manager@example.invalid',role:'manager'}),e=>e.status===403,'Managers cannot send');
   await assert.rejects(()=>api.prepareRequestReply(f.env,{requestId:second,mode:'ai',expectedRevision:null,send:true},owner),e=>e.status===403,'Send is always an exact owner-approved text');
   const picked=originals[1];
   // Send explains why a chosen original is blocked before the generic attachment-copy guard.

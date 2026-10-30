@@ -8,6 +8,7 @@ import { openRequestsForBridge, recordMailboxReplies } from './request-external'
 import { isIssue, issueLabel, resolutionLabel, looksLikePitchText } from './request-issues';
 import { matchedCoaReplyProblem } from './reply-composer';
 import { aiDraftGate, looksLikeSolicitation, type GateResult } from './reply-gate';
+import { can, isStaffRole } from './staff';
 import { followupStateStatements, answeredFollowupStateStatements } from './request-followups';
 export const REPLY_SENDER = 'contact@trybiomod.com';
 type Env = { DB: D1Database };
@@ -166,7 +167,8 @@ export async function prepareRequestReply(env:Env,input:PrepareReplyRequest,acto
  if(!['ai','staff'].includes(input.mode))fail('Choose AI or staff drafting.',400);
  if(input.mode==='ai'&&await aiDraftingPaused(env))fail('AI drafting is paused by the owner. Write this reply yourself.',409);const body=text(input.body??'',12000,input.mode==='staff'),userInstruction=text(input.instruction??'',2000);
  // Sending is the owner's decision. Staff save drafts; only an owner's click approves the send.
- const send=input.send===true;if(send&&(actor.role!=='owner'||input.mode!=='staff'))fail('Only the owner can send a reply.',403);
+ const send=input.send===true;if(send&&(input.mode!=='staff'||!(actor.role==='owner'||(isStaffRole(actor.role)&&can(actor.role,'requests:send')))))fail('Your role cannot send replies. Save the draft for the owner.',403);
+ if(send&&actor.role!=='owner'&&await env.DB.prepare("SELECT 1 x FROM request_issues WHERE request_id=? AND issue='owner_review'").bind(id(input.requestId)).first())fail('This case needs the owner\'s review. Save the draft; the owner sends it.',403);
  validateCoaChoice(input.coaSha256);
  const request=await inquiryFor(env,requestId);if(!request)fail('Request not found.',404);if(request!.status==='deleted')fail('This request was deleted. Restore it before replying.');if(request!.status==='spam'&&!send)fail('Move this request out of spam before preparing a reply.');const incoming=source(request!);if(!incoming.email)fail('The original request needs a valid recipient.',400);
  const old=await env.DB.prepare('SELECT * FROM request_reply_drafts WHERE request_id=?').bind(requestId).first<Row>();
@@ -282,7 +284,10 @@ export async function handleReplyBridge(env:Env,payload:unknown):Promise<Record<
   const plan=await currentCoa(env,row);
   if(plan.requiresNewReview){await db.prepare("UPDATE request_reply_drafts SET status='needs_review',reason=?,approved_at=NULL,approved_by=NULL,lease_token=NULL,lease_until=NULL,updated=? WHERE id=? AND revision=? AND status='preparing' AND lease_token=?").bind(plan.coa.reason,Date.now(),row.id,row.revision,token).run();return {job:null};}
   const written=await db.prepare("UPDATE request_reply_drafts SET coa_json=?,updated=? WHERE id=? AND revision=? AND status='preparing' AND lease_token=?").bind(JSON.stringify(plan.coa),Date.now(),row.id,row.revision,token).run();if(!written.meta.changes)fail('Draft changed during preparation.');
-  return {job:{id:row.id,requestId:row.request_id,revision:row.revision,leaseToken:token,mode:row.mode,sender:row.sender,recipient:row.recipient,subject:row.subject,instruction:draftInstruction(row),proposedBody:row.proposed_body,request:source(request!),history:(await historyFor(env,request!)).map(({id,direction,body,created})=>({id,direction,body,created})),coa:plan.coa,...('attachment' in plan&&plan.attachment?{attachment:plan.attachment}:{}),...(plan.extras?.length?{extraAttachments:plan.extras}:{}),preparedBy:row.prepared_by,...(gate?{latestIncomingAt:gate.latestIncomingAt,linkedEmails:gate.linkedEmails,linkedOrders:gate.linkedOrders}:{}),...(row.mode==='ai'?{customerHistory:(await customerHistoryFor(env,request!)).map(({id,direction,body,created})=>({id,direction,body,created})),customer:await customerContext(env.DB as any,source(request!).email,source(request!).subject+'\n'+source(request!).message).catch(()=>undefined)}:{}),...(row.approved_at?{approved:{by:row.approved_by||'',at:row.approved_at}}:{}),...(row.mode==='ai'?await (async()=>{const c=await env.DB.prepare('SELECT issue,resolutions,note FROM request_issues WHERE request_id=?').bind(row.request_id).first<{issue:string;resolutions:string;note:string}>().catch(()=>null);let res:string[]=[];try{res=c?JSON.parse(c.resolutions):[];}catch{res=[];}
+  // A reply sent by staff (not an owner) is blind-copied to the owner (owner request, Oct 30 2026). Owners are never staff rows.
+  const staffSender=row.approved_at&&row.approved_by?await env.DB.prepare('SELECT 1 x FROM staff WHERE email=?').bind(String(row.approved_by).toLowerCase()).first():null;
+  const bcc=staffSender?await staffSendBcc(env):null;
+  return {job:{id:row.id,requestId:row.request_id,revision:row.revision,leaseToken:token,mode:row.mode,sender:row.sender,recipient:row.recipient,subject:row.subject,instruction:draftInstruction(row),proposedBody:row.proposed_body,request:source(request!),history:(await historyFor(env,request!)).map(({id,direction,body,created})=>({id,direction,body,created})),coa:plan.coa,...('attachment' in plan&&plan.attachment?{attachment:plan.attachment}:{}),...(plan.extras?.length?{extraAttachments:plan.extras}:{}),preparedBy:row.prepared_by,...(bcc?{bcc}:{}),...(gate?{latestIncomingAt:gate.latestIncomingAt,linkedEmails:gate.linkedEmails,linkedOrders:gate.linkedOrders}:{}),...(row.mode==='ai'?{customerHistory:(await customerHistoryFor(env,request!)).map(({id,direction,body,created})=>({id,direction,body,created})),customer:await customerContext(env.DB as any,source(request!).email,source(request!).subject+'\n'+source(request!).message).catch(()=>undefined)}:{}),...(row.approved_at?{approved:{by:row.approved_by||'',at:row.approved_at}}:{}),...(row.mode==='ai'?await (async()=>{const c=await env.DB.prepare('SELECT issue,resolutions,note FROM request_issues WHERE request_id=?').bind(row.request_id).first<{issue:string;resolutions:string;note:string}>().catch(()=>null);let res:string[]=[];try{res=c?JSON.parse(c.resolutions):[];}catch{res=[];}
    return {style:await replyStyle(env,c?.issue||null),codes:activePromotions(),...(c?{caseInfo:`Issue: ${issueLabel(c.issue)}.${res.length?' Recorded resolution: '+res.map(resolutionLabel).join(', ')+'.':''}${c.note?' Staff note: '+c.note.slice(0,500):''}`}:{})};})():{})}};
  }
  if(p.action==='retired_drafts')return {drafts:(await env.DB.prepare("SELECT id,revision FROM request_reply_drafts WHERE status='cancelled' AND reason='retired_reply_policy_v2' ORDER BY updated DESC LIMIT 200").all<{id:string;revision:number}>()).results};
@@ -357,6 +362,12 @@ export async function handleReplyBridge(env:Env,payload:unknown):Promise<Record<
  return fail('Unknown reply bridge action.',400);
 }
 
+/** Blind copy for replies staff send directly. settings.reply_staff_send_v1.bcc overrides; a bad setting falls back to the owner. */
+const OWNER_BCC='ash@biomodcompounds.com';
+async function staffSendBcc(env:Env):Promise<string>{
+ try{const row=await env.DB.prepare("SELECT value FROM settings WHERE key='reply_staff_send_v1'").first<{value:string}>();const v=row?JSON.parse(row.value)?.bcc:null;return coaEmail(v)||OWNER_BCC;}
+ catch{return OWNER_BCC;}
+}
 /** Owner pause (Oct 30 2026): AI drafts were wrong too often. While settings.reply_ai_v1.paused is true no AI draft is
  * prepared, automatically or from the desk; staff-written replies and sending are unaffected. A failed read counts as paused. */
 export async function aiDraftingPaused(env:Env){
