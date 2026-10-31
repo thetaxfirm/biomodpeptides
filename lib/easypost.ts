@@ -1,3 +1,4 @@
+import { classifyVerifiedAddress, type AddressCheck } from './address-check';
 import { customerMailFrom, CUSTOMER_MAIL_SIGNATURE_HTML } from './customer-mail';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { shipmentEmailText } from './fulfillment';
@@ -118,6 +119,20 @@ export function shippingOptionsFromRates(available: Rate[], settings: ShippingOp
         result.push({ id: rate.id, tier, shippingService: free ? 'Free standard shipping · ' + serviceName(rate) : serviceName(rate), shipping: free ? 0 : rate.cents + handlingCents, carrierCents: rate.cents, handlingCents, days: rate.days, carrier: rate.carrier as ShippingCarrier, carrierService: rate.service, source: 'easypost', free });
     }
     return result;
+}
+/**
+ * Ask USPS (through EasyPost) whether this address is deliverable as typed. Buys nothing.
+ * Only the street, city, state and ZIP are sent. Any failure to reach the check reads as
+ * 'unavailable', never as a bad address: an outage must not turn customers away.
+ */
+export async function verifyShipAddress(env: Environment, a: Pick<ShipAddress, 'line1' | 'line2' | 'city' | 'state' | 'zip'>, now = Date.now()): Promise<AddressCheck> {
+    if (!easypostReady(env)) return { status: 'unavailable', at: now };
+    try {
+        const address = await call(env, '/addresses', { address: { street1: a.line1, street2: a.line2 || '', city: a.city, state: a.state, zip: a.zip, country: 'US' }, verify: true });
+        return { status: classifyVerifiedAddress(address, Boolean((a.line2 || '').trim())), at: now };
+    } catch {
+        return { status: 'unavailable', at: now };
+    }
 }
 /** Live checkout options for the enabled services or tiers. */
 export async function carrierShippingOptions(env: Environment, to: ShipAddress, items: ShipItem[], settings: ShippingOptionsConfig, freeStandard = false): Promise<ShippingOption[]> {

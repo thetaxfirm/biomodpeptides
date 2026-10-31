@@ -126,6 +126,7 @@ const settle = () => new Promise(r => setTimeout(r, 0));
  const RUN = Date.parse('2026-10-15T12:00:00Z');
  assert.match(autoLabelReport(null, RUN), /No automatic run has reported yet/);
  assert.match(autoLabelReport({ checkedAt: RUN - 60000, status: 'completed', enabled: true, bought: 2, failed: 0, blocked: 0, due: 2, recovered: 0, released: 0, capReached: false }, RUN), /2 labels bought/);
+ assert.match(autoLabelReport({ checkedAt: RUN - 60000, status: 'completed', enabled: true, bought: 0, failed: 0, blocked: 0, addressHeld: 1, due: 1, recovered: 0, released: 0, capReached: false }, RUN), /1 order held for an address USPS flagged/);
  assert.match(autoLabelReport({ checkedAt: RUN - 60000, status: 'completed', enabled: true, bought: 1, failed: 1, blocked: 1, due: 2, recovered: 0, released: 0, capReached: false }, RUN), /1 label bought, 1 attempt failed, 1 order handed to you/);
  assert.match(autoLabelReport({ checkedAt: RUN - 60000, status: 'completed', enabled: true, bought: 0, failed: 0, blocked: 0, needsApproval: 2, due: 2, recovered: 0, released: 0, capReached: false }, RUN), /2 labels waiting for your approval/);
  assert.match(autoLabelReport({ checkedAt: RUN - 60000, status: 'disabled', enabled: false, bought: 0, failed: 0, blocked: 0, due: 0, recovered: 0, released: 0, capReached: false }, RUN), /Automatic buying is off/);

@@ -7,7 +7,7 @@ import styles from './admin-shipping-settings.module.css';
 
 type AutoLabel = { enabled: boolean; delayMs: number; dailyCapCents: number; maxLabelCents?: number };
 /** What the last scheduled run did. Null means no run has reported yet, which is not the same as a failure. */
-type AutoLabelHealth = { checkedAt: number; status: string; enabled: boolean; bought: number; failed: number; blocked: number; needsApproval?: number; due: number; recovered: number; released: number; capReached: boolean } | null;
+type AutoLabelHealth = { checkedAt: number; status: string; enabled: boolean; bought: number; failed: number; blocked: number; addressHeld?: number; needsApproval?: number; due: number; recovered: number; released: number; capReached: boolean } | null;
 type ShippingSettingsConfig = { shippingCents: number | null; freeShippingAt: number; shippingOptions?: unknown; autoLabel?: AutoLabel; automaticSpend?: { cents: number; labels: number }; autoLabelHealth?: AutoLabelHealth };
 type LiveRate = { key: string; name: string; cents: number; days: number | null; tier: string | null };
 type ServiceCheck = { key: string; label: string; status: 'ok' | 'missing' | 'wrong'; carrierCents: number | null; customerCents: number | null; message: string };
@@ -89,6 +89,7 @@ export function autoLabelReport(health: AutoLabelHealth, now = Date.now()): stri
     const parts = [health.bought + (health.bought === 1 ? ' label bought' : ' labels bought')];
     if (health.failed) parts.push(health.failed + (health.failed === 1 ? ' attempt failed' : ' attempts failed'));
     if (health.blocked) parts.push(health.blocked + (health.blocked === 1 ? ' order handed to you' : ' orders handed to you'));
+    if (health.addressHeld) parts.push(health.addressHeld + (health.addressHeld === 1 ? ' order held for an address USPS flagged' : ' orders held for addresses USPS flagged'));
     if (health.needsApproval) parts.push(health.needsApproval + (health.needsApproval === 1 ? ' label waiting for your approval' : ' labels waiting for your approval'));
     if (health.recovered) parts.push(health.recovered + ' already-paid label recovered');
     if (health.released) parts.push(health.released + ' stuck order released');

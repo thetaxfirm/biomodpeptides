@@ -7,11 +7,12 @@ const root=path.resolve(__dirname,'..'),ts=require('typescript');
 
 // --- A stubbed EasyPost that records every call, so "did we buy twice" is directly observable. ---
 let shipments=new Map(),created=0,buys=0,nextRate={id:'rate_priority',carrier:'USPS',service:'Priority',rate:'11.40',currency:'USD',delivery_days:2,mode:'production'};
-let failBuy=null,failCreate=null,emails=[],attempts=[];
+let failBuy=null,failCreate=null,emails=[],attempts=[],verifyResult='verified',verifies=0;
 const makeShipment=id=>({id,mode:'production',rates:[nextRate],tracking_code:null,postage_label:null,selected_rate:null});
 function easypostStub(){
   return {
     ShippingError:class ShippingError extends Error{},
+    verifyShipAddress:async(_e,_a,now)=>{verifies++;return{status:verifyResult,at:now};},
     sendTrackingEmail:async(_e,to,orderId,_label,_name,replyTo)=>{emails.push({to,orderId,replyTo});return Boolean(replyTo);},
     readBoughtLabel:async(_e,id)=>{const s=shipments.get(id);return s&&s.selected_rate?label(s):null;},
     buyLabel:async(_env,_to,_items,_ref,_selected,_settings,attempt={})=>{
@@ -65,7 +66,7 @@ const order=(db,id,status,data,updated=OLD)=>db.raw.prepare('INSERT INTO orders 
 const store=(db,value)=>db.raw.prepare('INSERT INTO settings VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('store',JSON.stringify(value));
 const read=(db,id)=>{const r=db.raw.prepare('SELECT status,data FROM orders WHERE id=?').get(id);return{status:r.status,data:JSON.parse(r.data)};};
 const payable=(extra={})=>({address:{name:'Fixture Recipient',line1:'1 Test St',city:'Las Vegas',state:'NV',zip:'89118'},items:[{quantity:1,product:{categories:[{slug:'research-compounds'}]}}],email:'fixture@example.invalid',shippingService:'Free standard shipping',...extra});
-const reset=()=>{shipments=new Map();created=0;buys=0;failBuy=null;failCreate=null;emails=[];attempts=[];nextRate={id:'rate_priority',carrier:'USPS',service:'Priority',rate:'11.40',currency:'USD',delivery_days:2,mode:'production'};};
+const reset=()=>{verifyResult='verified';verifies=0;shipments=new Map();created=0;buys=0;failBuy=null;failCreate=null;emails=[];attempts=[];nextRate={id:'rate_priority',carrier:'USPS',service:'Priority',rate:'11.40',currency:'USD',delivery_days:2,mode:'production'};};
 const health=db=>{const r=db.raw.prepare("SELECT value FROM settings WHERE key='auto_label_health_v1'").get();return r?JSON.parse(r.value):null;};
 
 (async()=>{
@@ -313,5 +314,52 @@ const health=db=>{const r=db.raw.prepare("SELECT value FROM settings WHERE key='
   assert.equal((await auto.readAutoLabelHealth({DB:db})).status,'disabled');
   assert.equal(await auto.readAutoLabelHealth({DB:{prepare(){throw Error('gone');}}}),null,'an unreadable report is not an outage');
 
+  // --- Address gate (owner, Oct 31 2026): a USPS-flagged address waits for a person ---
+  reset(); db=database();
+  order(db,'unit','paid',payable({addressCheck:{status:'unit_missing',at:OLD,confirmed:true}}));
+  order(db,'clean','paid',payable({addressCheck:{status:'verified',at:OLD}}));
+  h=await auto.runAutoLabels({DB:db},NOW);
+  assert.equal(h.addressHeld,1,'the flagged order is held');
+  assert.equal(h.bought,1,'the verified order still ships');
+  assert.equal(verifies,0,'an order checked at checkout is not asked again');
+  let unit=read(db,'unit');
+  assert.equal(unit.status,'paid'); assert.equal(unit.data.shipment,undefined,'no label for a flagged address');
+  assert.equal(unit.data.hold.issue,'shipping');
+  assert.match(unit.data.hold.note,/apartment or unit number/);
+  assert.match(unit.data.hold.note,/customer confirmed/i);
+  assert.equal(unit.data.addressHeldAt,NOW);
+  // Once a person clears the hold, the job ships it and never re-holds it.
+  db.raw.prepare("UPDATE orders SET data=json_remove(data,'$.hold'),updated=? WHERE id='unit'").run(OLD);
+  h=await auto.runAutoLabels({DB:db},NOW);
+  assert.equal(h.addressHeld,0); assert.equal(h.bought,1,'cleared by a person: the label is bought');
+  assert(read(db,'unit').data.shipment,'label saved after review');
+
+  // An order paid before checkout checked addresses is checked at label time.
+  reset(); db=database(); verifyResult='unit_missing';
+  order(db,'legacy','paid',payable());
+  h=await auto.runAutoLabels({DB:db},NOW);
+  assert.equal(verifies,1); assert.equal(h.addressHeld,1); assert.equal(buys,0);
+  assert.equal(read(db,'legacy').data.addressCheck.status,'unit_missing','the result is kept on the order for staff');
+  reset(); db=database();
+  order(db,'legacy-ok','paid',payable());
+  h=await auto.runAutoLabels({DB:db},NOW);
+  assert.equal(h.bought,1); assert.equal(read(db,'legacy-ok').data.addressCheck.status,'verified');
+  // A check that cannot run never stops shipping: an outage is not a bad address.
+  reset(); db=database(); verifyResult='unavailable';
+  order(db,'outage','paid',payable({addressCheck:{status:'unavailable',at:OLD}}));
+  h=await auto.runAutoLabels({DB:db},NOW);
+  assert.equal(verifies,1,'an unavailable checkout check is retried'); assert.equal(h.bought,1); assert.equal(h.addressHeld,0);
+  // A retry that now finds a problem holds it.
+  reset(); db=database(); verifyResult='not_found';
+  order(db,'retry','paid',payable({addressCheck:{status:'unavailable',at:OLD}}));
+  h=await auto.runAutoLabels({DB:db},NOW);
+  assert.equal(h.addressHeld,1); assert.equal(buys,0);
+  // An address hold never overwrites a hold someone already placed.
+  reset(); db=database(); verifyResult='verified';
+  order(db,'already','paid',payable({hold:{issue:'out_of_stock',note:'restock',by:'Staff',at:OLD},addressCheck:{status:'unit_missing',at:OLD}}));
+  h=await auto.runAutoLabels({DB:db},NOW);
+  assert.equal(h.due,0,'a held order is not due'); assert.equal(read(db,'already').data.hold.issue,'out_of_stock');
+
+  console.log('PASS: address gate holds USPS-flagged and customer-confirmed addresses once, re-checks older orders, never blocks on an outage.');
   console.log('PASS: grace period, hold/test/labelled/unpaid/addressless gates, unreadable saved option skipped, daily cap counted from automatic labels in the last 24h only, kill switch stops buying but not recovery, a charged-but-lost attempt is adopted rather than repeated, stranded claims released, live requests untouched, a concurrent hold survives, one failure isolated, per-run limit honoured, unreadable settings stand the job down, the per-label ceiling sends an expensive label to a person instead of retrying it, repeated failures hand the order to a person, health is reported. No live providers.');
 })().catch(e=>{console.error(e);process.exitCode=1});

@@ -13,6 +13,8 @@ const address = { name: 'Isolated fixture', line1: '1 Example Road', line2: '', 
 const env = { FIXED_TAX_RATE: '8.375', FIXED_TAX_STATE: 'NV' };
 let receipt, oldOrder = null, savedOrder, sequence = 0, adapterCalls = 0;
 const shippingStates = [];
+let verifyStatus = 'verified';
+const verifyCalls = [];
 const now = 2000000000000;
 const runtime = {
   runtime: () => env, timestamp: () => now, uid: () => 'isolated-' + ++sequence,
@@ -40,7 +42,7 @@ Module._load = function(request, parent, isMain) {
     if (request === './change-history') return { withAuditDb: db => db, auditRun: (_db, actor, sql, ...values) => { assert.equal(actor.actor, 'Website checkout'); return runtime.run(sql, ...values); } };
     if (request === './commerce') return { quote: async () => ({ items: [{ ...lines[0], product, lineTotal: 4900 }], subtotal: 4900, discount: 0, total: 4900, config: { shippingCents: 500, freeShippingAt: 20000 } }) };
     if (request === './auth') return { customer: async () => ({ email: 'fixture@example.invalid' }) };
-    if (request === './easypost') return { easypostReady: () => true, carrierShippingOptions: async (_env, parsed) => { shippingStates.push(parsed.state); return [{ id: 'rate_fixture', tier: 'standard', shipping: 500, shippingService: 'USPS Ground Advantage', carrierCents: 500, handlingCents: 0, days: 3, carrier: 'USPS', carrierService: 'GroundAdvantage', source: 'easypost', free: false }]; } };
+    if (request === './easypost') return { easypostReady: () => true, verifyShipAddress: async (_env, parsed, at) => { verifyCalls.push(parsed); return { status: verifyStatus, at }; }, carrierShippingOptions: async (_env, parsed) => { shippingStates.push(parsed.state); return [{ id: 'rate_fixture', tier: 'standard', shipping: 500, shippingService: 'USPS Ground Advantage', carrierCents: 500, handlingCents: 0, days: 3, carrier: 'USPS', carrierService: 'GroundAdvantage', source: 'easypost', free: false }]; } };
     if (request === './payments') return {
       paymentEnvironment: () => 'isolated', paymentReturnUrl: () => 'https://example.invalid/return',
       createPaymentAdapter: () => ({ getStatus: () => ({ checkoutEnabled: true }), reference: id => id,
@@ -77,5 +79,33 @@ const { addressSchema, deliveryQuote, issueQuote, checkout } = require('../lib/c
   await assert.rejects(checkout('isolated-owner', lines, { ...body, accepted: false }), /21 or older/);
   await assert.rejects(checkout('isolated-owner', lines, { ...body, address: { ...address, state: 12 } }));
   assert.equal(adapterCalls, 1);
+  // USPS address check (owner, Oct 31 2026). The verified result travels from the quote onto the order.
+  assert.deepEqual(savedOrder.addressCheck, { status: 'verified', at: now }, 'The order records that USPS verified its address');
+  assert.equal(verifyCalls.at(-1).state, 'NV', 'USPS sees the same canonical address');
+  // A flagged address stops the quote before rates or payment, with a reason the page can show.
+  verifyStatus = 'unit_missing';
+  const ratesBefore = shippingStates.length;
+  await assert.rejects(deliveryQuote(lines, address), e => e.name === 'AddressCheckError' && e.addressProblem === 'unit_missing' && /apartment, suite or unit number/.test(e.message));
+  assert.equal(shippingStates.length, ratesBefore, 'No rates are requested for a flagged address');
+  await assert.rejects(issueQuote('isolated-owner', lines, address), /apartment, suite or unit number/, 'No quote is issued without confirmation');
+  // The customer confirms the address as typed: the quote proceeds and remembers the confirmation.
+  const confirmed = await issueQuote('isolated-owner', lines, address, undefined, undefined, true);
+  assert.deepEqual(confirmed.addressCheck, { status: 'unit_missing', at: now, confirmed: true });
+  assert.deepEqual(JSON.parse(receipt.data).addressCheck, confirmed.addressCheck, 'The stored quote keeps the check');
+  // Changing the delivery choice reuses that check without asking USPS again.
+  const checks = verifyCalls.length;
+  const reselected = await issueQuote('isolated-owner', lines, address, undefined, { quoteId: confirmed.quoteId, shippingOptionId: confirmed.shippingOptionId });
+  assert.equal(verifyCalls.length, checks, 'A stored quote is not re-checked');
+  assert.deepEqual(reselected.addressCheck, confirmed.addressCheck);
+  assert.deepEqual(JSON.parse(receipt.data).addressCheck, confirmed.addressCheck);
+  // Checkout carries the confirmed-but-flagged result onto the order, so fulfillment holds it for a person.
+  oldOrder = null;
+  await checkout('isolated-owner', lines, { ...body, requestKey: '00000000-0000-4000-8000-000000000001', expectedTotal: reselected.total, quoteId: reselected.quoteId, shippingOptionId: reselected.shippingOptionId });
+  assert.equal(adapterCalls, 2);
+  assert.deepEqual(savedOrder.addressCheck, { status: 'unit_missing', at: now, confirmed: true });
+  // An unavailable check never stops a customer.
+  verifyStatus = 'unavailable';
+  assert.deepEqual((await deliveryQuote(lines, address)).addressCheck, { status: 'unavailable', at: now });
+  console.log('PASS: USPS address check blocks flagged addresses until confirmed, travels quote to order, never blocks on an outage');
   console.log('PASS: state normalization, invalid input rejection, unchanged country/ZIP/tax rules, delivery quote consistency, checkout fingerprint reuse, and no duplicate payment attempt');
 })().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => { Module._load = originalLoad; global.fetch = originalFetch; });

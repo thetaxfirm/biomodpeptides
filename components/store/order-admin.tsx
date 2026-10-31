@@ -1,6 +1,7 @@
 'use client';
 import { money } from '@/lib/catalog';
 import { savedPreorder, orderPreorderNotice } from '@/lib/fulfillment';
+import { addressProblem, savedAddressCheck, staffAddressLabel } from '@/lib/address-check';
 // Full order for the admin Orders tab: who ordered, every item and quantity, and how the total was reached.
 const packLabel = (i: any) => i.packSize ? (i.packKind === 'fixed' ? 'Fixed ' : 'Mixed ') + i.packSize + '-pack' : '';
 export function OrderDetails({ order }: { order: any }) {
@@ -8,9 +9,11 @@ export function OrderDetails({ order }: { order: any }) {
     const items: any[] = Array.isArray(d.items) ? d.items : [];
     const units = items.reduce((s, i) => s + (Number(i.quantity) || 0), 0);
     const num = (v: unknown) => Number.isSafeInteger(v) ? v as number : 0;
+    const addressCheck = savedAddressCheck(d.addressCheck);
     return <div className="order-details">
         <p><strong>Customer:</strong> {d.address?.name || 'Not recorded'}{d.email && <> · <a href={'mailto:' + d.email}>{d.email}</a></>}{d.address?.phone && <> · <a href={'tel:' + String(d.address.phone).replace(/[^0-9+]/g, '')}>{d.address.phone}</a></>}</p>
         <p><strong>Ship to:</strong> {d.address?.line1}{d.address?.line2 ? ', ' + d.address.line2 : ''}, {d.address?.city} {d.address?.state} {d.address?.zip}</p>
+        {addressCheck && <p className={addressProblem(addressCheck) ? 'notice' : 'muted'}>{staffAddressLabel(addressCheck)}.</p>}
         {orderPreorderNotice(d) && <p className="notice">{orderPreorderNotice(d)}</p>}
         <table className="order-items">
             <thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Line total</th></tr></thead>

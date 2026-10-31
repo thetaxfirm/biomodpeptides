@@ -6,6 +6,7 @@ require.extensions['.ts']=(m,f)=>m._compile(ts.transpileModule(fs.readFileSync(f
 Module._load=function(name,parent,...rest){
  if(name==='@/lib/catalog')return require('../lib/catalog.ts');
  if(name==='@/lib/fulfillment')return require('../lib/fulfillment.ts');
+ if(name==='@/lib/address-check')return require('../lib/address-check.ts');
  if(parent?.filename.endsWith('/lib/checkout.ts') && ['./runtime','./auth','./commerce','./easypost','./payments','./checkout-tax'].includes(name))return {};
  return originalLoad.call(this,name,parent,...rest);
 };

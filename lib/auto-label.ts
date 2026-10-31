@@ -8,7 +8,8 @@
 //
 // Recovery runs whether or not automatic buying is switched on, because a manual purchase can strand
 // an order the same way.
-import { buyLabel, readBoughtLabel, sendTrackingEmail, type Label } from './easypost';
+import { buyLabel, readBoughtLabel, sendTrackingEmail, verifyShipAddress, type Label } from './easypost';
+import { addressHoldNote, addressProblem, savedAddressCheck, type AddressCheck } from './address-check';
 import { recordChange } from './change-history';
 import { normalizeShippingOptions, savedShippingOption, goodsValueCents } from './shipping-options';
 import { COA_REQUIRED_TO_SHIP } from './coa-shipping';
@@ -22,6 +23,8 @@ export type AutoLabelHealth = {
     due: number; bought: number; failed: number; skipped: number;
     /** Orders that failed too many times and were handed to a person. */
     blocked: number;
+    /** Orders stopped because USPS flagged the address, for a person to confirm before a label is bought. */
+    addressHeld: number;
     /** Orders whose label costs more than the ceiling, now waiting for a person to approve the price. */
     needsApproval: number;
     spentCents: number; capReached: boolean;
@@ -113,6 +116,13 @@ const COUNT_ATTEMPT = `UPDATE orders SET data=json_set(data,'$.labelAttempts',co
  */
 const BLOCK = `UPDATE orders SET data=json_set(data,'$.hold',json(?)),updated=? WHERE id=? AND json_extract(data,'$.hold') IS NULL`;
 /**
+ * USPS flagged the address (owner, Oct 31 2026: packages went out with no apartment number). The same
+ * hold as above, plus a marker: once a person clears it they have looked, so the job never re-holds it.
+ */
+const ADDRESS_HOLD = `UPDATE orders SET data=json_set(data,'$.hold',json(?),'$.addressCheck',json(?),'$.addressHeldAt',?),updated=? WHERE id=? AND status='paid' AND json_extract(data,'$.hold') IS NULL`;
+/** An order paid before checkout checked addresses gets its check now. Bookkeeping: leaves `updated` alone. */
+const SAVE_CHECK = `UPDATE orders SET data=json_set(data,'$.addressCheck',json(?)) WHERE id=?`;
+/**
  * A label that costs more than the ceiling. Deliberately not a hold: a hold blocks the Buy button,
  * and buying it by hand is exactly the approval being asked for. This marker moves the order into
  * Needs review and out of the automatic queue, while leaving every manual action available.
@@ -165,7 +175,7 @@ export async function runAutoLabels(env: AutoLabelEnvironment, now = Date.now())
     const settings = autoLabelSettings(stored?.autoLabel, env as Record<string, unknown>);
     const health: AutoLabelHealth = {
         checkedAt: now, enabled: stored !== null && settings.enabled,
-        recovered: 0, released: 0, due: 0, bought: 0, failed: 0, skipped: 0, blocked: 0, needsApproval: 0, spentCents: 0, capReached: false,
+        recovered: 0, released: 0, due: 0, bought: 0, failed: 0, skipped: 0, blocked: 0, addressHeld: 0, needsApproval: 0, spentCents: 0, capReached: false,
     };
     const writeLabel = (auto: boolean, label: Label, id: string) =>
         env.DB.prepare(save(auto)).bind(label.carrier + ' ' + label.tracking, JSON.stringify(label), now, now, id).run();
@@ -218,6 +228,27 @@ export async function runAutoLabels(env: AutoLabelEnvironment, now = Date.now())
         const selected = savedShippingOption(data.shippingOption);
         // A saved option that no longer validates is a human decision, not an automatic one.
         if (data.shippingOption && !selected) { health.skipped += 1; continue; }
+
+        // Address gate. Skipped once a person has cleared an address hold on this order: they decided.
+        if (!data.addressHeldAt) {
+            let check: AddressCheck | null = savedAddressCheck(data.addressCheck);
+            // Orders from before the checkout check, or whose check was unavailable, are asked now.
+            if (!check || check.status === 'unavailable') {
+                const fresh = await verifyShipAddress(env as never, data.address, now);
+                if (fresh.status !== 'unavailable' || !check) {
+                    check = check?.confirmed ? { ...fresh, confirmed: true } : fresh;
+                    try { await env.DB.prepare(SAVE_CHECK).bind(JSON.stringify(check), row.id).run(); } catch { /* bookkeeping only */ }
+                }
+            }
+            // A check that still cannot run never stops shipping: an outage is not a bad address.
+            if (addressProblem(check)) {
+                try {
+                    const held = await env.DB.prepare(ADDRESS_HOLD).bind(JSON.stringify({ issue: 'shipping', note: addressHoldNote(check!), by: 'Automatic label purchase', at: now }), JSON.stringify(check), now, now, row.id).run();
+                    if (held.meta.changes) health.addressHeld += 1; else health.skipped += 1;
+                } catch { health.failed += 1; }
+                continue;
+            }
+        }
 
         let claimed = false;
         try { claimed = Boolean((await env.DB.prepare(CLAIM).bind(now, row.id).run()).meta.changes); }
