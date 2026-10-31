@@ -12,7 +12,8 @@ import { checkoutTax } from './checkout-tax';
 import { savedPreorder } from './fulfillment';
 import { z } from 'zod';
 import { customer } from './auth';
-import { carrierShippingOptions, easypostReady } from './easypost';
+import { carrierShippingOptions, easypostReady, verifyShipAddress } from './easypost';
+import { addressProblem, customerAddressMessage, savedAddressCheck, type AddressCheck, type AddressCheckStatus } from './address-check';
 import { normalizeShippingOptions, savedShippingOption, shippingTierEnabled, enabledServiceSetting, freeEligible, type ShippingOption, type ShippingOptionsConfig } from './shipping-options';
 /** A quoted option is still payable only if the owner's current settings would produce the same charge. */
 function optionStillOffered(saved: ShippingOption, settings: ShippingOptionsConfig, freeStandard: boolean) {
@@ -25,13 +26,27 @@ function optionStillOffered(saved: ShippingOption, settings: ShippingOptionsConf
 }
 export const addressSchema = z.object({ name: z.string().trim().min(2).max(100), line1: z.string().trim().min(3).max(150), line2: z.string().trim().max(150).default(''), city: z.string().trim().min(2).max(100), state: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/, 'Enter a two-letter state abbreviation, such as NV.'), zip: z.string().regex(/^\d{5}(-\d{4})?$/), country: z.literal('US'), phone: z.string().trim().min(7).max(30) });
 const QUOTE_LIFETIME = 600000;
+/** USPS flagged the address and the customer has not confirmed it. The checkout page shows this inline. */
+export class AddressCheckError extends Error {
+    addressProblem: AddressCheckStatus;
+    constructor(status: AddressCheckStatus) { super(customerAddressMessage(status)); this.name = 'AddressCheckError'; this.addressProblem = status; }
+}
 type ShippingPreset = { shipping: number; shippingService: string; shippingOption?: ShippingOption; shippingOptions?: ShippingOption[] };
 const quoteExpired = (created: number) => !Number.isFinite(created) || timestamp() - created < 0 || timestamp() - created > QUOTE_LIFETIME;
 /** Rates are requested once; changing the selection reuses the stored options and their original expiry. */
-export async function deliveryQuote(lines: CartLine[], raw: unknown, preset?: ShippingPreset, promoCode?: unknown) {
+export async function deliveryQuote(lines: CartLine[], raw: unknown, preset?: ShippingPreset, promoCode?: unknown, addressConfirmed = false) {
     const address = addressSchema.parse(raw);
     const q = await quote(lines, promoCode);
     if (!lines.length) throw new Error('Your cart is empty.');
+    // A fresh quote asks USPS about the address before anything is priced. A stored quote already did.
+    let addressCheck: AddressCheck | undefined;
+    if (!preset && easypostReady(runtime())) {
+        addressCheck = await verifyShipAddress(runtime(), address, timestamp());
+        if (addressProblem(addressCheck)) {
+            if (!addressConfirmed) throw new AddressCheckError(addressCheck.status);
+            addressCheck = { ...addressCheck, confirmed: true };
+        }
+    }
     const settings = normalizeShippingOptions(q.config.shippingOptions, runtime());
     const freeStandard = settings.freeStandardEnabled && q.total >= q.config.freeShippingAt;
     let shippingOption: ShippingOption | undefined;
@@ -67,15 +82,16 @@ export async function deliveryQuote(lines: CartLine[], raw: unknown, preset?: Sh
         shippingService = shippingOption.shippingService;
     }
     const tax = await checkoutTax(runtime(), address, q.total, shipping);
-    return { items: q.items, subtotal: q.subtotal, discount: q.discount, packDiscount: q.packDiscount, promoDiscount: q.promoDiscount, promo: q.promo, shipping, shippingService, shippingOption, shippingOptionId: shippingOption?.id, shippingOptions, tax, total: q.total + shipping + tax, address };
+    return { items: q.items, subtotal: q.subtotal, discount: q.discount, packDiscount: q.packDiscount, promoDiscount: q.promoDiscount, promo: q.promo, shipping, shippingService, shippingOption, shippingOptionId: shippingOption?.id, shippingOptions, tax, total: q.total + shipping + tax, address, ...(addressCheck ? { addressCheck } : {}) };
 }
 const fingerprintItems = (q: Record<string, any>) => q.items.map((i: any) => ({ id: i.id, quantity: i.quantity, packId: i.packId || null, packSize: i.packSize || null, packKind: i.packKind || null, lineTotal: i.lineTotal, presaleId: i.presaleId || null, price: i.product.price, preorder: savedPreorder(i.product.activePreorder), batch: savedBatch(i.product.soldBatch) }));
 export const quoteFingerprint = (q: Record<string, any>) => JSON.stringify({ items: fingerprintItems(q), address: q.address, shipping: q.shipping, shippingService: q.shippingService || '', shippingOption: savedShippingOption(q.shippingOption), tax: q.tax, total: q.total, ...(q.promo ? { promoCode: q.promo.code } : {}) });
 const inputFingerprint = (q: Record<string, any>) => JSON.stringify({ items: fingerprintItems(q), address: q.address, subtotal: q.subtotal, discount: q.discount, ...(q.promo ? { promoCode: q.promo.code } : {}) });
-export async function issueQuote(owner: string, lines: CartLine[], address: unknown, promoCode?: unknown, selection?: { quoteId: string; shippingOptionId: string }) {
+export async function issueQuote(owner: string, lines: CartLine[], address: unknown, promoCode?: unknown, selection?: { quoteId: string; shippingOptionId: string }, addressConfirmed = false) {
     let created = timestamp();
     let preset: ShippingPreset | undefined;
     let expectedInput: string | undefined;
+    let storedCheck: AddressCheck | null = null;
     if (selection) {
         const receipt = await one<{ data: string; created: number }>('SELECT data,created FROM requests WHERE id=? AND owner=? AND kind=?', selection.quoteId, owner, 'quote');
         if (!receipt || quoteExpired(receipt.created)) throw new Error('Your checkout quote expired. Recalculate delivery.');
@@ -86,12 +102,15 @@ export async function issueQuote(owner: string, lines: CartLine[], address: unkn
         preset = { shipping: option.shipping, shippingService: option.shippingService, shippingOption: option, shippingOptions: options };
         expectedInput = stored.inputFingerprint;
         created = receipt.created;
+        // Changing the delivery choice keeps the address check made for this same address.
+        storedCheck = savedAddressCheck(stored.addressCheck);
     }
-    const q = await deliveryQuote(lines, address, preset, promoCode);
+    const q = await deliveryQuote(lines, address, preset, promoCode, addressConfirmed);
+    const addressCheck = q.addressCheck || storedCheck;
     if (expectedInput !== undefined && expectedInput !== inputFingerprint(q)) throw new Error('Your cart, address or promotion changed. Recalculate delivery.');
     const id = uid();
-    await run('INSERT INTO requests(id,owner,kind,data,created) VALUES(?,?,?,?,?)', id, owner, 'quote', JSON.stringify({ fingerprint: quoteFingerprint(q), inputFingerprint: inputFingerprint(q), shipping: q.shipping, shippingService: q.shippingService, shippingOption: q.shippingOption, shippingOptionId: q.shippingOptionId, shippingOptions: q.shippingOptions }), created);
-    return { ...q, quoteId: id, quoteExpiresAt: created + QUOTE_LIFETIME };
+    await run('INSERT INTO requests(id,owner,kind,data,created) VALUES(?,?,?,?,?)', id, owner, 'quote', JSON.stringify({ fingerprint: quoteFingerprint(q), inputFingerprint: inputFingerprint(q), shipping: q.shipping, shippingService: q.shippingService, shippingOption: q.shippingOption, shippingOptionId: q.shippingOptionId, shippingOptions: q.shippingOptions, ...(addressCheck ? { addressCheck } : {}) }), created);
+    return { ...q, ...(addressCheck ? { addressCheck } : {}), quoteId: id, quoteExpiresAt: created + QUOTE_LIFETIME };
 }
 export async function checkout(owner: string, lines: CartLine[], body: Record<string, any>, promoCode?: unknown) {
     const auditActor: AuditActor = { source: 'system', actor: 'Website checkout', actorType: 'system', action: 'checkout.state' };
@@ -165,7 +184,9 @@ export async function checkout(owner: string, lines: CartLine[], body: Record<st
     }>('SELECT data FROM campaigns WHERE id=?', campaignId))?.data, {}) : null;
     const email = (await customer())?.email || '';
     const { shippingOptions: _unselectedOptions, ...selectedQuote } = q;
-    const saved = { ...selectedQuote, email, fingerprint, environment: paymentEnvironment(runtime()), campaignId, campaignLimit: campaign?.maxPerCustomer || null, unitCount: lines.reduce((s, l) => s + l.quantity, 0) };
+    // The USPS result for this exact address travels with the order, so fulfillment knows whether to trust it.
+    const addressCheck = savedAddressCheck(quoted.addressCheck);
+    const saved = { ...selectedQuote, ...(addressCheck ? { addressCheck } : {}), email, fingerprint, environment: paymentEnvironment(runtime()), campaignId, campaignLimit: campaign?.maxPerCustomer || null, unitCount: lines.reduce((s, l) => s + l.quantity, 0) };
     const id = uid();
     const db=withAuditDb(database(), auditActor);
     try { await db.batch([

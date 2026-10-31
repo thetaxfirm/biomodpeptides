@@ -158,7 +158,7 @@ export function Cart() {
 }
 export function AddressFields({ initial = {} }: {
     initial?: Record<string, string>;
-}) { return <><Field label="Full name" name="name" defaultValue={initial.name}/><Field label="Street address" name="line1" defaultValue={initial.line1}/><Field label="Apartment / suite (optional)" name="line2" defaultValue={initial.line2} required={false}/><div className="form-row"><Field label="City" name="city" defaultValue={initial.city}/><Field label="State (2 letters)" name="state" defaultValue={initial.state} placeholder="CA"/><Field label="ZIP code" name="zip" defaultValue={initial.zip}/></div><Field label="Phone" name="phone" type="tel" defaultValue={initial.phone}/><input type="hidden" name="country" value="US"/><p className="muted">United States delivery only.</p></>; }
+}) { return <><Field label="Full name" name="name" defaultValue={initial.name}/><Field label="Street address" name="line1" defaultValue={initial.line1}/><Field label="Apartment, suite or unit (if any)" name="line2" defaultValue={initial.line2} required={false}/><div className="form-row"><Field label="City" name="city" defaultValue={initial.city}/><Field label="State (2 letters)" name="state" defaultValue={initial.state} placeholder="CA"/><Field label="ZIP code" name="zip" defaultValue={initial.zip}/></div><Field label="Phone" name="phone" type="tel" defaultValue={initial.phone}/><input type="hidden" name="country" value="US"/><p className="muted">United States delivery only.</p></>; }
 export function Checkout() {
     const { store, ready, loadError, cartSync = 'current', cartUpdating = false, refresh, measureShopping, observeShoppingView, validShoppingQuote, validShoppingHandoff } = useStore();
     useEffect(() => observeShoppingView?.(store.customer ? 'checkout_form_view' : 'checkout_signin_view'), [observeShoppingView, store, ready, loadError]);
@@ -172,6 +172,10 @@ export function Checkout() {
     const renderedLifetime = scope.lifetime;
     const [view, setView] = useState<CheckoutView>({ scope, lifetime: 0, accepted: false, deliveryQuote: null, address: null, requestKey: '' });
     const [activeRequest, setActiveRequest] = useState<Operation | null>(null);
+    // USPS flagged the address on the last delivery calculation. `fields` is the exact address it was about,
+    // so a confirmation only ever applies to the address the customer actually saw the warning for.
+    const [addressProblem, setAddressProblem] = useState<{ status: string; message: string; fields: string } | null>(null);
+    const [addressConfirmed, setAddressConfirmed] = useState(false);
     const [activePromo, setActivePromo] = useState<Operation | null>(null);
     const [activePromoDraft, setActivePromoDraft] = useState<Operation | null>(null);
     const operation = useRef<Operation | null>(null);
@@ -199,6 +203,8 @@ export function Checkout() {
         setActivePromo(null);
         setActivePromoDraft(null);
         setView({ scope, lifetime: scope.lifetime, accepted: false, deliveryQuote: null, address: null, requestKey: crypto.randomUUID() });
+        setAddressProblem(null);
+        setAddressConfirmed(false);
         return () => { scope.active = false; scope.lifetime += 1; };
     }, [scope]);
     const q = store.totals;
@@ -260,14 +266,25 @@ export function Checkout() {
         invalidateDelivery();
         const revision = quoteRevision.current;
         const context = currentContext.current;
+        const form = e.currentTarget;
+        const fields = formData(form);
+        const fieldsKey = JSON.stringify(fields);
+        const confirmed = Boolean(addressProblem && addressConfirmed && addressProblem.fields === fieldsKey);
         try {
-            const fields = formData(e.currentTarget);
-            const data = await api('delivery', { address: fields });
+            const data = await api('delivery', { address: fields, ...(confirmed ? { addressConfirmed: true } : {}) });
             if (!current(request) || operation.current !== request || revision !== quoteRevision.current || context !== currentContext.current || promoOperation.current || unappliedPromo.current) return;
             setView(previous => previous.scope === scope && previous.lifetime === request.lifetime ? { ...previous, address: fields, deliveryQuote: { data, context } } : previous);
+            if (!confirmed) { setAddressProblem(null); setAddressConfirmed(false); }
             if (validShoppingQuote?.(data)) measureShopping?.('delivery_quote_confirmed');
         } catch (e) {
-            if (current(request) && revision === quoteRevision.current) report(e);
+            if (!current(request) || revision !== quoteRevision.current) return;
+            const problem = (e as { data?: { addressProblem?: unknown } }).data?.addressProblem;
+            if (typeof problem === 'string') {
+                setAddressProblem({ status: problem, message: (e as Error).message, fields: fieldsKey });
+                setAddressConfirmed(false);
+                // Put the cursor where the fix usually goes.
+                form.querySelector<HTMLInputElement>(problem === 'not_found' ? '[name=line1]' : '[name=line2]')?.focus();
+            } else report(e);
         } finally {
             if (operation.current === request) {
                 operation.current = null;
@@ -327,6 +344,10 @@ export function Checkout() {
         <div className="cart-layout">
             <form key={scope.tenure} className="store-form" onSubmit={submit} onChange={invalidateDelivery}>
                 <h2>Delivery address</h2><AddressFields initial={{ name: store.customer.name }}/>
+                {addressProblem && <div className="notice address-check" role="alert">
+                    <p>{addressProblem.message}</p>
+                    <Check checked={addressConfirmed} onChange={setAddressConfirmed}>{addressProblem.status === 'unit_missing' ? 'There is no apartment or unit number at this address.' : 'My address is correct as I typed it.'} We will double-check it before your order ships.</Check>
+                </div>}
                 <button className="button button-dark" disabled={busy || promoBusy || promoUnapplied || cartUpdating}>{busy ? 'Calculating…' : 'Calculate delivery and tax'}</button>
             </form>
             <aside className="order-summary"><h2>Your order</h2>{hasPreorder(q?.items) && <p className="preorder-checkout-notice">{preorderOrderNotice}</p>}
@@ -358,7 +379,7 @@ export function Checkout() {
                 </div>
                 <Check checked={accepted} onChange={setAccepted}>I am 21 or older and purchasing exclusively for laboratory research. I agree to the <a href="/terms-of-sale">terms of sale</a>.</Check>
                 <button className="button button-gold" disabled={!delivery || !accepted || !requestKey || busy || promoBusy || promoUnapplied || !store.payment.enabled || cartUpdating} onClick={() => void checkout()}>Continue to secure payment</button>
-                <p className="muted">Card information is entered on Authorize.net’s secure payment page.</p>
+                <p className="muted">Card information is entered on Authorize.net’s secure payment page. Your billing address starts as your delivery address. If your card bills to a different address, change it there so the payment is not held.</p>
             </aside>
         </div>
     </>;
