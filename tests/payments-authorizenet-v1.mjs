@@ -37,12 +37,23 @@ try {
   // Hosted payment request keeps the schema element order
   const payload = a.anetHostedPaymentPayload({ name: 'x', transactionKey: 'y' }, order, env.AUTHORIZENET_RETURN_URL, { email: 'a@b.co', name: 'Ada Lovelace', line1: '1 Main', city: 'LA', state: 'CA', zip: '90001' }).getHostedPaymentPageRequest;
   assert.deepEqual(Object.keys(payload), ['merchantAuthentication', 'refId', 'transactionRequest', 'hostedPaymentSettings']);
-  assert.deepEqual(Object.keys(payload.transactionRequest), ['transactionType', 'amount', 'order', 'customer', 'shipTo', 'transactionSettings']);
+  assert.deepEqual(Object.keys(payload.transactionRequest), ['transactionType', 'amount', 'order', 'customer', 'billTo', 'shipTo', 'transactionSettings']);
+  // Billing starts as the delivery address so customers do not retype it (owner, Oct 31 2026).
+  assert.deepEqual(payload.transactionRequest.billTo, payload.transactionRequest.shipTo, 'billing prefill matches delivery when no phone is known');
+  assert.equal(payload.transactionRequest.billTo.address, '1 Main');
+  // The apartment reaches Authorize.net on both addresses, and the phone fills billing only.
+  const unit = a.anetHostedPaymentPayload({ name: 'x', transactionKey: 'y' }, order, env.AUTHORIZENET_RETURN_URL, { name: 'Ada Lovelace', line1: '1 Main St', line2: 'Apt 4B', city: 'LA', state: 'CA', zip: '90001', phone: '(702) 555-0100' }).getHostedPaymentPageRequest.transactionRequest;
+  assert.equal(unit.shipTo.address, '1 Main St Apt 4B');
+  assert.deepEqual(unit.billTo, { firstName: 'Ada', lastName: 'Lovelace', address: '1 Main St Apt 4B', city: 'LA', state: 'CA', zip: '90001', country: 'US', phoneNumber: '(702) 555-0100' });
+  assert.equal(unit.shipTo.phoneNumber, undefined);
+  assert.equal(a.anetHostedPaymentPayload({ name: 'x', transactionKey: 'y' }, order, env.AUTHORIZENET_RETURN_URL, { name: 'A', line1: 'x'.repeat(58), line2: 'Unit 12', city: 'LA', state: 'CA', zip: '90001' }).getHostedPaymentPageRequest.transactionRequest.billTo.address.length, 60, 'address stays within the 60-character field');
+  // No address on file means no billing prefill rather than an empty block.
+  assert.equal(a.anetHostedPaymentPayload({ name: 'x', transactionKey: 'y' }, order, env.AUTHORIZENET_RETURN_URL, { email: 'a@b.co' }).getHostedPaymentPageRequest.transactionRequest.billTo, undefined);
   assert.equal(payload.transactionRequest.amount, '49.00');
   assert.equal(payload.transactionRequest.order.invoiceNumber, ref);
-  // Receipt detail: items, tax and shipping, still in schema order (order, lineItems, tax, shipping, customer, shipTo)
+  // Receipt detail: items, tax and shipping, still in schema order (order, lineItems, tax, shipping, customer, billTo, shipTo)
   const detailed = a.anetHostedPaymentPayload({ name: 'x', transactionKey: 'y' }, order, env.AUTHORIZENET_RETURN_URL, { email: 'a@b.co', name: 'Ada Lovelace', line1: '1 Main', city: 'LA', state: 'CA', zip: '90001' }, { items: [{ id: 7, name: 'BPC-157 10mg Research Compound Vial', detail: '', quantity: 2, lineTotalCents: 3000 }, { id: 9, name: 'TB-500', detail: 'Mixed 3-pack', quantity: 3, lineTotalCents: 1000 }], taxCents: 335, shippingCents: 565, shippingName: 'USPS Ground Advantage', note: 'Promo BM10' }).getHostedPaymentPageRequest.transactionRequest;
-  assert.deepEqual(Object.keys(detailed), ['transactionType', 'amount', 'order', 'lineItems', 'tax', 'shipping', 'customer', 'shipTo', 'transactionSettings']);
+  assert.deepEqual(Object.keys(detailed), ['transactionType', 'amount', 'order', 'lineItems', 'tax', 'shipping', 'customer', 'billTo', 'shipTo', 'transactionSettings']);
   assert.equal(detailed.lineItems.lineItem.length, 2);
   assert.deepEqual(detailed.lineItems.lineItem[0], { itemId: '7', name: 'BPC-157 10mg Research Compound', description: 'BPC-157 10mg Research Compound Vial', quantity: '2', unitPrice: '15.00' });
   assert.equal(detailed.lineItems.lineItem[1].quantity, '1', 'uneven pack line is sent at its line total');

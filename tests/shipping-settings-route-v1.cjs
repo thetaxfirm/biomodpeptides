@@ -1,6 +1,8 @@
 /* Actual store POST route with Zod and an in-memory settings/cart store.
  * Synthetic fixtures only. No live accounts, quotes, providers or orders. */
 const assert = require('node:assert/strict');
+class AddressCheckError extends Error { constructor(status) { super('USPS flagged ' + status); this.name = 'AddressCheckError'; this.addressProblem = status; } }
+let quoteFailure = null;
 const fs = require('node:fs');
 const path = require('node:path');
 const Module = require('node:module');
@@ -55,7 +57,7 @@ const dependencies = {
  '@/lib/promotions': { PROMO_COOKIE: 'fixture-promo', promotion: (value, extra) => { assert.equal(value, 'BIOMOD15'); assert.deepEqual(extra, [], 'owner-added codes are offered to the validator'); return { code: value }; } },
  // Reading the owner-added codes is a database read like any other and follows authorization.
  '@/lib/promo-codes': { storedPromotions: async received => { assert(customerAuthorized || staffAuthorized, 'Authorization precedes the stored promo read'); assert.equal(received, db); record('stored-promos'); return []; } },
- '@/lib/checkout': { issueQuote: async (...args) => { assert(customerAuthorized); record('issue-quote', args); return { quoteId, shippingOptionId: args[4]?.shippingOptionId || 'flat_standard', shipping: 1000 }; } },
+ '@/lib/checkout': { AddressCheckError, issueQuote: async (...args) => { assert(customerAuthorized); record('issue-quote', args); if (quoteFailure) throw quoteFailure; return { quoteId, shippingOptionId: args[4]?.shippingOptionId || 'flat_standard', shipping: 1000 }; } },
  '@/lib/change-history': { auditRun: async (received, actor, query, ...values) => { assert(staffAuthorized); assert.equal(received, db); assert.equal(actor.actor, user.email); assert.equal(actor.action, 'admin-config'); assert.equal(query, settingsSql); assert.equal(values[0], 'store'); record('settings-write', JSON.parse(values[1])); return { meta: sql.prepare(query).run(...values) }; } },
 };
 const mod = new Module(filename, module); mod.filename = filename; mod.paths = Module._nodeModulePaths(path.dirname(filename));
@@ -76,11 +78,17 @@ async function request(action, body, extraHeaders = {}) {
 }
 (async () => {
  // Existing callers may request the initial quote without selecting a service.
- reset('customer'); let result = await request('delivery', { address }); assert.equal(result.status, 200); assert.deepEqual(called('issue-quote')[0].value, [user.id, lines, address, 'BIOMOD15', undefined]);
+ reset('customer'); let result = await request('delivery', { address }); assert.equal(result.status, 200); assert.deepEqual(called('issue-quote')[0].value, [user.id, lines, address, 'BIOMOD15', undefined, false]);
+ // USPS address check: only a literal true confirms, and a flagged address comes back as 422 with its reason.
+ for (const [flag, expected] of [[true, true], ['true', false], [1, false]]) { reset('customer'); result = await request('delivery', { address, addressConfirmed: flag }); assert.equal(result.status, 200); assert.equal(called('issue-quote')[0].value[5], expected, String(flag)); }
+ reset('customer'); quoteFailure = new AddressCheckError('unit_missing'); result = await request('delivery', { address });
+ assert.equal(result.status, 422); assert.deepEqual(result.body, { error: 'USPS flagged unit_missing', addressProblem: 'unit_missing' });
+ reset('customer'); quoteFailure = new Error('Your cart is empty.'); result = await request('delivery', { address });
+ assert.equal(result.status, 400); assert.deepEqual(result.body, { error: 'Your cart is empty.' }, 'Other quote errors are unchanged'); quoteFailure = null;
  // Selection is always paired and contains only safe identifiers. Prices, owners
  // and cart lines submitted by a browser never become quote authority.
  reset('customer'); result = await request('delivery', { address, quoteId, shippingOptionId: 'rate_UPS_NextDayAir_001', shipping: 0, total: 0, owner: 'other-user', lines: [{ id: 1, quantity: 99 }] });
- assert.equal(result.status, 200); assert.deepEqual(called('issue-quote')[0].value, [user.id, lines, address, 'BIOMOD15', { quoteId, shippingOptionId: 'rate_UPS_NextDayAir_001' }]);
+ assert.equal(result.status, 200); assert.deepEqual(called('issue-quote')[0].value, [user.id, lines, address, 'BIOMOD15', { quoteId, shippingOptionId: 'rate_UPS_NextDayAir_001' }, false]);
  for (const choice of [
   { quoteId }, { shippingOptionId: 'flat_standard' }, { quoteId: null, shippingOptionId: 'flat_standard' }, { quoteId, shippingOptionId: null }, { quoteId: 'not-a-uuid', shippingOptionId: 'flat_standard' },
   { quoteId, shippingOptionId: '' }, { quoteId, shippingOptionId: '../rate' }, { quoteId, shippingOptionId: 'bad rate' }, { quoteId, shippingOptionId: 'x'.repeat(161) }, { quoteId, shippingOptionId: 12 }, { quoteId, shippingOptionId: { id: 'rate' } },

@@ -29,7 +29,7 @@ import { catalog, config, quote, validateLines } from '@/lib/commerce';
 import { mixesPreorder, preorderSeparateMessage } from '@/lib/preorders';
 import { availabilityOptions, hasPublicationHold, sourcePublicationHold, blockedReleaseLot } from '@/lib/availability';
 import { all, one, run, uid, timestamp, parse, runtime, database } from '@/lib/runtime';
-import { checkout, reconcile, addressSchema, issueQuote } from '@/lib/checkout';
+import { checkout, reconcile, addressSchema, issueQuote, AddressCheckError } from '@/lib/checkout';
 import { createPaymentAdapter, getPaymentStatus, paymentEnvironment, paymentProvider } from '@/lib/payments';
 import { createAnetAdapter } from '@/lib/authorizenet-payments';
 import { anetOrderDetails } from '@/lib/order-summary';
@@ -469,9 +469,15 @@ export async function POST(req: NextRequest, { params }: {
                 ? z.object({ quoteId: z.string().uuid(), shippingOptionId: z.string().min(1).max(160).regex(/^[a-zA-Z0-9_-]+$/) }).parse({ quoteId: b.quoteId, shippingOptionId: b.shippingOptionId })
                 : undefined;
             await cartImports().assertResolved(u.id, s.id);
-            return j(await issueQuote(u.id, validateLines(parse((await one<{
-                cart: string;
-            }>('SELECT cart FROM customer_carts WHERE id=?', u.id))?.cart, [])), b.address, await currentPromoCode(), selection));
+            try {
+                return j(await issueQuote(u.id, validateLines(parse((await one<{
+                    cart: string;
+                }>('SELECT cart FROM customer_carts WHERE id=?', u.id))?.cart, [])), b.address, await currentPromoCode(), selection, b.addressConfirmed === true));
+            } catch (e) {
+                // USPS flagged the address. The checkout page shows the reason beside the form and lets the customer confirm.
+                if (e instanceof AddressCheckError) return j({ error: e.message, addressProblem: e.addressProblem }, 422);
+                throw e;
+            }
         }
         if (action === 'checkout') {
             const u = await requireCustomer();

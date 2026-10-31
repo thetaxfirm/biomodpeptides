@@ -12,9 +12,11 @@ export type AnetCustomer = {
     customerId?: string;
     name?: string;
     line1?: string;
+    line2?: string;
     city?: string;
     state?: string;
     zip?: string;
+    phone?: string;
 };
 /** What was bought, sent to Authorize.net so its merchant and customer receipts list the items, tax and shipping. */
 export type AnetOrderDetails = {
@@ -181,15 +183,21 @@ export function anetHostedPaymentPayload(auth: { name: string; transactionKey: s
     validateAnetOrder(order);
     const reference = anetOrderReference(order.id);
     const [firstName, ...rest] = (customer.name || '').trim().split(/\s+/);
+    // Street and apartment share Authorize.net's single address line. The apartment used to be dropped here.
+    const street = [customer.line1, customer.line2].map(part => (part || '').trim()).filter(Boolean).join(' ');
     const shipTo = customer.line1 ? {
         firstName: clip(firstName, 50),
         lastName: clip(rest.join(' '), 50),
-        address: clip(customer.line1, 60),
+        address: clip(street, 60),
         city: clip(customer.city, 40),
         state: clip(customer.state, 40),
         zip: clip(customer.zip, 20),
         country: 'US',
     } : undefined;
+    // The billing form starts as the delivery address (owner, Oct 31 2026). Customers retyping it from
+    // memory caused address-check mismatches and fraud-filter holds. They can still change every field.
+    const phone = clip((customer.phone || '').replace(/[^0-9+()\- ]/g, '').trim(), 25);
+    const billTo = shipTo ? { ...shipTo, ...(phone ? { phoneNumber: phone } : {}) } : undefined;
     const transactionRequest: Record<string, unknown> = {
         transactionType: 'authCaptureTransaction',
         amount: centsToAmount(order.totalCents),
@@ -209,6 +217,9 @@ export function anetHostedPaymentPayload(auth: { name: string; transactionKey: s
             ...(customer.customerId ? { id: clip(customer.customerId.replace(/[^A-Za-z0-9]/g, ''), 20) } : {}),
             ...(customer.email ? { email: clip(customer.email, 255) } : {}),
         };
+    // Authorize.net reads JSON in its schema order: customer, then billTo, then shipTo.
+    if (billTo)
+        transactionRequest.billTo = billTo;
     if (shipTo)
         transactionRequest.shipTo = shipTo;
     // Reject a second identical card charge for the same invoice and amount for eight hours.
