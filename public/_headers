@@ -1,0 +1,9 @@
+# Cloudflare static asset headers. Certificate PDFs are served as static assets, so the
+# page-level noindex in proxy.ts never reaches them. A certificate for a product that is not
+# indexable (publication or specification hold) stays readable for verification but is kept
+# out of search. tests/certificate-hold-noindex-v1.cjs keeps this list in step with the holds.
+/certificates/klow-80mg-lot-503-80-0001-vanguard-v260304-6-022.pdf
+  X-Robots-Tag: noindex, nofollow
+
+/certificates/run-and-gun-10mg-lot-501-10-0001-vanguard-v260304-6-020.pdf
+  X-Robots-Tag: noindex, nofollow
