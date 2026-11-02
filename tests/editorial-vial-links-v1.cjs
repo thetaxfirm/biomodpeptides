@@ -30,7 +30,7 @@ const productLinks = html => [...new Set([...html.matchAll(/href="\/product\/([^
 const config = seoConfig({ SEO_PUBLIC_ORIGIN: publication.origin, SEO_PUBLIC_LAUNCH_APPROVED: 'true', SEO_INDEXING_ENABLED: 'true', SEO_REVIEWED_PRODUCT_SLUGS: publication.productSlugs.join(',') });
 const sitemapVials = sitemapPaths(config).filter(p => p.startsWith('/product/')).map(p => p.slice(9)).sort();
 const vials = products.filter(p => p.categories.some(c => c.slug === 'research-compounds') && eligibleDiscovery(p)).map(p => p.slug).sort();
-assert.equal(vials.length, 17);
+assert.equal(vials.length, 20);
 assert.deepEqual(vials, sitemapVials, 'The linked set is exactly the sitemap product set');
 
 for (const page of ['faq', 'about', 'quality-standard', 'choosing-a-research-supplier']) {
@@ -50,4 +50,4 @@ assert.deepEqual(productLinks(own), vials.filter(slug => slug !== 'bpc-157-10mg'
 assert.match(own, /<h3 id="research-vial-index-heading">/);
 // A catalog with no published vials renders nothing.
 assert.equal(renderToStaticMarkup(React.createElement(ResearchVialIndex, { products: products.filter(p => !eligibleDiscovery(p)) })), '');
-console.log('PASS: FAQ, About, COA and supplier guides link all 17 published vials; policies unchanged; product index unchanged');
+console.log('PASS: FAQ, About, COA and supplier guides link all 20 published vials; policies unchanged; product index unchanged');

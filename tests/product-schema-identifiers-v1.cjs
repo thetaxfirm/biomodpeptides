@@ -21,7 +21,7 @@ const reviewed = publication.productSlugs.map(slug => {
   assert(product, 'Every publication-listed product has a catalog record');
   return product;
 });
-assert.equal(reviewed.length, 17, 'The release audit covers all 17 current eligible products');
+assert.equal(reviewed.length, 20, 'The release audit covers all 20 current eligible products');
 let snapshot = { verified: true, products: products.map(product => ({ ...product })) };
 const originalLoad = Module._load, originalFetch = global.fetch;
 global.fetch = async () => { throw new Error('Network forbidden in schema tests'); };
@@ -90,7 +90,7 @@ function noInventedIdentifiers(node) {
       noInventedIdentifiers(data);
       assert.deepEqual(JSON.parse(jsonLd(data)), data, 'Serialized graph preserves omitted identifiers');
     }
-    assert.equal(assigned, 16);
+    assert.equal(assigned, 19);
     assert.equal(missing, 1);
 
     const eligiblePreorder = snapshot.products.find(product => product.id === reviewed[0].id);
@@ -144,7 +144,7 @@ function noInventedIdentifiers(node) {
     for (const hidden of ['/admin', '/account', '/product/not-listed', ...Object.keys(productReviewBlocks).map(slug => '/product/' + slug)])
       assert.equal(await routeStructuredData(hidden, config), null, hidden + ': publication holds/private paths remain suppressed');
     assert.equal(await routeStructuredData(path, seoConfig()), null, 'Index-disabled preview has no Product graph');
-    console.log('PASS: all 17 eligible Product graphs retain 16 source SKUs, omit unassigned SS-31 SKU/internal ID, handle blank values, and preserve stable IDs, Offers, certificates and publication holds without invented GTIN/MPN');
+    console.log('PASS: all 20 eligible Product graphs retain 19 source SKUs, omit unassigned SS-31 SKU/internal ID, handle blank values, and preserve stable IDs, Offers, certificates and publication holds without invented GTIN/MPN');
   } finally {
     Module._load = originalLoad;
     global.fetch = originalFetch;

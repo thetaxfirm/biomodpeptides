@@ -25,7 +25,7 @@ const { Header, nav } = require('../components/store/header.tsx');
 const { StoreProvider } = require('../components/store/provider.tsx');
 const before = JSON.stringify(products);
 const reviewed = publication.productSlugs.filter(slug => !productReviewBlocks[slug]).sort();
-assert.equal(reviewed.length, 17, 'The verified SS-31 50 mg listing joins the 16 existing reviewed targets');
+assert.equal(reviewed.length, 20, 'GHK-Cu, CJC-1295 No DAC and Run & Gun (Nov 2 2026) join the 17 reviewed targets');
 const vials = products.filter(product => product.categories.some(category => category.slug === 'research-compounds'));
 const ordered = orderHomeVials(products);
 assert.equal(products.length, 52, 'SS-31 50 mg and the unavailable Wolverine 20 mg have independent catalog records');
@@ -143,7 +143,9 @@ assert.deepEqual(cardSlugs(render(tree)), eligibleVials.map(product => product.s
 tree = statefulHome([heldSale, eligibleVials[0]]);
 assert.deepEqual(cardSlugs(render(tree, [heldSale, eligibleVials[0]])), [eligibleVials[0].slug], 'A smaller eligible catalog does not expose held sale cards through stale state');
 const allHeld = products.filter(product => !eligibleDiscovery(product));
-const extraVials = allHeld.map(product => ({ ...product, categories: eligibleVials[0].categories }));
+// A fixed 35 held cards (cycled, fresh ids) give exactly three extra pages however many
+// holds are released later.
+const extraVials = Array.from({ length: 35 }, (_, index) => ({ ...allHeld[index % allHeld.length], id: 900000 + index, categories: eligibleVials[0].categories }));
 const pagingCatalog = [...eligibleVials.slice(0, 1), ...extraVials];
 tree = statefulHome(pagingCatalog);
 loadMore(tree).props.onClick();

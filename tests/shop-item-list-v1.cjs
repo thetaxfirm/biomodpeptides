@@ -35,7 +35,7 @@ const heat = /\b(c-heat|heat-r|heat-t)\b/i;
 (async () => {
   // The helper and the sitemap agree, and the preview configuration lists nothing.
   const listed = indexableProducts(config);
-  assert.equal(listed.length, 17, 'seventeen reviewed product pages');
+  assert.equal(listed.length, 20, 'twenty reviewed product pages');
   assert.deepEqual(listed.map(p => '/product/' + p.slug), sitemapPaths(config).filter(p => p.startsWith('/product/')));
   assert.deepEqual(indexableProducts(seoConfig()), []);
   for (const p of listed) assert(!productReviewBlocks[p.slug] && publication.productSlugs.includes(p.slug), p.slug);
@@ -48,15 +48,15 @@ const heat = /\b(c-heat|heat-r|heat-t)\b/i;
   assert.deepEqual(page.mainEntity, { '@id': origin + '/shop#products' });
   const list = data['@graph'].find(item => item['@type'] === 'ItemList');
   assert.equal(list['@id'], origin + '/shop#products');
-  assert.equal(list.numberOfItems, 17);
-  assert.equal(list.itemListElement.length, 17);
+  assert.equal(list.numberOfItems, 20);
+  assert.equal(list.itemListElement.length, 20);
   list.itemListElement.forEach((entry, index) => {
     const product = listed[index];
     assert.deepEqual(entry, { '@type': 'ListItem', position: index + 1, name: pageInfo('/product/' + product.slug).name, url: origin + '/product/' + product.slug }, product.slug);
     assert(!heat.test(entry.url) && !heat.test(entry.name), 'HEAT products are held');
   });
   const urls = new Set(list.itemListElement.map(entry => entry.url));
-  assert.equal(urls.size, 17, 'no duplicate URLs');
+  assert.equal(urls.size, 20, 'no duplicate URLs');
   for (const p of products) if (!listed.includes(p)) assert(!urls.has(origin + '/product/' + p.slug), p.slug + ' is not indexable and must not be listed');
   assert.equal(data['@graph'].filter(item => item['@type'] === 'ItemList').length, 1);
 
@@ -67,5 +67,5 @@ const heat = /\b(c-heat|heat-r|heat-t)\b/i;
     assert.equal(other['@graph'].find(item => item['@id'] === origin + path + '#page')?.['@type'], 'WebPage', path);
   }
   assert.equal(await routeStructuredData('/shop', seoConfig()), null, 'preview origin emits nothing');
-  console.log('PASS: /shop CollectionPage lists the 17 indexable product pages in catalog order, matching the sitemap, with no held products; other pages unchanged');
+  console.log('PASS: /shop CollectionPage lists the 20 indexable product pages in catalog order, matching the sitemap, with no held products; other pages unchanged');
 })().catch(error => { console.error(error); process.exit(1); });

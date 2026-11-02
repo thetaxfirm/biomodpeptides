@@ -39,5 +39,5 @@ for (const f of files) {
   assert.equal(noindexed(p), !indexable, p + (indexable ? ' (indexable product) stays indexable' : ' (held product ' + slug + ') is noindex'));
   if (!indexable) held.push(slug);
 }
-assert.ok(held.includes('klow-80mg') && held.includes('run-gun-10mg'), 'known held certificates covered');
+assert.ok(held.includes('klow-80mg') && !held.includes('run-gun-10mg'), 'KLOW stays held; Run & Gun released Nov 2 2026');
 console.log('certificate-hold-noindex-v1 passed (' + held.length + ' held of ' + files.length + ')');
