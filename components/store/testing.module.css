@@ -5,5 +5,5 @@
 .record[open]>.trigger>svg{transform:rotate(180deg)}
 .content{padding:10px 24px 28px;background:var(--bm-surface,#fafafa);border-radius:4px}
 .content>a{margin-top:20px;font-size:13px}
-.content>a+a{margin-top:0}
+.content>a+a{display:flex;width:fit-content;margin-top:0}
 @media(max-width:640px){.content{padding:15px 18px 22px}}

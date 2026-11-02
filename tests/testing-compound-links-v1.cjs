@@ -30,5 +30,5 @@ const source = fs.readFileSync(path.join(root, 'components/store/testing.tsx'), 
 assert(/publishedReferenceFor\(r\.product_slug\)/.test(source), 'Batch records use the published-reference gate');
 assert(/href=\{'\/compounds\/'\+c\.slug\}/.test(source), 'Batch records link to /compounds/<slug>');
 const css = fs.readFileSync(path.join(root, 'components/store/testing.module.css'), 'utf8');
-assert(/\.content>a\+a\{margin-top:0\}/.test(css) && !/\.content>a\+a\{[^}]*margin-left/.test(css), 'The reference link stacks flush under View product (no indent on phones)');
+assert(/\.content>a\+a\{display:flex;width:fit-content;margin-top:0\}/.test(css) && !/\.content>a\+a\{[^}]*margin-left/.test(css), 'The reference link sits on its own line, flush under View product');
 console.log('testing-compound-links-v1 passed');
