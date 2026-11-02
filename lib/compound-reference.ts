@@ -89,6 +89,11 @@ export const comparisonAt = (slug: string) => comparisons.find(c => c.slug === s
 export const publishedCompound = (c?: Compound) => Boolean(c && c.products.some(published));
 export const publishedComparison = (c?: Comparison) => Boolean(c && publishedCompound(compoundAt(c.a)) && publishedCompound(compoundAt(c.b)));
 export const compoundForProduct = (productSlug: string) => compounds.find(c => c.products.includes(productSlug));
+// Reference page to link from a published product's own surfaces (batch records); none for held products.
+export const publishedReferenceFor = (productSlug: string) => {
+  const c = published(productSlug) ? compoundForProduct(productSlug) : undefined;
+  return c && publishedCompound(c) ? c : undefined;
+};
 export const pubchemUrl = (c: Compound) => 'https://pubchem.ncbi.nlm.nih.gov/compound/' + c.cid;
 export const comparisonsFor = (slug: string) => comparisons.filter(c => (c.a === slug || c.b === slug) && publishedComparison(c));
 
