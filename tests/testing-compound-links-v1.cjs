@@ -29,4 +29,6 @@ for (const c of compounds) if (!publishedCompound(c)) for (const slug of c.produ
 const source = fs.readFileSync(path.join(root, 'components/store/testing.tsx'), 'utf8');
 assert(/publishedReferenceFor\(r\.product_slug\)/.test(source), 'Batch records use the published-reference gate');
 assert(/href=\{'\/compounds\/'\+c\.slug\}/.test(source), 'Batch records link to /compounds/<slug>');
+const css = fs.readFileSync(path.join(root, 'components/store/testing.module.css'), 'utf8');
+assert(/\.content>a\+a\{margin-top:0\}/.test(css) && !/\.content>a\+a\{[^}]*margin-left/.test(css), 'The reference link stacks flush under View product (no indent on phones)');
 console.log('testing-compound-links-v1 passed');
