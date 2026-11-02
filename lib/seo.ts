@@ -10,6 +10,9 @@ import { productQuestions } from './product-questions';
 import { productDescription } from './product-description';
 import { researchFaqSchemaItems } from './research-faq';
 import { pressReleaseAt } from './press-releases';
+import { compoundAt, comparisonAt, compoundQuestions } from './compound-reference';
+import { products as catalogProducts } from './catalog';
+import { eligibleDiscovery, vialName } from './product-discovery';
 import { headers } from 'next/headers';
 
 export const currentSEO = () => seoConfig(runtime());
@@ -99,6 +102,15 @@ export async function routeStructuredData(path: string, config: SEOConfig = curr
     headline: release.headline, description: release.summary, datePublished: release.date, dateModified: release.date,
     image: config.origin + '/brand/logo-navy-tm-v36.png', author: { '@id': organization['@id'] }, publisher: { '@id': organization['@id'] },
     articleBody: release.body.join(' ') });
+  // Compound reference pages: breadcrumbs, and question markup mirroring the visible questions.
+  const compound = clean.startsWith('/compounds/') ? compoundAt(clean.slice(11)) : undefined;
+  const comparison = clean.startsWith('/compare/') ? comparisonAt(clean.slice(9)) : undefined;
+  if (compound || comparison) graph.push({ '@type': 'BreadcrumbList', itemListElement: [
+    { '@type': 'ListItem', position: 1, name: 'Compound reference', item: config.origin + '/compounds' },
+    { '@type': 'ListItem', position: 2, name: info.title, item: config.origin + clean },
+  ] });
+  if (compound) graph.push(faqPage(config.origin + clean, compoundQuestions(compound,
+    compound.products.map(slug => catalogProducts.find(p => p.slug === slug)).filter(p => p && eligibleDiscovery(p)).map(p => vialName(p!)))));
   // Question markup mirrors the visible /faq answers exactly.
   if (clean === '/faq') graph.push(faqPage(config.origin + clean, researchFaqSchemaItems().map(item => ({ question: item.question, answer: item.answer }))));
   return { '@context': 'https://schema.org', '@graph': graph };

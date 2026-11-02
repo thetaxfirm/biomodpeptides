@@ -1,11 +1,16 @@
 import type { Product } from './catalog';
 import publication from './seo-publication-v1.json';
 import { productReviewBlocks } from './seo-policy';
+import { packContents } from './packs';
 
 const reviewedSlugs = new Set<string>(publication.productSlugs);
 
 // Publication review controls discovery slots, not catalog membership or purchasing.
 export const eligibleDiscovery = (product: Product) => reviewedSlugs.has(product.slug) && !productReviewBlocks[product.slug];
+// Research vials carry their strength in the heading ("BPC-157 10 mg"), matching how they are searched.
+export const sizedVial = (product: Product) => product.categories.some(c => c.slug === 'research-compounds') && /\d\s*mg\b/i.test(packContents(product));
+export const vialTitle = (product: Product) => product.name.replace(/\s+\d+(?:\.\d+)?\s*mg$/i, '') + ' ' + packContents(product).replace(/\s*\/\s*vial\b/i, '').replace(/(\d)\s*mg\b/gi, '$1 mg');
+export const vialName = (product: Product) => sizedVial(product) ? vialTitle(product) : product.name;
 
 export function orderHomeVials(allProducts: Product[]): Product[] {
   const vials = allProducts.filter(product => product.categories.some(category => category.slug === 'research-compounds'));

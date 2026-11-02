@@ -3,6 +3,7 @@ import { products, compound, size, productFormat, type Product } from './catalog
 import specificationReviews from './product-specification-review-v1.json';
 import { productNameVariants } from './product-names';
 import { pressReleases } from './press-releases';
+import { compounds, comparisons, compoundTitle, compoundDescription, comparisonTitle, comparisonDescription, publishedCompound, publishedComparison } from './compound-reference';
 
 export const previewOrigin = 'https://trybiomod.com';
 export const reviewedOn = '2026-10-08';
@@ -28,6 +29,11 @@ export const pageRecords: Record<string, { title: string; description: string; e
   '/international-partners': { title: 'Partnership Enquiries', description: 'Contact BIOMOD about research supply requirements and partnership enquiries.', eligible: false },
   // Press releases are ordinary public pages: routed, indexed and listed like the guides.
   ...Object.fromEntries(pressReleases.map(release => ['/news/' + release.slug, { title: release.headline, description: release.summary, eligible: true }])),
+  // Compound reference, comparisons and lot lookup: indexed while their products are published.
+  '/compounds': { title: 'Compound Reference: CAS and MW', description: 'CAS numbers, molecular formulas, molecular weights and sequences for every Biomod research compound, linked to PubChem and to lab reports by lot.', eligible: true },
+  ...Object.fromEntries(compounds.map(c => ['/compounds/' + c.slug, { title: compoundTitle(c), description: compoundDescription(c), eligible: publishedCompound(c) }])),
+  ...Object.fromEntries(comparisons.map(x => ['/compare/' + x.slug, { title: comparisonTitle(x), description: comparisonDescription(x), eligible: publishedComparison(x) }])),
+  '/verify': { title: 'Verify Your COA by Lot Number', description: 'Enter the lot printed on your Biomod vial to open its batch record and the original laboratory report for that exact lot.', eligible: true },
 };
 export const productReviewBlocks: Record<string, string> = {
   ...specificationReviews,

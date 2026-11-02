@@ -1,0 +1,50 @@
+.page { max-width: 1100px; padding-bottom: 64px; }
+.crumbs { display: flex; gap: 10px; flex-wrap: wrap; font-size: 14px; color: #6d655c; margin-bottom: 22px; }
+.crumbs a { text-decoration: underline; text-underline-offset: 3px; }
+.section { margin-top: 52px; }
+.section h2 { font-size: clamp(24px, 2.4vw, 32px); margin-bottom: 18px; }
+.section p { color: #29435f; line-height: 1.65; max-width: 760px; }
+.section p + p { margin-top: 12px; }
+.section p a { text-decoration: underline; text-underline-offset: 3px; }
+.facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px 30px; padding: 30px; background: #f6f3ee; border-radius: 5px; }
+.facts .wide { grid-column: 1 / -1; }
+.facts dt { font-size: 13px; color: #776b5c; margin-bottom: 7px; }
+.facts dd { margin: 0; font-size: 17px; font-weight: 500; line-height: 1.5; overflow-wrap: anywhere; color: #12243a; }
+.facts dd a { text-decoration: underline; text-underline-offset: 3px; }
+.source { font-size: 13px !important; color: #6f6355 !important; margin-top: 14px; }
+.lots { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 18px; margin-top: 18px; }
+.lots article { padding: 24px; border: 1px solid #e6ddd1; border-radius: 4px; background: #fff; display: flex; flex-direction: column; }
+.lots h3 { font-size: 20px; margin-bottom: 14px; }
+.lots dl { display: grid; gap: 10px; margin: 0 0 18px; }
+.lots dl > div { display: flex; justify-content: space-between; gap: 16px; font-size: 14px; border-bottom: 1px solid #f0ebe4; padding-bottom: 8px; }
+.lots dt { color: #776b5c; }
+.lots dd { margin: 0; text-align: right; font-weight: 500; color: #12243a; overflow-wrap: anywhere; }
+.links { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: auto; font-size: 14px; }
+.links a { display: inline-flex; align-items: center; min-height: 44px; text-decoration: underline; text-underline-offset: 3px; color: #12243a; }
+.tableWrap { overflow-x: auto; margin-top: 30px; }
+.table { width: 100%; border-collapse: collapse; font-size: 15px; min-width: 640px; }
+.table th, .table td { text-align: left; padding: 14px 16px 14px 0; border-bottom: 1px solid #e7dfd5; vertical-align: top; color: #12243a; }
+.table thead th { font-size: 13px; font-weight: 500; color: #776b5c; }
+.table tbody th { font-weight: 600; }
+.table a { text-decoration: underline; text-underline-offset: 3px; }
+.table td a { display: block; margin-bottom: 4px; }
+.table .sequence { font-size: 14px; overflow-wrap: anywhere; max-width: 360px; }
+.pair { min-width: 0; table-layout: fixed; }
+.pair th, .pair td { overflow-wrap: anywhere; }
+.pair tbody th { width: 28%; }
+.plainList { display: grid; gap: 4px; padding: 0; list-style: none; }
+.plainList a { display: inline-flex; min-height: 44px; align-items: center; font-size: 17px; text-decoration: underline; text-underline-offset: 3px; }
+.questions { display: grid; gap: 26px; max-width: 820px; }
+.questions h3 { font-size: 19px; margin-bottom: 6px; }
+.verify { margin-top: 30px; max-width: 640px; }
+.verify label { display: block; font-size: 14px; color: #776b5c; margin-bottom: 8px; }
+.verify > div { display: flex; gap: 12px; flex-wrap: wrap; }
+.verify input { flex: 1 1 240px; min-height: 50px; font-size: 18px; padding: 0 16px; border: 1px solid #cfc6ba; border-radius: 4px; background: #fff; color: #12243a; }
+.verify input:focus-visible { outline: 3px solid #9d743e; outline-offset: 2px; }
+.missing { margin-top: 14px; color: #835b31; line-height: 1.6; }
+.missing a { text-decoration: underline; }
+.ruo { margin-top: 56px; font-size: 13px; color: #6f6355; }
+@media (max-width: 760px) {
+  .facts { grid-template-columns: 1fr; padding: 22px; }
+  .pair th, .pair td { font-size: 14px; padding-right: 10px; }
+}

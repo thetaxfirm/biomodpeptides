@@ -1,10 +1,7 @@
 import { ArrowRight } from 'lucide-react';
 import { Product, mass } from '@/lib/catalog';
-import { packContents } from '@/lib/packs';
-import { eligibleDiscovery } from '@/lib/product-discovery';
-// Research vials carry their strength in the heading ("BPC-157 10 mg"), matching how they are searched.
-export const sizedVial = (product: Product) => product.categories.some(c => c.slug === 'research-compounds') && /\d\s*mg\b/i.test(packContents(product));
-export const vialTitle = (product: Product) => product.name.replace(/\s+\d+(?:\.\d+)?\s*mg$/i, '') + ' ' + packContents(product).replace(/\s*\/\s*vial\b/i, '').replace(/(\d)\s*mg\b/gi, '$1 mg');
+import { eligibleDiscovery, sizedVial, vialTitle } from '@/lib/product-discovery';
+export { sizedVial, vialTitle };
 // Plain links to every published research vial. Product pages list the rest of the range;
 // the guides and FAQ list all of it, so pages search engines already index lead to the vials.
 export function ResearchVialIndex({ current, products, level = 3 }: { current?: Product; products: Product[]; level?: 2 | 3 }) {

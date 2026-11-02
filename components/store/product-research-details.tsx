@@ -5,6 +5,7 @@ import { packContents, packUnitLimit } from '@/lib/packs';
 import { batchFor, batchPath } from '@/lib/testing';
 import { CoaPopup } from './batch-record';
 import { productQuestions } from '@/lib/product-questions';
+import { compoundForProduct, publishedCompound } from '@/lib/compound-reference';
 import styles from './product-research-details.module.css';
 
 // Literature context is deliberately limited to these reviewed molecule/size
@@ -213,6 +214,7 @@ export function ProductResearchDetails({ product }: { product: Product }) {
   if (!eligibleDiscovery(product)) return null;
   const record = batchFor(product.id,product);
   const study = researchBySlug[product.slug];
+  const compound = compoundForProduct(product.slug);
   return <><section className={styles.questions} aria-labelledby="product-questions-heading">
     <h2 id="product-questions-heading">Product questions</h2>
     <div className={styles.answers}>
@@ -220,6 +222,7 @@ export function ProductResearchDetails({ product }: { product: Product }) {
         <h3>{item.question}</h3>
         {item.answer.map(paragraph => <p key={paragraph}>{paragraph}</p>)}
         {item.id === 'buy' && <p><Link href="/shop">Browse all research compounds</Link>.</p>}
+        {item.id === 'documentation' && compound && publishedCompound(compound) && <p><Link href={'/compounds/' + compound.slug}>{compound.name} reference data: CAS, formula, molecular weight{compound.sequence ? ' and sequence' : ''}</Link>.</p>}
         {item.id === 'documentation' && <p><CoaPopup product={product} label="Read this product's batch record and COA" className={styles.inlineCoa}/>. <Link href="/quality-standard#read-the-results">Understand purity and measured content</Link>.</p>}
       </article>)}
     </div>

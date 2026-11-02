@@ -8,6 +8,8 @@ import { Admin } from './admin';
 import { Locations } from './locations';
 import { Softgels } from './softgels';
 import { Blank } from './primitives';
+import { CompoundIndex, CompoundPage, ComparisonPage, VerifyCoa } from './compound-reference';
+import { compoundAt, comparisonAt } from '@/lib/compound-reference';
 export function Experience({ path, query }: {
     path: string;
     query: Record<string, string>;
@@ -24,7 +26,11 @@ export function Experience({ path, query }: {
     return <Account section={path.slice(8)}/>; if (path === 'contact')
     return <Contact subject={query.subject||''}/>; if (path === 'admin')
     return <Admin initialTab={query.tab} initialRequest={query.request}/>; if (['about', 'quality-standard', 'choosing-a-research-supplier', 'research-use-only', 'shipping-policy', 'returns-refunds', 'terms-of-sale', 'privacy-policy', 'international-partners', 'faq'].includes(path))
-    return <ContentPage path={path}/>; if (path === 'news')
+    return <ContentPage path={path}/>; if (path === 'compounds')
+    return <CompoundIndex/>; if (path.startsWith('compounds/') && compoundAt(path.slice(10)))
+    return <CompoundPage slug={path.slice(10)}/>; if (path.startsWith('compare/') && comparisonAt(path.slice(8)))
+    return <ComparisonPage slug={path.slice(8)}/>; if (path === 'verify')
+    return <VerifyCoa/>; if (path === 'news')
     return <Newsroom/>; if (path.startsWith('news/'))
     return <PressReleasePage slug={path.slice(5)}/>; if (path === 'about-biomod')
     return <ContentPage path="about"/>; if (path === 'affiliate-program')
