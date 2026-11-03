@@ -6,6 +6,7 @@ import { batchFor, batchPath } from '@/lib/testing';
 import { CoaPopup } from './batch-record';
 import { productQuestions } from '@/lib/product-questions';
 import { compoundForProduct, publishedCompound } from '@/lib/compound-reference';
+import { collectionsFor } from '@/lib/collections';
 import styles from './product-research-details.module.css';
 
 // Literature context is deliberately limited to these reviewed molecule/size
@@ -221,7 +222,7 @@ export function ProductResearchDetails({ product }: { product: Product }) {
       {productQuestions(product).map(item => <article key={item.id}>
         <h3>{item.question}</h3>
         {item.answer.map(paragraph => <p key={paragraph}>{paragraph}</p>)}
-        {item.id === 'buy' && <p><Link href="/shop">Browse all research compounds</Link>.</p>}
+        {item.id === 'buy' && <p><Link href="/shop">Browse all research compounds</Link>{collectionsFor(product.slug).map(c => <span key={c.slug}>, or the <Link href={'/collections/' + c.slug}>{c.name.toLowerCase()} collection</Link></span>)}.</p>}
         {item.id === 'documentation' && compound && publishedCompound(compound) && <p><Link href={'/compounds/' + compound.slug}>{compound.name} reference data: CAS, formula, molecular weight{compound.sequence ? ' and sequence' : ''}</Link>.</p>}
         {item.id === 'documentation' && <p><CoaPopup product={product} label="Read this product's batch record and COA" className={styles.inlineCoa}/>. <Link href="/quality-standard#read-the-results">Understand purity and measured content</Link>.</p>}
       </article>)}

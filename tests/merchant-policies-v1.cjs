@@ -75,7 +75,7 @@ function assertNoInventedClaims(value) {
   const originalStaticPaths = ['/', '/shop', '/about', '/contact', '/testing', '/quality-standard', '/choosing-a-research-supplier', '/research-use-only', '/faq'];
   // Later public additions: newsroom and owner-approved softgel category (October 20, 2026).
   // Compound reference, comparison and lot-lookup pages (Nov 2 2026) are covered by compound-reference-v1.
-  const referencePaths = Object.keys(pageRecords).filter(path => /^\/(compounds|compare)(\/|$)|^\/verify$/.test(path) && pageRecords[path].eligible);
+  const referencePaths = Object.keys(pageRecords).filter(path => /^\/(compounds|compare|collections)(\/|$)|^\/verify$/.test(path) && pageRecords[path].eligible);
   const expectedStaticPaths = [...originalStaticPaths, '/shipping-policy', '/returns-refunds', '/news', '/softgels', ...referencePaths].sort();
   assert.deepEqual(Object.keys(pageRecords).filter(path => pageRecords[path].eligible && !path.startsWith('/news/')).sort(), expectedStaticPaths, 'Public set includes the policies, newsroom and approved softgel category');
   const releasePaths = require('../lib/press-releases.ts').pressReleases.map(release => '/news/' + release.slug);

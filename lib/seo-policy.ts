@@ -3,6 +3,7 @@ import { products, compound, size, productFormat, type Product } from './catalog
 import specificationReviews from './product-specification-review-v1.json';
 import { productNameVariants } from './product-names';
 import { pressReleases } from './press-releases';
+import { collections, publishedCollection } from './collections';
 import { compounds, comparisons, compoundTitle, compoundDescription, comparisonTitle, comparisonDescription, publishedCompound, publishedComparison } from './compound-reference';
 
 export const previewOrigin = 'https://trybiomod.com';
@@ -33,6 +34,9 @@ export const pageRecords: Record<string, { title: string; description: string; e
   '/compounds': { title: 'Compound Reference: CAS and MW', description: 'CAS numbers, molecular formulas, molecular weights and sequences for every Biomod research compound, linked to PubChem and to lab reports by lot.', eligible: true },
   ...Object.fromEntries(compounds.map(c => ['/compounds/' + c.slug, { title: compoundTitle(c), description: compoundDescription(c), eligible: publishedCompound(c) }])),
   ...Object.fromEntries(comparisons.map(x => ['/compare/' + x.slug, { title: comparisonTitle(x), description: comparisonDescription(x), eligible: publishedComparison(x) }])),
+  // Collections: indexed while at least two of their products are published.
+  '/collections': { title: 'Shop Research Compounds by Area', description: 'Biomod research vials grouped by compound type: growth hormone axis, mitochondrial, neuroscience, melanocortin and more, with lab reports by lot.', eligible: true },
+  ...Object.fromEntries(collections.map(c => ['/collections/' + c.slug, { title: c.title, description: c.description, eligible: publishedCollection(c) }])),
   '/verify': { title: 'Verify Your COA by Lot Number', description: 'Enter the lot printed on your Biomod vial to open its batch record and the original laboratory report for that exact lot.', eligible: true },
 };
 export const productReviewBlocks: Record<string, string> = {

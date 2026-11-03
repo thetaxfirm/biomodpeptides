@@ -43,6 +43,12 @@
 .verify input:focus-visible { outline: 3px solid #9d743e; outline-offset: 2px; }
 .missing { margin-top: 14px; color: #835b31; line-height: 1.6; }
 .missing a { text-decoration: underline; }
+.collections { display: grid; gap: 40px; margin: 34px 0 40px; max-width: 860px; }
+.collections h2 { font-size: clamp(22px, 2.2vw, 28px); margin-bottom: 10px; }
+.collections h2 a { text-decoration: underline; text-underline-offset: 4px; }
+.collections p { color: #29435f; line-height: 1.65; }
+.inlineList { display: flex; flex-wrap: wrap; gap: 0 22px; padding: 0; margin: 6px 0 0; list-style: none; }
+.inlineList a { display: inline-flex; align-items: center; min-height: 44px; text-decoration: underline; text-underline-offset: 3px; color: #12243a; }
 .ruo { margin-top: 56px; font-size: 13px; color: #6f6355; }
 @media (max-width: 760px) {
   .facts { grid-template-columns: 1fr; padding: 22px; }

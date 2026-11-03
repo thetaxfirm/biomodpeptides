@@ -10,6 +10,8 @@ import { Softgels } from './softgels';
 import { Blank } from './primitives';
 import { CompoundIndex, CompoundPage, ComparisonPage, VerifyCoa } from './compound-reference';
 import { compoundAt, comparisonAt } from '@/lib/compound-reference';
+import { CollectionIndex, CollectionPage } from './collections';
+import { collectionAt } from '@/lib/collections';
 export function Experience({ path, query }: {
     path: string;
     query: Record<string, string>;
@@ -30,7 +32,9 @@ export function Experience({ path, query }: {
     return <CompoundIndex/>; if (path.startsWith('compounds/') && compoundAt(path.slice(10)))
     return <CompoundPage slug={path.slice(10)}/>; if (path.startsWith('compare/') && comparisonAt(path.slice(8)))
     return <ComparisonPage slug={path.slice(8)}/>; if (path === 'verify')
-    return <VerifyCoa/>; if (path === 'news')
+    return <VerifyCoa/>; if (path === 'collections')
+    return <CollectionIndex/>; if (path.startsWith('collections/') && collectionAt(path.slice(12)))
+    return <CollectionPage slug={path.slice(12)}/>; if (path === 'news')
     return <Newsroom/>; if (path.startsWith('news/'))
     return <PressReleasePage slug={path.slice(5)}/>; if (path === 'about-biomod')
     return <ContentPage path="about"/>; if (path === 'affiliate-program')

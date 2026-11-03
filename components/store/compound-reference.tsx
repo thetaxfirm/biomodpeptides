@@ -5,6 +5,7 @@ import type { Product } from '@/lib/catalog';
 import { compounds, compoundAt, comparisonAt, comparisons, comparisonsFor, compoundQuestions, publishedCompound, publishedComparison, pubchemUrl, type Compound } from '@/lib/compound-reference';
 import { eligibleDiscovery, vialName } from '@/lib/product-discovery';
 import { batchFor, batchPath, batchRecords, batchRecordsFor, batchStatusLabel, matchingCertificateFor, reportedResult } from '@/lib/testing';
+import { collections, publishedCollection } from '@/lib/collections';
 import { useStore } from './provider';
 import styles from './compound-reference.module.css';
 
@@ -55,6 +56,8 @@ export function CompoundIndex() {
     </table></div>
     <section className={styles.section} aria-labelledby="compare-heading"><h2 id="compare-heading">Side-by-side comparisons</h2>
       <ul className={styles.plainList}>{comparisons.filter(publishedComparison).map(x => <li key={x.slug}><a href={'/compare/' + x.slug}>{compoundAt(x.a)!.name} vs {compoundAt(x.b)!.name}</a></li>)}</ul></section>
+    <section className={styles.section} aria-labelledby="areas-heading"><h2 id="areas-heading">Shop by research area</h2>
+      <ul className={styles.plainList}>{collections.filter(publishedCollection).map(x => <li key={x.slug}><a href={'/collections/' + x.slug}>{x.title}</a></li>)}</ul></section>
     <section className={styles.section} aria-labelledby="verify-heading"><h2 id="verify-heading">Check the lot on your vial</h2>
       <p>Enter the lot printed on your label to open its batch record and lab report.</p><a className="editorial-link" href="/verify">Verify a COA by lot number <ArrowRight size={17}/></a></section>
     {ruo}

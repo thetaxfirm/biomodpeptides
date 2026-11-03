@@ -11,6 +11,7 @@ import { productDescription } from './product-description';
 import { researchFaqSchemaItems } from './research-faq';
 import { pressReleaseAt } from './press-releases';
 import { compoundAt, comparisonAt, compoundQuestions } from './compound-reference';
+import { collectionAt } from './collections';
 import { products as catalogProducts } from './catalog';
 import { eligibleDiscovery, vialName } from './product-discovery';
 import { headers } from 'next/headers';
@@ -59,17 +60,25 @@ export async function routeStructuredData(path: string, config: SEOConfig = curr
     ...(policies ? { hasMerchantReturnPolicy: policies.hasMerchantReturnPolicy } : {}),
     ...(policies?.hasShippingService ? { hasShippingService: policies.hasShippingService } : {}),
   };
+  // A collection page lists its indexable products the way the shop page lists the whole catalog.
+  const collection = clean.startsWith('/collections/') ? collectionAt(clean.slice(13)) : undefined;
+  const listed = clean === '/shop' ? indexableProducts(config) : collection ? indexableProducts(config).filter(item => collection.products.includes(item.slug)) : null;
   const graph: Record<string, unknown>[] = [organization,
     { '@type': 'WebSite', '@id': config.origin + '/#website', url: config.origin, name: 'Biomod Research Supply Company', alternateName: ['TryBiomod', 'BIOMOD'], publisher: { '@id': organization['@id'] } },
-    { '@type': clean === '/shop' ? ['WebPage', 'CollectionPage'] : 'WebPage', '@id': config.origin + clean + '#page', url: config.origin + clean, name: info.title, description: info.description, isPartOf: { '@id': config.origin + '/#website' },
-      ...(clean === '/shop' ? { mainEntity: { '@id': config.origin + clean + '#products' } } : {}) },
+    { '@type': listed ? ['WebPage', 'CollectionPage'] : 'WebPage', '@id': config.origin + clean + '#page', url: config.origin + clean, name: info.title, description: info.description, isPartOf: { '@id': config.origin + '/#website' },
+      ...(listed ? { mainEntity: { '@id': config.origin + clean + '#products' } } : {}) },
   ];
   // The shop grid links every product page; the list names the ones search engines may index,
   // in the grid's order, so the catalog page states which product pages belong to it.
-  if (clean === '/shop') graph.push({ '@type': 'ItemList', '@id': config.origin + clean + '#products', name: 'Research compounds',
-    numberOfItems: indexableProducts(config).length,
-    itemListElement: indexableProducts(config).map((item, index) => ({ '@type': 'ListItem', position: index + 1,
+  if (listed) graph.push({ '@type': 'ItemList', '@id': config.origin + clean + '#products', name: collection ? collection.title : 'Research compounds',
+    numberOfItems: listed.length,
+    itemListElement: listed.map((item, index) => ({ '@type': 'ListItem', position: index + 1,
       name: pageInfo('/product/' + item.slug).name, url: config.origin + '/product/' + item.slug })) });
+  if (collection) graph.push({ '@type': 'BreadcrumbList', itemListElement: [
+    { '@type': 'ListItem', position: 1, name: 'Shop', item: config.origin + '/shop' },
+    { '@type': 'ListItem', position: 2, name: 'Collections', item: config.origin + '/collections' },
+    { '@type': 'ListItem', position: 3, name: collection.name, item: config.origin + clean },
+  ] });
   if (p) graph.push({ '@type': 'BreadcrumbList', itemListElement: [
     { '@type': 'ListItem', position: 1, name: 'Shop', item: config.origin + '/shop' },
     { '@type': 'ListItem', position: 2, name: p.name, item: config.origin + clean },
