@@ -72,6 +72,18 @@ export function canonicalPath(path: string) {
   if (path === '/coa' || path.startsWith('/testing/')) return '/testing';
   return path;
 }
+// Other names shown in a product's meta description: its compound identity and search
+// spellings, minus anything that only repeats the product name. "Semax (ACTH 4–10 analog)"
+// on the Semax listing contributes just "ACTH 4–10 analog", so the snippet never reads
+// "SEMAX 10mg (Semax (ACTH 4–10 analog))" or "SELANK 10mg (Selank)".
+export function descriptionAliases(p: Product) {
+  const own = [p.name, p.name.replace(/\s+\d+(?:\.\d+)?\s*mg$/i, '')].map(n => n.trim().toLowerCase());
+  const names = [compound(p), ...(productNameVariants[p.slug] || [])].map(n => {
+    const qualified = n.match(/^(.+?)\s*\(([^()]+)\)$/);
+    return qualified && own.includes(qualified[1].trim().toLowerCase()) ? qualified[2].trim() : n.trim();
+  });
+  return names.filter((n, i) => n && !own.includes(n.toLowerCase()) && names.findIndex(x => x.toLowerCase() === n.toLowerCase()) === i);
+}
 export function pageInfo(path: string) {
   path = canonicalPath(path);
   if (path === '/admin/login') return { title: 'Administrator Sign In', description: 'Sign in to TryBiomod store administration.', eligible: false };
@@ -86,7 +98,8 @@ export function pageInfo(path: string) {
     const title = ('Buy ' + name + ' | Biomod Research Supply Company').length > 70 ? `Buy ${p.name}${strength} ${productFormat(p)}` : 'Buy ' + name;
     if (p.slug === 'bpc-157-10mg') return { title: 'Buy BPC-157 10mg Vials', name,
       description: 'BPC-157 (BPC157) 10 mg single-compound vials from BIOMOD. Compare packs, current pricing, batch records and the Wolverine blend. Research use only.', eligible: !productReviewBlocks[p.slug] };
-    return { title, name, description: `Buy ${p.name}${strength} (${[compound(p), ...(productNameVariants[p.slug] || [])].filter((n, i, all) => all.findIndex(x => x.toLowerCase() === n.toLowerCase()) === i && (i > 0 || !productNameVariants[p.slug] || n.toLowerCase() !== p.name.replace(/\s+\d+\s*mg$/i, '').toLowerCase())).join(', ')}): single vials or 3, 5 and 10-packs, batch records and U.S. shipping. For laboratory research only.`, eligible: !productReviewBlocks[p.slug] };
+    const aliases = descriptionAliases(p);
+    return { title, name, description: `Buy ${p.name}${strength}${aliases.length ? ' (' + aliases.join(', ') + ')' : ''}: single vials or 3, 5 and 10-packs, batch records and U.S. shipping. For laboratory research only.`, eligible: !productReviewBlocks[p.slug] };
   }
   return pageRecords[path] || { title: privatePath(path) ? 'Customer Services' : 'Page Not Found', description: 'BIOMOD customer services and research products.', eligible: false };
 }
