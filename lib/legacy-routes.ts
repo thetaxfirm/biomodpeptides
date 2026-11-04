@@ -43,6 +43,8 @@ export const legacyRoutes: Record<string, string> = {
   'product-category/spray-products': '/shop?category=spray-products',
   'product-category/aminos-liquids': '/shop?category=aminos-liquids',
   'my-account': '/account',
+  // Old-domain "My Account" page, listed by Bing for "biomod peptides" (November 2-3, 2026) and ending in a 404.
+  'signup': '/account',
   // Press releases renamed without the word peptide (owner, October 17, 2026).
   'news/biomod-peptides-online-store-trybiomod': '/news/biomod-online-store-trybiomod',
   'news/guide-to-reading-peptide-coa': '/news/guide-to-reading-coa',

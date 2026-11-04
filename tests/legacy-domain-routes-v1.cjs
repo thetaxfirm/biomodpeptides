@@ -117,7 +117,15 @@ const mappings = {
       await assert.rejects(handler(props(form)), error => error.digest === `NEXT_REDIRECT;replace;${destination};308;`, form + ' must permanently redirect');
     }
   }
-  for (const unknown of ['/not-a-real-old-post', '/product-tag/not-a-tag', '/product-tag/blends/extra', '/tag/not-a-tag', '/tag/reproducibility/extra', '/research-peptides', '/research-peptides/not-a-category', '/tag/nevada-research-supply/extra', '/tag/peptides/extra', '/peptide-softgel-starter-kit']) {
+  // Old account pages land on the live account page, which stays private and out of the sitemap.
+  for (const [source, destination] of [['/my-account', '/account'], ['/signup', '/account']]) {
+    assert.equal(legacyRoutes[source.slice(1)], destination);
+    assert(!sitemap.includes(source) && !sitemap.includes(destination), source + ' and its destination stay out of the sitemap');
+    for (const form of [source, source + '/']) for (const handler of [generateMetadata, Page]) {
+      await assert.rejects(handler(props(form)), error => error.digest === `NEXT_REDIRECT;replace;${destination};308;`, form + ' must permanently redirect');
+    }
+  }
+  for (const unknown of ['/not-a-real-old-post', '/product-tag/not-a-tag', '/product-tag/blends/extra', '/tag/not-a-tag', '/tag/reproducibility/extra', '/research-peptides', '/research-peptides/not-a-category', '/tag/nevada-research-supply/extra', '/tag/peptides/extra', '/peptide-softgel-starter-kit', '/signup/extra', '/sign-up']) {
     for (const handler of [generateMetadata, Page]) {
       await assert.rejects(handler(props(unknown)), error => error.digest === 'NEXT_HTTP_ERROR_FALLBACK;404', unknown + ' must remain a genuine 404');
     }
