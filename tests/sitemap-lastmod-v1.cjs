@@ -59,6 +59,15 @@ loaded._compile(transpile(filename), filename);
   assert(/function Footer\(\)[^\n]*<TrademarkNote\/>/.test(contentSource), 'footer renders the trademark note on every page');
   assert(/The Original RUO Softgel/.test(brandSource.match(/function TrademarkNote[\s\S]*?\n}/)[0]), 'trademark note carries the October 23 wording');
   for (const [route, date] of entries) assert(date >= '2026-10-23', route + ' shows the October 23 footer change but is dated ' + date);
+  // f2dd1c6 and 3e4b3f2 (November 2) added the compound reference, lot lookup and collections
+  // links to the footer on every page: no page may keep an older date.
+  const footer = contentSource.match(/export function Footer\(\)[^\n]*/)[0];
+  for (const href of ['/compounds', '/verify', '/collections']) assert(footer.includes('href="' + href + '"'), 'footer links ' + href);
+  for (const [route, date] of entries) assert(date >= '2026-11-02', route + ' shows the November 2 footer links but is dated ' + date);
+  // daaec24 (November 4) changed these product descriptions; the compound, compare and collection
+  // pages first went live on November 2, so none of them may be dated before it.
+  for (const slug of ['semax', 'selank', 'tesamorelin-10mg']) if (release.productSlugs.includes(slug)) assert(lastmodFor('/product/' + slug) >= '2026-11-04', slug + ' description changed on 2026-11-04');
+  for (const [route, date] of entries) if (/^\/(compounds|compare|collections|verify)/.test(route)) assert(date >= '2026-11-02', route + ' went live on 2026-11-02 but is dated ' + date);
   // A specific page date can never pull a page below the sitewide date.
   for (const route of Object.keys(pageLastmod)) assert.equal(lastmodFor(route), pageLastmod[route] > siteLastmod ? pageLastmod[route] : siteLastmod, route);
   // Honest by construction: every date is a hand-set constant tied to a release, never "today".

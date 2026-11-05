@@ -4,11 +4,13 @@
 // that changes a page; never set every page to today by default.
 import { pressReleases } from './press-releases';
 
-// The sitewide footer last changed on October 23, 2026: d52581c renamed the softgel marks in
-// the footer trademark line on every page (710dc82 had added that line on October 20; 92d01ce
-// changed the header on October 17). A sitewide change dates every page, so no entry below can
-// be older than this (lastmodFor takes the later of the two).
-export const siteLastmod = '2026-10-23';
+// The sitewide footer last changed on November 2, 2026: f2dd1c6 added "Verify a COA by lot" and
+// "Compound reference" and 3e4b3f2 added "Shop by research area" to the footer on every page
+// (both also link each product page to its compound reference and collections). Before that,
+// d52581c (October 23) renamed the softgel marks in the footer trademark line, 710dc82 added
+// that line on October 20 and 92d01ce changed the header on October 17. A sitewide change dates
+// every page, so no entry below can be older than this (lastmodFor takes the later of the two).
+export const siteLastmod = '2026-11-02';
 // October 17: da848db added free USPS Priority Mail at $250 and the 2 p.m. Pacific same-day
 // wording to every product page; 589ae41 moved the product images to WebP.
 // The same day the store was renamed Biomod Research Supply Company, changing every page's title.
@@ -28,6 +30,11 @@ export const pageLastmod: Record<string, string> = {
   '/product/kisspeptin-10mg': '2026-10-29',
   '/product/pt-141-10mg': '2026-10-29',
   '/product/thymosin-alpha-1-10mg': '2026-10-29',
+  // daaec24 (November 4): meta description, og:description, WebPage markup and llms.txt line
+  // no longer repeat the product name as its own alias.
+  '/product/semax': '2026-11-04',
+  '/product/selank': '2026-11-04',
+  '/product/tesamorelin-10mg': '2026-11-04',
   // October 14: initial homepage cards now include every publication-reviewed vial.
   '/': '2026-10-14',
   // fb54b09: batch status wording on shop cards, the FAQ, batch library and COA guide.
