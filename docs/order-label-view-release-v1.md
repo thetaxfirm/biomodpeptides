@@ -17,9 +17,15 @@ Owner: there was no way in admin to see an order's shipping label or whether it 
 ## Checks
 
 - `npm run check:release`: TypeScript and 120 isolated suites passed.
-- Production build and deployment: recorded below after the push.
+- Production build (`BIOMOD_DEPLOY=true npm run build`) passed locally.
+- Source commit `154baee` pushed to main Nov 9 2026 00:13 UTC. Workers Builds succeeded; Worker version `c1f1b15e-57bc-4fb2-9de0-aadd308b9b2c` deployed 00:16 UTC. GitHub release-check passed.
+- Live check: the public admin bundle served by trybiomod.com contains the new card ("Orders from this customer", "View label", "Last contact recorded", "open now").
+- Change history import (`--remote`) ran: GitHub and Cloudflare sources active, existing events preserved.
+- Layout checked with synthetic orders rendered at side-panel width: one block per order, no clipped columns or mid-word breaks.
 
 ## Gaps
+
+- Signed-in admin view not checked by Claude (no admin session; passwords are entered by the owner only).
 
 - Roles without `orders:read` see "Your role cannot view orders." in the reply desk instead of the list.
 - The carrier status shown is the last one the store saved; the carrier's full scan history stays behind Track.
