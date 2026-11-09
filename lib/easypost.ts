@@ -330,3 +330,11 @@ export async function readShipmentTracking(env: Environment, shipmentId: string,
         throw new ShippingError('Carrier tracking status is unavailable.');
     return status as string;
 }
+/** The production shipment's tracker with every scan, checked against the saved tracking number. Read-only. */
+export async function readShipmentTracker(env: Environment, shipmentId: string, tracking: string): Promise<Record<string, any>> {
+    if (!/^shp_[a-zA-Z0-9]+$/.test(shipmentId)) throw new ShippingError('This order has no valid carrier shipment reference.');
+    const shipment = await call(env, '/shipments/' + encodeURIComponent(shipmentId));
+    if (shipment.mode !== 'production' || shipment.id !== shipmentId || shipment.tracking_code !== tracking || shipment.tracker?.tracking_code !== tracking)
+        throw new ShippingError('Carrier tracking did not match this production shipment.');
+    return shipment.tracker as Record<string, any>;
+}

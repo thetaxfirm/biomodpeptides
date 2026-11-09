@@ -15,6 +15,9 @@ const time = (v: unknown) => typeof v === 'number' && Number.isFinite(v) && v > 
 const PAID = new Set(['paid', 'labeling', 'shipped', 'delivered']);
 const CARRIER_PROBLEMS = new Set(['return_to_sender', 'failure', 'cancelled', 'error']);
 
+/** The admin Track page: carrier scans beside the label, ready to copy into an email. */
+export const trackPageUrl = (orderId: string) => '/api/admin/parcel?id=' + encodeURIComponent(orderId);
+
 /** Whether a postage label exists, where to open it, and what the carrier last said about it. */
 export function labelSummary(order: Order): LabelSummary {
     const d = (order.data || {}) as Record<string, any>, s = d.shipment as Record<string, any> | undefined;

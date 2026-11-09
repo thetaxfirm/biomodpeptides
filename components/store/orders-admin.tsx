@@ -246,7 +246,7 @@ export function OrdersAdmin({ reloadToken, viewRequest, checkoutRecovery, allowe
             <a className="text-button" href={s.labelUrl} target="_blank" rel="noopener">Print label</a>
             {canMarkDroppedOff(o, allowed) && <DroppedOff order={o} busy={busy} change={change}/>}
         </span>;
-        if ((tabForOrder(o) === 'shipped' || o.bucket === 'delivered') && s?.trackingUrl) return <a className="text-button" href={s.trackingUrl} target="_blank" rel="noopener">Track</a>;
+        if ((tabForOrder(o) === 'shipped' || o.bucket === 'delivered') && (s?.tracking || s?.labelUrl)) return <a className="text-button" href={'/api/admin/parcel?id=' + encodeURIComponent(o.id)} target="_blank" rel="noopener">Track</a>;
         if ((o.bucket === 'unpaid' || o.bucket === 'review') && canReconcile(o)) return <span className={styles.nextGroup}>
             <button type="button" className="text-button" disabled={busy} onClick={() => reconcile(o)}>Check payment</button>
         </span>;

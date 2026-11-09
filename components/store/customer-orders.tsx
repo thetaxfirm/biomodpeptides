@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react';
 import { api } from './provider';
 import { money } from '@/lib/catalog';
 import { orderPaymentStatus, orderShipmentStatus } from '@/lib/fulfillment';
-import { labelSummary, nextStepWords } from '@/lib/order-label';
+import { labelSummary, nextStepWords, trackPageUrl } from '@/lib/order-label';
 import { orderMessageLabel, type OrderMessageLog } from '@/lib/order-messages';
 import type { QueueResult, QueueRow } from '@/lib/order-queue';
 import styles from './customer-orders.module.css';
@@ -32,7 +32,7 @@ export function LabelCell({ order }: { order: QueueRow }) {
     return <span className={styles.label} data-label-state="bought">
         <span className={styles.links}>
             {label.labelUrl ? <a href={label.labelUrl} target="_blank" rel="noopener noreferrer">View label</a> : <span className={styles.missing}>Label file not saved</span>}
-            {label.trackingUrl && <a href={label.trackingUrl} target="_blank" rel="noopener noreferrer">Track</a>}
+            {order.id && <a href={trackPageUrl(order.id)} target="_blank" rel="noopener" title="Carrier scans beside the label, ready to copy">Track</a>}
         </span>
         <span className={styles.sub}>{[label.service, label.tracking].filter(Boolean).join(' · ')}</span>
         {label.boughtAt && <span className={styles.sub}>Bought {day(label.boughtAt)}{label.protection ? ' · ' + label.protection : ''}</span>}
