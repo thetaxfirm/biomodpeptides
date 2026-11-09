@@ -24,7 +24,7 @@ loaded._compile(transpile(filename), filename);
 
 (async () => {
   const xml = await loaded.exports.GET(new Request('https://trybiomod.com/sitemap.xml')).text();
-  const entries = [...xml.matchAll(/<url><loc>([^<]+)<\/loc><lastmod>([^<]+)<\/lastmod><\/url>/g)].map(m => [m[1].slice(release.origin.length) || '/', m[2]]);
+  const entries = [...xml.matchAll(/<url><loc>([^<]+)<\/loc><lastmod>([^<]+)<\/lastmod>(?:<image:image>.*?<\/image:image>)?<\/url>/g)].map(m => [m[1].slice(release.origin.length) || '/', m[2]]);
   const paths = sitemapPaths(config);
   assert.equal((xml.match(/<url>/g) || []).length, paths.length, 'every sitemap entry has exactly one loc and lastmod');
   assert.deepEqual(entries.map(e => e[0]), paths);
