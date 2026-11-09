@@ -4,6 +4,7 @@ import { database, runtime } from '@/lib/runtime';
 import { onboardingPortal, onboardingAdmin, saveTaxProfile, saveIdDocument, signOfferPacket, sendOffer, publishTalkingPoints, reviewTaxProfile, recordManualSale, recordPayout } from '@/lib/affiliate-onboarding';
 import { invitedAffiliate } from '@/lib/affiliate-program';
 import { recordContact } from '@/lib/contacts';
+import { shareContact } from '@/lib/crm-capture';
 export const dynamic = 'force-dynamic';
 const json = (data: unknown, status = 200) => NextResponse.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
 // Two ID photos are sent one at a time; a signature and a W-9 are far smaller.
@@ -27,7 +28,7 @@ export async function POST(req: NextRequest) {
   const user = await requireCustomer(), db = database(), vault = runtime().AFFILIATE_VAULT_KEY;
   if (['tax', 'id', 'sign'].includes(body.action)) {
    await rateLimit('affiliate-onboarding:' + user.id, 40);
-   if (body.action === 'tax') { const r = await saveTaxProfile(db, vault, user.id, body.tax); await recordContact(db, { email: user.email, owner: user.id, name: body.tax?.legalName, phone: body.tax?.phone, source: 'affiliate' }); return json(r); }
+   if (body.action === 'tax') { const r = await saveTaxProfile(db, vault, user.id, body.tax); await recordContact(db, { email: user.email, owner: user.id, name: body.tax?.legalName, phone: body.tax?.phone, source: 'affiliate' }); await shareContact({ email: user.email, owner: user.id, name: body.tax?.legalName, phone: body.tax?.phone, source: 'affiliate' }); return json(r); }
    if (body.action === 'id') return json(await saveIdDocument(db, vault, user.id, body));
    return json(await signOfferPacket(db, user.id, body, { ip: req.headers.get('cf-connecting-ip') || '', userAgent: req.headers.get('user-agent') || '' }));
   }

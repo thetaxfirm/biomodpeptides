@@ -108,6 +108,7 @@ async function apiCookieIntegration() {
       if (request === 'next/headers') return { cookies: async () => cookieJar };
       if (request === 'next/server') return { NextResponse: { json: (value, options) => new Response(JSON.stringify(value), { ...options, headers: { 'Content-Type': 'application/json', ...options.headers } }) } };
       if (request === '@/lib/runtime') return runtime;
+      if (request === '@/lib/crm-capture') return { shareContact: async () => {} }; // shared CRM copy: not part of checkout
       if (request === '@/lib/auth') return {
         customer: async () => user, requireCustomer: async () => { if (!user) throw new Error('Please sign in.'); return user; },
         session: async () => sessionRow(), authReady: () => true,

@@ -1,5 +1,6 @@
 import { replyBridgeRoute } from '@/lib/request-reply-route';
 import { recordContact } from '@/lib/contacts';
+import { shareContact } from '@/lib/crm-capture';
 import { queryOrders, scanLimit, orderBucket, canArchive, isArchived } from '@/lib/order-queue';
 import { publicCatalog } from '@/lib/public-catalog';
 import { batchRecordsFor, batchStatus, batchPath } from '@/lib/testing';
@@ -53,7 +54,7 @@ const cartImports = () => createCartImports({ db: database(), normalize: validat
 // Start only this newly saved inquiry after the response. Durable jobs remain the
 // source of recipients/documents; the outbox keeps its leases, caps and retry policy.
 // Contact capture is secondary: it never changes the outcome of a sign-in or a form.
-async function captureContact(input: Parameters<typeof recordContact>[1]) { try { await recordContact(runtime().DB, input); } catch { /* ignore */ } }
+async function captureContact(input: Parameters<typeof recordContact>[1]) { try { await recordContact(runtime().DB, input); } catch { /* ignore */ } await shareContact(input); }
 function scheduleInquiryDelivery(env: ReturnType<typeof runtime>, requestId: string, kind: 'contact' | 'affiliate') {
     try {
         const deliveryEnv = { ...env, DB: withAuditDb(env.DB, { source: 'system', actor: 'Inquiry delivery automation', actorType: 'system' }) } as ReturnType<typeof runtime>;

@@ -10,6 +10,8 @@ import { runAutoLabels } from './lib/auto-label';
 import { runParcelAlerts } from './lib/parcel-alerts';
 import { runPaymentVerification } from './lib/payment-verify';
 import { keepRequestAlive } from './lib/request-lifetime';
+import { publishOnSchedule } from './lib/shared-crm';
+import { contactList } from './lib/contacts';
 
 type TrafficWorkerEnvironment = CoaEnvironment;
 
@@ -39,7 +41,9 @@ export default {
       // Asks the provider again about orders already marked paid, and insists on a capture for the
       // exact order total that has not been reversed. Writes one field; changes no status.
       const verifyEnv = { ...env, DB: withAuditDb(env.DB, { source: 'system', actor: 'Payment verification', actorType: 'system' }) } as TrafficWorkerEnvironment;
-      const results=await Promise.allSettled([runScheduledCoaOutbox(coaEnv, controller.scheduledTime),runCheckoutRecovery(recoveryEnv),runTrackingSweep(trackingEnv as never),runAutoLabels(labelEnv as never),runCheckoutExpiry(expiryEnv as never),runParcelAlerts(parcelEnv as never),runPaymentVerification(verifyEnv as never)]);
+      const results=await Promise.allSettled([runScheduledCoaOutbox(coaEnv, controller.scheduledTime),runCheckoutRecovery(recoveryEnv),runTrackingSweep(trackingEnv as never),runAutoLabels(labelEnv as never),runCheckoutExpiry(expiryEnv as never),runParcelAlerts(parcelEnv as never),runPaymentVerification(verifyEnv as never),
+        // Hourly copy of the contact list into the CRM shared with Biomod Pro. Never throws.
+        publishOnSchedule(env as never, 'trybiomod', contactList)]);
       if(results.some(result=>result.status==='rejected'))throw new Error('One or more scheduled correspondence tasks failed.');
     }
   },

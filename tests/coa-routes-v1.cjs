@@ -53,6 +53,8 @@ const dependencies = {
   '@/lib/coa-delivery': coaDeliveryStrict,
   // Contact capture is best-effort and recorded only; it is not COA delivery.
   '@/lib/contacts': { recordContact: async (db, input) => { note('contact:' + input.source); } },
+  // Shared CRM copy of the same capture; best-effort, never part of COA delivery.
+  '@/lib/crm-capture': { shareContact: async () => {} },
   '@/lib/request-replies': (m=>Object.assign(m,{autoDraftNewRequest:(e,id)=>m.prepareRequestReply(e,{requestId:id,mode:'ai',expectedRevision:null},{email:'Website request automation',role:'system'})}))({
     summarizeRequestReplies: async(receivedEnv,ids)=>{checkedAdmin();assert.equal(receivedEnv,env);return {};},
     previewReplyAttachments: async(receivedEnv,input,actor)=>{

@@ -5,6 +5,7 @@ import searchPublication from "./lib/seo-publication-v1.json";
 import { readExecutionProfile } from "./scripts/execution-profile.mjs";
 import { sites } from "./build/sites-vite-plugin";
 
+const SHARED_CRM_DATABASE_ID = "3c29e535-3975-4ccb-bca8-690ddd87641b";
 const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
   "00000000-0000-4000-8000-000000000000";
 
@@ -41,6 +42,8 @@ const localBindingConfig = {
           database_id: production ? "877af242-59d4-4122-a1ff-50fcf02a54dc" : SITE_CREATOR_PLACEHOLDER_DATABASE_ID,
           migrations_dir: production ? "../../drizzle" : "drizzle",
         },
+        // One CRM shared with Biomod Pro (lib/shared-crm.ts). Contacts only; orders stay in DB.
+        ...(production ? [{ binding: "CRM", database_name: "biomod-crm", database_id: SHARED_CRM_DATABASE_ID }] : []),
       ]
     : [],
   r2_buckets: r2
