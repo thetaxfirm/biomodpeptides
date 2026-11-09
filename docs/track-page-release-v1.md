@@ -18,7 +18,8 @@ Owner: when pressing Track, open the label side by side with the tracking, so th
 
 - `npm run check:release`: TypeScript and 121 isolated suites passed.
 - Page layout checked locally with one real order's scans and label (scratch only, nothing committed).
-- Deployment: recorded after the push.
+- Source commit `5d31db8` pushed to main Nov 9 2026 ~00:58 UTC. Workers Builds and GitHub release-check succeeded; Worker version `e6f68163-8d76-4c55-989f-d143f8c21699` deployed 01:01 UTC.
+- Live: `/api/admin/parcel` and `&label=png` return 403 without an admin session; the served admin bundle links Track to `/api/admin/parcel`.
 
 ## Gaps
 
