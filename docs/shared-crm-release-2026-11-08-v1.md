@@ -18,4 +18,7 @@ November 8, 2026. Owner direction: Biomod Pro gets the same store engine as TryB
 
 ## Live verification
 
-Recorded after deploy in the follow-up section below.
+- Commit 16b1637 pushed to main; Workers Builds deployed version a89941f7 at 01:35 UTC Nov 9 with the CRM binding (read back from the Worker settings).
+- trybiomod.com /, /shop and /admin/login return 200 after deploy.
+- First scheduled publish ran on its own: crm_publish_log shows trybiomod with 91 contacts published (25 with paid orders), 0 unchanged.
+- Not yet seen: the signed-in Contacts tab with the Store column. That needs the owner signed in; nothing else depends on it.
