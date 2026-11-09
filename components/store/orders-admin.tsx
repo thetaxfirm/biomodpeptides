@@ -16,6 +16,7 @@ import { queueTabs, tabForOrder, requestedTab, canArchive, isArchived, dismissib
 import { CarrierConnection } from './fulfillment-admin';
 import { ShippingLabel, post as shippingPost } from './shipping-admin';
 import { OrderDetails } from './order-admin';
+import { LabelCell, CustomerOrders } from './customer-orders';
 import { paymentLine, paymentAdvice, savedPaymentCheck } from '@/lib/payment-check';
 import styles from './orders-admin.module.css';
 
@@ -306,7 +307,7 @@ export function OrdersAdmin({ reloadToken, viewRequest, checkoutRecovery, allowe
         </p>}
         {!viewReady ? <p className={styles.empty} role="status">{viewError ? 'Orders for this view are unavailable. Retry to load them.' : 'Loading orders…'}</p> : !visibleRows.length ? <p className={styles.empty}>{q ? 'No orders match this search in ' + current.label + '. Try All.' : 'No orders in ' + current.label + '.'}</p> :
             <table className={styles.table}>
-                <thead><tr><th>Order</th><th>Customer</th><th className={styles.number}>Items</th><th className={styles.number}>Total</th><th>Payment</th><th>Shipment</th><th>Last contact recorded</th><th>Next step</th></tr></thead>
+                <thead><tr><th>Order</th><th>Customer</th><th className={styles.number}>Items</th><th className={styles.number}>Total</th><th>Payment</th><th>Shipment</th><th>Label</th><th>Last contact recorded</th><th>Next step</th></tr></thead>
                 <tbody>{visibleRows.map(o => { const payment = orderPaymentStatus(o), shipment = orderShipmentStatus(o); const due = tabForOrder(o) === 'to_ship' ? shipDue(o) : null; const urgent = due && due.state !== 'upcoming'; return <tr key={o.id}>
                     <td>{urgent && <span className={styles.star} role="img" aria-label={due.label} title={due.label}>★</span>}<button type="button" className={styles.orderButton} onClick={() => setSelected(o)}>{orderNumber(o.id)}</button>{due && <span className={urgent ? styles.dueUrgent : styles.sub}>{due.label}</span>}<span className={styles.sub}>{new Date(o.created).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span></td>
                     <td>{o.data?.address?.name || 'Name not recorded'}<span className={styles.sub}>{[place(o), o.data?.email].filter(Boolean).join(' · ')}</span></td>
@@ -314,6 +315,7 @@ export function OrdersAdmin({ reloadToken, viewRequest, checkoutRecovery, allowe
                     <td data-label="Order total" className={styles.number}>{money(Number(o.total) || 0)}</td>
                     <td data-label="Payment"><strong>{payment.label}</strong>{payment.detail && <span className={styles.sub}>{payment.detail}</span>}{['unpaid', 'review'].includes(o.bucket) && paymentLine(savedPaymentCheck(o.data?.paymentCheck)) && <span className={styles.sub}>{paymentLine(savedPaymentCheck(o.data?.paymentCheck))}</span>}</td>
                     <td data-label="Shipment"><strong>{shipment.label}</strong>{shipment.detail && <span className={styles.sub}>{shipment.detail}</span>}{statusLine(o) && <span className={styles.sub}>{statusLine(o)}</span>}</td>
+                    <td data-label="Label"><LabelCell order={o}/></td>
                     <td data-label="Last contact recorded" className={styles.messaged}><MessagedCell order={o}/></td>
                     <td className={styles.next}>{orderAttentionReason(o) && <span className={styles.attentionReason}>{orderAttentionReason(o)}</span>}{nextStep(o)}</td>
                 </tr>; })}</tbody>
@@ -338,6 +340,8 @@ export function OrdersAdmin({ reloadToken, viewRequest, checkoutRecovery, allowe
                     <div className={styles.stateSummary}><p><strong>Payment: {orderPaymentStatus(selected).label}</strong><span className={styles.sub}>{orderPaymentStatus(selected).detail}</span></p><p><strong>Shipment: {orderShipmentStatus(selected).label}</strong><span className={styles.sub}>{orderShipmentStatus(selected).detail}</span></p></div>
                     {orderAttentionReason(selected) && <p className={styles.attentionReason}>{orderAttentionReason(selected)}</p>}
                     {statusLine(selected) && <p className={styles.statusLine}>{statusLine(selected)}</p>}
+                    {/* Label, delivery and contact for this order and every other order from the same customer (owner, Nov 8 2026). */}
+                    <CustomerOrders email={String(selected.data?.email || '')} currentId={selected.id} onOpen={setSelected}/>
                     {!paymentVerificationFailed(selected) && awaitingLabelApproval(selected) && <p className={styles.coaHold}>This label quotes {money(Number(selected.data?.labelApproval?.cents) || 0)}, above your {money(Number(selected.data?.labelApproval?.limitCents) || 0)} automatic limit, so it was not bought. Buying it below approves that cost. Nothing has been charged.</p>}
                     <div className={styles.messageLog}>
                         <h3>Contact history recorded</h3>

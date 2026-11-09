@@ -10,6 +10,7 @@ function load(file){const name=path.join(root,file),m=new Module(name,module);m.
   if(id==='./provider')return{api:(...args)=>adminApi(...args),report(){}};
   if(id==='./shipping-admin')return{ShippingLabel:()=>React.createElement('span',{'data-shipping-label-control':true},'Fixture label control')};
   if(id==='./order-admin')return{OrderDetails:()=>null};
+  if(id==='./customer-orders')return{LabelCell:()=>null,CustomerOrders:()=>null}; /* Own suite: order-label-v1. */
   if(id==='@/lib/payment-check')return load('lib/payment-check.ts');
   if(id==='./fulfillment-admin')return{CarrierConnection:()=>null};
   if(id==='./primitives')return{Field:()=>null};

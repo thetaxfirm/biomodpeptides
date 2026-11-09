@@ -4,6 +4,7 @@ import { vipSignal, type CustomerContext } from '@/lib/customer-context';
 import { useEffect, useRef, useState } from 'react';
 import { matchedCoaReplyProblem, preparedCoaReply, appendNextPurchaseOffer } from '@/lib/reply-composer';
 import type { CoaAutomationReport } from './coa-automation';
+import { CustomerOrders } from './customer-orders';
 import styles from './request-inbox.module.css';
 import { issueTypes, resolutionTypes, issueLabel, resolutionLabel, looksLikePitchText, type RequestIssue } from '@/lib/request-issues';
 
@@ -806,6 +807,8 @@ function conversation({ row, draft, automation, options, attachmentRead, onRetry
     </section>}
     {!latestRequest && <p className={styles.message}>No message from customer.</p>}
     <p className={styles.orderResult} role="status">{replyPurchaseNotice(request, customerEvidence)}</p>
+    {/* Each order's label, delivery and last contact, before anyone answers (owner, Nov 8 2026). */}
+    {canReply && <CustomerOrders email={email}/>}
     {request.status === 'deleted' && <p className={styles.warning}>This request is deleted. Restore it to reply.</p>}
     {request.kind === 'affiliate' && <p className={styles.note}>Partner application. Agree terms and create the code under Affiliate &amp; promo codes before promising one.</p>}
     {request.kind === 'stock' && <p className={styles.note}>Check stock under Products before promising a date.</p>}
