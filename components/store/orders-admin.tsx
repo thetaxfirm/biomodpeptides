@@ -243,7 +243,7 @@ export function OrdersAdmin({ reloadToken, viewRequest, checkoutRecovery, allowe
         </span>;
         if (tabForOrder(o) === 'to_ship' && o.bucket === 'to_ship' && allowed('orders:fulfill')) return <ShippingLabel order={o} onDone={reload} compact/>;
         if (tabForOrder(o) === 'to_ship' && o.bucket === 'label' && s?.labelUrl) return <span className={styles.nextGroup}>
-            <a className="text-button" href={s.labelUrl} target="_blank" rel="noopener">Print label</a>
+            <a className="text-button" href={'/api/admin/label?id=' + encodeURIComponent(o.id)} target="_blank" rel="noopener">Print label</a>
             {canMarkDroppedOff(o, allowed) && <DroppedOff order={o} busy={busy} change={change}/>}
         </span>;
         if ((tabForOrder(o) === 'shipped' || o.bucket === 'delivered') && (s?.tracking || s?.labelUrl)) return <a className="text-button" href={'/api/admin/parcel?id=' + encodeURIComponent(o.id)} target="_blank" rel="noopener">Track</a>;
