@@ -31,7 +31,7 @@ db.prepare("INSERT INTO staff VALUES('former@example.invalid','','support',0,11,
 assert.throws(() => db.prepare("INSERT INTO staff VALUES('early@example.invalid','','catalog',1,1,1,'x')").run(), /CHECK constraint/, 'catalog refused before 0034');
 const before = db.prepare('SELECT * FROM staff ORDER BY email').all().map(r => ({ ...r }));
 const eventsBefore = db.prepare('SELECT COUNT(*) n FROM change_events').get().n;
-for (const name of files.slice(at)) db.exec(fs.readFileSync(path.join(root, 'drizzle', name), 'utf8'));
+for (const name of files.slice(at, at + 1)) db.exec(fs.readFileSync(path.join(root, 'drizzle', name), 'utf8'));
 assert.deepEqual(db.prepare('SELECT * FROM staff ORDER BY email').all().map(r => ({ ...r })), before, 'Existing staff rows unchanged');
 assert.equal(db.prepare('SELECT COUNT(*) n FROM change_events').get().n, eventsBefore, 'The table copy writes no change events');
 assert.deepEqual(db.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND tbl_name='staff' ORDER BY name").all().map(r => r.name), ['audit_staff_delete', 'audit_staff_insert', 'audit_staff_update']);

@@ -4,7 +4,7 @@ import specificationReviews from './product-specification-review-v1.json';
 const specificationReviewsBySlug: Record<string, string> = specificationReviews;
 import vialBranding from './vial-branding-v37.json';
 import competitive from './competitive-pricing-v3.json';
-import retail from './retail-pricing-v4.json';
+import retail from './retail-pricing-v5.json';
 export type Product = {
     id: number;
     name: string;
