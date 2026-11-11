@@ -93,6 +93,25 @@ const mappings = {
   '/tag/retatrutide-protocol-length': '/',
   '/tag/terzepatide-softgel-timing': '/',
   '/tag/trustworthy-peptide-supplier': '/choosing-a-research-supplier',
+  // Listed by Bing (via DuckDuckGo) on November 10, 2026 and still ending in a 404.
+  '/research-peptides-and-laboratory-supply-delivery-in-las-vegas': '/choosing-a-research-supplier',
+  '/us-made-peptides-in-las-vegas-a-researchers-procurement-guide-2026': '/choosing-a-research-supplier',
+  '/buying-research-peptides-in-las-vegas-an-analytical-procurement-guide-2026': '/choosing-a-research-supplier',
+  '/southern-nevada-research-peptide-supplier-laboratory-standards-procurement': '/choosing-a-research-supplier',
+  '/selecting-a-qualified-research-peptide-supplier-in-las-vegas-2026': '/choosing-a-research-supplier',
+  '/local-peptide-company-las-vegas-analytical-grade-supply-for-research-laboratories': '/about',
+  '/tag/las-vegas-peptides': '/about',
+  '/laboratory-peptide-supply-a-resource-guide-for-analytical-research-standards': '/quality-standard',
+  '/peptide-stability-in-different-buffers-a-reference-for-analytical-research': '/quality-standard',
+  '/peptides-for-binding-affinity-assays-an-analytical-reference-guide-2026': '/quality-standard',
+  '/selecting-peptides-for-assay-development-a-technical-guide-for-researchers': '/quality-standard',
+  '/lab-reagents-delivery-in-las-vegas-high-purity-peptide-procurement-2026': '/shipping-policy',
+  '/in-stock-research-peptides-in-las-vegas-analytical-grade-laboratory-reagents': '/shop',
+  '/las-vegas-research-peptide-price-list-analytical-procurement-guide-2026': '/shop',
+  '/research-peptides/all-research-peptides': '/shop',
+  '/klow-blend-peptides-for-las-vegas-research-labs': '/shop',
+  '/las-vegas-guide-to-glow-peptides-for-research': '/shop',
+  '/peptide-health-optimization-beginners': '/',
 };
 
 (async () => {
@@ -125,7 +144,7 @@ const mappings = {
       await assert.rejects(handler(props(form)), error => error.digest === `NEXT_REDIRECT;replace;${destination};308;`, form + ' must permanently redirect');
     }
   }
-  for (const unknown of ['/not-a-real-old-post', '/product-tag/not-a-tag', '/product-tag/blends/extra', '/tag/not-a-tag', '/tag/reproducibility/extra', '/research-peptides', '/research-peptides/not-a-category', '/tag/nevada-research-supply/extra', '/tag/peptides/extra', '/peptide-softgel-starter-kit', '/signup/extra', '/sign-up']) {
+  for (const unknown of ['/not-a-real-old-post', '/product-tag/not-a-tag', '/product-tag/blends/extra', '/tag/not-a-tag', '/tag/reproducibility/extra', '/research-peptides', '/research-peptides/not-a-category', '/tag/nevada-research-supply/extra', '/tag/peptides/extra', '/peptide-softgel-starter-kit', '/signup/extra', '/sign-up', '/research-peptides/all-research-peptides/extra', '/tag/las-vegas-peptides/extra']) {
     for (const handler of [generateMetadata, Page]) {
       await assert.rejects(handler(props(unknown)), error => error.digest === 'NEXT_HTTP_ERROR_FALLBACK;404', unknown + ' must remain a genuine 404');
     }

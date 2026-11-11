@@ -116,4 +116,25 @@ export const legacyRoutes: Record<string, string> = {
   'tag/retatrutide-protocol-length': '/',
   'tag/terzepatide-softgel-timing': '/',
   'tag/trustworthy-peptide-supplier': '/choosing-a-research-supplier',
+  // Old-domain URLs listed by Bing (DuckDuckGo site:biomodpeptides.com, November 10, 2026) that still
+  // ended in a 404. Sourcing guides go to the supplier guide, assay and stability references to the
+  // COA standard, price and stock lists to the shop; a health-topic post goes to the homepage.
+  'research-peptides-and-laboratory-supply-delivery-in-las-vegas': '/choosing-a-research-supplier',
+  'us-made-peptides-in-las-vegas-a-researchers-procurement-guide-2026': '/choosing-a-research-supplier',
+  'buying-research-peptides-in-las-vegas-an-analytical-procurement-guide-2026': '/choosing-a-research-supplier',
+  'southern-nevada-research-peptide-supplier-laboratory-standards-procurement': '/choosing-a-research-supplier',
+  'selecting-a-qualified-research-peptide-supplier-in-las-vegas-2026': '/choosing-a-research-supplier',
+  'local-peptide-company-las-vegas-analytical-grade-supply-for-research-laboratories': '/about',
+  'tag/las-vegas-peptides': '/about',
+  'laboratory-peptide-supply-a-resource-guide-for-analytical-research-standards': '/quality-standard',
+  'peptide-stability-in-different-buffers-a-reference-for-analytical-research': '/quality-standard',
+  'peptides-for-binding-affinity-assays-an-analytical-reference-guide-2026': '/quality-standard',
+  'selecting-peptides-for-assay-development-a-technical-guide-for-researchers': '/quality-standard',
+  'lab-reagents-delivery-in-las-vegas-high-purity-peptide-procurement-2026': '/shipping-policy',
+  'in-stock-research-peptides-in-las-vegas-analytical-grade-laboratory-reagents': '/shop',
+  'las-vegas-research-peptide-price-list-analytical-procurement-guide-2026': '/shop',
+  'research-peptides/all-research-peptides': '/shop',
+  'klow-blend-peptides-for-las-vegas-research-labs': '/shop',
+  'las-vegas-guide-to-glow-peptides-for-research': '/shop',
+  'peptide-health-optimization-beginners': '/',
 };
