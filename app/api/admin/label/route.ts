@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireStaff } from '@/lib/auth';
 import { one, parse } from '@/lib/runtime';
 import { labelPdf } from '@/lib/label-pdf';
+import { labelFileName, contentDisposition } from '@/lib/label-filename';
 export const dynamic = 'force-dynamic';
 
 /**
@@ -19,7 +20,8 @@ export async function GET(req: NextRequest) {
     if (!/^[a-f0-9-]{36}$/.test(id))
         return NextResponse.json({ error: 'Order not found.' }, { status: 404 });
     const order = await one<{ data: string }>('SELECT data FROM orders WHERE id=?', id);
-    const shipment = parse<Record<string, any>>(order?.data, {}).shipment;
+    const saved = parse<Record<string, any>>(order?.data, {});
+    const shipment = saved.shipment;
     const source = String(shipment?.labelUrl || '');
     // Only ever the carrier's own file, and only over TLS: the stored value decides what is
     // fetched, so a malformed record must stop here rather than become a request to anywhere.
@@ -46,7 +48,8 @@ export async function GET(req: NextRequest) {
         headers: {
             'Content-Type': 'application/pdf',
             'Content-Length': String(pdf.length),
-            'Content-Disposition': 'inline; filename="label-' + id.slice(0, 8).toUpperCase() + '-4x6.pdf"',
+            // Named after whoever it is going to, so a folder of downloads can be matched to boxes.
+            'Content-Disposition': contentDisposition('inline', labelFileName(id, saved.address?.name, 'pdf')),
             'Cache-Control': 'no-store',
             'X-Robots-Tag': 'noindex, nofollow',
         },

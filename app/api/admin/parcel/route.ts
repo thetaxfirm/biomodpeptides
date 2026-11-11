@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { contentDisposition } from '@/lib/label-filename';
 import { requireStaff } from '@/lib/auth';
 import { one, parse, runtime } from '@/lib/runtime';
 import { readShipmentTracker } from '@/lib/easypost';
@@ -30,7 +31,7 @@ export async function GET(req: NextRequest) {
         try { file = await fetch(source); } catch { return new NextResponse('The label file could not be read.', { status: 502, headers }); }
         const type = (file.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
         if (!file.ok || !['image/png', 'image/jpeg', 'image/gif'].includes(type)) return new NextResponse('The label file could not be read.', { status: 502, headers });
-        const disposition = (req.nextUrl.searchParams.get('download') ? 'attachment' : 'inline') + '; filename="' + entry.labelFile + '"';
+        const disposition = contentDisposition(req.nextUrl.searchParams.get('download') ? 'attachment' : 'inline', entry.labelFile);
         return new NextResponse(file.body, { headers: { ...headers, 'Content-Type': type, 'Content-Disposition': disposition } });
     }
 

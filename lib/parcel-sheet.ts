@@ -3,6 +3,7 @@
 // (owner, Nov 8 2026: "when I press track, I want the label to also open side by side").
 // Read-only. It shows what the carrier and the store recorded; it buys, sends and changes nothing.
 
+import { labelFileName } from './label-filename';
 export type TrackingEvent = { date: string; time: string; message: string; place: string; key: string };
 export type ParcelHistory = { status: string; estimated: string; events: TrackingEvent[] };
 export type ParcelEntry = {
@@ -79,7 +80,7 @@ export function parcelEntry(order: { id: string; data?: Record<string, any> }): 
         service: clean(s.service || s.carrier, 60), tracking: clean(s.tracking, 60),
         protection: [cents > 0 ? 'Insured $' + (cents / 100).toFixed(2) : '', s.signature ? 'Signature required' : ''].filter(Boolean).join(' · '),
         carrierPage: https(s.trackingUrl), labelSrc: labelSource(s.labelUrl) ? '/api/admin/parcel?id=' + encodeURIComponent(order.id) + '&label=png' : null,
-        labelFile: 'Order ' + number.slice(1) + ' label.png',
+        labelFile: labelFileName(order.id, a.name, 'png'),
     };
 }
 

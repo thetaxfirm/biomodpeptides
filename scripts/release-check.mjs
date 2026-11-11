@@ -13,7 +13,7 @@ const tests = [
   "product-batch-v1.cjs", "label-lot-reports-v1.cjs", "product-batch-admin-v1.cjs", "product-batch-history-v1.cjs", "product-batch-order-v1.cjs", "public-batch-consumers-v1.cjs",
   "pack-price-admin-v1.cjs",
   "product-availability-v1.cjs", "admin-products-ui-v1.cjs", "sale-display-v1.cjs",
-  "change-history-v1.cjs", "change-history-system-v1.cjs", "change-history-route-v1.cjs", "change-history-ui-v1.cjs", "change-history-shipping-v1.cjs", "change-history-import-v1.mjs", "label-pdf-v1.cjs",
+  "change-history-v1.cjs", "change-history-system-v1.cjs", "change-history-route-v1.cjs", "change-history-ui-v1.cjs", "change-history-shipping-v1.cjs", "change-history-import-v1.mjs", "label-pdf-v1.cjs", "label-filename-v1.cjs",
   "checkout-recovery-v1.cjs", "checkout-expiry-v1.cjs", "preorder-pricing-v1.cjs", "preorder-order-v1.cjs",
   "admin-shipping-services-ui-v1.cjs", "shipping-services-v1.cjs", "coa-shipping-v1.cjs", "admin-overview-v1.cjs", "shipping-settings-route-v1.cjs", "shipping-options-v1.cjs",
   "shipping-policy-history-v1.cjs", "merchant-policies-v1.cjs", "shipping-minimum-service-v1.cjs",

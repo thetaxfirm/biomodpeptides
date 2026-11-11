@@ -5,7 +5,9 @@ const ts = require('typescript');
 const root = path.resolve(__dirname, '..');
 function load(file) {
   const name = path.join(root, file), m = new Module(name, module);
-  m.filename = name; m.require = id => { throw Error('Unexpected dependency ' + id); };
+  // Sibling library modules load for real: the download's file name is part of what this page
+  // promises, and a stub would hide a break in it (owner, Nov 11 2026).
+  m.filename = name; m.require = id => { if (id.startsWith('./')) return load('lib/' + id.slice(2) + '.ts'); throw Error('Unexpected dependency ' + id); };
   m._compile(ts.transpileModule(fs.readFileSync(name, 'utf8'), { compilerOptions: { module: 1, target: 9 } }).outputText, name);
   return m.exports;
 }
@@ -43,7 +45,10 @@ const order = { id: 'abcdef12-0000-4000-8000-000000000000', data: { address: { n
 const entry = p.parcelEntry(order);
 assert.equal(entry.number, '#ABCDEF12');
 assert.equal(entry.labelSrc, '/api/admin/parcel?id=abcdef12-0000-4000-8000-000000000000&label=png', 'The page shows the label through this site, so it can be copied');
-assert.equal(entry.labelFile, 'Order ABCDEF12 label.png');
+// Owner, Nov 11 2026: the download is named after whoever it is going to, with the order number
+// keeping two labels for the same person apart.
+assert.equal(entry.labelFile, 'Fixture Person ABCDEF12.png');
+assert.equal(p.parcelEntry({ ...order, data: { ...order.data, address: {} } }).labelFile, 'Order ABCDEF12 label.png', 'and falls back when no name was recorded');
 assert.equal(entry.protection, 'Insured $50.00 · Signature required');
 assert.equal(p.parcelEntry({ ...order, data: { shipment: { labelUrl: 'https://evil.example/x.png' } } }).labelSrc, null);
 
@@ -62,7 +67,7 @@ const html = p.renderParcelSheet(entry, history);
 for (const piece of ['Tracking history', 'Shipping label', 'id="copyHistory"', 'id="copyLabel"', 'Download label', 'Print or save as PDF', 'Open carrier page', 'grid-template-columns:minmax(0,1fr) minmax(300px,440px)', '<strong data-problem>Delivery failed</strong>'])
   assert(html.includes(piece), piece);
 assert.match(html, /<img id="labelImage" src="\/api\/admin\/parcel\?id=abcdef12-0000-4000-8000-000000000000&amp;label=png"/);
-assert.match(html, /download="Order ABCDEF12 label.png"/);
+assert.match(html, /download="Fixture Person ABCDEF12\.png"/, 'the download attribute carries the recipient\'s name too');
 assert(!html.includes('easypost-files'), 'The saved label link itself is not written into the page');
 assert(html.indexOf('ADDRESS NOT FOUND') < html.indexOf('ARRIVE FACILITY'), 'Newest scan first');
 const hostile = p.renderParcelSheet({ ...entry, customer: '<script>x</script>' }, p.trackingHistory({ tracking_details: [{ datetime: '2026-11-01T01:00:00Z', message: '<img src=x onerror=alert(1)>' }] }));
