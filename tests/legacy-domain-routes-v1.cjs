@@ -112,6 +112,21 @@ const mappings = {
   '/klow-blend-peptides-for-las-vegas-research-labs': '/shop',
   '/las-vegas-guide-to-glow-peptides-for-research': '/shop',
   '/peptide-health-optimization-beginners': '/',
+  // Listed by Bing (via DuckDuckGo) on November 11, 2026 and still ending in a 404.
+  '/tag/softgels': '/softgels',
+  '/es/tag/pharmaceutical-softgel-process': '/softgels',
+  '/tag/bpc-157-peptide-chemistry': '/compounds/bpc-157',
+  '/tag/ghrh': '/compounds',
+  '/es/tag/cjc-1295-research-peptide-purity': '/quality-standard',
+  '/optimizing-peptide-lab-workflows-2026-technical-guide': '/quality-standard',
+  '/peptide-modifications-for-research-analytical-guide-2026': '/quality-standard',
+  '/high-purity-research-peptides-standards-for-analytical-verification-in-2026': '/testing',
+  '/tag/sbir-sttr': '/choosing-a-research-supplier',
+  '/become-the-go-to-peptide-expert-a-technical-guide': '/choosing-a-research-supplier',
+  '/es/tag/cysteine': '/',
+  '/es/tag/mvl': '/',
+  '/es/tag/neuroprotection': '/',
+  '/es/tag/peptide-delivery-methods': '/',
 };
 
 (async () => {
@@ -144,7 +159,7 @@ const mappings = {
       await assert.rejects(handler(props(form)), error => error.digest === `NEXT_REDIRECT;replace;${destination};308;`, form + ' must permanently redirect');
     }
   }
-  for (const unknown of ['/not-a-real-old-post', '/product-tag/not-a-tag', '/product-tag/blends/extra', '/tag/not-a-tag', '/tag/reproducibility/extra', '/research-peptides', '/research-peptides/not-a-category', '/tag/nevada-research-supply/extra', '/tag/peptides/extra', '/peptide-softgel-starter-kit', '/signup/extra', '/sign-up', '/research-peptides/all-research-peptides/extra', '/tag/las-vegas-peptides/extra']) {
+  for (const unknown of ['/not-a-real-old-post', '/product-tag/not-a-tag', '/product-tag/blends/extra', '/tag/not-a-tag', '/tag/reproducibility/extra', '/research-peptides', '/research-peptides/not-a-category', '/tag/nevada-research-supply/extra', '/tag/peptides/extra', '/peptide-softgel-starter-kit', '/signup/extra', '/sign-up', '/research-peptides/all-research-peptides/extra', '/tag/las-vegas-peptides/extra', '/tag/softgels/extra', '/es/tag/not-a-tag']) {
     for (const handler of [generateMetadata, Page]) {
       await assert.rejects(handler(props(unknown)), error => error.digest === 'NEXT_HTTP_ERROR_FALLBACK;404', unknown + ' must remain a genuine 404');
     }

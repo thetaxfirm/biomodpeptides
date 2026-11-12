@@ -137,4 +137,21 @@ export const legacyRoutes: Record<string, string> = {
   'klow-blend-peptides-for-las-vegas-research-labs': '/shop',
   'las-vegas-guide-to-glow-peptides-for-research': '/shop',
   'peptide-health-optimization-beginners': '/',
+  // Old-domain URLs listed by Bing (DuckDuckGo site:biomodpeptides.com, November 11, 2026) that still
+  // ended in a 404. tag/softgels ranks for "biomod softgels". Topic tags without a matching live page
+  // go to the homepage, never to a product.
+  'tag/softgels': '/softgels',
+  'es/tag/pharmaceutical-softgel-process': '/softgels',
+  'tag/bpc-157-peptide-chemistry': '/compounds/bpc-157',
+  'tag/ghrh': '/compounds',
+  'es/tag/cjc-1295-research-peptide-purity': '/quality-standard',
+  'optimizing-peptide-lab-workflows-2026-technical-guide': '/quality-standard',
+  'peptide-modifications-for-research-analytical-guide-2026': '/quality-standard',
+  'high-purity-research-peptides-standards-for-analytical-verification-in-2026': '/testing',
+  'tag/sbir-sttr': '/choosing-a-research-supplier',
+  'become-the-go-to-peptide-expert-a-technical-guide': '/choosing-a-research-supplier',
+  'es/tag/cysteine': '/',
+  'es/tag/mvl': '/',
+  'es/tag/neuroprotection': '/',
+  'es/tag/peptide-delivery-methods': '/',
 };
