@@ -3,10 +3,10 @@
 // and the slot names its own link and discount code; the switch decides whether it prices anything.
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { PARTNER_SLOTS, MAX_PERCENT_OFF, slugFromName, codeFromName, type PartnerSlot } from '@/lib/restaurant-partners';
+import { PARTNER_SLOTS, MAX_PERCENT_OFF, slugFromCode, codeFromName, type PartnerSlot } from '@/lib/restaurant-partners';
 
 const ENDPOINT = '/api/admin/restaurant-partners';
-const linkFor = (slug: string) => 'https://trybiomod.com/r/' + slug;
+const linkFor = (slug: string) => 'https://trybiomod.com/' + slug;
 
 async function call(body?: unknown) {
     const response = await fetch(ENDPOINT, {
@@ -56,9 +56,10 @@ export function RestaurantPartners() {
         {slots.map(slot => {
             const edit = draft[slot.slot] ?? { name: slot.name, percentOff: slot.percentOff ? String(slot.percentOff) : '' };
             const changed = edit.name !== slot.name || edit.percentOff !== (slot.percentOff ? String(slot.percentOff) : '');
-            // Shown before saving so the owner sees what the name will produce.
-            const previewSlug = edit.name ? slugFromName(edit.name) : '';
-            const previewCode = edit.name ? codeFromName(edit.name, slot.slot) : '';
+            // Shown before saving so the owner sees what the name will produce. The discount is part
+            // of the code, so typing a percentage changes the preview as well as the price.
+            const previewCode = edit.name ? codeFromName(edit.name, slot.slot, Number(edit.percentOff) || 0) : '';
+            const previewSlug = slugFromCode(previewCode);
             const working = busy === slot.slot;
             const set = (patch: Partial<typeof edit>) => setDraft(c => ({ ...c, [slot.slot]: { ...edit, ...patch } }));
             return <article className="account-record" key={slot.slot}>
@@ -74,7 +75,7 @@ export function RestaurantPartners() {
                     </label>
                 </div>
                 {slot.code
-                    ? <p>Link <a href={'/r/' + slot.slug} target="_blank" rel="noopener">{linkFor(slot.slug)}</a> · code <strong>{slot.code}</strong>
+                    ? <p>Link <a href={'/' + slot.slug} target="_blank" rel="noopener">{linkFor(slot.slug)}</a> · code <strong>{slot.code}</strong>
                         {' '}<button type="button" className="text-button" onClick={() => { void navigator.clipboard?.writeText(linkFor(slot.slug)); toast.success('Link copied.'); }}>Copy link</button></p>
                     : previewSlug ? <p>Will become {linkFor(previewSlug)} · code <strong>{previewCode}</strong></p> : null}
                 {slot.previous.length > 0 && <p className="notice">Retired codes, switched off but kept in case they are already printed: {slot.previous.join(', ')}</p>}

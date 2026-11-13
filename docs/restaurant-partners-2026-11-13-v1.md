@@ -1,5 +1,8 @@
 # Restaurant partners: twenty slots — Nov 13 2026
 
+> Superseded the same day by [v2](restaurant-partners-2026-11-13-v2.md): the link is now the code,
+> it resolves in `proxy.ts`, and it applies the discount on arrival.
+
 ## What the owner asked
 
 > "20 personal links that i can change that lead to our website trybiomod.com that are personalized

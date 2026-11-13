@@ -66,6 +66,8 @@ export async function POST(req: NextRequest) {
 
         if (body.active === true && !slotReady(saved))
             return j({ error: 'A slot needs a restaurant name and a discount between 1 and ' + MAX_PERCENT_OFF + '% before it can be switched on.' }, 400);
+        if (saved.name && !saved.slug)
+            return j({ error: 'That name matches a page the site already serves, so the link would not work. Use a different name for this slot.' }, 409);
         if (saved.name && !saved.code)
             return j({ error: 'That name matches a built-in store code. Edit the code for this slot so it is different.' }, 409);
 
@@ -89,7 +91,7 @@ export async function POST(req: NextRequest) {
         return j({
             slots: next, live: sync.live, retired: sync.retired,
             message: body.clear === true ? 'Slot ' + slot + ' cleared. Its code is switched off and kept in the promo list.'
-                : saved.active ? saved.name + ' is live at ' + saved.percentOff + '% off. Link: /r/' + saved.slug + ' · code ' + saved.code
+                : saved.active ? saved.name + ' is live at ' + saved.percentOff + '% off. Link: trybiomod.com/' + saved.slug + ' · code ' + saved.code
                 : 'Saved. ' + (saved.name || 'Slot ' + slot) + ' is switched off, so nothing is discounted yet.',
         });
     }
