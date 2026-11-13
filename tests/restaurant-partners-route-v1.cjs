@@ -189,10 +189,14 @@ const slots = () => JSON.parse(db.prepare("SELECT value FROM settings WHERE key=
   assert.match(proxy, /NextResponse\.redirect\(partner, 302\)/, 'and hands off to the route that owns the cookie');
   assert.match(ui, /credited to nobody/, 'it says plainly that a link alone earns no credit');
   assert.match(ui, /Retired codes/, 'and surfaces codes kept switched off');
+  // Its own page in the side nav, under the Affiliates dropdown -- not a fold in the middle of
+  // the affiliate page, which is where it started (owner, Nov 13 2026).
+  const shell = fs.readFileSync(path.join(root, 'components/store/admin.tsx'), 'utf8');
+  assert.match(shell, /<TabsContent value="restaurants">\{activeTab === 'restaurants' && <RestaurantPartners\/>\}<\/TabsContent>/, 'Restaurants is a page of its own');
+  assert.match(shell, /\{ label: 'Affiliates', tabs: \['affiliates', 'restaurants'\] \}/, 'reached from the Affiliates section');
+  assert.match(shell, /tab !== 'restaurants' \|\| role === 'owner'/, 'and stays the owner\'s page');
   const tab = fs.readFileSync(path.join(root, 'components/store/affiliate-program.tsx'), 'utf8');
-  assert.match(tab, /<RestaurantPartners\/>/, 'the Affiliates tab renders it');
-  assert.match(tab, /<summary[^>]*>Restaurant partners/, 'as a dropdown');
-  assert.match(tab, /data\.canPublish&&<details className="account-record"><summary[^>]*>Restaurant partners/, 'owner only');
+  assert.doesNotMatch(tab, /RestaurantPartners/, 'the affiliate page no longer carries it');
 
-  console.log('PASS: restaurant slots endpoint gates origin and sign-in, bounds the slot number, derives link and code from a name, applies that discount when the bare link is followed and refuses to for a retired, switched-off or unknown one while leaving approved affiliate links alone, prices nothing until switched on, retires rather than deletes a renamed or switched-off code, leaves unrelated promo codes untouched, records every save, and preserves a concurrent edit to another slot. Isolated SQLite only.');
+  console.log('PASS: restaurant slots endpoint gates origin and sign-in, bounds the slot number, derives link and code from a name, applies that discount when the bare link is followed and refuses to for a retired, switched-off or unknown one while leaving approved affiliate links alone, prices nothing until switched on, retires rather than deletes a renamed or switched-off code, leaves unrelated promo codes untouched, records every save, preserves a concurrent edit to another slot, and is reached from its own page under the Affiliates section. Isolated SQLite only.');
 })().catch(e => { console.error(e); process.exitCode = 1; }).finally(() => db.close());
