@@ -1,0 +1,31 @@
+/* The sections run down the left-hand side of administration, with the page beside them, and a
+ * section holding more than one page opens on hover (owner, Nov 13 2026). */
+.shell { display: flex; flex-direction: row; align-items: flex-start; gap: 30px; }
+.shell > [data-slot=tabs-content] { flex: 1; min-width: 0; }
+.tabs { position: sticky; top: 18px; flex: 0 0 206px; width: 206px; height: auto; padding: 7px; gap: 1px; background: #f4f2e9; border-radius: 6px; overflow: visible; }
+.tabs [data-slot=tabs-trigger] { width: 100%; justify-content: flex-start; padding: 10px 13px; font-size: 15px; text-align: left; }
+
+.section { position: relative; width: 100%; }
+.sectionLabel { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; padding: 10px 13px; border-radius: 6px; font-size: 15px; font-weight: 500; text-align: left; color: #12243a; opacity: .6; cursor: pointer; }
+/* Points the way the menu opens: right, into the page. */
+.sectionLabel::after { content: ""; flex: none; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); margin-right: 2px; }
+.section:hover > .sectionLabel, .section:focus-within > .sectionLabel { opacity: 1; }
+.sectionOpen > .sectionLabel { opacity: 1; background: #fff; font-weight: 600; box-shadow: 0 1px 2px #0000000d; }
+.sectionLabel:disabled { cursor: not-allowed; opacity: .35; }
+
+/* Held open by hover and by keyboard focus, so arrowing through the list reveals the pages inside
+ * a section rather than skipping past them. */
+.sectionMenu { position: absolute; top: 0; left: calc(100% + 9px); z-index: 30; min-width: 190px; padding: 7px; background: #fff; border: 1px solid #e0ddd0; border-radius: 6px; box-shadow: 0 10px 28px #12243a1f; opacity: 0; visibility: hidden; transition: opacity .12s; }
+.section:hover > .sectionMenu, .section:focus-within > .sectionMenu { opacity: 1; visibility: visible; }
+.sectionMenu [data-slot=tabs-trigger] { white-space: nowrap; opacity: 1; color: #12243a; }
+
+/* Narrow screens have no hover and no room for a column: the sections run across the top again and
+ * every page is listed, because a menu that only opens on hover would be unreachable. */
+@media (max-width: 900px) {
+  .shell { flex-direction: column; }
+  .tabs { position: static; width: 100%; flex: none; flex-direction: row; flex-wrap: wrap; gap: 4px; margin-bottom: 22px; }
+  .tabs [data-slot=tabs-trigger] { width: auto; flex: none; }
+  .section { display: contents; }
+  .sectionLabel { display: none; }
+  .sectionMenu { position: static; display: contents; opacity: 1; visibility: visible; padding: 0; border: 0; box-shadow: none; }
+}
