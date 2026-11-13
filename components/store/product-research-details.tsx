@@ -5,7 +5,7 @@ import { packContents, packUnitLimit } from '@/lib/packs';
 import { batchFor, batchPath } from '@/lib/testing';
 import { CoaPopup } from './batch-record';
 import { productQuestions } from '@/lib/product-questions';
-import { compoundForProduct, publishedCompound } from '@/lib/compound-reference';
+import { compoundAt, compoundForProduct, comparisonsFor, publishedCompound } from '@/lib/compound-reference';
 import { collectionsFor } from '@/lib/collections';
 import styles from './product-research-details.module.css';
 
@@ -224,6 +224,7 @@ export function ProductResearchDetails({ product }: { product: Product }) {
         {item.answer.map(paragraph => <p key={paragraph}>{paragraph}</p>)}
         {item.id === 'buy' && <p><Link href="/shop">Browse all research compounds</Link>{collectionsFor(product.slug).map(c => <span key={c.slug}>, or the <Link href={'/collections/' + c.slug}>{c.name.toLowerCase()} collection</Link></span>)}.</p>}
         {item.id === 'documentation' && compound && publishedCompound(compound) && <p><Link href={'/compounds/' + compound.slug}>{compound.name} reference data: CAS, formula, molecular weight{compound.sequence ? ' and sequence' : ''}</Link>.</p>}
+        {item.id === 'documentation' && compound && publishedCompound(compound) && comparisonsFor(compound.slug).map(x => <p key={x.slug}><Link href={'/compare/' + x.slug}>{compoundAt(x.a)!.name} vs {compoundAt(x.b)!.name}: sequence and reference data side by side</Link>.</p>)}
         {item.id === 'documentation' && <p><CoaPopup product={product} label="Read this product's batch record and COA" className={styles.inlineCoa}/>. <Link href="/quality-standard#read-the-results">Understand purity and measured content</Link>.</p>}
       </article>)}
     </div>

@@ -41,6 +41,7 @@ const { eligibleDiscovery, vialName } = require('../lib/product-discovery.ts');
 const { routeStructuredData } = require('../lib/seo.ts');
 const { StoreProvider } = require('../components/store/provider.tsx');
 const { CompoundIndex, CompoundPage, ComparisonPage, VerifyCoa } = require('../components/store/compound-reference.tsx');
+const { ProductResearchDetails } = require('../components/store/product-research-details.tsx');
 const config = seoConfig(env);
 const render = child => renderToStaticMarkup(React.createElement(StoreProvider, { initialCatalog: products }, child));
 const productLinks = html => [...new Set([...html.matchAll(/href="\/product\/([^"#?]+)"/g)].map(m => m[1]))];
@@ -105,6 +106,17 @@ const validCas = cas => { const m = /^(\d{2,7})-(\d\d)-(\d)$/.exec(cas); return 
 
   // Product pages lead to their reference, and the footer lists the hub and the lot lookup.
   assert(fs.readFileSync(path.join(root, 'components/store/product-research-details.tsx'), 'utf8').includes("'/compounds/' + compound.slug"));
+  // Product pages also lead to every published side-by-side page for their compound, and to no other.
+  let comparisonProducts = 0;
+  for (const product of products.filter(eligibleDiscovery)) {
+    const html = render(React.createElement(ProductResearchDetails, { product }));
+    const c = compounds.find(x => x.products.includes(product.slug));
+    const expected = c && publishedCompound(c) ? comparisons.filter(x => (x.a === c.slug || x.b === c.slug) && publishedCompound(compounds.find(y => y.slug === x.a)) && publishedCompound(compounds.find(y => y.slug === x.b))).map(x => '/compare/' + x.slug).sort() : [];
+    const linked = [...new Set([...html.matchAll(/href="(\/compare\/[^"]+)"/g)].map(m => m[1]))].sort();
+    assert.deepEqual(linked, expected, product.slug + ': links exactly its published comparisons');
+    if (expected.length) comparisonProducts++;
+  }
+  assert(comparisonProducts >= 8, 'products in published comparison pairs link them (found ' + comparisonProducts + ')');
   const footer = fs.readFileSync(path.join(root, 'components/store/content.tsx'), 'utf8');
   assert(footer.includes('href="/compounds"') && footer.includes('href="/verify"'));
   console.log(`PASS: ${compounds.length} compound references and ${comparisons.length} comparisons agree with the catalog CAS, fit the result line, are in the sitemap, render one h1 with only published product links, and their FAQPage matches the visible questions; lot lookup and hub indexed`);
