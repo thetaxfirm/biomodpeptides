@@ -45,6 +45,8 @@ function AffiliateProgramView({admin=false}:{admin?:boolean}) {
  <h3>Applications and partners</h3><p>Earlier applications remain in <a href="/admin?tab=requests">Requests</a>. Applicants must accept the published agreement through their account; old inquiries are never treated as accepted agreements.</p><p>Each partner receives one existing promotion code. Customer discounts remain controlled by the store’s promotion rules.</p>
  {!data.members?.length&&<p>No applications have been submitted through the upgraded program.</p>}
  {data.members?.map(m=><article className="account-record" key={m.owner}><h4>{m.name}</h4><p>{m.email} · {m.status}</p><p>{m.website}</p><p>{m.audience}</p><p>Accepted {new Date(m.accepted).toLocaleString()}{m.agreement_id!==data.agreement?.id?' · Latest agreement acceptance needed':''}</p>{m.review_note&&<p>Last review: {m.review_note}</p>}
+
+
  <form className="store-form" onSubmit={e=>submit(e,'review',{owner:m.owner,expectedUpdated:m.updated})}>
  <label className="field">Decision<select name="status" defaultValue={m.status==='pending'?'approved':m.status}><option value="approved">Approve</option><option value="rejected">Reject</option><option value="suspended">Suspend</option></select></label>
  <label className="field">Assigned promotion code<select name="code" defaultValue={data.schedules?.find(f=>f.owner===m.owner)?.code||m.code||''}><option value="">Choose a code</option>{data.codes?.map(c=><option key={c}>{c}</option>)}</select></label>
