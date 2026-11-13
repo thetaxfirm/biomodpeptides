@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState, type FormEvent } from 'react';
+import { RestaurantPartners } from './restaurant-partners-admin';
 import type { Agreement, Member, AffiliateSchedule } from '@/lib/affiliate-program';
 import { useStore } from './provider';
 import { Field } from './primitives';
@@ -40,11 +41,10 @@ function AffiliateProgramView({admin=false}:{admin?:boolean}) {
  <label><input name="confirmed" type="checkbox" required/> I confirm these are the approved program terms and rates, ready to publish.</label>
  <button className="button button-dark" disabled={busy}>Publish agreement version</button></form></details>}
  {data.canPublish&&<section><h3>Private invitations</h3><p>Authorize the recipient's email here, then send them https://trybiomod.com/account/affiliate. They must sign in with that verified email. A forwarded link does not grant access. Nothing is emailed automatically.</p><form className="store-form" onSubmit={e=>submit(e,'invite',{active:true})}><Field label="Affiliate email to invite" name="email" type="email"/><button className="button button-dark" disabled={busy}>Authorize invitation</button></form>{data.invitations?.map(i=><p key={i.email}>{i.email} · {i.active?'Invited':'Revoked'} {Boolean(i.active)&&<button disabled={busy} onClick={()=>save({action:'invite',email:i.email,active:false})}>Revoke invitation</button>}</p>)}</section>}
+ {data.canPublish&&<details className="account-record"><summary style={{cursor:'pointer',padding:'12px 0',fontWeight:600}}>Restaurant partners · 20 slots</summary><RestaurantPartners/></details>}
  <h3>Applications and partners</h3><p>Earlier applications remain in <a href="/admin?tab=requests">Requests</a>. Applicants must accept the published agreement through their account; old inquiries are never treated as accepted agreements.</p><p>Each partner receives one existing promotion code. Customer discounts remain controlled by the store’s promotion rules.</p>
  {!data.members?.length&&<p>No applications have been submitted through the upgraded program.</p>}
  {data.members?.map(m=><article className="account-record" key={m.owner}><h4>{m.name}</h4><p>{m.email} · {m.status}</p><p>{m.website}</p><p>{m.audience}</p><p>Accepted {new Date(m.accepted).toLocaleString()}{m.agreement_id!==data.agreement?.id?' · Latest agreement acceptance needed':''}</p>{m.review_note&&<p>Last review: {m.review_note}</p>}
-
-
  <form className="store-form" onSubmit={e=>submit(e,'review',{owner:m.owner,expectedUpdated:m.updated})}>
  <label className="field">Decision<select name="status" defaultValue={m.status==='pending'?'approved':m.status}><option value="approved">Approve</option><option value="rejected">Reject</option><option value="suspended">Suspend</option></select></label>
  <label className="field">Assigned promotion code<select name="code" defaultValue={data.schedules?.find(f=>f.owner===m.owner)?.code||m.code||''}><option value="">Choose a code</option>{data.codes?.map(c=><option key={c}>{c}</option>)}</select></label>
