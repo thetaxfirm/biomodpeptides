@@ -18,4 +18,7 @@ November 14, 2026. Owner direction, after reviewing the Search Console "Page ind
 
 ## Live verification
 
-Recorded after deployment below.
+- Commit c1af582 pushed to main at 22:50 UTC Nov 14; Workers Builds served it on trybiomod.com by 22:54 UTC.
+- Live sitemap: 82 URLs (was 64), every one 200 with `index, follow`.
+- Spot checks: /terms-of-sale, /privacy-policy, /locations, /product/apex-semax-spray ("Buy APEX 60mg Spray"), /product/softgel-eraser-tesofensine and /product/acetic-acid-solution-1 are indexable. /product/tb500-10mg and /product/wolverine-10mg remain `noindex, follow`; /cart remains `noindex, nofollow`; /shop?category=softgels remains `noindex, follow`.
+- Search Console: the 404 validation was started on November 9. The sitemap was resubmitted after this release.
