@@ -3,10 +3,11 @@ import specificationReviews from './product-specification-review-v1.json';
 import { compoundForProduct } from './compound-reference';
 
 // Shop collections: published products grouped by what the compounds are (their structural
-// origin or the research field they are catalogued under), never by an outcome. Intros state
+// origin or the research field they are catalogued under) or by supplied format, never by an outcome. Intros state
 // structural facts already given on the compound reference pages. A collection is indexed
 // while at least two of its products are published, so no collection is a one-product page.
-export type Collection = { slug: string; name: string; title: string; description: string; intro: string; products: string[] };
+// byFormat marks a collection grouped by how the product is supplied; it has no compound reference table.
+export type Collection = { slug: string; name: string; title: string; description: string; intro: string; products: string[]; byFormat?: boolean };
 
 export const collections: Collection[] = [
   { slug: 'growth-hormone-axis', name: 'Growth Hormone Axis', title: 'Growth Hormone Axis Compounds',
@@ -37,6 +38,10 @@ export const collections: Collection[] = [
     description: 'Biomod multi-compound research vials such as Run & Gun, Wolverine, KLOW and GLOW, with every compound and lab report listed.',
     intro: 'Vials that combine two or more compounds. Each product page lists every compound in the vial, the lot printed on its label and the laboratory report for that lot.',
     products: ['run-gun-10mg', 'wolverine-10mg', 'wolverine-20mg', 'klow-80mg', 'glow-70mg'] },
+  { slug: 'research-sprays', name: 'Research Sprays', title: 'Research Compound Sprays',
+    description: 'Biomod research compounds in spray bottles: Semax, Selank, BPC-157, NAD+, GHK-Cu, PT-141 and Melanotan II, with total content per bottle.',
+    intro: 'Research compounds supplied as a solution in a spray bottle instead of a lyophilized vial. Each product page lists the compound, the total content per bottle and the available batch record. APEX is Semax, EQUIL is Selank, FORGE is BPC-157, FLUX is NAD+, GLOW is GHK-Cu, SOLARA is Melanotan II, IGNITE combines PT-141 with oxytocin, and KLOW combines GHK-Cu, BPC-157 and KPV.',
+    products: ['apex-semax-spray', 'equil-selank-spray', 'forge-bpc-157-spray', 'flux-nad-spray', 'glow-spray', 'ignite-pt-141-oxy-spray', 'klow-spray', 'solara-melanotan-ii-spray', 'noctis-blend-spray', 'zenith-semax-selank-spray'], byFormat: true },
 ];
 
 const holds = specificationReviews as Record<string, string>;

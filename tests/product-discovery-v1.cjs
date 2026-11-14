@@ -46,6 +46,15 @@ for (const product of products) {
   assert.deepEqual(relatedResearchProducts(product, products), related, product.slug + ': deterministic links');
   assert.deepEqual(relatedResearchProducts(product, products, 0), []);
 }
+// Sprays and softgels use the same rotation as vials, so every published one is linked from sibling
+// pages instead of all pages repeating the first three (which left five sprays with no sibling link).
+for (const category of ['spray-products', 'softgels']) {
+  const members = products.filter(product => product.categories[0]?.slug === category);
+  const inbound = new Map();
+  for (const product of members) for (const candidate of relatedResearchProducts(product, products)) inbound.set(candidate.slug, (inbound.get(candidate.slug) || 0) + 1);
+  for (const product of members.filter(eligibleDiscovery)) assert((inbound.get(product.slug) || 0) >= 2, product.slug + ': linked from at least two sibling pages');
+}
+assert(!fs.readFileSync(path.join(__dirname, '../components/store/catalog.tsx'), 'utf8').includes("v.categories[0]?.slug === p.categories[0]?.slug).slice(0, 3)"), 'product page uses the shared related-product rotation for every category');
 const ten = products.find(product => product.slug === 'mots-c-10mg');
 const forty = products.find(product => product.slug === 'mots-c-40mg');
 for (const [current, sibling] of [[ten, forty], [forty, ten]]) {

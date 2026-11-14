@@ -16,7 +16,7 @@ export function CollectionIndex() {
   const { store } = useStore();
   return <div className={styles.page}>
     <nav aria-label="Breadcrumb" className={styles.crumbs}><a href="/shop">Shop</a><span aria-hidden="true">/</span><span>Collections</span></nav>
-    <div className="page-heading"><h1>Shop by research area</h1><p>Biomod research vials grouped by what each compound is, with every product linked to its lab report by lot.</p></div>
+    <div className="page-heading"><h1>Shop by research area</h1><p>Biomod research vials and sprays grouped by what each compound is and how it is supplied, with every product linked to its batch record.</p></div>
     <div className={styles.collections}>{collections.filter(publishedCollection).map(c => <section key={c.slug} aria-labelledby={c.slug + '-heading'}>
       <h2 id={c.slug + '-heading'}><a href={'/collections/' + c.slug}>{c.name}</a></h2>
       <p>{c.intro}</p>

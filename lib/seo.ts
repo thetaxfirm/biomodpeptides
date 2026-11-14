@@ -12,6 +12,7 @@ import { researchFaqSchemaItems } from './research-faq';
 import { pressReleaseAt } from './press-releases';
 import { compoundAt, comparisonAt, compoundQuestions } from './compound-reference';
 import { collectionAt } from './collections';
+import { storeLocationNodes } from './store-locations';
 import { products as catalogProducts } from './catalog';
 import { eligibleDiscovery, vialName } from './product-discovery';
 import { headers } from 'next/headers';
@@ -121,6 +122,7 @@ export async function routeStructuredData(path: string, config: SEOConfig = curr
   if (compound) graph.push(faqPage(config.origin + clean, compoundQuestions(compound,
     compound.products.map(slug => catalogProducts.find(p => p.slug === slug)).filter(p => p && eligibleDiscovery(p)).map(p => vialName(p!)))));
   // Question markup mirrors the visible /faq answers exactly.
+  if (clean === '/locations') graph.push(...storeLocationNodes(config.origin, String(organization['@id'])));
   if (clean === '/faq') graph.push(faqPage(config.origin + clean, researchFaqSchemaItems().map(item => ({ question: item.question, answer: item.answer }))));
   return { '@context': 'https://schema.org', '@graph': graph };
 }

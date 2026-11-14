@@ -70,7 +70,8 @@ const published = slug => publication.productSlugs.includes(slug) && !productRev
     assert.deepEqual([...links].sort(), publishedProducts(c).sort(), c.slug + ': every published member is shown');
     assert(!/peptide|dos(e|ing)\b|inject|reconstitut/i.test(text(html).replace(disclaimer, '')), c.slug + ': no peptide, dosing or handling wording');
     if (!isPublic) continue;
-    assert(html.includes('href="/compounds/'), c.slug + ': links its compound references');
+    // Format collections (sprays) group by container, so they carry no compound reference table.
+    assert.equal(html.includes('href="/compounds/'), !c.byFormat, c.slug + ': compound references only on compound collections');
 
     const data = await routeStructuredData(route, config);
     const page = data['@graph'].find(node => String(node['@id']).endsWith(route + '#page'));
@@ -87,6 +88,11 @@ const published = slug => publication.productSlugs.includes(slug) && !productRev
   for (const c of collections) assert.equal(index.includes('href="/collections/' + c.slug + '"'), publishedCollection(c), 'index lists ' + c.slug + ' only while public');
   assert(sitemap.includes('/collections') && mayIndex('/collections', new URLSearchParams(), config), '/collections indexed');
   assert(productLinks(index).every(published), 'index links only published products');
+  // The spray collection shows the eight published sprays and none of the held ones.
+  const sprays = collections.find(c => c.slug === 'research-sprays');
+  assert.equal(publishedProducts(sprays).length, 8);
+  assert(!publishedProducts(sprays).some(slug => /noctis|zenith/.test(slug)), 'held sprays stay out');
+  assert.deepEqual(collectionsFor('forge-bpc-157-spray').map(c => c.slug), ['research-sprays']);
 
   // Product pages lead to their collections; held products lead nowhere.
   assert.deepEqual(collectionsFor('nad-500mg').map(c => c.slug), ['mitochondrial-research', 'coenzymes-antioxidants']);
