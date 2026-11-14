@@ -29,7 +29,7 @@ const alerts=h=>nodes(h.tree).filter(n=>n.props.role==='alert').map(text).join('
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return{promise,resolve,reject};};
 const flush=async h=>{for(let i=0;i<16;i++)await Promise.resolve();h?.render();};
 const noop=()=>null;
-function AdminOverview(){}function PresaleProductPicker(){}function Field(){}function Check(){}function Choice(){}function Blank(){}function AuthPage(){}function ShippingLabel(){}function OrdersAdmin(){}function Dialog(){}function Tabs(){}function TabsTrigger(){}function TabsContent(){}function CoaAutomation(){}function ChangeHistory(){}function AdminProducts(){}function AdminShippingSettings(){}function AdminOrderAlerts(){}
+function AdminOverview(){}function PresaleProductPicker(){}function Field(){}function Check(){}function Choice(){}function Blank(){}function AuthPage(){}function ShippingLabel(){}function OrdersAdmin(){}function Dialog(){}function Tabs(){}function TabsTrigger(){}function TabsContent(){}function CoaAutomation(){}function ChangeHistory(){}function AdminProducts(){}function AdminShippingSettings(){}function AdminOrderAlerts(){}function RestaurantPartners(){}
 const ownerA={id:'fixture-admin-a',name:'Fixture A',email:'a@example.invalid'};
 const ownerB={id:'fixture-admin-b',name:'Fixture B',email:'b@example.invalid'};
 const fixture=(label='Snapshot A')=>({config:{presalesEnabled:false,rewardsEnabled:false,affiliateEnabled:false,packDiscounts:{},shippingCents:null,freeShippingAt:20000},products:[{id:900001,name:label,price:10000,stockQuantity:1,inStock:true,purchasable:true}],campaigns:[{id:'fixture-campaign',title:'Simulated campaign',active:false,starts:'2099-01-01',ends:'2099-02-01'}],orders:[{id:'fixture-order',status:'pending',total:10000,created:0,data:{items:[]}}],requests:[{id:'fixture-request',kind:'fixture',status:'new',created:0,data:{}}],searchPublishing:{}});
@@ -63,6 +63,9 @@ mod.require=id=>{
  }
 
  if(id==='./admin-order-alerts')return{AdminOrderAlerts};
+ if(id==='./restaurant-partners-admin')return{RestaurantPartners};
+ // The nav's class names come from its stylesheet; the harness keeps the key as the name.
+ if(id.endsWith('.module.css'))return{__esModule:true,default:new Proxy({},{get:(_,key)=>String(key)})};
  if(id==='./team-admin')return{TeamAdmin:noop};if(id==='@/lib/staff')return require('./staff-module-fixture.cjs').loadStaffModule();
  if(id==='./request-inbox')return{RequestInbox};
  if(id==='./primitives')return{Field,Check,Choice,Blank,formData:form=>form.fields};
@@ -90,9 +93,34 @@ const productNames=h=>String(Boolean(productPanel(h).props.edited));
  reset();let h=mount();await flush(h);
  assert.equal(find(h,n=>n.type===Tabs).props.value,'overview');
  assert.deepEqual(nodes(h.tree).filter(n=>n.type===TabsTrigger).slice(0,4).map(n=>[n.props.value,text(n)]),[['overview','Today'],['orders','Orders'],['requests','Requests'],['products','Products']]);
- const reportsTab=nodes(h.tree).filter(n=>n.type===TabsTrigger).at(-1);
- assert.deepEqual([reportsTab.props.value,text(reportsTab),reportsTab.props.className],['diagnostics','Reports','admin-tab-reports'],'One Reports tab opens Sales reports first');
- assert(!nodes(h.tree).some(n=>n.type===TabsTrigger&&['traffic','search','changes'].includes(n.props.value)),'Report pages live behind the Reports tab');
+ // Sections holding several pages open a dropdown: the section is a plain button that opens the
+ // page it is showing, and each page inside it is a real destination of its own.
+ const pages=nodes(h.tree).filter(n=>n.type===TabsTrigger).map(n=>n.props.value);
+ for(const page of ['diagnostics','traffic','search','changes'])assert(pages.includes(page),page+' is reachable from the Reports section');
+ const labels=h=>nodes(h.tree).filter(n=>n.props?.className==='sectionLabel').map(text);
+ // This fixture carries no role, so it falls back to manager: Restaurants is the owner's page, so
+ // Affiliates holds one page here and stays a plain destination rather than a dropdown.
+ assert.deepEqual(labels(h),['Reports'],'a section with one page needs no dropdown');
+ assert(pages.includes('affiliates')&&!pages.includes('restaurants'));
+ // Restaurants is its own page beside the affiliate program, not a fold inside it.
+ const affiliatePage=fs.readFileSync(path.join(__dirname,'..','components/store/affiliate-program.tsx'),'utf8');
+ assert(!/RestaurantPartners/.test(affiliatePage),'the affiliate page no longer embeds it');
+ // Every page belongs to exactly one section, so none can be stranded with no way to reach it.
+ const admin=fs.readFileSync(path.join(__dirname,'..','components/store/admin.tsx'),'utf8');
+ const declaredBlock=/const adminTabs = \[([\s\S]*?)\] as const;/.exec(admin);
+ assert(declaredBlock,'the page list is still a literal');
+ const declared=[...declaredBlock[1].matchAll(/\['([a-z]+)',/g)].map(m=>m[1]);
+ const listed=[...admin.matchAll(/tabs: \[([^\]]*)\]/g)].flatMap(m=>m[1].match(/'[^']+'/g)||[]).map(v=>v.slice(1,-1));
+ assert(declared.length>=15,'the page list was read, not missed by the pattern');
+ assert.deepEqual([...declared].sort(),[...listed].sort(),'every page sits in exactly one section');
+ assert.equal(new Set(listed).size,listed.length,'and in only one');
+ // The sections run down the left-hand side, with the page beside them (owner, Nov 13 2026).
+ const css=fs.readFileSync(path.join(__dirname,'..','components/store/admin-nav.module.css'),'utf8');
+ assert.match(css,/\.shell \{[^}]*flex-direction: row;/,'the section list sits to the left of the page');
+ assert.match(css,/\.sectionMenu \{[^}]*left: calc\(100% \+ 9px\)/,'and a dropdown opens to its right, into the page');
+ assert.match(css,/\.tabs \{[^}]*position: sticky/,'and stays put while the page scrolls');
+ assert.match(css,/\.section:hover > \.sectionMenu, \.section:focus-within > \.sectionMenu \{[^}]*visibility: visible/,'a section opens on hover and on keyboard focus');
+ assert.match(css,/@media \(max-width: 900px\) \{[\s\S]*?\.sectionMenu \{ position: static; display: contents/,'and every page is listed outright where there is no hover');
  assert(nodes(h.tree).some(n=>n.type===AdminOverview),'Today is shown on open');
  const openWork=find(h,n=>n.type===AdminOverview).props.onOpen;
  openWork('orders','unpaid');h.render();assert.equal(find(h,n=>n.type===Tabs).props.value,'orders');
@@ -164,6 +192,13 @@ const productNames=h=>String(Boolean(productPanel(h).props.edited));
   const mayRead=role==='owner'||role==='manager';
   assert.equal(find(h,n=>n.type===Tabs).props.value,mayRead?'changes':'orders');
   assert.equal(nodes(h.tree).some(n=>n.type===TabsTrigger&&n.props.value==='changes'),mayRead);
+  // Restaurants stays the owner's page, exactly as restrictive as the fold it replaced.
+  assert.equal(nodes(h.tree).some(n=>n.type===TabsTrigger&&n.props.value==='restaurants'),role==='owner','only the owner sees Restaurants');
+  assert.equal(nodes(h.tree).some(n=>n.props?.className==='sectionLabel'&&text(n).startsWith('Affiliates')),role==='owner','and only then does Affiliates become a dropdown');
+  // This route opens the Change log, so exactly the section holding it reads as where you are.
+  const marked=nodes(h.tree).filter(n=>typeof n.props?.className==='string'&&n.props.className.includes('sectionOpen'));
+  assert.equal(marked.length,mayRead?1:0,'one section at a time is marked open');
+  if(mayRead)assert.equal(text(nodes(marked[0]).find(n=>n.props?.className==='sectionLabel')),'Reports · Change log','and it names the page it is on');
   assert.equal(nodes(h.tree).some(n=>n.type===ChangeHistory),mayRead,'History is never mounted without reports permission');
   assert.equal(nodes(h.tree).some(n=>n.type===AdminProducts),mayRead,'Products editor is never mounted without store write permission');
   assert.equal(nodes(h.tree).some(n=>n.type===AdminShippingSettings),mayRead,'Shipping settings are never mounted without store write permission');
@@ -409,5 +444,5 @@ const productNames=h=>String(Boolean(productPanel(h).props.edited));
  state.store.customer=ownerB;apiImpl=async()=>fixture('Owner B active');h.render();await flush(h);const newAction=deferred();apiImpl=()=>newAction.promise;const newSave=settingsForm(h).props.onSubmit(event());h.render();assert(button(h,'Save store settings').props.disabled);const before=calls.length;
  oldAction.resolve({message:'Old owner save'});await oldSave;await flush(h);assert.equal(calls.length,before);assert.equal(successes.length,0);assert.equal(refreshCalls,0);assert(button(h,'Save store settings').props.disabled);
  apiImpl=async()=>fixture('Owner B refreshed');newAction.resolve({message:'Current save'});await newSave;h.render();assert.deepEqual(successes,['Current save']);assert.equal(refreshCalls,1);assert.equal(button(h,'Save store settings').props.disabled,false);assert(text(h.tree).includes('Owner B refreshed'));
- hosts.forEach(x=>x.unmount());console.log('Admin discovery/read recovery passed: actual routing/default tabs, exact email destinations/sign-in retention/tab exit, bounded read-only inbox snapshots, healthy empty-to-two-order GET refresh, draft protection/read races, independent saves, failure retention, owner/role/tenure/unmount/replay and stale handler boundaries. All fixtures isolated; no live I/O.');
+ hosts.forEach(x=>x.unmount());console.log('Admin discovery/read recovery passed: actual routing/default tabs, the left-hand section list with its dropdowns, exact email destinations/sign-in retention/tab exit, bounded read-only inbox snapshots, healthy empty-to-two-order GET refresh, draft protection/read races, independent saves, failure retention, owner/role/tenure/unmount/replay and stale handler boundaries. All fixtures isolated; no live I/O.');
 })().catch(error=>{console.error(error);process.exitCode=1});
