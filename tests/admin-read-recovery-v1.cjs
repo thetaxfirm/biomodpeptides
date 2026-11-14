@@ -64,6 +64,8 @@ mod.require=id=>{
 
  if(id==='./admin-order-alerts')return{AdminOrderAlerts};
  if(id==='./restaurant-partners-admin')return{RestaurantPartners};
+ // The real device-preference module: with no browser here it must be inert, not throw.
+ if(id==='@/lib/admin-theme'){const f=path.join(root,'lib/admin-theme.ts'),m=new Module(f,module);m.filename=f;m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,f);return m.exports;}
  // The nav's class names come from its stylesheet; the harness keeps the key as the name.
  if(id.endsWith('.module.css'))return{__esModule:true,default:new Proxy({},{get:(_,key)=>String(key)})};
  if(id==='./team-admin')return{TeamAdmin:noop};if(id==='@/lib/staff')return require('./staff-module-fixture.cjs').loadStaffModule();
