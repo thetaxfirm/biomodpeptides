@@ -141,12 +141,12 @@ const mappings = {
       await assert.rejects(handler(props(form)), error => error.digest === `NEXT_REDIRECT;replace;${destination};308;`, form + ' must permanently redirect');
     }
   }
-  // A renamed product keeps its publication hold: the old address redirects to the
-  // new one without entering the sitemap (owner, October 29, 2026).
+  // A renamed product: the old address redirects to the new one (owner, October 29, 2026).
+  // The owner approved IGNITE for indexing on November 14, 2026, so only the new address is listed.
   {
     const source = '/product/ignite-pt-141-oxytocin-spray', destination = '/product/ignite-pt-141-oxy-spray';
     assert.equal(legacyRoutes[source.slice(1)], destination);
-    assert(!sitemap.includes(source) && !sitemap.includes(destination), 'IGNITE stays out of the sitemap while held');
+    assert(!sitemap.includes(source) && sitemap.includes(destination), 'Only the current IGNITE address is in the sitemap');
     for (const form of [source, source + '/']) for (const handler of [generateMetadata, Page]) {
       await assert.rejects(handler(props(form)), error => error.digest === `NEXT_REDIRECT;replace;${destination};308;`, form + ' must permanently redirect');
     }

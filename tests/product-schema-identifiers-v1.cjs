@@ -21,7 +21,7 @@ const reviewed = publication.productSlugs.map(slug => {
   assert(product, 'Every publication-listed product has a catalog record');
   return product;
 });
-assert.equal(reviewed.length, 20, 'The release audit covers all 20 current eligible products');
+assert.equal(reviewed.length, 35, 'The release audit covers all 35 current eligible products');
 let snapshot = { verified: true, products: products.map(product => ({ ...product })) };
 const originalLoad = Module._load, originalFetch = global.fetch;
 global.fetch = async () => { throw new Error('Network forbidden in schema tests'); };
@@ -75,8 +75,8 @@ function noInventedIdentifiers(node) {
         assert.equal(Object.hasOwn(node, 'sku'), false, product.slug + ': optional SKU absent when not assigned');
       }
       assert.deepEqual(node.additionalProperty, [
-        { '@type': 'PropertyValue', name: 'Compound', value: product.identity },
-        { '@type': 'PropertyValue', name: 'Container contents', value: product.sizes[0] },
+        ...(product.identity ? [{ '@type': 'PropertyValue', name: 'Compound', value: product.identity }] : []),
+        ...(product.sizes[0] ? [{ '@type': 'PropertyValue', name: 'Container contents', value: product.sizes[0] }] : []),
         ...(product.casNumber ? [{ '@type': 'PropertyValue', name: 'CAS', value: product.casNumber }] : []),
         ...certificateProperties(product.id),
       ], product.slug + ': compound, contents and matching-lot certificate evidence stay unchanged');
@@ -88,9 +88,9 @@ function noInventedIdentifiers(node) {
         shippingDetails: { '@type': 'OfferShippingDetails', hasShippingService: { '@id': origin + '/shipping-policy#standard-shipping' } },
       }, product.slug + ': verified live Offer and policy references stay unchanged');
       noInventedIdentifiers(data);
-      assert.deepEqual(JSON.parse(jsonLd(data)), data, 'Serialized graph preserves omitted identifiers');
+      assert.deepEqual(JSON.parse(jsonLd(data)), data, product.slug + ': Serialized graph preserves omitted identifiers');
     }
-    assert.equal(assigned, 19);
+    assert.equal(assigned, 34);
     assert.equal(missing, 1);
 
     const eligiblePreorder = snapshot.products.find(product => product.id === reviewed[0].id);

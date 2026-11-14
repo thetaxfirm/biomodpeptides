@@ -10,8 +10,8 @@ require.extensions['.ts'] = (module, filename) => module._compile(ts.transpileMo
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true },
 }).outputText, filename);
 const root = path.join(__dirname, '..');
-const { products, compound, cas } = require('../lib/catalog.ts');
-const { packContents } = require('../lib/packs.ts');
+const { products, compound, cas, productFormat } = require('../lib/catalog.ts');
+const { packContents, packUnit, supportsPacks } = require('../lib/packs.ts');
 const { batchFor, batchStatus, matchingCertificateFor, reportedResult } = require('../lib/testing.ts');
 const { productLabel } = require('../lib/product-questions.ts');
 const { productDescription } = require('../lib/product-description.ts');
@@ -53,9 +53,12 @@ const claims = /\b(dos(e|es|ing|age)|treat(s|ment)?|cure|heal(s|ing)?|benefit(s)
 
     // Listing paragraph: the searched label, identity, contents, SKU and CAS from the catalog record.
     const listing = paragraphs[0];
-    assert(listing.startsWith(productLabel(product) + ' from Biomod Research Supply Company is supplied as a single research vial'), slug + ': ' + listing);
-    const contents = packContents(product).replace(/\s*\/\s*vial$/i, '');
-    assert(listing.includes(`listed contents of ${contents} per vial`), slug + ': contents ' + contents);
+    // Vials, spray and softgel bottles (approved November 14, 2026) and lab supplies each name their own container.
+    const format = productFormat(product);
+    const container = format === 'Vial' ? 'research vial' : format === 'Softgels' ? 'softgel bottle' : format === 'Spray' ? 'spray bottle' : 'research supply';
+    assert(listing.startsWith(productLabel(product) + ' from Biomod Research Supply Company is supplied as a single ' + container), slug + ': ' + listing);
+    const contents = packContents(product).replace(/\s*\/\s*(?:vial|bottle)$/i, '');
+    if (contents) assert(listing.includes(`listed contents of ${contents} per ${packUnit(product)}`), slug + ': contents ' + contents);
     if (product.sku?.trim()) assert(listing.includes('SKU ' + product.sku.trim()), slug + ': SKU'); else assert(!/SKU/.test(listing), slug + ': no SKU invented');
     if (cas(product)) assert(listing.includes('CAS ' + cas(product)), slug + ': CAS'); else assert(!/CAS/.test(listing), slug + ': no CAS invented');
     if (compound(product) !== product.name) assert(listing.includes('The listed identity is ' + compound(product) + '.'), slug + ': identity');
@@ -76,7 +79,8 @@ const claims = /\b(dos(e|es|ing|age)|treat(s|ment)?|cure|heal(s|ing)?|benefit(s)
     }
 
     // Pack paragraph: only the documented 1, 3, 5 and 10 counts.
-    assert.equal(paragraphs[2], 'Order a single vial or a 3, 5 or 10-pack; each pack price on this page is shown per vial.', slug);
+    if (supportsPacks(product)) assert.equal(paragraphs[2], `Order a single ${packUnit(product)} or a 3, 5 or 10-pack; each pack price on this page is shown per ${packUnit(product)}.`, slug);
+    else assert.equal(paragraphs[2], undefined, slug + ': no pack paragraph without packs');
 
     // Research-use-only wording: facts about the listing, no dosing, use or effect claims.
     assert(!claims.test(text), slug + ': no dosing, use or effect wording: ' + text);

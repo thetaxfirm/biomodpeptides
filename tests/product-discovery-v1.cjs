@@ -25,14 +25,16 @@ const { Header, nav } = require('../components/store/header.tsx');
 const { StoreProvider } = require('../components/store/provider.tsx');
 const before = JSON.stringify(products);
 const reviewed = publication.productSlugs.filter(slug => !productReviewBlocks[slug]).sort();
-assert.equal(reviewed.length, 20, 'GHK-Cu, CJC-1295 No DAC and Run & Gun (Nov 2 2026) join the 17 reviewed targets');
+assert.equal(reviewed.length, 35, 'GHK-Cu, CJC-1295 No DAC and Run & Gun (Nov 2 2026) join the 17 reviewed targets; 8 sprays, 6 softgels and the acetic acid solution follow (Nov 14 2026)');
 const vials = products.filter(product => product.categories.some(category => category.slug === 'research-compounds'));
 const ordered = orderHomeVials(products);
 assert.equal(products.length, 52, 'SS-31 50 mg and the unavailable Wolverine 20 mg have independent catalog records');
 assert.equal(ordered.length, 33);
 assert.deepEqual(ordered.map(product => product.id).sort((a, b) => a - b), vials.map(product => product.id).sort((a, b) => a - b), 'All original vial members remain present');
-assert.deepEqual(ordered.slice(0, reviewed.length).map(product => product.slug).sort(), reviewed);
-assert(ordered.slice(reviewed.length).every(product => !eligibleDiscovery(product)), 'Unreviewed products remain after the reviewed group');
+// The home grid orders vials; reviewed sprays, softgels and supplies are listed elsewhere.
+const reviewedVials = reviewed.filter(slug => vials.some(vial => vial.slug === slug));
+assert.deepEqual(ordered.slice(0, reviewedVials.length).map(product => product.slug).sort(), reviewedVials);
+assert(ordered.slice(reviewedVials.length).every(product => !eligibleDiscovery(product)), 'Unreviewed products remain after the reviewed group');
 assert(ordered.every(product => products.includes(product)), 'Home order preserves the supplied product objects');
 assert.deepEqual(orderHomeVials(products), ordered, 'Ordering is deterministic');
 for (const product of products) {
@@ -87,10 +89,10 @@ const cardSlugs = html => [...html.matchAll(/<h3><a href="\/product\/([^"]+)"/g)
 const home = render(React.createElement(HomeVials, { products: ordered }));
 const initialLinks = [...new Set([...home.matchAll(/href="\/product\/([^"]+)"/g)].map(match => match[1]))].sort();
 const homeCards = [...home.matchAll(/<article class="product-card">([\s\S]*?)<\/article>/g)].map(match => match[1]);
-assert.equal(homeCards.length, reviewed.length, 'Every eligible vial is rendered before Load more');
+assert.equal(homeCards.length, reviewedVials.length, 'Every eligible vial is rendered before Load more');
 assert.deepEqual(homeCards.map(card => card.match(/<h3><a href="\/product\/([^"]+)"/)?.[1]), ordered.filter(eligibleDiscovery).map(product => product.slug));
 assert(initialLinks.every(slug => reviewed.includes(slug)), 'Initial cards and alternate-size links exclude held products');
-assert(home.includes(`Showing ${reviewed.length} of ${ordered.length} lyophilized vials`));
+assert(home.includes(`Showing ${reviewedVials.length} of ${ordered.length} lyophilized vials`));
 assert(initialLinks.includes('thymosin-alpha-1-10mg'), 'Thymosin Alpha-1 has a crawlable homepage link without a click');
 assert(home.includes('Load more lyophilized vials'), 'The remaining vial members retain the existing Load more control');
 // Cover changing catalog sizes without promoting held products just to fill 16 slots.
@@ -183,10 +185,10 @@ pageModule._compile(ts.transpileModule(fs.readFileSync(pageFilename, 'utf8'), {
   const page = render(await pageModule.exports.default({ searchParams: Promise.resolve({}) }));
   const featured = [...new Set([...page.matchAll(/href="\/product\/([^"]+)"/g)].map(match => match[1]))].sort();
   assert(featured.every(slug => reviewed.includes(slug)), 'Actual homepage cards and size links remain reviewed');
-  assert(page.includes(`Showing ${reviewed.length} of ${ordered.length} lyophilized vials`));
+  assert(page.includes(`Showing ${reviewedVials.length} of ${ordered.length} lyophilized vials`));
   const cards = [...page.matchAll(/<article class="product-card">([\s\S]*?)<\/article>/g)].map(match => match[1]);
-  assert.equal(cards.length, reviewed.length, 'Actual homepage renders every reviewed vial before Load more');
-  assert.deepEqual(cardSlugs(page).sort(), reviewed, 'Every eligible product has its own initial homepage card');
+  assert.equal(cards.length, reviewedVials.length, 'Actual homepage renders every reviewed vial before Load more');
+  assert.deepEqual(cardSlugs(page).sort(), reviewedVials, 'Every eligible vial has its own initial homepage card');
   assert(featured.includes('thymosin-alpha-1-10mg'), 'The current 17th eligible vial is linked in the actual initial homepage');
   const tenIndex = cards.findIndex(card => card.includes('<h3><a href="/product/mots-c-10mg">'));
   const fortyIndex = cards.findIndex(card => card.includes('<h3><a href="/product/mots-c-40mg">'));

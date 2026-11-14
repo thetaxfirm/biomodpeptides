@@ -1,4 +1,5 @@
 import { products, compound, size, productFormat, type Product } from './catalog';
+import { packUnit, supportsPacks } from './packs';
 
 import specificationReviews from './product-specification-review-v1.json';
 import { productNameVariants } from './product-names';
@@ -13,7 +14,7 @@ export const pageRecords: Record<string, { title: string; description: string; e
   '/softgels': { title: 'The Original RUO Softgel™ by BIOMOD', description: 'Explore BIOMOD RUO softgels with BPC-157 Arginate, KPV, GHK-Cu, AHK-Cu, Pinealon and Epitalon. Compare formulations and enteric design.', eligible: true },
   '/shop': { title: 'Buy Research Compounds Online', description: 'Buy research compounds for laboratory research: BPC-157, MOTS-c, SS-31, KPV and more. Compare vial sizes, per-mg pack prices and batch documentation.', eligible: true },
   '/about': { title: 'About Biomod and TryBiomod', description: 'TryBiomod.com is the online storefront for Biomod Research Supply Company, a U.S. Marine Corps veteran-owned company with Las Vegas retail roots.', eligible: true },
-  '/locations': { title: 'BIOMOD Locations', description: 'BIOMOD stores in Las Vegas, Nevada, the St. George area in Utah, and El Paso, Texas. Contact the team to confirm visiting details.', eligible: false },
+  '/locations': { title: 'BIOMOD Locations', description: 'BIOMOD stores in Las Vegas, Nevada, the St. George area in Utah, and El Paso, Texas. Contact the team to confirm visiting details.', eligible: true },
   '/contact': { title: 'Contact BIOMOD', description: 'Contact BIOMOD about product documentation, location details, existing orders and general questions.', eligible: true },
   '/testing': { title: 'Batch Documents and Certificates', description: 'Search BIOMOD product lots and original certificates. Matching lots, mismatches and missing documentation are identified separately.', eligible: true },
   '/quality-standard': { title: 'Reading a COA: Lot, Purity, Assay', description: 'Learn how to match a research compound COA to its product lot, distinguish purity from measured content, and read the laboratory’s methods and limitations.', eligible: true },
@@ -23,8 +24,8 @@ export const pageRecords: Record<string, { title: string; description: string; e
   '/faq': { title: 'How to Buy Research Compounds', description: 'How to buy research compounds from Biomod, plus answers about COAs, lot matching, purity versus measured content, pack sizes and U.S. shipping.', eligible: true },
   '/shipping-policy': { title: 'Shipping Policy', description: 'BIOMOD U.S. shipping information, processing times and delivery support.', eligible: true },
   '/returns-refunds': { title: 'Returns and Refunds', description: 'How to contact BIOMOD about damaged, incorrect or missing items and request an order review.', eligible: true },
-  '/terms-of-sale': { title: 'Terms of Sale', description: 'BIOMOD research purchasing terms, payment verification, order eligibility and policy references.', eligible: false },
-  '/privacy-policy': { title: 'Privacy Policy', description: 'How this BIOMOD storefront handles customer information, shopping sessions and privacy requests.', eligible: false },
+  '/terms-of-sale': { title: 'Terms of Sale', description: 'BIOMOD research purchasing terms, payment verification, order eligibility and policy references.', eligible: true },
+  '/privacy-policy': { title: 'Privacy Policy', description: 'How this BIOMOD storefront handles customer information, shopping sessions and privacy requests.', eligible: true },
   '/multi-pack': { title: 'Build and Save a Pack', description: 'Choose a 1, 3, 5 or 10-product BIOMOD pack. Save a selection and review current prices before adding it to your cart.', eligible: false },
   '/presales': { title: 'Presales', description: 'Current BIOMOD presale availability and release information.', eligible: false },
   '/international-partners': { title: 'Partnership Enquiries', description: 'Contact BIOMOD about research supply requirements and partnership enquiries.', eligible: false },
@@ -90,16 +91,23 @@ export function pageInfo(path: string) {
   if (path === '/admin') return { title: 'TryBiomod Administration', description: 'Secure administrator access to the shared TryBiomod store.', eligible: false };
   const p = productAt(path);
   if (p) {
-    const contents = size(p).replace(/\s*\/\s*vial/i, '');
+    const contents = size(p).replace(/\s*\/\s*(?:vial|bottle)/i, '');
     const strength = contents && !p.name.toLowerCase().includes(contents.toLowerCase()) ? ' ' + contents : '';
-    const name = `${p.name}${strength} ${productFormat(p) === 'Vial' ? 'Research Vial' : productFormat(p)}`;
+    const format = productFormat(p);
+    // A spray or softgel bottle is named by its format; a lab supply by its own name.
+    const name = `${p.name}${strength}${format === 'Vial' ? ' Research Vial' : format === 'Research supply' ? '' : ' ' + format}`;
     // Keep "Buy <product> Research Vial | <brand>" within a 70-character result line;
     // a long product name drops the word Research from the title only.
-    const title = ('Buy ' + name + ' | Biomod Research Supply Company').length > 70 ? `Buy ${p.name}${strength} ${productFormat(p)}` : 'Buy ' + name;
+    const title = ('Buy ' + name + ' | Biomod Research Supply Company').length > 70 ? `Buy ${p.name}${strength} ${format}` : 'Buy ' + name;
     if (p.slug === 'bpc-157-10mg') return { title: 'Buy BPC-157 10mg Vials', name,
       description: 'BPC-157 (BPC157) 10 mg single-compound vials from BIOMOD. Compare packs, current pricing, batch records and the Wolverine blend. Research use only.', eligible: !productReviewBlocks[p.slug] };
     const aliases = descriptionAliases(p);
-    return { title, name, description: `Buy ${p.name}${strength}${aliases.length ? ' (' + aliases.join(', ') + ')' : ''}: single vials or 3, 5 and 10-packs, batch records and U.S. shipping. For laboratory research only.`, eligible: !productReviewBlocks[p.slug] };
+    // Packs are named in the product's own unit (vials or bottles), and only where packs are sold.
+    const offer = supportsPacks(p) ? `single ${packUnit(p)}s or 3, 5 and 10-packs, ` : '';
+    const describe = (names: string[]) => `Buy ${p.name}${strength}${names.length ? ' (' + names.join(', ') + ')' : ''}: ${offer}batch records and U.S. shipping. For laboratory research only.`;
+    // Keep the snippet within 160 characters: drop the alias list before anything else.
+    const description = describe(aliases).length <= 160 ? describe(aliases) : describe([]);
+    return { title, name, description, eligible: !productReviewBlocks[p.slug] };
   }
   return pageRecords[path] || { title: privatePath(path) ? 'Customer Services' : 'Page Not Found', description: 'BIOMOD customer services and research products.', eligible: false };
 }

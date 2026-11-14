@@ -40,6 +40,7 @@ Review the actual product classification, label, intended use, sales practices a
 - All other products still require individual review before allowlisting, including consumer-style formats, investigational compounds and semaglutide blends.
 - Six certificate lots do not match the listed product lot; twenty-four products lack certificate PDFs. Results remain tied to the specific available report. Do not interpret certificates as universal safety, sterility, efficacy, regulatory approval or certification claims.
 - Shipping, return, terms and privacy pages remain out of the sitemap until business/legal terms and actual service configuration are finalized.
+- Update, November 14, 2026: the owner approved indexing of the terms of sale, privacy policy and locations pages, and of the 15 products that carry no review block in code (eight sprays, six softgels and the acetic acid solution). Products with a review block in `productReviewBlocks` stay held.
 
 ## Locations source reconciliation
 

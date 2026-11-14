@@ -74,9 +74,10 @@ function assertNoInventedClaims(value) {
 (async () => {
   const originalStaticPaths = ['/', '/shop', '/about', '/contact', '/testing', '/quality-standard', '/choosing-a-research-supplier', '/research-use-only', '/faq'];
   // Later public additions: newsroom and owner-approved softgel category (October 20, 2026).
+  // Locations, terms of sale and privacy policy: owner approved for indexing November 14, 2026.
   // Compound reference, comparison and lot-lookup pages (Nov 2 2026) are covered by compound-reference-v1.
   const referencePaths = Object.keys(pageRecords).filter(path => /^\/(compounds|compare|collections)(\/|$)|^\/verify$/.test(path) && pageRecords[path].eligible);
-  const expectedStaticPaths = [...originalStaticPaths, '/shipping-policy', '/returns-refunds', '/news', '/softgels', ...referencePaths].sort();
+  const expectedStaticPaths = [...originalStaticPaths, '/shipping-policy', '/returns-refunds', '/news', '/softgels', '/locations', '/terms-of-sale', '/privacy-policy', ...referencePaths].sort();
   assert.deepEqual(Object.keys(pageRecords).filter(path => pageRecords[path].eligible && !path.startsWith('/news/')).sort(), expectedStaticPaths, 'Public set includes the policies, newsroom and approved softgel category');
   const releasePaths = require('../lib/press-releases.ts').pressReleases.map(release => '/news/' + release.slug);
   assert.deepEqual(sitemapPaths(live).sort(), [...expectedStaticPaths, ...releasePaths, productPath].sort());
@@ -172,7 +173,7 @@ function assertNoInventedClaims(value) {
     const data = await routeStructuredData(path, live);
     assert.equal(organizationOf(data).hasShippingService, undefined);
   }
-  for (const path of ['/account', '/admin', '/cart', '/checkout', '/terms-of-sale', '/privacy-policy', '/locations', '/multi-pack', '/missing-page', '/about-biomod', '/product/not-listed', ...Object.keys(productReviewBlocks).map(slug => '/product/' + slug)]) {
+  for (const path of ['/account', '/admin', '/cart', '/checkout', '/multi-pack', '/missing-page', '/about-biomod', '/product/not-listed', ...Object.keys(productReviewBlocks).map(slug => '/product/' + slug)]) {
     assert.equal(await routeStructuredData(path, live), null, path + ': existing publication suppression preserved');
     assert.equal(routeMetadata(path, new URLSearchParams(), live).robots.index, false);
   }

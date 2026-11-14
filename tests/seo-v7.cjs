@@ -23,7 +23,9 @@ assert.equal(mayIndex('/product/softgel-lumen-ghk-cu-ahk-cu-astaxanthin-vitamin-
 assert.equal(mayIndex('/product/bpc-157-10mg',query,live),true);
 assert.equal(mayIndex('/product/ghk-cu-50mg',query,live),false);
 for (const slug of Object.keys(productReviewBlocks)) assert.equal(mayIndex('/product/'+slug,query,seoConfig({...base,SEO_REVIEWED_PRODUCT_SLUGS:slug})),false,slug);
-for (const path of ['/cart','/checkout','/account','/account/orders','/admin','/api/store/state','/auth/google','/payment/return','/login','/register','/multi-pack','/locations','/terms-of-sale','/privacy-policy','/fake','/product/does-not-exist','/testing/201-10-0001','/about-biomod','/coa']) assert.equal(mayIndex(path,query,live),false,path);
+// Owner approved indexing of the policy and locations pages on November 14, 2026.
+for (const path of ['/locations','/terms-of-sale','/privacy-policy']) assert.equal(mayIndex(path,query,live),true,path);
+for (const path of ['/cart','/checkout','/account','/account/orders','/admin','/api/store/state','/auth/google','/payment/return','/login','/register','/multi-pack','/fake','/product/does-not-exist','/testing/201-10-0001','/about-biomod','/coa']) assert.equal(mayIndex(path,query,live),false,path);
 assert.equal(mayIndex('/',new URLSearchParams('q=test'),live),false);
 assert.equal(mayIndex('/shop',new URLSearchParams('q=weight+loss'),live),false);
 assert.equal(mayIndex('/shop',new URLSearchParams('category=softgels'),live),false);

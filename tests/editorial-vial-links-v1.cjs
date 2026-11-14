@@ -28,7 +28,9 @@ const render = (child, catalog = products) => renderToStaticMarkup(React.createE
 const productLinks = html => [...new Set([...html.matchAll(/href="\/product\/([^"#?]+)"/g)].map(m => m[1]))].sort();
 
 const config = seoConfig({ SEO_PUBLIC_ORIGIN: publication.origin, SEO_PUBLIC_LAUNCH_APPROVED: 'true', SEO_INDEXING_ENABLED: 'true', SEO_REVIEWED_PRODUCT_SLUGS: publication.productSlugs.join(',') });
-const sitemapVials = sitemapPaths(config).filter(p => p.startsWith('/product/')).map(p => p.slice(9)).sort();
+// Sprays, softgels and lab supplies (approved November 14, 2026) are in the sitemap too; this suite covers the vials.
+const isVial = slug => products.find(p => p.slug === slug)?.categories.some(c => c.slug === 'research-compounds');
+const sitemapVials = sitemapPaths(config).filter(p => p.startsWith('/product/')).map(p => p.slice(9)).filter(isVial).sort();
 const vials = products.filter(p => p.categories.some(c => c.slug === 'research-compounds') && eligibleDiscovery(p)).map(p => p.slug).sort();
 assert.equal(vials.length, 20);
 assert.deepEqual(vials, sitemapVials, 'The linked set is exactly the sitemap product set');
