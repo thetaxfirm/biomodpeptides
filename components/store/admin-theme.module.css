@@ -1,0 +1,62 @@
+/* Night mode for administration (owner, Nov 13 2026).
+ *
+ * The storefront already defines its colours as tokens on :root, and every shadcn control reads
+ * them, so dark mode is mostly a second set of values rather than a second set of rules. What
+ * follows the tokens is only the handful of admin surfaces that hardcode a colour.
+ *
+ * html[data-theme='dark'] rather than [data-theme='dark'] on purpose: it outranks :root whichever
+ * order the stylesheets happen to load in. */
+:global(html[data-theme='dark']) {
+  --background: #10141b; --foreground: #e6e8e3;
+  --card: #171d26; --card-foreground: #e6e8e3;
+  --popover: #171d26; --popover-foreground: #e6e8e3;
+  --primary: #e6e8e3; --primary-foreground: #10141b;
+  --secondary: #1c232e; --secondary-foreground: #e6e8e3;
+  --muted: #1c232e; --muted-foreground: #9aa1a9;
+  --accent: #222a36; --accent-foreground: #e6e8e3;
+  --destructive: #e4786d;
+  --border: #2a3341; --input: #2a3341; --ring: #c08a4e;
+  /* Tells the browser to darken its own form controls, scrollbars and caret. */
+  color-scheme: dark;
+}
+:global(html[data-theme='dark'] body) { background: #10141b; color: #e6e8e3; }
+:global(html[data-theme='dark'] .page-heading h1),
+:global(html[data-theme='dark'] h2),
+:global(html[data-theme='dark'] h3),
+:global(html[data-theme='dark'] h4) { color: #f1f2ee; }
+:global(html[data-theme='dark'] .page-heading p),
+:global(html[data-theme='dark'] .muted),
+:global(html[data-theme='dark'] small),
+:global(html[data-theme='dark'] .catalog-toolbar > span) { color: #9aa1a9; }
+:global(html[data-theme='dark'] .account-record) { border-bottom-color: #262f3c; }
+:global(html[data-theme='dark'] .notice) { background: #241f16; border-left-color: #a07a42; color: #e8dfcd; }
+:global(html[data-theme='dark'] .notice.error),
+:global(html[data-theme='dark'] .data-warning) { background: #2a1917; border-left-color: #b4544a; color: #f0c9c3; }
+:global(html[data-theme='dark'] .field input),
+:global(html[data-theme='dark'] .field textarea),
+:global(html[data-theme='dark'] .field select),
+:global(html[data-theme='dark'] input:not([type=checkbox])),
+:global(html[data-theme='dark'] textarea),
+:global(html[data-theme='dark'] select),
+:global(html[data-theme='dark'] .choice) { background: #171d26; border-color: #2a3341; color: #e6e8e3; }
+:global(html[data-theme='dark'] input::placeholder),
+:global(html[data-theme='dark'] textarea::placeholder) { color: #767d86; }
+/* The dark button has to invert, or it disappears into the page it sits on. */
+:global(html[data-theme='dark'] .button-dark) { background: #e6e8e3; border-color: #e6e8e3; color: #10141b; }
+:global(html[data-theme='dark'] .button-dark:hover) { background: #c9cdc6; border-color: #c9cdc6; }
+:global(html[data-theme='dark'] .blank) { background: #151b23; }
+:global(html[data-theme='dark'] table th) { background: #1c232e; color: #e6e8e3; }
+:global(html[data-theme='dark'] table tr:nth-child(2n)) { background: #151b23; }
+:global(html[data-theme='dark'] table td),
+:global(html[data-theme='dark'] table th) { border-color: #262f3c; }
+
+/* The switch itself: a plain button, so administration gains no new component dependency. */
+.row { display: flex; align-items: flex-start; justify-content: space-between; gap: 22px; max-width: 720px; padding: 18px 0; border-bottom: 1px solid var(--border); }
+.copy { flex: 1; min-width: 0; }
+.copy h2 { margin-bottom: 6px; }
+.copy p { color: var(--muted-foreground); font-size: 14px; margin: 0; }
+.slider { flex: none; position: relative; width: 50px; height: 28px; margin-top: 4px; padding: 0; border: 1px solid var(--border); border-radius: 999px; background: var(--muted); cursor: pointer; transition: background .15s, border-color .15s; }
+.slider::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px #0000002e; transition: transform .15s; }
+.slider[aria-checked='true'] { background: #3f6b43; border-color: #3f6b43; }
+.slider[aria-checked='true']::after { transform: translateX(22px); }
+.slider:focus-visible { outline: 3px solid var(--ring); outline-offset: 3px; }
