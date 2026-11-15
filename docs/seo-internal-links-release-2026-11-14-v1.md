@@ -40,3 +40,15 @@ No ranking or traffic change is claimed. Expected signals: the spray pages and t
 
 - The site never uses the word "peptide" (owner decision, Oct 23). Searches containing that word ("buy peptides", "research peptides", "BPC-157 peptide") cannot match these pages well. This is the largest on-page limit on non-brand traffic.
 - Claude's web search still returns no trybiomod.com page, including for the brand name. Independent links and listings are the missing signal. Google Business Profiles for the three stores need the owner's sign-in.
+
+## Later the same day: Bing verified, sitemaps resubmitted, indexing requested
+
+- Bing Webmaster Tools (owner's account, signed in by the owner): the property had sat unverified since October 15. Bing reported it could not read `BingSiteAuth.xml`, although the file answers 200 to bingbot user agents. Commit bb7575e adds the same two keys as `msvalidate.01` meta tags on the home page; Bing verified on the next attempt. Keep both tags and the XML file.
+- Bing sitemap: last read November 7 with 64 URLs. Resubmitted November 15 (UTC); status "Processing". The live sitemap has 83.
+- Google Search Console (domain property, already verified): sitemap resubmitted; last read November 14 with 82 pages. Page indexing report: 53 indexed, 242 not indexed (204 excluded by noindex, 25 redirects, 4 not found, 9 discovered but not indexed).
+- Indexing requested in Search Console for /collections/research-sprays ("Discovered, currently not indexed") and /locations (last crawled November 4 while it was still noindex). Both were added to the priority crawl queue.
+- Checks for bb7575e: `npm run check:release` (TypeScript and 130 suites) and the production build passed; both meta tags confirmed in the live home page HTML.
+
+## Checkout finding (read-only production aggregates, no customer details recorded here)
+
+In the five weeks to November 14, 29 checkouts worth about $6,980 reached the payment page and were not paid, against about $8,300 paid. Of 34 card attempts with saved payment details, 12 were declined. Four of those were approved by the card issuer and then rejected by the store's own Authorize.net filters (Enhanced CCV Handling twice, Enhanced AVS Handling twice). The three orders in `review` are declined cards, not fraud holds. Nine recovery emails were sent and none led to a paid order. Filter settings live in the Authorize.net Merchant Interface and were not changed.
