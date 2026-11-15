@@ -13,7 +13,7 @@ import { Eye, EyeOff, Trash2, Minus, Plus } from 'lucide-react';
 import { useStore, api, report } from './provider';
 import { money, compound } from '@/lib/catalog';
 import { Field, Check, Blank, Choice, formData } from './primitives';
-import { ATTESTATION_TEXT, SMS_CONSENT_TEXT, SMS_UPDATES_READY } from '@/lib/guest-checkout';
+import { ATTESTATION_TEXT, BUSINESS_TYPES } from '@/lib/guest-checkout';
 import { toast } from 'sonner';
 import { ProductCard } from './catalog';
 export const businessTypes: [string, string][] = [['university', 'University'], ['researcher', 'Researcher'], ['laboratory', 'Laboratory'], ['medical_professional', 'Medical professional'], ['other', 'Other research organization']];
@@ -157,40 +157,20 @@ export function Cart() {
         </div>}
     </>;
 }
+const US_STATES: [string, string][] = [['AL','Alabama'],['AK','Alaska'],['AZ','Arizona'],['AR','Arkansas'],['CA','California'],['CO','Colorado'],['CT','Connecticut'],['DE','Delaware'],['DC','District of Columbia'],['FL','Florida'],['GA','Georgia'],['HI','Hawaii'],['ID','Idaho'],['IL','Illinois'],['IN','Indiana'],['IA','Iowa'],['KS','Kansas'],['KY','Kentucky'],['LA','Louisiana'],['ME','Maine'],['MD','Maryland'],['MA','Massachusetts'],['MI','Michigan'],['MN','Minnesota'],['MS','Mississippi'],['MO','Missouri'],['MT','Montana'],['NE','Nebraska'],['NV','Nevada'],['NH','New Hampshire'],['NJ','New Jersey'],['NM','New Mexico'],['NY','New York'],['NC','North Carolina'],['ND','North Dakota'],['OH','Ohio'],['OK','Oklahoma'],['OR','Oregon'],['PA','Pennsylvania'],['RI','Rhode Island'],['SC','South Carolina'],['SD','South Dakota'],['TN','Tennessee'],['TX','Texas'],['UT','Utah'],['VT','Vermont'],['VA','Virginia'],['WA','Washington'],['WV','West Virginia'],['WI','Wisconsin'],['WY','Wyoming'],['AA','Armed Forces Americas'],['AE','Armed Forces Europe'],['AP','Armed Forces Pacific']];
 export function AddressFields({ initial = {} }: {
     initial?: Record<string, string>;
-}) { return <><Field label="Full name" name="name" defaultValue={initial.name}/><Field label="Street address" name="line1" defaultValue={initial.line1}/><Field label="Apartment, suite or unit (if any)" name="line2" defaultValue={initial.line2} required={false}/><div className="form-row"><Field label="City" name="city" defaultValue={initial.city}/><Field label="State (2 letters)" name="state" defaultValue={initial.state} placeholder="CA"/><Field label="ZIP code" name="zip" defaultValue={initial.zip}/></div><Field label="Phone" name="phone" type="tel" defaultValue={initial.phone}/><input type="hidden" name="country" value="US"/><p className="muted">United States delivery only.</p></>; }
-/** Guest checkout (owner, Nov 14 2026): an email and the research statement, then straight to delivery. */
-export function GuestStart({ onDone }: { onDone: () => unknown }) {
-    const [email, setEmail] = useState(''), [attested, setAttested] = useState(false), [smsConsent, setSmsConsent] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('');
-    async function start(e: FormEvent<HTMLFormElement>) {
-        e.preventDefault();
-        if (busy) return;
-        setBusy(true); setError('');
-        try { await api('guest-start', { email, attested, smsConsent }); await onDone(); }
-        catch (problem) { setError(problem instanceof Error ? problem.message : 'Checkout could not start. Please try again.'); }
-        finally { setBusy(false); }
-    }
-    return <><div className="page-heading"><h1>Checkout</h1></div>
-        <form className="store-form" onSubmit={start}>
-            <h2>Your email</h2>
-            <p className="muted">No membership needed to order. We send your receipt and shipping updates here, and after your first order we create your Biomod account with this email so you can track and reorder.</p>
-            <label className="field"><span>Email address</span><input type="email" name="email" autoComplete="email" required maxLength={200} value={email} onChange={e => setEmail(e.target.value)}/></label>
-            <Check checked={attested} onChange={setAttested}>{ATTESTATION_TEXT} I agree to the <a href="/terms-of-sale">terms of sale</a> and the <a href="/research-use-only">research use policy</a>.</Check>
-            {SMS_UPDATES_READY && <Check checked={smsConsent} onChange={setSmsConsent}>{SMS_CONSENT_TEXT} (Optional)</Check>}
-            {error && <p className="notice error" role="alert">{error}</p>}
-            <button className="button button-gold" disabled={busy || !attested || !email}>{busy ? 'Starting checkout…' : 'Continue to delivery'}</button>
-            <p className="muted">Already a member? <a href="/login?returnTo=%2Fcheckout">Sign in</a></p>
-        </form>
-    </>;
-}
+}) { return <><Field label="Full name" name="name" defaultValue={initial.name}/><Field label="Street address" name="line1" defaultValue={initial.line1}/><Field label="Apartment, suite or unit (if any)" name="line2" defaultValue={initial.line2} required={false}/><div className="form-row"><Field label="City" name="city" defaultValue={initial.city}/><Field label="State" name="state"><select name="state" required defaultValue={initial.state || ''}><option value="" disabled>Choose</option>{US_STATES.map(([code, name]) => <option key={code} value={code}>{name}</option>)}</select></Field><Field label="ZIP code" name="zip" defaultValue={initial.zip}/></div><Field label="Phone" name="phone" type="tel" defaultValue={initial.phone}/><input type="hidden" name="country" value="US"/><p className="muted">United States delivery only.</p></>; }
 export function Checkout() {
     const { store, ready, loadError, cartSync = 'current', cartUpdating = false, refresh, measureShopping, observeShoppingView, validShoppingQuote, validShoppingHandoff } = useStore();
-    useEffect(() => observeShoppingView?.(store.customer || store.guest ? 'checkout_form_view' : 'checkout_signin_view'), [observeShoppingView, store, ready, loadError]);
+    useEffect(() => observeShoppingView?.('checkout_form_view'), [observeShoppingView, store, ready, loadError]);
     type Scope = { owner: string | null; tenure: number; lifetime: number; active: boolean };
     type Operation = { scope: Scope; lifetime: number };
     type CheckoutView = { scope: Scope; lifetime: number; accepted: boolean; deliveryQuote: { data: any; context: string } | null; address: any; requestKey: string };
-    const owner = ready ? store.customer?.id || store.guest?.id || null : null;
+    // Guests share one scope name: checkout is a single page for them (owner, Nov 14 2026), and the
+    // guest record is saved on Calculate, so nothing they typed may be reset by it.
+    const guestCheckout = ready && !store.customer;
+    const owner = ready ? store.customer?.id || 'guest' : null;
     const scopeRef = useRef<Scope>({ owner, tenure: 0, lifetime: 0, active: false });
     if (scopeRef.current.owner !== owner) scopeRef.current = { owner, tenure: scopeRef.current.tenure + 1, lifetime: 0, active: false };
     const scope = scopeRef.current;
@@ -281,7 +261,6 @@ export function Checkout() {
     if (!store.payment.enabled) return <section className="checkout-unavailable"><h1>Checkout is not open yet.</h1><p>Your cart stays saved with your shopping session. We are preparing secure checkout and will accept orders once it is ready.</p><div className="checkout-unavailable-actions"><a className="button button-dark" href="/cart">Return to your cart</a><a href="/shop">Keep shopping</a><a href="/contact">Contact Biomod</a></div></section>;
     if (store.cartError) return <Blank title="Your cart needs a review."><p>{store.cartError}</p><a className="button button-dark" href="/cart">Review your cart</a></Blank>;
     if (!store.cart.length) return <Blank title="Your cart is empty."><a href="/shop">Shop products</a></Blank>;
-    if (!store.customer && !store.guest) return <GuestStart onDone={refresh}/>;
     async function submit(e: FormEvent<HTMLFormElement>) {
         e.preventDefault();
         const request = { scope, lifetime: renderedLifetime };
@@ -292,10 +271,12 @@ export function Checkout() {
         const revision = quoteRevision.current;
         const context = currentContext.current;
         const form = e.currentTarget;
-        const fields = formData(form);
+        const { guestEmail, guestBusinessType, ...fields } = formData(form) as Record<string, FormDataEntryValue>;
         const fieldsKey = JSON.stringify(fields);
         const confirmed = Boolean(addressProblem && addressConfirmed && addressProblem.fields === fieldsKey);
         try {
+            // A guest is saved (email, organization type, research statement) before the first quote.
+            if (guestCheckout) await api('guest-start', { email: guestEmail, businessType: guestBusinessType, attested: accepted });
             const data = await api('delivery', { address: fields, ...(confirmed ? { addressConfirmed: true } : {}) });
             if (!current(request) || operation.current !== request || revision !== quoteRevision.current || context !== currentContext.current || promoOperation.current || unappliedPromo.current) return;
             setView(previous => previous.scope === scope && previous.lifetime === request.lifetime ? { ...previous, address: fields, deliveryQuote: { data, context } } : previous);
@@ -368,13 +349,19 @@ export function Checkout() {
         {store.payment.state === 'sandbox' && <p className="notice">Test checkout only. This payment environment does not accept real payments.</p>}
         <div className="cart-layout">
             <form key={scope.tenure} className="store-form" onSubmit={submit} onChange={invalidateDelivery}>
-                {store.guest && !store.customer && <p className="muted">Checking out as {store.guest.email}. <a href="/login?returnTo=%2Fcheckout">Sign in instead</a></p>}
+                {guestCheckout && <>
+                    <h2>Contact</h2>
+                    <p className="muted">No membership needed. Already a member? <a href="/login?returnTo=%2Fcheckout">Sign in</a></p>
+                    <Field label="Email address" name="guestEmail" type="email" defaultValue={store.guest?.email}/>
+                    <Field label="Type of research organization" name="guestBusinessType"><select name="guestBusinessType" required defaultValue=""><option value="" disabled>Choose one</option>{Object.entries(BUSINESS_TYPES).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field>
+                </>}
                 <h2>Delivery address</h2><AddressFields initial={{ name: store.customer?.name || '' }}/>
+                {guestCheckout && <Check checked={accepted} onChange={setAccepted}>{ATTESTATION_TEXT} I agree to the <a href="/terms-of-sale">terms of sale</a> and the <a href="/research-use-only">research use policy</a>.</Check>}
                 {addressProblem && <div className="notice address-check" role="alert">
                     <p>{addressProblem.message}</p>
                     <Check checked={addressConfirmed} onChange={setAddressConfirmed}>{addressProblem.status === 'unit_missing' ? 'There is no apartment or unit number at this address.' : 'My address is correct as I typed it.'} We will double-check it before your order ships.</Check>
                 </div>}
-                <button className="button button-dark" disabled={busy || promoBusy || promoUnapplied || cartUpdating}>{busy ? 'Calculating…' : 'Calculate delivery and tax'}</button>
+                <button className="button button-dark" disabled={busy || promoBusy || promoUnapplied || cartUpdating || (guestCheckout && !accepted)}>{busy ? 'Calculating…' : 'Calculate delivery and tax'}</button>
             </form>
             <aside className="order-summary"><h2>Your order</h2>{hasPreorder(q?.items) && <p className="preorder-checkout-notice">{preorderOrderNotice}</p>}
                 {q?.items.map((l: any, i: number) => <p className="summary-product" key={i}><span>{l.product.name} × {l.quantity}{l.product.activePreorder && <small className="preorder-line-note">Preorder · {l.product.activePreorder.percentOff}% off included · Estimated dispatch {l.product.activePreorder.ships}</small>}</span><strong>{money(l.lineTotal ?? l.product.price * l.quantity)}</strong></p>)}
@@ -403,7 +390,8 @@ export function Checkout() {
                     <p><span>Tax</span><strong>{delivery ? money(delivery.tax) : 'Pending address'}</strong></p>
                     {delivery && <p className="total"><span>Total</span><strong>{money(delivery.total)}</strong></p>}
                 </div>
-                <Check checked={accepted} onChange={setAccepted}>I am 21 or older and purchasing exclusively for laboratory research. I agree to the <a href="/terms-of-sale">terms of sale</a>.</Check>
+                {!guestCheckout && <Check checked={accepted} onChange={setAccepted}>I am 21 or older and purchasing exclusively for laboratory research. I agree to the <a href="/terms-of-sale">terms of sale</a>.</Check>}
+                {guestCheckout && <p className="muted">After your first order we create your Biomod account with your email, so you can track and reorder. You will get one email to confirm it.</p>}
                 <button className="button button-gold" disabled={!delivery || !accepted || !requestKey || busy || promoBusy || promoUnapplied || !store.payment.enabled || cartUpdating} onClick={() => void checkout()}>Continue to secure payment</button>
                 <p className="muted">Card information is entered on Authorize.net’s secure payment page. Your card must be billed to the delivery address above: use the address on your card statement, or the payment may be declined. Shipping somewhere else? <a href="/contact?subject=Ship%20to%20a%20different%20address">Contact us</a> before ordering.</p>
             </aside>

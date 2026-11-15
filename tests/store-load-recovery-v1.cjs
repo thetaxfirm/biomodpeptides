@@ -48,7 +48,7 @@ mod.require=id=>{
   if(id==='./provider')return provider;
   if(id==='@/lib/catalog')return {money:c=>'$'+(c/100).toFixed(2),compound:p=>p.name};
   if(id==='./promo-code')return {PromoCode:noop};if(id==='./product-image')return {ProductImage:noop};
-  if(id==='@/lib/guest-checkout')return {ATTESTATION_TEXT:'Research statement',SMS_CONSENT_TEXT:'Text consent'}; // guest checkout form text
+  if(id==='@/lib/guest-checkout')return {ATTESTATION_TEXT:'Research statement',BUSINESS_TYPES:{researcher:'Researcher'}}; // guest checkout form text
   if(id==='@/lib/auth-return')return {authLink:()=>'',safeAuthReturn:value=>value};
   if(id==='lucide-react')return new Proxy({}, {get:()=>noop});if(id==='sonner')return {toast:{success:noop,info:noop}};
   if(id==='./catalog')return {ProductCard:noop};

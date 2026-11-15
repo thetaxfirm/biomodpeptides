@@ -40,7 +40,7 @@ function load(file) {
   if(id==='./provider')return provider;if(id.endsWith('.module.css'))return new Proxy({}, {get:(_,key)=>key});
   if(id==='@/lib/catalog')return {money:c=>'$'+(c/100).toFixed(2),compound:p=>p.name};
   if(id==='./promo-code')return {PromoCode:PromoStub};if(id==='./product-image')return {ProductImage:noop};
-  if(id==='@/lib/guest-checkout')return {ATTESTATION_TEXT:'Research statement',SMS_CONSENT_TEXT:'Text consent'}; // guest checkout form text
+  if(id==='@/lib/guest-checkout')return {ATTESTATION_TEXT:'Research statement',BUSINESS_TYPES:{researcher:'Researcher'}}; // guest checkout form text
   if(id==='@/lib/auth-return')return {authLink:()=>'',safeAuthReturn:x=>x};
   if(id==='lucide-react')return new Proxy({}, {get:()=>noop});if(id==='sonner')return {toast:{success:()=>{},info:()=>{}}};
   if(id==='./catalog')return {ProductCard:noop};if(id==='./primitives')return {Field:noop,Check:noop,Blank:noop,Choice:noop,formData:x=>x.fields};

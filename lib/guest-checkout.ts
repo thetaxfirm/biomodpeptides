@@ -17,7 +17,10 @@ export const SMS_CONSENT_TEXT = 'Text me order and shipping updates at the phone
 export const SMS_UPDATES_READY = false;
 
 export type GuestShopper = { id: string; email: string; name: string; guest: true };
-type GuestRecord = { email: string; attestation: { version: string; at: number }; smsConsent: { at: number; text: string } | null; enrolledAt?: number };
+/** Same choices as the membership form, so guests and members are described the same way. */
+export const BUSINESS_TYPES = { university: 'University', researcher: 'Researcher', laboratory: 'Laboratory', medical_professional: 'Medical professional', other: 'Other research organization' } as const;
+export type BusinessType = keyof typeof BUSINESS_TYPES;
+type GuestRecord = { email: string; businessType: BusinessType; attestation: { version: string; at: number }; smsConsent: { at: number; text: string } | null; enrolledAt?: number };
 
 export const guestOwner = (sessionId: string) => 'guest:' + sessionId;
 export const isGuestOwner = (owner: unknown): owner is string => typeof owner === 'string' && /^guest:[a-f0-9-]{36}$/.test(owner);
@@ -32,7 +35,7 @@ async function row(db: D1Database, sessionId: string) {
 export async function readGuestRecord(db: D1Database, sessionId: unknown): Promise<GuestRecord | null> {
     if (!validSession(sessionId)) return null;
     const saved = parse((await row(db, sessionId))?.data);
-    return saved && cleanGuestEmail(saved.email) && saved.attestation?.version === ATTESTATION_VERSION && Number.isFinite(saved.attestation?.at) ? saved as GuestRecord : null;
+    return saved && cleanGuestEmail(saved.email) && Object.hasOwn(BUSINESS_TYPES, saved.businessType) && saved.attestation?.version === ATTESTATION_VERSION && Number.isFinite(saved.attestation?.at) ? saved as GuestRecord : null;
 }
 /** The guest for this browser session, or null. A guest exists only after agreeing to the current statement. */
 export async function readGuest(db: D1Database, sessionId: unknown): Promise<GuestShopper | null> {
@@ -40,20 +43,25 @@ export async function readGuest(db: D1Database, sessionId: unknown): Promise<Gue
     return record && validSession(sessionId) ? { id: guestOwner(sessionId), email: record.email, name: '', guest: true } : null;
 }
 /** Save (or replace) this session's guest. Throws the message the form shows when something is missing. */
-export async function saveGuest(db: D1Database, sessionId: string, input: { email?: unknown; attested?: unknown; smsConsent?: unknown }, now: number, id: string): Promise<GuestShopper> {
+export async function saveGuest(db: D1Database, sessionId: string, input: { email?: unknown; businessType?: unknown; attested?: unknown; smsConsent?: unknown }, now: number, id: string): Promise<GuestShopper> {
     if (!validSession(sessionId)) throw new Error('Refresh the page and try again.');
     const email = cleanGuestEmail(input.email);
     if (!email) throw new Error('Enter a valid email address.');
+    const businessType = typeof input.businessType === 'string' && Object.hasOwn(BUSINESS_TYPES, input.businessType) ? input.businessType as BusinessType : null;
+    if (!businessType) throw new Error('Choose your type of research organization.');
     if (input.attested !== true) throw new Error('Confirm the research statement to continue.');
-    const record: GuestRecord = { email, attestation: { version: ATTESTATION_VERSION, at: now }, smsConsent: input.smsConsent === true ? { at: now, text: SMS_CONSENT_TEXT } : null };
+    const record: GuestRecord = { email, businessType, attestation: { version: ATTESTATION_VERSION, at: now }, smsConsent: input.smsConsent === true ? { at: now, text: SMS_CONSENT_TEXT } : null };
     const existing = await row(db, sessionId);
+    // A returning guest with the same email is not enrolled (emailed) a second time.
+    const before = parse(existing?.data);
+    if (before?.email === email && Number.isFinite(before?.enrolledAt)) record.enrolledAt = before.enrolledAt;
     if (existing) await db.prepare('UPDATE requests SET data=? WHERE id=? AND kind=?').bind(JSON.stringify(record), existing.id, GUEST_KIND).run();
     else await db.prepare('INSERT INTO requests(id,owner,kind,data,created) VALUES(?,?,?,?,?)').bind(id, guestOwner(sessionId), GUEST_KIND, JSON.stringify(record), now).run();
     return { id: guestOwner(sessionId), email, name: '', guest: true };
 }
 /** What the order keeps about its buyer's agreement. Stored on every guest order. */
 export function guestOrderRecord(record: GuestRecord | null) {
-    return record ? { guest: true, attestation: { ...record.attestation, text: ATTESTATION_TEXT }, ...(record.smsConsent ? { smsConsent: record.smsConsent } : {}) } : {};
+    return record ? { guest: true, businessType: record.businessType, attestation: { ...record.attestation, text: ATTESTATION_TEXT }, ...(record.smsConsent ? { smsConsent: record.smsConsent } : {}) } : {};
 }
 
 /**
@@ -89,7 +97,7 @@ export async function enrollGuest(db: D1Database, owner: string, order: { email?
         // Claim first, so two payment notifications for one order cannot both send the email.
         const claimed = await db.prepare('UPDATE requests SET data=? WHERE id=? AND data=?').bind(JSON.stringify({ ...record, enrolledAt: now }), existing.id, existing.data).run();
         if (!claimed.meta.changes) return false;
-        await signup('signup?redirect_to=' + encodeURIComponent(origin + '/login'), { email, password, data: { name: String(order.address?.name || '').slice(0, 100), phone: String(order.address?.phone || '').slice(0, 30), business_type: 'researcher', guest_checkout: true } });
+        await signup('signup?redirect_to=' + encodeURIComponent(origin + '/login'), { email, password, data: { name: String(order.address?.name || '').slice(0, 100), phone: String(order.address?.phone || '').slice(0, 30), business_type: record.businessType, guest_checkout: true } });
         return true;
     } catch { return false; }
 }

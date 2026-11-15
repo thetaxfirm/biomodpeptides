@@ -29,12 +29,13 @@ const NOW = 2000000000000;
   // No guest exists until the buyer gives an email and agrees to the statement.
   assert.equal(await g.readGuest(db, S1), null);
   assert.equal(await g.readGuest(db, 'not-a-session'), null);
-  await assert.rejects(g.saveGuest(db, S1, { email: 'ada@example.com', attested: false }, NOW, 'r1'), /research statement/);
-  await assert.rejects(g.saveGuest(db, S1, { email: 'not an email', attested: true }, NOW, 'r1'), /valid email/);
-  await assert.rejects(g.saveGuest(db, 'x', { email: 'ada@example.com', attested: true }, NOW, 'r1'), /Refresh/);
+  await assert.rejects(g.saveGuest(db, S1, { email: 'ada@example.com', businessType: 'researcher', attested: false }, NOW, 'r1'), /research statement/);
+  await assert.rejects(g.saveGuest(db, S1, { email: 'not an email', businessType: 'researcher', attested: true }, NOW, 'r1'), /valid email/);
+  await assert.rejects(g.saveGuest(db, 'x', { email: 'ada@example.com', businessType: 'researcher', attested: true }, NOW, 'r1'), /Refresh/);
+  for (const businessType of [undefined, '', 'consumer', 'constructor']) await assert.rejects(g.saveGuest(db, S1, { email: 'ada@example.com', businessType, attested: true }, NOW, 'r1'), /type of research organization/, String(businessType));
   assert.equal(sql.prepare('SELECT COUNT(*) n FROM requests').get().n, 0, 'nothing saved for a refused guest');
 
-  const guest = await g.saveGuest(db, S1, { email: ' Ada@Example.com ', attested: true, smsConsent: true }, NOW, 'r1');
+  const guest = await g.saveGuest(db, S1, { email: ' Ada@Example.com ', businessType: 'laboratory', attested: true, smsConsent: true }, NOW, 'r1');
   assert.deepEqual(guest, { id: 'guest:' + S1, email: 'ada@example.com', name: '', guest: true });
   assert.deepEqual(await g.readGuest(db, S1), guest);
   assert.equal(await g.readGuest(db, S2), null, 'another browser session is not this guest');
@@ -43,18 +44,19 @@ const NOW = 2000000000000;
   assert.equal(record.attestation.at, NOW);
   assert.deepEqual(record.smsConsent, { at: NOW, text: g.SMS_CONSENT_TEXT });
   // Saving again replaces the record instead of adding a second one. Text consent is opt-in each time.
-  await g.saveGuest(db, S1, { email: 'ada2@example.com', attested: true }, NOW + 1, 'r2');
+  await g.saveGuest(db, S1, { email: 'ada2@example.com', businessType: 'laboratory', attested: true }, NOW + 1, 'r2');
   assert.equal(sql.prepare("SELECT COUNT(*) n FROM requests WHERE kind='guest_shopper'").get().n, 1);
   assert.equal((await g.readGuestRecord(db, S1)).smsConsent, null);
   assert.equal((await g.readGuest(db, S1)).email, 'ada2@example.com');
   // A record under an older statement no longer counts: the buyer must agree to the current one.
   sql.prepare("UPDATE requests SET data=json_set(data,'$.attestation.version','old-v0')").run();
   assert.equal(await g.readGuest(db, S1), null);
-  await g.saveGuest(db, S1, { email: 'ada@example.com', attested: true, smsConsent: true }, NOW, 'r3');
+  await g.saveGuest(db, S1, { email: 'ada@example.com', businessType: 'laboratory', attested: true, smsConsent: true }, NOW, 'r3');
 
   // What each guest order keeps: the exact statement, when it was agreed, and any text consent.
   const kept = g.guestOrderRecord(await g.readGuestRecord(db, S1));
   assert.equal(kept.guest, true);
+  assert.equal(kept.businessType, 'laboratory');
   assert.equal(kept.attestation.text, g.ATTESTATION_TEXT);
   assert.equal(kept.attestation.at, NOW);
   assert.equal(kept.smsConsent.text, g.SMS_CONSENT_TEXT);
@@ -94,11 +96,14 @@ const NOW = 2000000000000;
   assert.equal(await g.enrollGuest(db, 'guest:' + S1, paid, 'https://trybiomod.com', signup, NOW, 'pw'), true);
   assert.equal(calls.length, 1);
   assert.equal(calls[0].route, 'signup?redirect_to=' + encodeURIComponent('https://trybiomod.com/login'));
-  assert.deepEqual(calls[0].body, { email: 'ada@example.com', password: 'pw', data: { name: 'Ada Lovelace', phone: '(702) 555-0100', business_type: 'researcher', guest_checkout: true } });
+  assert.deepEqual(calls[0].body, { email: 'ada@example.com', password: 'pw', data: { name: 'Ada Lovelace', phone: '(702) 555-0100', business_type: 'laboratory', guest_checkout: true } });
   assert.equal(await g.enrollGuest(db, 'guest:' + S1, paid, 'https://trybiomod.com', signup, NOW + 5, 'pw'), false, 'a second payment notice does not email again');
   assert.equal(calls.length, 1);
   assert.equal((await g.readGuest(db, S1)).email, 'ada@example.com', 'the guest can still check out after enrolment');
-  await g.saveGuest(db, S2, { email: 'grace@example.com', attested: true }, NOW, 'r9');
+  await g.saveGuest(db, S1, { email: 'ada@example.com', businessType: 'laboratory', attested: true }, NOW + 9, 'r4');
+  assert.equal(await g.enrollGuest(db, 'guest:' + S1, paid, 'https://trybiomod.com', signup, NOW + 10, 'pw'), false, 'a returning guest is not emailed again');
+  assert.equal(calls.length, 1);
+  await g.saveGuest(db, S2, { email: 'grace@example.com', businessType: 'university', attested: true }, NOW, 'r9');
   assert.equal(await g.enrollGuest(db, 'guest:' + S2, { email: 'grace@example.com' }, 'https://trybiomod.com', async () => { throw new Error('provider down'); }, NOW, 'pw'), false, 'a provider failure is swallowed');
 
   // Wiring: the routes guests may use, and the ones they may not.
@@ -113,8 +118,13 @@ const NOW = 2000000000000;
   const checkout = fs.readFileSync(path.join(__dirname, '../lib/checkout.ts'), 'utf8');
   assert(checkout.includes('enrollGuest(database(), owner, saved'), 'enrolment runs when an order is first marked paid');
   const ui = fs.readFileSync(path.join(__dirname, '../components/store/account.tsx'), 'utf8');
-  assert(ui.includes('<GuestStart onDone={refresh}/>') && ui.includes('{ATTESTATION_TEXT}') && ui.includes('disabled={busy || !attested || !email}'), 'guest form shows the statement and requires it');
-  assert(!ui.includes('if (!store.customer) return <AuthPage returnTo="/checkout"/>'), 'checkout no longer forces sign-in');
-  assert.equal(g.SMS_UPDATES_READY, false); assert(ui.includes('{SMS_UPDATES_READY && <Check'), 'text opt-in is hidden until texts can be sent');
+  // One page: contact, organization type, address and the statement, then Calculate. No sign-in wall.
+  assert(!ui.includes('if (!store.customer) return <AuthPage returnTo="/checkout"/>') && !ui.includes('GuestStart'), 'checkout is one page with no sign-in wall');
+  assert(ui.includes('name="guestEmail"') && ui.includes('name="guestBusinessType"') && ui.includes('{ATTESTATION_TEXT}'), 'guest fields and the statement are on the checkout form');
+  assert(ui.includes("await api('guest-start', { email: guestEmail, businessType: guestBusinessType, attested: accepted })"), 'the guest is saved before the first quote');
+  assert(ui.includes('(guestCheckout && !accepted)'), 'no quote until the statement is ticked');
+  assert(ui.includes("const { guestEmail, guestBusinessType, ...fields } = formData(form)"), 'guest fields never travel inside the address');
+  assert(ui.includes("store.customer?.id || 'guest'"), 'one stable guest scope: saving the guest never resets the form');
+  assert(ui.includes('{guestCheckout && <Check checked={accepted}') && ui.includes('{!guestCheckout && <Check checked={accepted}'), 'a buyer sees one agreement box: the statement for guests, the member line for members');
   console.log('PASS: guest records are session-bound and need the current research statement; orders keep the statement and text consent; sign-in transfers only a verified email’s guest orders; enrolment is once, guarded and never throws; members-only routes stay members-only');
 })().catch(error => { console.error(error); process.exit(1); });

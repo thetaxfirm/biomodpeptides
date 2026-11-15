@@ -32,7 +32,8 @@ export function measureShoppingStage(enabled: boolean, context: ShoppingMeasurem
       || trafficPrivacyExcluded(navigator as Navigator & { globalPrivacyControl?: boolean }, (window as Window & { doNotTrack?: string }).doNotTrack)
       || !shoppingContextEligible(context, options.cart)) return;
     if (stage === 'checkout_signin_view' && (context.store.customer || !context.store.authReady)) return;
-    if (['checkout_form_view', 'delivery_quote_confirmed', 'checkout_handoff_ready'].includes(stage) && !context.store.customer) return;
+    // Guests check out on the same form as members (guest checkout, Nov 14 2026), so the form, quote
+    // and handoff stages count for both. checkout_signin_view remains for history; nothing emits it now.
     const viewPath = viewPaths[stage] || (stage === 'delivery_quote_confirmed' || stage === 'checkout_handoff_ready' ? '/checkout' : undefined);
     if (viewPath && (window.location.pathname !== viewPath
       || document.querySelector('main[data-traffic-path]')?.getAttribute('data-traffic-path') !== viewPath)) return;

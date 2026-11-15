@@ -505,7 +505,7 @@ export async function POST(req: NextRequest, { params }: {
         // Guest checkout (owner, Nov 14 2026): an email and the research statement, no membership first.
         if (action === 'guest-start') {
             if (await customer()) return j({ message: 'You are signed in.' });
-            const guest = await saveGuest(database(), s.id, { email: b.email, attested: b.attested, smsConsent: b.smsConsent }, timestamp(), uid());
+            const guest = await saveGuest(database(), s.id, { email: b.email, businessType: b.businessType, attested: b.attested, smsConsent: b.smsConsent }, timestamp(), uid());
             await captureContact({ email: guest.email, owner: null, source: 'order' });
             return j({ guest });
         }

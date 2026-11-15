@@ -138,7 +138,8 @@ function blocked(h){assert.equal(button(h,'Continue to secure payment').props.di
   gate.resolve({quoteId:'obsolete-quote',total:p.price+500,shipping:500,tax:0});await waiting;
   assert.equal(count('delivery_quote_confirmed'),0);assert.equal(checkoutCalls().length,0);
   if(transition==='aba'||transition==='effect-replay'){h.render();blocked(h);}
-  if(transition==='signed-out')assert(!nodes(h.tree).some(n=>n.type==='form'));
+  // Signing out lands on a fresh guest checkout (guest checkout, Nov 14 2026): the member's quote and address are gone.
+  if(transition==='signed-out'){h.render();assert(nodes(h.tree).some(n=>n.props?.name==='guestEmail'),'guest contact fields shown');blocked(h);}
  }
  // Every new owner tenure gets a new idempotency key and fresh acceptance.
  h=await forOwner();await quoteFor(h);checkoutImpl=async()=>{throw Error('Isolated stopped handoff');};button(h,'Continue to secure payment').props.onClick();await flush();h.render();const firstKey=checkoutCalls()[0].body.requestKey;
