@@ -102,15 +102,24 @@ export function compoundTitle(c: Compound) {
   const long = `${c.name} Molecular Weight and CAS`;
   return long.length <= 37 ? long : `${c.name} Formula, MW and CAS`;
 }
-export const compoundDescription = (c: Compound) =>
-  `${c.name} reference data: CAS ${c.cas}, formula ${c.formula}, molecular weight ${c.weight} g/mol${c.residues ? `, ${c.residues}-residue sequence` : ''}, plus Biomod lab reports by lot.`.slice(0, 160);
+// NAD+ is a dinucleotide coenzyme. Every other compound here is a chain of amino-acid residues, so its
+// pages say "peptide" (owner instruction, November 14, 2026). The test holds this to isPeptideVial.
+export const isPeptideCompound = (c: Compound) => c.slug !== 'nad';
+// The longest wording that fits the 160-character description, never a sentence cut mid-word.
+const fits = (...candidates: string[]) => candidates.find(text => text.length <= 160) || candidates[candidates.length - 1].slice(0, 160);
+export const compoundDescription = (c: Compound) => {
+  const data = `${c.name}${isPeptideCompound(c) ? ' peptide' : ''} reference data: CAS ${c.cas}, formula ${c.formula}, molecular weight ${c.weight} g/mol${c.residues ? `, ${c.residues}-residue sequence` : ''}`;
+  return fits(data + ', plus Biomod lab reports by lot.', data + ', with Biomod lab reports.', data + '.');
+};
 export function comparisonTitle(x: Comparison) {
   const pair = `${compoundAt(x.a)!.name} vs ${compoundAt(x.b)!.name}`;
   return (pair + ' Compared').length <= 37 ? pair + ' Compared' : pair;
 }
+export const isPeptideComparison = (x: Comparison) => isPeptideCompound(compoundAt(x.a)!) && isPeptideCompound(compoundAt(x.b)!);
 export const comparisonDescription = (x: Comparison) => {
   const a = compoundAt(x.a)!, b = compoundAt(x.b)!;
-  return `${a.name} vs ${b.name}: sequence, molecular formula, molecular weight and CAS side by side, with Biomod lab reports for each. Research use only.`.slice(0, 160);
+  const pair = `${a.name} vs ${b.name}${isPeptideComparison(x) ? ' peptides' : ''}: sequence, molecular formula, molecular weight and CAS side by side`;
+  return fits(pair + ', with Biomod lab reports for each. Research use only.', pair + ', with Biomod lab reports. Research use only.', pair + '. Research use only.');
 };
 
 // Visible questions on each compound page; the FAQPage markup reads the same list.
@@ -119,6 +128,7 @@ export function compoundQuestions(c: Compound, productNames: string[]) {
     { question: `What is the molecular weight of ${c.name}?`, answer: `PubChem lists the molecular weight of ${c.name} (CID ${c.cid}) as ${c.weight} g/mol, for the formula ${c.formula}.` },
     { question: `What is the CAS number for ${c.name}?`, answer: `The CAS registry number for ${c.name} is ${c.cas}.` },
     ...(c.sequence ? [{ question: `What is the ${c.name} sequence?`, answer: `${c.name} is ${c.sequence}${c.residues ? `, ${c.residues} residues` : ''}.` }] : []),
+    { question: `Is ${c.name} a peptide?`, answer: isPeptideCompound(c) ? `Yes, ${c.name} is a peptide. ${c.summary}` : `No. ${c.summary}` },
     ...(c.aliases.length ? [{ question: `What other names is ${c.name} listed under?`, answer: `${c.name} is also listed as ${c.aliases.join(', ')}.` }] : []),
     { question: `Which Biomod products contain ${c.name}?`, answer: `${productNames.join(', ')}. Each product page lists the lot printed on its label and links the laboratory report for that lot when one is published.` },
   ];
