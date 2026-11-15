@@ -16,6 +16,7 @@ import { recoveryAdminStatus } from '@/lib/checkout-recovery';
 import { coaAutomationStatus, enqueueCoaRequest, enqueueRequestAlert, processCoaOutbox, saveCoaConfig } from '@/lib/coa-outbox';
 import { promoAnalytics } from '@/lib/promo-analytics';
 import { PROMO_COOKIE, promotion, type PromoRecord } from '@/lib/promotions';
+import { textOfferSignup } from '@/lib/text-offer';
 import { storedPromotions } from '@/lib/promo-codes';
 import inventorySql from '@/lib/inventory-statements.json';
 import { AUTH_RETURN_COOKIE, AUTH_RETURN_MAX_AGE, safeAuthReturn, clearAuthSessionCookies, ANONYMOUS_SESSION_COOKIE, needsAnonymousSession, needsAccountSession } from '@/lib/auth-return';
@@ -501,6 +502,16 @@ export async function POST(req: NextRequest, { params }: {
                 if (e instanceof AddressCheckError) return j({ error: e.message, addressProblem: e.addressProblem }, 422);
                 throw e;
             }
+        }
+        // Text sign-up offer (owner, Nov 14 2026): a phone number and one button. Five tries per visitor per ten minutes.
+        if (action === 'text-offer') {
+            await rateLimit('text-offer-strict:' + (req.headers.get('cf-connecting-ip') || s.id), 5);
+            const result = await textOfferSignup(database(), runtime() as unknown as Record<string, string | undefined>, { phone: b.phone, consent: b.consent }, req.nextUrl.origin, timestamp(), uid());
+            if (result.status !== 'shown') return j(result);
+            // No text provider yet: the code is shown, and applied unless the cart already carries another code.
+            const applied = !await currentPromoCode();
+            if (applied) (await cookies()).set(PROMO_COOKIE, result.code, { httpOnly: true, secure, sameSite: 'lax', path: '/', maxAge: 2592000 });
+            return j({ ...result, applied, message: result.message + (applied ? ' It is applied to your order.' : ' Enter it under "Have a promo code?".') });
         }
         // Guest checkout (owner, Nov 14 2026): an email and the research statement, no membership first.
         if (action === 'guest-start') {

@@ -7,6 +7,7 @@ import { ProductImage } from './product-image';
 import { authLink, safeAuthReturn } from '@/lib/auth-return';
 import { useEffect, useRef, useState, FormEvent } from 'react';
 import { PromoCode } from './promo-code';
+import { TextOffer } from './text-offer';
 import type { ShippingOption } from '@/lib/shipping-options';
 import { shippingTerms } from '@/lib/shipping-terms';
 import { Eye, EyeOff, Trash2, Minus, Plus } from 'lucide-react';
@@ -141,6 +142,7 @@ export function Cart() {
             </div>
             <aside className="order-summary"><h2>Order Summary</h2>{hasPreorder(q?.items) && <p className="preorder-checkout-notice">{preorderOrderNotice}</p>}
                 <PromoCode key={promoScope.tenure} disabled={busy || cartUpdating || cartSync === 'uncertain' || Boolean(store.cartError) || Boolean(store.pricingStale)} onBusyChange={next => changePromoState('busy', next)} onUnappliedChange={next => changePromoState('unapplied', next)}/>
+                {!q?.promo && <TextOffer disabled={locked}/>}
                 <div className="summary-lines">
                     <p><span>Subtotal</span><strong>{q ? money(q.subtotal) : 'Unavailable'}</strong></p>
                     {packSavings > 0 && <p><span>Pack savings</span><strong>−{money(packSavings)}</strong></p>}

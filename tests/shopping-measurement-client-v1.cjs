@@ -31,7 +31,7 @@ function load(relative){if(cache.has(relative))return cache.get(relative).export
   if(id==='sonner')return{toast:{success:noop,error:noop,info:noop},Toaster:noop};
   if(id==='lucide-react')return new Proxy({}, {get:()=>noop});
   if(relative.startsWith('components/')&&id==='./provider')return{...load('components/store/provider.tsx'),useStore:()=>providerHost.tree.props.value};
-  if(id==='./promo-code')return{PromoCode:Promo};if(id==='./product-image')return{ProductImage:noop};if(relative.startsWith('components/')&&id==='./catalog')return{ProductCard:noop};
+  if(id==='./text-offer')return{TextOffer:()=>null};if(id==='./promo-code')return{PromoCode:Promo};if(id==='./product-image')return{ProductImage:noop};if(relative.startsWith('components/')&&id==='./catalog')return{ProductCard:noop};
   if(id==='./primitives')return{Field:noop,Check,Blank,Choice:noop,formData:form=>form.fields};
   if(id.startsWith('@/lib/')||id.startsWith('.')){
    const target=id.startsWith('@/')?id.slice(2):path.relative(root,path.resolve(path.dirname(filename),id));

@@ -73,7 +73,7 @@ mod.require=id=>{
   if(id==='react')return hooks;if(id==='react/jsx-runtime')return require('react/jsx-runtime');
   if(id==='./provider')return provider;
   if(id==='@/lib/catalog')return {money:c=>'$'+(c/100).toFixed(2),compound:p=>p.name};
-  if(id==='./promo-code')return {PromoCode:noop};if(id==='./product-image')return {ProductImage:noop};
+  if(id==='./text-offer')return{TextOffer:()=>null};if(id==='./promo-code')return {PromoCode:noop};if(id==='./product-image')return {ProductImage:noop};
   if(id==='@/lib/guest-checkout')return {ATTESTATION_TEXT:'Research statement',BUSINESS_TYPES:{researcher:'Researcher'}}; // guest checkout form text
   if(id==='@/lib/auth-return')return authReturnModule.exports;
   if(id==='lucide-react')return new Proxy({}, {get:()=>noop});
