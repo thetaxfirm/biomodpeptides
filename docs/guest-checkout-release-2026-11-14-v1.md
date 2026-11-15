@@ -26,3 +26,24 @@ Checkout required membership first: seven fields, a business type and email veri
 - `/api/store/state` returns `guest: null` for a new visitor.
 - `guest-start` refuses a bad or missing email with HTTP 400; `delivery` and `reconcile` without a member or guest return "Please sign in or continue as a guest."
 - **Not verified live:** a complete guest order. No test email, order or payment was created on production. The first real guest order should be watched: order placed, payment confirmed, verification email received, order visible after sign-in.
+
+## Same day, second release: one page (commit f629d42)
+
+Owner feedback: guest checkout looked unusual for this market, and a customer had called the checkout a bad experience.
+
+Competitor check, November 14 (cart and checkout pages viewed in a browser; no order placed):
+
+- realpeptides.co allows guest checkout on one page: delivery address, email, business phone, a required "Business type / industry" choice and a 21+ confirmation, then delivery and payment.
+- peptideplugs.com shows no products until the visitor completes a short form: first name, business name, research category, email (confirmed with a 4-digit code) and a research-use checkbox. No password.
+
+Both qualify the buyer as a research customer; neither asks for a password before the first order.
+
+What changed:
+
+- The separate guest step is gone. Signed-out buyers get one checkout page: email, type of research organization (the same five choices as the membership form), delivery address and phone, the research statement as the only agreement box, then Calculate and pay. Members see the page as before.
+- The organization type is saved with the statement on each guest order.
+- State is a dropdown (50 states, DC and the three military codes) instead of a typed two-letter code.
+- The guest is saved when Calculate is pressed, so nothing typed is reset. `guest-start` now requires the organization type.
+- Funnel stages (form view, quote, handoff) count guests as well as members. `checkout_signin_view` is no longer emitted from checkout.
+
+Checks: `npm run check:release` (TypeScript, 131 suites; checkout-owner-recovery-v1 and shopping-measurement-client-v1 updated for the signed-out guest form) and the production build passed. Live: `/checkout` signed out with one item in the cart shows the single page with all fields; no order, email or payment was created.
