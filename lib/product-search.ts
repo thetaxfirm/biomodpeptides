@@ -3,7 +3,7 @@ import { eligibleDiscovery } from './product-discovery';
 
 // Reviewed peptide identities, not every item in the Research Compounds category.
 // This does not release a publication hold or add a product to the catalog.
-const peptideVialSlugs = new Set([
+export const peptideVialSlugs = new Set([
   'aod-9604-10mg', 'bpc-157-10mg', 'dsip-10mg', 'epitalon-50mg',
   'glutathione-reduced-l-glutathione', 'kisspeptin-10mg', 'kpv-10mg',
   'mots-c-10mg', 'mots-c-40mg', 'pt-141-10mg', 'selank', 'semax',

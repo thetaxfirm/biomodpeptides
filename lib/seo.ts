@@ -59,7 +59,7 @@ export async function routeStructuredData(path: string, config: SEOConfig = curr
   // Stable policies are defined on their own pages and repeated on eligible
   // products, so every Offer reference also resolves within its document.
   const policies = p || clean === '/shipping-policy' || clean === '/returns-refunds' ? await merchantPolicies(config.origin) : null;
-  const organization = { '@type': 'Organization', '@id': config.origin + '/#organization', name: 'Biomod Research Supply Company', alternateName: ['TryBiomod', 'BIOMOD'], description: 'Biomod Research Supply Company supplies lyophilized compound vials for laboratory research through TryBiomod.com. Not for human or animal use.', url: config.origin, logo: config.origin + '/brand/logo-navy-tm-v36.png', email: 'contact@trybiomod.com',
+  const organization = { '@type': 'Organization', '@id': config.origin + '/#organization', name: 'Biomod Research Supply Company', alternateName: ['TryBiomod', 'BIOMOD', 'Biomod Peptides'], description: 'Biomod Research Supply Company supplies lyophilized research peptide vials for laboratory research through TryBiomod.com. Not for human or animal use.', url: config.origin, logo: config.origin + '/brand/logo-navy-tm-v36.png', email: 'contact@trybiomod.com',
     ...(policies ? { hasMerchantReturnPolicy: policies.hasMerchantReturnPolicy } : {}),
     ...(policies?.hasShippingService ? { hasShippingService: policies.hasShippingService } : {}),
   };
@@ -73,7 +73,7 @@ export async function routeStructuredData(path: string, config: SEOConfig = curr
   ];
   // The shop grid links every product page; the list names the ones search engines may index,
   // in the grid's order, so the catalog page states which product pages belong to it.
-  if (listed) graph.push({ '@type': 'ItemList', '@id': config.origin + clean + '#products', name: collection ? collection.title : 'Research compounds',
+  if (listed) graph.push({ '@type': 'ItemList', '@id': config.origin + clean + '#products', name: collection ? collection.title : 'Research peptides',
     numberOfItems: listed.length,
     itemListElement: listed.map((item, index) => ({ '@type': 'ListItem', position: index + 1,
       name: pageInfo('/product/' + item.slug).name, url: config.origin + '/product/' + item.slug })) });

@@ -71,7 +71,7 @@ const validCas = cas => { const m = /^(\d{2,7})-(\d\d)-(\d)$/.exec(cas); return 
     const links = productLinks(html);
     assert(links.length > 0 && links.every(slug => c.products.includes(slug)), c.slug + ': links only its own products');
     assert(links.every(slug => !productReviewBlocks[slug] && publication.productSlugs.includes(slug)), c.slug + ': no held product linked');
-    assert(!/peptide|dos(e|ing)\b|inject|reconstitut/i.test(text(html).replace(disclaimer, '')), c.slug + ': no peptide, dosing or handling wording');
+    assert(!/dos(e|ing)\b|inject|reconstitut/i.test(text(html).replace(disclaimer, '')), c.slug + ': no dosing or handling wording');
 
     // Question markup repeats the visible questions and answers.
     const visible = [...html.matchAll(/<h3>([^<]+)<\/h3><p>([^<]+)<\/p>/g)].map(m => text(m[1]).trim());

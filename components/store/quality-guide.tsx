@@ -18,7 +18,7 @@ export function QualityGuide() {
   const certificate = matchingCertificateFor(example);
   return <article className={styles.guide}>
     <header className="page-heading">
-      <h1>How to read a COA</h1>
+      <h1>How to read a peptide COA</h1>
       <p>A Certificate of Analysis records laboratory results for a submitted sample. Start with the lot number, then read the methods, values and limitations in the original report.</p>
       <a className="button button-dark" href="/testing">Find a product or lot</a>
     </header>

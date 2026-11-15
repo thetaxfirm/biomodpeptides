@@ -25,7 +25,7 @@ type ResearchStudy = {
 const studies = {
   semax: {
     heading: 'Semax research context',
-    identity: 'Semax is described in the literature as a synthetic seven-amino-acid compound. Medvedeva and colleagues studied its effects on gene expression in rat brain cortex.',
+    identity: 'Semax is described in the literature as a synthetic seven-amino-acid peptide. Medvedeva and colleagues studied its effects on gene expression in rat brain cortex.',
     models: 'Rats following experimental focal ischemia, with analysis of frontoparietal cortex.',
     focus: 'Transcript levels and the immune and vascular processes associated with the affected genes.',
     citation: 'Medvedeva et al. (2014), BMC Genomics',
@@ -34,7 +34,7 @@ const studies = {
   },
   selank: {
     heading: 'Selank research context',
-    identity: 'Selank is described as a synthetic seven-amino-acid compound related to tuftsin. Volkova and colleagues compared gene expression after exposure to Selank or GABA.',
+    identity: 'Selank is described as a synthetic seven-amino-acid peptide related to tuftsin. Volkova and colleagues compared gene expression after exposure to Selank or GABA.',
     models: 'Rat frontal cortex, with samples pooled by experimental group and time point.',
     focus: 'Expression of neurotransmission-associated genes, measured using a targeted real-time PCR panel.',
     citation: 'Volkova et al. (2016), Frontiers in Pharmacology',
@@ -94,7 +94,7 @@ const studies = {
   },
   kpv: {
     heading: 'KPV research context',
-    identity: 'KPV is the three-amino-acid sequence Lys-Pro-Val. Dalmasso and colleagues examined its uptake and signaling in cell cultures and experimental mouse models.',
+    identity: 'KPV is the tripeptide Lys-Pro-Val. Dalmasso and colleagues examined its uptake and signaling in cell cultures and experimental mouse models.',
     models: 'Intestinal epithelial cell cultures, Jurkat T cells and mouse models of intestinal inflammation.',
     focus: 'PepT1-mediated uptake, NF-κB and MAPK signaling, and inflammatory readouts.',
     citation: 'Dalmasso et al. (2008), Gastroenterology',
@@ -114,7 +114,7 @@ const studies = {
   },
   dsip: {
     heading: 'DSIP research context',
-    identity: 'DSIP is described in research literature as a nine-amino-acid compound.',
+    identity: 'DSIP is described in research literature as a nine-amino-acid peptide.',
     models: 'Rabbits, with comparisons of synthetic DSIP and related compounds.',
     focus: 'Characterization and comparison of delta and spindle electroencephalogram (EEG) patterns.',
     citation: 'Schoenenberger and Monnier (1977), Proceedings of the National Academy of Sciences',
@@ -134,7 +134,7 @@ const studies = {
   },
   thymosinAlpha1: {
     heading: 'Thymosin Alpha-1 research context',
-    identity: 'Goldstein and colleagues described thymosin alpha-1 as a 28-amino-acid compound in their 1977 sequence study.',
+    identity: 'Goldstein and colleagues described thymosin alpha-1 as a 28-amino-acid peptide in their 1977 sequence study.',
     materialLabel: 'Study material',
     models: 'Material isolated from calf thymus for the authors’ study.',
     focus: 'Isolation and amino-acid sequence analysis.',
@@ -145,7 +145,7 @@ const studies = {
   },
   bpc157: {
     heading: 'BPC-157 research context',
-    identity: 'BPC-157 is described in research literature as a 15-amino-acid compound.',
+    identity: 'BPC-157 is described in research literature as a 15-amino-acid peptide.',
     models: 'Tendon fibroblasts cultured from rat Achilles tendon.',
     focus: 'Growth-hormone-receptor expression and related cell signaling.',
     citation: 'Chang et al. (2014), Molecules',
@@ -154,7 +154,7 @@ const studies = {
   },
   mots: {
     heading: 'MOTS-c research context',
-    identity: 'MOTS-c is a 16-amino-acid, mitochondrial-derived compound described by Lee and colleagues in 2015.',
+    identity: 'MOTS-c is a 16-amino-acid, mitochondrial-derived peptide described by Lee and colleagues in 2015.',
     models: 'Cultured cells and mice.',
     focus: 'Folate and purine metabolism, with a focus on AMPK-related signaling.',
     citation: 'Lee et al. (2015), Cell Metabolism',
@@ -163,7 +163,7 @@ const studies = {
   },
   ss31: {
     heading: 'SS-31 research context',
-    identity: 'SS-31 is a four-amino-acid compound. Birk and colleagues examined its interactions with mitochondrial membranes in their 2014 paper.',
+    identity: 'SS-31 is a four-amino-acid peptide. Birk and colleagues examined its interactions with mitochondrial membranes in their 2014 paper.',
     models: 'Artificial lipid membranes and mitochondria isolated from rat kidneys.',
     focus: 'Interaction with cardiolipin, a membrane lipid, alongside electron transfer, oxygen consumption and ATP synthesis.',
     citation: 'Birk et al. (2014), British Journal of Pharmacology',
@@ -222,7 +222,7 @@ export function ProductResearchDetails({ product }: { product: Product }) {
       {productQuestions(product).map(item => <article key={item.id}>
         <h3>{item.question}</h3>
         {item.answer.map(paragraph => <p key={paragraph}>{paragraph}</p>)}
-        {item.id === 'buy' && <p><Link href="/shop">Browse all research compounds</Link>{collectionsFor(product.slug).map(c => <span key={c.slug}>, or the <Link href={'/collections/' + c.slug}>{c.name.toLowerCase()} collection</Link></span>)}.</p>}
+        {item.id === 'buy' && <p><Link href="/shop">Browse all research peptides</Link>{collectionsFor(product.slug).map(c => <span key={c.slug}>, or the <Link href={'/collections/' + c.slug}>{c.name.toLowerCase()} collection</Link></span>)}.</p>}
         {item.id === 'documentation' && compound && publishedCompound(compound) && <p><Link href={'/compounds/' + compound.slug}>{compound.name} reference data: CAS, formula, molecular weight{compound.sequence ? ' and sequence' : ''}</Link>.</p>}
         {item.id === 'documentation' && compound && publishedCompound(compound) && comparisonsFor(compound.slug).map(x => <p key={x.slug}><Link href={'/compare/' + x.slug}>{compoundAt(x.a)!.name} vs {compoundAt(x.b)!.name}: sequence and reference data side by side</Link>.</p>)}
         {item.id === 'documentation' && <p><CoaPopup product={product} label="Read this product's batch record and COA" className={styles.inlineCoa}/>. <Link href="/quality-standard#read-the-results">Understand purity and measured content</Link>.</p>}

@@ -10,7 +10,9 @@ import { pressReleases } from './press-releases';
 // d52581c (October 23) renamed the softgel marks in the footer trademark line, 710dc82 added
 // that line on October 20 and 92d01ce changed the header on October 17. A sitewide change dates
 // every page, so no entry below can be older than this (lastmodFor takes the later of the two).
-export const siteLastmod = '2026-11-02';
+// November 15, 2026: the owner restored "peptide" wording. Titles, descriptions and headings changed on
+// the home page, shop, guides, FAQ, collections, compound reference and every peptide vial page.
+export const siteLastmod = '2026-11-15';
 // October 17: da848db added free USPS Priority Mail at $250 and the 2 p.m. Pacific same-day
 // wording to every product page; 589ae41 moved the product images to WebP.
 // The same day the store was renamed Biomod Research Supply Company, changing every page's title.

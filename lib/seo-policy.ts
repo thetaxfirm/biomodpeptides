@@ -1,4 +1,5 @@
 import { products, compound, size, productFormat, type Product } from './catalog';
+import { peptideVialSlugs } from './product-search';
 import { packUnit, supportsPacks } from './packs';
 
 import specificationReviews from './product-specification-review-v1.json';
@@ -9,19 +10,21 @@ import { compounds, comparisons, compoundTitle, compoundDescription, comparisonT
 
 export const previewOrigin = 'https://trybiomod.com';
 export const reviewedOn = '2026-10-08';
+/** A vial whose compound is a peptide: on the reviewed list, or a single compound with a published amino-acid sequence. Blends, NAD+ and small molecules are not called peptides. */
+export const isPeptideVial = (p: Product) => productFormat(p) === 'Vial' && (peptideVialSlugs.has(p.slug) || compounds.some(c => c.products[0] === p.slug && (c.residues || 0) >= 2));
 export const pageRecords: Record<string, { title: string; description: string; eligible: boolean; name?: string }> = {
-  '/': { title: 'Buy Research Compounds | Biomod Research Supply Company', description: 'Buy research compounds from Biomod: BPC-157 10mg, MOTS-c, SS-31 and more, with available batch COAs and 1, 3, 5 and 10-packs. Research use only.', eligible: true },
+  '/': { title: 'Buy Research Peptides Online | Biomod | TryBiomod', description: 'Buy research peptides from Biomod: BPC-157 10mg, MOTS-c, SS-31 and more, with available batch COAs and 1, 3, 5 and 10-packs. Research use only.', eligible: true },
   '/softgels': { title: 'The Original RUO Softgel™ by BIOMOD', description: 'Explore BIOMOD RUO softgels with BPC-157 Arginate, KPV, GHK-Cu, AHK-Cu, Pinealon and Epitalon. Compare formulations and enteric design.', eligible: true },
-  '/shop': { title: 'Buy Research Compounds Online', description: 'Buy research compounds for laboratory research: BPC-157, MOTS-c, SS-31, KPV and more. Compare vial sizes, per-mg pack prices and batch documentation.', eligible: true },
+  '/shop': { title: 'Buy Peptides for Research Online', description: 'Buy peptides for laboratory research: BPC-157, MOTS-c, SS-31, KPV and more. Compare vial sizes, per-mg pack prices and batch documentation.', eligible: true },
   '/about': { title: 'About Biomod and TryBiomod', description: 'TryBiomod.com is the online storefront for Biomod Research Supply Company, a U.S. Marine Corps veteran-owned company with Las Vegas retail roots.', eligible: true },
   '/locations': { title: 'BIOMOD Locations', description: 'BIOMOD stores in Las Vegas, Nevada, the St. George area in Utah, and El Paso, Texas. Contact the team to confirm visiting details.', eligible: true },
   '/contact': { title: 'Contact BIOMOD', description: 'Contact BIOMOD about product documentation, location details, existing orders and general questions.', eligible: true },
   '/testing': { title: 'Batch Documents and Certificates', description: 'Search BIOMOD product lots and original certificates. Matching lots, mismatches and missing documentation are identified separately.', eligible: true },
-  '/quality-standard': { title: 'Reading a COA: Lot, Purity, Assay', description: 'Learn how to match a research compound COA to its product lot, distinguish purity from measured content, and read the laboratory’s methods and limitations.', eligible: true },
-  '/choosing-a-research-supplier': { title: 'Choosing a Research Compound Supplier', description: 'Check product identity, supplied lots, original COA results and missing handling documents. Compare research compound pack contents and total order costs.', eligible: true },
+  '/quality-standard': { title: 'How to Read a Peptide COA', description: 'Learn how to match a peptide COA to its product lot, distinguish purity from measured content, and read the laboratory’s methods and limitations.', eligible: true },
+  '/choosing-a-research-supplier': { title: 'Choosing a Research Peptide Supplier', description: 'Check product identity, supplied lots, original COA results and missing handling documents. Compare research peptide pack contents and total order costs.', eligible: true },
   '/research-use-only': { title: 'Research Use Policy', description: 'BIOMOD products are supplied for laboratory research. Review purchasing restrictions and the policy on dosing and medical advice.', eligible: true },
-  '/news': { title: 'News and Press Releases', description: 'Press releases and announcements from Biomod Research Supply Company and TryBiomod.com, the online store for research compound vials and batch records.', eligible: true },
-  '/faq': { title: 'How to Buy Research Compounds', description: 'How to buy research compounds from Biomod, plus answers about COAs, lot matching, purity versus measured content, pack sizes and U.S. shipping.', eligible: true },
+  '/news': { title: 'News and Press Releases', description: 'Press releases and announcements from Biomod Research Supply Company and TryBiomod.com, the online store for research peptide vials and batch records.', eligible: true },
+  '/faq': { title: 'How to Buy Research Peptides', description: 'How to buy research peptides from Biomod, plus answers about peptide COAs, lot matching, purity versus measured content, pack sizes and U.S. shipping.', eligible: true },
   '/shipping-policy': { title: 'Shipping Policy', description: 'BIOMOD U.S. shipping information, processing times and delivery support.', eligible: true },
   '/returns-refunds': { title: 'Returns and Refunds', description: 'How to contact BIOMOD about damaged, incorrect or missing items and request an order review.', eligible: true },
   '/terms-of-sale': { title: 'Terms of Sale', description: 'BIOMOD research purchasing terms, payment verification, order eligibility and policy references.', eligible: true },
@@ -32,11 +35,11 @@ export const pageRecords: Record<string, { title: string; description: string; e
   // Press releases are ordinary public pages: routed, indexed and listed like the guides.
   ...Object.fromEntries(pressReleases.map(release => ['/news/' + release.slug, { title: release.headline, description: release.summary, eligible: true }])),
   // Compound reference, comparisons and lot lookup: indexed while their products are published.
-  '/compounds': { title: 'Compound Reference: CAS and MW', description: 'CAS numbers, molecular formulas, molecular weights and sequences for every Biomod research compound, linked to PubChem and to lab reports by lot.', eligible: true },
+  '/compounds': { title: 'Peptide Reference: CAS and MW', description: 'CAS numbers, molecular formulas, molecular weights and sequences for every Biomod research peptide and compound, linked to PubChem and to lab reports by lot.', eligible: true },
   ...Object.fromEntries(compounds.map(c => ['/compounds/' + c.slug, { title: compoundTitle(c), description: compoundDescription(c), eligible: publishedCompound(c) }])),
   ...Object.fromEntries(comparisons.map(x => ['/compare/' + x.slug, { title: comparisonTitle(x), description: comparisonDescription(x), eligible: publishedComparison(x) }])),
   // Collections: indexed while at least two of their products are published.
-  '/collections': { title: 'Shop Research Compounds by Area', description: 'Biomod research vials grouped by compound type: growth hormone axis, mitochondrial, neuroscience, melanocortin and more, with lab reports by lot.', eligible: true },
+  '/collections': { title: 'Shop Research Peptides by Area', description: 'Biomod research peptide vials grouped by type: growth hormone axis, mitochondrial, neuroscience, melanocortin and more, with lab reports by lot.', eligible: true },
   ...Object.fromEntries(collections.map(c => ['/collections/' + c.slug, { title: c.title, description: c.description, eligible: publishedCollection(c) }])),
   '/verify': { title: 'Verify Your COA by Lot Number', description: 'Enter the lot printed on your Biomod vial to open its batch record and the original laboratory report for that exact lot.', eligible: true },
 };
@@ -95,18 +98,19 @@ export function pageInfo(path: string) {
     const strength = contents && !p.name.toLowerCase().includes(contents.toLowerCase()) ? ' ' + contents : '';
     const format = productFormat(p);
     // A spray or softgel bottle is named by its format; a lab supply by its own name.
-    const name = `${p.name}${strength}${format === 'Vial' ? ' Research Vial' : format === 'Research supply' ? '' : ' ' + format}`;
+    const name = `${p.name}${strength}${format === 'Vial' ? (isPeptideVial(p) ? ' Peptide Vial' : ' Research Vial') : format === 'Research supply' ? '' : ' ' + format}`;
     // Keep "Buy <product> Research Vial | <brand>" within a 70-character result line;
     // a long product name drops the word Research from the title only.
     const title = ('Buy ' + name + ' | Biomod Research Supply Company').length > 70 ? `Buy ${p.name}${strength} ${format}` : 'Buy ' + name;
-    if (p.slug === 'bpc-157-10mg') return { title: 'Buy BPC-157 10mg Vials', name,
-      description: 'BPC-157 (BPC157) 10 mg single-compound vials from BIOMOD. Compare packs, current pricing, batch records and the Wolverine blend. Research use only.', eligible: !productReviewBlocks[p.slug] };
+    if (p.slug === 'bpc-157-10mg') return { title: 'Buy BPC-157 10mg Peptide Vials', name,
+      description: 'BPC-157 (BPC157) 10 mg research peptide vials from BIOMOD. Compare packs, current pricing, batch records and the Wolverine blend. Research use only.', eligible: !productReviewBlocks[p.slug] };
     const aliases = descriptionAliases(p);
     // Packs are named in the product's own unit (vials or bottles), and only where packs are sold.
     const offer = supportsPacks(p) ? `single ${packUnit(p)}s or 3, 5 and 10-packs, ` : '';
-    const describe = (names: string[]) => `Buy ${p.name}${strength}${names.length ? ' (' + names.join(', ') + ')' : ''}: ${offer}batch records and U.S. shipping. For laboratory research only.`;
+    const describe = (names: string[], kind = isPeptideVial(p) ? ' research peptide' : '') => `Buy ${p.name}${strength}${kind}${names.length ? ' (' + names.join(', ') + ')' : ''}: ${offer}batch records and U.S. shipping. For laboratory research only.`;
     // Keep the snippet within 160 characters: drop the alias list before anything else.
-    const description = describe(aliases).length <= 160 ? describe(aliases) : describe([]);
+    // When space is tight the alias list outranks the word "research peptide".
+    const description = [describe(aliases), describe(aliases, ''), describe([])].find(text => text.length <= 160) || describe([], '');
     return { title, name, description, eligible: !productReviewBlocks[p.slug] };
   }
   return pageRecords[path] || { title: privatePath(path) ? 'Customer Services' : 'Page Not Found', description: 'BIOMOD customer services and research products.', eligible: false };

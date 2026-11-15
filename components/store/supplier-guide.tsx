@@ -3,7 +3,7 @@ import styles from './quality-guide.module.css';
 export function SupplierGuide() {
   return <article className={styles.guide}>
     <header className="page-heading">
-      <h1>Choosing a research compound supplier</h1>
+      <h1>Choosing a research peptide supplier</h1>
       <p>Start with records you can check. A polished storefront or a high purity percentage does not establish what is in a vial. Evaluate the exact material, the documents for the supplied lot and the terms of sale before ordering for laboratory research.</p>
     </header>
 
