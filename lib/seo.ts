@@ -41,6 +41,8 @@ export function routeMetadata(path: string, query: URLSearchParams = new URLSear
     width: 1320, height: 381, type: 'image/png', alt: 'Biomod Research Supply Company logo' } : null;
   return {
     title: { absolute: title }, description: info.description,
+    // Bing Webmaster Tools ownership tags (same keys as public/BingSiteAuth.xml). Home page only; keep both.
+    ...(path === '/' && index ? { verification: { other: { 'msvalidate.01': ['F209A141EE30ECCDF3114455FCA48BEE', 'C98CEC8E8D91252EB1DC2470FF5A6BB6'] } } } : {}),
     alternates: { canonical },
     robots: { index, follow, googleBot: { index, follow, 'max-image-preview': index ? 'large' : 'none' } },
     openGraph: { type: 'website', locale: 'en_US', siteName: 'Biomod Research Supply Company', title, description: info.description, url: canonical,
