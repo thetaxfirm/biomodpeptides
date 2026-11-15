@@ -379,7 +379,7 @@ export function Checkout() {
                 </div>
                 <Check checked={accepted} onChange={setAccepted}>I am 21 or older and purchasing exclusively for laboratory research. I agree to the <a href="/terms-of-sale">terms of sale</a>.</Check>
                 <button className="button button-gold" disabled={!delivery || !accepted || !requestKey || busy || promoBusy || promoUnapplied || !store.payment.enabled || cartUpdating} onClick={() => void checkout()}>Continue to secure payment</button>
-                <p className="muted">Card information is entered on Authorize.net’s secure payment page. Your billing address starts as your delivery address. If your card bills to a different address, change it there so the payment is not held.</p>
+                <p className="muted">Card information is entered on Authorize.net’s secure payment page. Your card must be billed to the delivery address above: use the address on your card statement, or the payment may be declined. Shipping somewhere else? <a href="/contact?subject=Ship%20to%20a%20different%20address">Contact us</a> before ordering.</p>
             </aside>
         </div>
     </>;

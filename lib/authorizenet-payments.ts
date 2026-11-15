@@ -179,7 +179,7 @@ export function anetLineItems(details: AnetOrderDetails = {}) {
         };
     });
 }
-export function anetHostedPaymentPayload(auth: { name: string; transactionKey: string }, order: AnetOrder, returnUrl: string, customer: AnetCustomer = {}, details: AnetOrderDetails = {}) {
+export function anetHostedPaymentPayload(auth: { name: string; transactionKey: string }, order: AnetOrder, returnUrl: string, customer: AnetCustomer = {}, details: AnetOrderDetails = {}, lockBilling = false) {
     validateAnetOrder(order);
     const reference = anetOrderReference(order.id);
     const [firstName, ...rest] = (customer.name || '').trim().split(/\s+/);
@@ -194,8 +194,11 @@ export function anetHostedPaymentPayload(auth: { name: string; transactionKey: s
         zip: clip(customer.zip, 20),
         country: 'US',
     } : undefined;
-    // The billing form starts as the delivery address (owner, Oct 31 2026). Customers retyping it from
-    // memory caused address-check mismatches and fraud-filter holds. They can still change every field.
+    // The billing form starts as the delivery address (owner, Oct 31 2026). Owner policy, Nov 14 2026: a
+    // card must be billed to where the order ships. With lockBilling (AUTHORIZENET_LOCK_BILLING=true)
+    // the hosted page shows no billing form, so the delivery address is the only billing address.
+    // The switch is off until one live payment confirms Authorize.net still passes the hidden address
+    // to the bank's address check; their documentation does not say.
     const phone = clip((customer.phone || '').replace(/[^0-9+()\- ]/g, '').trim(), 25);
     const billTo = shipTo ? { ...shipTo, ...(phone ? { phoneNumber: phone } : {}) } : undefined;
     const transactionRequest: Record<string, unknown> = {
@@ -236,7 +239,8 @@ export function anetHostedPaymentPayload(auth: { name: string; transactionKey: s
                     setting('hostedPaymentButtonOptions', { text: 'Pay' }),
                     setting('hostedPaymentOrderOptions', { show: true, merchantName: 'Biomod' }),
                     setting('hostedPaymentPaymentOptions', { cardCodeRequired: true, showCreditCard: true, showBankAccount: false }),
-                    setting('hostedPaymentBillingAddressOptions', { show: true, required: true }),
+                    // Always shown when there is no delivery address to bill to.
+                    setting('hostedPaymentBillingAddressOptions', lockBilling && billTo ? { show: false, required: false } : { show: true, required: true }),
                     setting('hostedPaymentShippingAddressOptions', { show: false, required: false }),
                     setting('hostedPaymentSecurityOptions', { captcha: false }),
                     setting('hostedPaymentCustomerOptions', { showEmail: true, requiredEmail: false, addPaymentProfile: false }),
@@ -406,7 +410,7 @@ export function createAnetAdapter(env: Environment = process.env, request: typeo
         async hostedForm(order: AnetOrder, customer: AnetCustomer = {}, details: AnetOrderDetails = {}): Promise<{ action: string; token: string }> {
             validateAnetOrder(order);
             const current = active(true);
-            const response = await call(anetHostedPaymentPayload(auth(), order, current.returnUrl!.href, customer, details));
+            const response = await call(anetHostedPaymentPayload(auth(), order, current.returnUrl!.href, customer, details, env.AUTHORIZENET_LOCK_BILLING === 'true'));
             if (typeof response.token !== 'string' || !response.token)
                 throw new AnetPaymentError('INVALID_TOKEN', 'Authorize.net did not return a payment form token.');
             return { action: ANET_HOSTED_FORM[current.environment], token: response.token };

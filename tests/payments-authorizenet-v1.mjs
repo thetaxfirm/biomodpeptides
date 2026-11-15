@@ -38,7 +38,15 @@ try {
   const payload = a.anetHostedPaymentPayload({ name: 'x', transactionKey: 'y' }, order, env.AUTHORIZENET_RETURN_URL, { email: 'a@b.co', name: 'Ada Lovelace', line1: '1 Main', city: 'LA', state: 'CA', zip: '90001' }).getHostedPaymentPageRequest;
   assert.deepEqual(Object.keys(payload), ['merchantAuthentication', 'refId', 'transactionRequest', 'hostedPaymentSettings']);
   assert.deepEqual(Object.keys(payload.transactionRequest), ['transactionType', 'amount', 'order', 'customer', 'billTo', 'shipTo', 'transactionSettings']);
-  // Billing starts as the delivery address so customers do not retype it (owner, Oct 31 2026).
+  // Billing starts as the delivery address (owner, Oct 31 2026). With the lock (owner, Nov 14 2026) the
+  // hosted page shows no billing form, so the card can only be billed to the delivery address.
+  const billingOptions = request => JSON.parse(request.hostedPaymentSettings.setting.find(x => x.settingName === 'hostedPaymentBillingAddressOptions').settingValue);
+  const ada = { email: 'a@b.co', name: 'Ada Lovelace', line1: '1 Main', city: 'LA', state: 'CA', zip: '90001' };
+  assert.deepEqual(billingOptions(payload), { show: true, required: true }, 'billing form shown while the lock is off');
+  const lockedRequest = a.anetHostedPaymentPayload({ name: 'x', transactionKey: 'y' }, order, env.AUTHORIZENET_RETURN_URL, ada, {}, true).getHostedPaymentPageRequest;
+  assert.deepEqual(billingOptions(lockedRequest), { show: false, required: false }, 'lock hides the billing form');
+  assert.deepEqual(lockedRequest.transactionRequest.billTo, lockedRequest.transactionRequest.shipTo, 'locked billing is the delivery address');
+  assert.deepEqual(billingOptions(a.anetHostedPaymentPayload({ name: 'x', transactionKey: 'y' }, order, env.AUTHORIZENET_RETURN_URL, { email: 'a@b.co' }, {}, true).getHostedPaymentPageRequest), { show: true, required: true }, 'no address to bill: the form is always shown');
   assert.deepEqual(payload.transactionRequest.billTo, payload.transactionRequest.shipTo, 'billing prefill matches delivery when no phone is known');
   assert.equal(payload.transactionRequest.billTo.address, '1 Main');
   // The apartment reaches Authorize.net on both addresses, and the phone fills billing only.
