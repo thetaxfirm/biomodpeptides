@@ -31,6 +31,7 @@ import { mixesPreorder, preorderSeparateMessage } from '@/lib/preorders';
 import { availabilityOptions, hasPublicationHold, sourcePublicationHold, blockedReleaseLot } from '@/lib/availability';
 import { all, one, run, uid, timestamp, parse, runtime, database } from '@/lib/runtime';
 import { checkout, reconcile, addressSchema, issueQuote, AddressCheckError } from '@/lib/checkout';
+import { readGuest, readGuestRecord, saveGuest, guestOrderRecord, transferGuestOrders, type GuestShopper } from '@/lib/guest-checkout';
 import { createPaymentAdapter, getPaymentStatus, paymentEnvironment, paymentProvider } from '@/lib/payments';
 import { createAnetAdapter } from '@/lib/authorizenet-payments';
 import { anetOrderDetails } from '@/lib/order-summary';
@@ -54,6 +55,21 @@ const cartImports = () => createCartImports({ db: database(), normalize: validat
 // Start only this newly saved inquiry after the response. Durable jobs remain the
 // source of recipients/documents; the outbox keeps its leases, caps and retry policy.
 // Contact capture is secondary: it never changes the outcome of a sign-in or a form.
+// A signed-in member, or a guest who has agreed to the research statement in this browser session.
+// Guests reach only checkout: quote, order, payment page and their own order status.
+type Shopper = { id: string; email: string; name: string; guest: boolean };
+async function shopperFor(sessionId: string | undefined): Promise<Shopper | null> {
+    const u = await customer();
+    if (u) return { ...u, guest: false };
+    return readGuest(database(), sessionId);
+}
+async function requireShopper(sessionId: string | undefined): Promise<Shopper> {
+    const shopper = await shopperFor(sessionId);
+    if (!shopper) throw new Error('Please sign in or continue as a guest.');
+    return shopper;
+}
+const shopperCart = async (shopper: Shopper, sessionCart: string) => shopper.guest ? sessionCart
+    : (await one<{ cart: string }>('SELECT cart FROM customer_carts WHERE id=?', shopper.id))?.cart;
 async function captureContact(input: Parameters<typeof recordContact>[1]) { try { await recordContact(runtime().DB, input); } catch { /* ignore */ } await shareContact(input); }
 function scheduleInquiryDelivery(env: ReturnType<typeof runtime>, requestId: string, kind: 'contact' | 'affiliate') {
     try {
@@ -176,7 +192,7 @@ export async function GET(req: NextRequest, { params }: {
             const packOwner = u ? 'customer:' + u.id : 'guest:' + s.id;
             if(u) await run('UPDATE saved_packs SET owner=? WHERE owner=?',packOwner,'guest:'+s.id);
             const savedPacks = (await all<{id:string;name:string;products:string;updated:number}>('SELECT id,name,products,updated FROM saved_packs WHERE owner=? ORDER BY updated DESC',packOwner)).map(p=>({...p,products:parse(p.products,[])})).filter(p=>currentSelection(p.products)).map(p=>presentationData(p));
-            return j({ products: ps, config: cfg, cart, cartConflict, wishlist, savedPacks, customer: u, authReady: authReady(), googleReady: authReady() && runtime().GOOGLE_SIGNIN_ENABLED === 'true', payment: { state: payment.state, enabled: payment.checkoutEnabled }, totals, cartError, cartNotice, campaigns: (await all<{
+            return j({ products: ps, config: cfg, cart, cartConflict, wishlist, savedPacks, customer: u, guest: u ? null : await readGuest(database(), s.id) as GuestShopper | null, authReady: authReady(), googleReady: authReady() && runtime().GOOGLE_SIGNIN_ENABLED === 'true', payment: { state: payment.state, enabled: payment.checkoutEnabled }, totals, cartError, cartNotice, campaigns: (await all<{
                     id: string;
                     data: string;
                     active: number;
@@ -187,14 +203,16 @@ export async function GET(req: NextRequest, { params }: {
             const page = (title: string, body: string, status = 200) => new NextResponse('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>' + title + '</title><style>body{font-family:system-ui,sans-serif;background:#0b0b0b;color:#f2ede4;display:grid;place-items:center;min-height:100vh;margin:0;padding:16px;text-align:center}a,button{color:#0b0b0b;background:#c8a46a;border:0;border-radius:6px;padding:12px 20px;font:inherit;text-decoration:none;cursor:pointer}</style></head><body><main>' + body + '</main></body></html>', { status, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer', 'X-Frame-Options': 'DENY' } });
             const esc = (v: string) => v.replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
             const fail = (message: string, status = 400) => page('Payment unavailable', '<h1>Payment unavailable</h1><p>' + esc(message) + '</p><p><a href="/account/orders">View my orders</a></p>', status);
-            if (!u)
+            // A member, or the guest whose browser session placed the order.
+            const payer = u || await readGuest(database(), (await cookies()).get('bm_session')?.value);
+            if (!payer)
                 return fail('Please sign in to continue.', 401);
             if (paymentProvider(runtime()) !== 'authorizenet')
                 return fail('This checkout is not available.', 404);
             const id = String(req.nextUrl.searchParams.get('id') || '');
             if (!/^[a-f0-9-]{36}$/.test(id))
                 return fail('Order not found.', 404);
-            const o = await one<{ id: string; status: string; total: number; checkout_ref: string; data: string; created: number }>('SELECT id,status,total,checkout_ref,data,created FROM orders WHERE id=? AND owner=?', id, u.id);
+            const o = await one<{ id: string; status: string; total: number; checkout_ref: string; data: string; created: number }>('SELECT id,status,total,checkout_ref,data,created FROM orders WHERE id=? AND owner=?', id, payer.id);
             const saved = parse<{ environment?: string; address?: Record<string, string> } & Record<string, unknown>>(o?.data, {});
             if (!o || unavailableOrder(saved) || !['awaiting_payment', 'pending'].includes(o.status) || saved.environment !== paymentEnvironment(runtime()) || timestamp() - o.created > 7 * 86400000)
                 return fail('This payment requires review. Open your orders or contact us before paying again.');
@@ -210,7 +228,7 @@ export async function GET(req: NextRequest, { params }: {
                 if (saved.internalTest === true) return fail('This is an internal test order.');
                 const locked = await run("UPDATE orders SET data=?,updated=? WHERE id=? AND data=? AND total=? AND status IN ('awaiting_payment','pending')", JSON.stringify({...saved,lastPaymentFormAt:timestamp()}),timestamp(),o.id,o.data,o.total);
                 if (!locked.meta.changes) return fail('The order changed. Review your current total in My orders before paying.');
-                const form = await adapter.hostedForm(order, { email: u.email, customerId: u.id, ...saved.address }, anetOrderDetails(saved));
+                const form = await adapter.hostedForm(order, { email: payer.email, customerId: payer.id, ...saved.address }, anetOrderDetails(saved));
                 return page('Secure payment', '<h1>Opening secure payment…</h1><form id="pay" method="post" action="' + esc(form.action) + '"><input type="hidden" name="token" value="' + esc(form.token) + '"><button type="submit">Continue to secure payment</button></form><script>document.getElementById("pay").submit()</script>');
             }
             catch (e) {
@@ -221,6 +239,10 @@ export async function GET(req: NextRequest, { params }: {
             }
         }
         if (action === 'account') {
+            if (!u) {
+                const guest = await readGuest(database(), (await cookies()).get('bm_session')?.value);
+                if (guest) return j({ guest: true, profile: null, addresses: [], requests: [], rewards: [], orders: (await all<{ data: string }>('SELECT id,status,total,data,created FROM orders WHERE owner=? ORDER BY created DESC LIMIT 100', guest.id)).map(o => ({ ...o, data: orderView(parse(o.data, {})) })) });
+            }
             const user = await requireCustomer();
             return j({ profile: await one('SELECT name,phone,company,research_accepted FROM profiles WHERE id=?', user.id), addresses: (await all<{
                     id: string;
@@ -369,6 +391,8 @@ export async function POST(req: NextRequest, { params }: {
             await cartImports().record(d.user.id, loginSession.id);
             await storeAuth(d, secure);
             await captureContact({ email: d.user.email, owner: d.user.id, name: d.user.user_metadata?.name, phone: d.user.user_metadata?.phone, source: 'account' });
+            // Orders placed as a guest with this email join the account. Only once the provider has verified the address.
+            if (d.user.email_confirmed_at && typeof d.user.email === 'string') { try { await transferGuestOrders(database(), d.user.id, d.user.email); } catch { /* sign-in never fails on this */ } }
             c.delete(ANONYMOUS_SESSION_COOKIE);
             const returnTo = safeAuthReturn(b.returnTo ?? c.get(AUTH_RETURN_COOKIE)?.value);
             c.delete(AUTH_RETURN_COOKIE);
@@ -463,35 +487,44 @@ export async function POST(req: NextRequest, { params }: {
         }
         if (action === 'affiliate') return j({ error: 'Please reload the affiliate program to review the current agreement before applying.' }, 409);
         if (action === 'delivery') {
-            const u = await requireCustomer();
+            const u = await requireShopper(s.id);
             // A choice refers only to a rate in this customer's stored quote.
             // Both identifiers are required together; client prices are never accepted.
             const selection = b.quoteId !== undefined || b.shippingOptionId !== undefined
                 ? z.object({ quoteId: z.string().uuid(), shippingOptionId: z.string().min(1).max(160).regex(/^[a-zA-Z0-9_-]+$/) }).parse({ quoteId: b.quoteId, shippingOptionId: b.shippingOptionId })
                 : undefined;
-            await cartImports().assertResolved(u.id, s.id);
+            if (!u.guest) await cartImports().assertResolved(u.id, s.id);
             try {
-                return j(await issueQuote(u.id, validateLines(parse((await one<{
-                    cart: string;
-                }>('SELECT cart FROM customer_carts WHERE id=?', u.id))?.cart, [])), b.address, await currentPromoCode(), selection, b.addressConfirmed === true));
+                return j(await issueQuote(u.id, validateLines(parse(await shopperCart(u, s.cart), [])), b.address, await currentPromoCode(), selection, b.addressConfirmed === true));
             } catch (e) {
                 // USPS flagged the address. The checkout page shows the reason beside the form and lets the customer confirm.
                 if (e instanceof AddressCheckError) return j({ error: e.message, addressProblem: e.addressProblem }, 422);
                 throw e;
             }
         }
+        // Guest checkout (owner, Nov 14 2026): an email and the research statement, no membership first.
+        if (action === 'guest-start') {
+            if (await customer()) return j({ message: 'You are signed in.' });
+            const guest = await saveGuest(database(), s.id, { email: b.email, attested: b.attested, smsConsent: b.smsConsent }, timestamp(), uid());
+            await captureContact({ email: guest.email, owner: null, source: 'order' });
+            return j({ guest });
+        }
         if (action === 'checkout') {
-            const u = await requireCustomer();
-            await cartImports().assertResolved(u.id, s.id);
-            const checkoutLines = validateLines(parse((await one<{
-                cart: string;
-            }>('SELECT cart FROM customer_carts WHERE id=?', u.id))?.cart, []));
+            const u = await requireShopper(s.id);
+            if (!u.guest) await cartImports().assertResolved(u.id, s.id);
+            const checkoutLines = validateLines(parse(await shopperCart(u, s.cart), []));
             // Preorders are purchased in their own order, never mixed with in-stock items.
             if (mixesPreorder(checkoutLines, await catalog())) return j({ error: preorderSeparateMessage }, 409);
-            return j(await checkout(u.id, checkoutLines, b, await currentPromoCode()));
+            // Presale limits are counted per member, so a presale needs an account.
+            if (u.guest && checkoutLines.some(line => line.presaleId)) return j({ error: 'Presale items need a member account. Sign in or become a member to order them.' }, 409);
+            const guestRecord = u.guest ? await readGuestRecord(database(), s.id) : null;
+            const placed = await checkout(u.id, checkoutLines, b, await currentPromoCode(), u.guest ? { email: u.email, extra: guestOrderRecord(guestRecord) } : undefined);
+            // The delivery phone joins the guest's contact record (members give theirs at sign-up).
+            if (u.guest) await captureContact({ email: u.email, owner: null, name: typeof b.address?.name === 'string' ? b.address.name : undefined, phone: typeof b.address?.phone === 'string' ? b.address.phone : undefined, source: 'order' });
+            return j(placed);
         }
         if (action === 'resume') {
-            const u = await requireCustomer();
+            const u = await requireShopper(s.id);
             const o = await one<{
                 checkout_url: string;
                 status: string;
@@ -502,7 +535,7 @@ export async function POST(req: NextRequest, { params }: {
             return j({ url: o.checkout_url });
         }
         if (action === 'reconcile') {
-            const u = await requireCustomer();
+            const u = await requireShopper(s.id);
             return j(await reconcile(u.id, str(b.id, 50)));
         }
         if (action.startsWith('admin-')) {

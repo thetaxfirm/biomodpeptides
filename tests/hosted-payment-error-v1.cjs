@@ -35,6 +35,8 @@ global.fetch = async () => { networkCalls++; throw new Error('Network is forbidd
 console.error = (...args) => logs.push(args);
 const dependencies = {
   '@/lib/auth': { customer: async () => { calls.push('customer'); return scenario.signedOut ? null : user; } },
+  // A signed-out visitor is checked for a guest session (guest checkout, Nov 14 2026). None exists here.
+  '@/lib/guest-checkout': { readGuest: async (db, sessionId) => { assert.equal(sessionId, undefined); calls.push('guest'); return null; } },
   '@/lib/runtime': {
     runtime: () => ({}), timestamp: () => clock,
     parse: (value, fallback) => value ? JSON.parse(value) : fallback,
@@ -47,7 +49,8 @@ const dependencies = {
     // Exactly one write is expected before a payment form is issued: the lock that stamps the attempt
     // and refuses to hand over a form if the order's total or contents changed underneath it. Every
     // other write is still forbidden, which is what keeps a failed attempt from touching the order.
-    all: forbidden('database all'), database: forbidden('database connection'),
+    // The handle is passed to the guest lookup for signed-out visitors and never used by this fixture.
+    all: forbidden('database all'), database: () => { calls.push('database'); return { prepare: forbidden('database statement') }; },
     run: async (query, ...values) => {
       assert.match(query, /^UPDATE orders SET data=\?,updated=\? WHERE id=\? AND data=\? AND total=\? AND status IN \('awaiting_payment','pending'\)$/, 'the only write is the payment-form lock');
       assert.deepEqual(values.slice(2), [orderId, savedOrder.data, savedOrder.total], 'the lock matches on the exact order it read');
@@ -79,7 +82,7 @@ const dependencies = {
 Module._load = function(name, parent, isMain) {
   if (parent?.filename === path.join(root, 'app/api/store/[action]/route.ts')) {
     if (name === 'next/server') return { NextResponse: TestResponse };
-    if (name === 'next/headers') return { cookies: forbidden('cookies') };
+    if (name === 'next/headers') return { cookies: async () => ({ get: name => { assert.equal(name, 'bm_session'); return undefined; } }) };
     if (Object.hasOwn(dependencies, name)) return dependencies[name];
     if (name.startsWith('@/')) return new Proxy({}, { get: (_, key) => key === '__esModule' ? true : forbidden(name + ':' + String(key)) });
   }
@@ -163,7 +166,7 @@ Module._load = function(name, parent, isMain) {
     assert.deepEqual(calls, ['customer', 'order'], 'Ineligible saved orders cannot reach the provider');
   }
   assert.equal((await pay({ signedOut: true })).status, 401);
-  assert.deepEqual(calls, ['customer'], 'Signed-out requests do not read saved orders or contact a provider');
+  assert.deepEqual(calls, ['customer', 'database', 'guest'], 'Signed-out requests check for a guest session, then stop: no saved order is read and no provider is contacted');
   assert.equal(JSON.stringify(savedOrder), before, 'The saved order fixture remains unchanged');
   assert.equal(networkCalls, 0);
   console.log('PASS: actual GET pay handler reports uncertainty for verification/form errors; no form after failed verification or paid/review status; no form when the order changed under the payment-form lock; escaped provider detail, owner checks, receipt arguments and security headers preserved; no network and no writes beyond that single lock');

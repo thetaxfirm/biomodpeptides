@@ -11,7 +11,8 @@ import { createPaymentAdapter, paymentEnvironment, paymentReturnUrl } from './pa
 import { checkoutTax } from './checkout-tax';
 import { savedPreorder } from './fulfillment';
 import { z } from 'zod';
-import { customer } from './auth';
+import { customer, authCall } from './auth';
+import { enrollGuest } from './guest-checkout';
 import { carrierShippingOptions, easypostReady, verifyShipAddress } from './easypost';
 import { addressProblem, customerAddressMessage, savedAddressCheck, type AddressCheck, type AddressCheckStatus } from './address-check';
 import { normalizeShippingOptions, savedShippingOption, shippingTierEnabled, enabledServiceSetting, freeEligible, type ShippingOption, type ShippingOptionsConfig } from './shipping-options';
@@ -112,7 +113,7 @@ export async function issueQuote(owner: string, lines: CartLine[], address: unkn
     await run('INSERT INTO requests(id,owner,kind,data,created) VALUES(?,?,?,?,?)', id, owner, 'quote', JSON.stringify({ fingerprint: quoteFingerprint(q), inputFingerprint: inputFingerprint(q), shipping: q.shipping, shippingService: q.shippingService, shippingOption: q.shippingOption, shippingOptionId: q.shippingOptionId, shippingOptions: q.shippingOptions, ...(addressCheck ? { addressCheck } : {}) }), created);
     return { ...q, ...(addressCheck ? { addressCheck } : {}), quoteId: id, quoteExpiresAt: created + QUOTE_LIFETIME };
 }
-export async function checkout(owner: string, lines: CartLine[], body: Record<string, any>, promoCode?: unknown) {
+export async function checkout(owner: string, lines: CartLine[], body: Record<string, any>, promoCode?: unknown, guest?: { email: string; extra: Record<string, unknown> }) {
     const auditActor: AuditActor = { source: 'system', actor: 'Website checkout', actorType: 'system', action: 'checkout.state' };
     const run = (sql: string, ...values: (string | number | null)[]) => auditRun(database(), auditActor, sql, ...values);
     if (body.accepted !== true)
@@ -182,11 +183,11 @@ export async function checkout(owner: string, lines: CartLine[], body: Record<st
     const campaign = campaignId ? parse<Record<string, any>>((await one<{
         data: string;
     }>('SELECT data FROM campaigns WHERE id=?', campaignId))?.data, {}) : null;
-    const email = (await customer())?.email || '';
+    const email = guest ? guest.email : (await customer())?.email || '';
     const { shippingOptions: _unselectedOptions, ...selectedQuote } = q;
     // The USPS result for this exact address travels with the order, so fulfillment knows whether to trust it.
     const addressCheck = savedAddressCheck(quoted.addressCheck);
-    const saved = { ...selectedQuote, ...(addressCheck ? { addressCheck } : {}), email, fingerprint, environment: paymentEnvironment(runtime()), campaignId, campaignLimit: campaign?.maxPerCustomer || null, unitCount: lines.reduce((s, l) => s + l.quantity, 0) };
+    const saved = { ...selectedQuote, ...(addressCheck ? { addressCheck } : {}), ...(guest ? guest.extra : {}), email, fingerprint, environment: paymentEnvironment(runtime()), campaignId, campaignLimit: campaign?.maxPerCustomer || null, unitCount: lines.reduce((s, l) => s + l.quantity, 0) };
     const id = uid();
     const db=withAuditDb(database(), auditActor);
     try { await db.batch([
@@ -245,5 +246,8 @@ if (!written[0]?.meta?.changes) {
 if (state === 'paid' && written[0]?.meta?.changes) {
  try { await run("UPDATE orders SET data=json_set(data,'$.paidAt',?) WHERE id=? AND json_extract(data,'$.paidAt') IS NULL", timestamp(), id); } catch { }
  await sendOrderNotification(runtime(), id, saved, row.created);
+ // A guest's first paid order enrols them: the sign-in provider emails the usual verification link
+ // and their orders join the account when they sign in. Never blocks or undoes the payment.
+ try { await enrollGuest(database(), owner, saved, new URL(paymentReturnUrl(runtime()) || 'https://trybiomod.com').origin, authCall, timestamp(), uid()); } catch { }
 }
 return { status: state, message: result.state === 'failed' ? 'The payment attempt failed. This order is held for review before inventory is released.' : result.message }; }

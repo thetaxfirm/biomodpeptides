@@ -13,6 +13,7 @@ import { Eye, EyeOff, Trash2, Minus, Plus } from 'lucide-react';
 import { useStore, api, report } from './provider';
 import { money, compound } from '@/lib/catalog';
 import { Field, Check, Blank, Choice, formData } from './primitives';
+import { ATTESTATION_TEXT, SMS_CONSENT_TEXT, SMS_UPDATES_READY } from '@/lib/guest-checkout';
 import { toast } from 'sonner';
 import { ProductCard } from './catalog';
 export const businessTypes: [string, string][] = [['university', 'University'], ['researcher', 'Researcher'], ['laboratory', 'Laboratory'], ['medical_professional', 'Medical professional'], ['other', 'Other research organization']];
@@ -159,13 +160,37 @@ export function Cart() {
 export function AddressFields({ initial = {} }: {
     initial?: Record<string, string>;
 }) { return <><Field label="Full name" name="name" defaultValue={initial.name}/><Field label="Street address" name="line1" defaultValue={initial.line1}/><Field label="Apartment, suite or unit (if any)" name="line2" defaultValue={initial.line2} required={false}/><div className="form-row"><Field label="City" name="city" defaultValue={initial.city}/><Field label="State (2 letters)" name="state" defaultValue={initial.state} placeholder="CA"/><Field label="ZIP code" name="zip" defaultValue={initial.zip}/></div><Field label="Phone" name="phone" type="tel" defaultValue={initial.phone}/><input type="hidden" name="country" value="US"/><p className="muted">United States delivery only.</p></>; }
+/** Guest checkout (owner, Nov 14 2026): an email and the research statement, then straight to delivery. */
+export function GuestStart({ onDone }: { onDone: () => unknown }) {
+    const [email, setEmail] = useState(''), [attested, setAttested] = useState(false), [smsConsent, setSmsConsent] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('');
+    async function start(e: FormEvent<HTMLFormElement>) {
+        e.preventDefault();
+        if (busy) return;
+        setBusy(true); setError('');
+        try { await api('guest-start', { email, attested, smsConsent }); await onDone(); }
+        catch (problem) { setError(problem instanceof Error ? problem.message : 'Checkout could not start. Please try again.'); }
+        finally { setBusy(false); }
+    }
+    return <><div className="page-heading"><h1>Checkout</h1></div>
+        <form className="store-form" onSubmit={start}>
+            <h2>Your email</h2>
+            <p className="muted">No membership needed to order. We send your receipt and shipping updates here, and after your first order we create your Biomod account with this email so you can track and reorder.</p>
+            <label className="field"><span>Email address</span><input type="email" name="email" autoComplete="email" required maxLength={200} value={email} onChange={e => setEmail(e.target.value)}/></label>
+            <Check checked={attested} onChange={setAttested}>{ATTESTATION_TEXT} I agree to the <a href="/terms-of-sale">terms of sale</a> and the <a href="/research-use-only">research use policy</a>.</Check>
+            {SMS_UPDATES_READY && <Check checked={smsConsent} onChange={setSmsConsent}>{SMS_CONSENT_TEXT} (Optional)</Check>}
+            {error && <p className="notice error" role="alert">{error}</p>}
+            <button className="button button-gold" disabled={busy || !attested || !email}>{busy ? 'Starting checkout…' : 'Continue to delivery'}</button>
+            <p className="muted">Already a member? <a href="/login?returnTo=%2Fcheckout">Sign in</a></p>
+        </form>
+    </>;
+}
 export function Checkout() {
     const { store, ready, loadError, cartSync = 'current', cartUpdating = false, refresh, measureShopping, observeShoppingView, validShoppingQuote, validShoppingHandoff } = useStore();
-    useEffect(() => observeShoppingView?.(store.customer ? 'checkout_form_view' : 'checkout_signin_view'), [observeShoppingView, store, ready, loadError]);
+    useEffect(() => observeShoppingView?.(store.customer || store.guest ? 'checkout_form_view' : 'checkout_signin_view'), [observeShoppingView, store, ready, loadError]);
     type Scope = { owner: string | null; tenure: number; lifetime: number; active: boolean };
     type Operation = { scope: Scope; lifetime: number };
     type CheckoutView = { scope: Scope; lifetime: number; accepted: boolean; deliveryQuote: { data: any; context: string } | null; address: any; requestKey: string };
-    const owner = ready ? store.customer?.id || null : null;
+    const owner = ready ? store.customer?.id || store.guest?.id || null : null;
     const scopeRef = useRef<Scope>({ owner, tenure: 0, lifetime: 0, active: false });
     if (scopeRef.current.owner !== owner) scopeRef.current = { owner, tenure: scopeRef.current.tenure + 1, lifetime: 0, active: false };
     const scope = scopeRef.current;
@@ -255,8 +280,8 @@ export function Checkout() {
     if (store.cartConflict) return <CartChoice/>;
     if (!store.payment.enabled) return <section className="checkout-unavailable"><h1>Checkout is not open yet.</h1><p>Your cart stays saved with your shopping session. We are preparing secure checkout and will accept orders once it is ready.</p><div className="checkout-unavailable-actions"><a className="button button-dark" href="/cart">Return to your cart</a><a href="/shop">Keep shopping</a><a href="/contact">Contact Biomod</a></div></section>;
     if (store.cartError) return <Blank title="Your cart needs a review."><p>{store.cartError}</p><a className="button button-dark" href="/cart">Review your cart</a></Blank>;
-    if (!store.customer) return <AuthPage returnTo="/checkout"/>;
     if (!store.cart.length) return <Blank title="Your cart is empty."><a href="/shop">Shop products</a></Blank>;
+    if (!store.customer && !store.guest) return <GuestStart onDone={refresh}/>;
     async function submit(e: FormEvent<HTMLFormElement>) {
         e.preventDefault();
         const request = { scope, lifetime: renderedLifetime };
@@ -343,7 +368,8 @@ export function Checkout() {
         {store.payment.state === 'sandbox' && <p className="notice">Test checkout only. This payment environment does not accept real payments.</p>}
         <div className="cart-layout">
             <form key={scope.tenure} className="store-form" onSubmit={submit} onChange={invalidateDelivery}>
-                <h2>Delivery address</h2><AddressFields initial={{ name: store.customer.name }}/>
+                {store.guest && !store.customer && <p className="muted">Checking out as {store.guest.email}. <a href="/login?returnTo=%2Fcheckout">Sign in instead</a></p>}
+                <h2>Delivery address</h2><AddressFields initial={{ name: store.customer?.name || '' }}/>
                 {addressProblem && <div className="notice address-check" role="alert">
                     <p>{addressProblem.message}</p>
                     <Check checked={addressConfirmed} onChange={setAddressConfirmed}>{addressProblem.status === 'unit_missing' ? 'There is no apartment or unit number at this address.' : 'My address is correct as I typed it.'} We will double-check it before your order ships.</Check>
@@ -458,7 +484,7 @@ export function PaymentReturn() {
     type Scope = { owner: string; version: number };
     const { store, ready, loadError, refresh } = useStore();
     const { retrying, retryLoad } = useStoreLoadRetry(refresh);
-    const owner = ready ? store.customer?.id || null : null;
+    const owner = ready ? store.customer?.id || store.guest?.id || null : null;
     const latestOwner = useRef(owner);
     latestOwner.current = owner;
     const version = useRef(0);
@@ -539,7 +565,8 @@ export function PaymentReturn() {
                 {verifiable.includes(order.status) && <button className="button button-dark" disabled={Boolean(shown.busy)} onClick={() => verify(order.id)}>{shown.busy === order.id ? 'Verifying payment…' : 'Verify payment'}</button>}
             </article>)}
         </> : <p role="status">No orders were found for this signed-in account. If you used another email at checkout, sign in with that email or contact us.</p>)}
-        <p><a href="/account/orders">View my orders</a> · <a href="/contact">Contact Biomod</a></p>
+        <p>{store.customer ? <><a href="/account/orders">View my orders</a> · </> : null}<a href="/contact">Contact Biomod</a></p>
+        {!store.customer && store.guest && <p className="muted">Once your payment is confirmed we email {store.guest.email} a link to verify your Biomod account. After you verify, choose a password with “Forgot password?” to see this order any time.</p>}
     </>;
 }
 

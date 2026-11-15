@@ -74,6 +74,7 @@ mod.require=id=>{
   if(id==='./provider')return provider;
   if(id==='@/lib/catalog')return {money:c=>'$'+(c/100).toFixed(2),compound:p=>p.name};
   if(id==='./promo-code')return {PromoCode:noop};if(id==='./product-image')return {ProductImage:noop};
+  if(id==='@/lib/guest-checkout')return {ATTESTATION_TEXT:'Research statement',SMS_CONSENT_TEXT:'Text consent'}; // guest checkout form text
   if(id==='@/lib/auth-return')return authReturnModule.exports;
   if(id==='lucide-react')return new Proxy({}, {get:()=>noop});
   if(id==='sonner')return {toast:{success:noop,info:noop}};

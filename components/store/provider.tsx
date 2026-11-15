@@ -26,6 +26,8 @@ type Store = {
         email: string;
         name: string;
     } | null;
+    /** A guest who agreed to the research statement in this browser session. Checkout only. */
+    guest?: { id: string; email: string; name: string } | null;
     authReady: boolean;
     googleReady: boolean;
     admin: boolean;
