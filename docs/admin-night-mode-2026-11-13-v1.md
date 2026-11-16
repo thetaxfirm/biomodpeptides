@@ -1,4 +1,4 @@
-# Night mode for administration — Nov 13 2026
+# Night mode for administration — Nov 13 2026, colour rule revised Nov 16
 
 ## What the owner asked
 
@@ -18,14 +18,46 @@ So the switch sits **above the settings form and outside it**. Inside, a persona
 could ride along with a store save and reach everyone; a test asserts the ordering, and that the
 `config` payload is still exactly the program flags and pack discounts.
 
-## Mostly a second set of values
+## The colour rule (owner, Nov 16 2026)
 
-The storefront already declares its colours as tokens on `:root` — `--background`, `--foreground`,
-`--card`, `--border`, `--input`, `--muted` and the rest — and every shadcn control reads them. Dark
-mode therefore redefines those tokens rather than repainting the interface, and only the handful of
-admin surfaces that hardcode a colour need their own rule: the notices, the inputs, the dark save
-button (which has to invert or it vanishes into the page), tables, and the side nav, which paints
-its own colours.
+> "dont make the colors just inverted keep all of the regular colors the same just black out the
+> background and use white font instead of black keep all the other colors red, yellow, etc the
+> same"
+
+The first cut recoloured the palette: the amber notice went brown, the error red was lightened, the
+navy save button inverted to white. That read as an inverted theme rather than a dark one, and it
+was wrong.
+
+The rule now is narrow. **Only the background and the text move.** Rendered side by side, light and
+dark differ in exactly two computed values:
+
+| | light | night |
+|---|---|---|
+| page background | `rgb(255, 255, 255)` | `rgb(12, 12, 14)` |
+| text, headings included | `rgb(43, 16, 48)` | `rgb(255, 255, 255)` |
+| save button | `rgb(43, 16, 48)` | `rgb(43, 16, 48)` |
+| notice background | `rgb(246, 237, 219)` | `rgb(246, 237, 219)` |
+| error red | `rgb(139, 54, 44)` | `rgb(139, 54, 44)` |
+| in-stock green | `rgb(77, 99, 59)` | `rgb(77, 99, 59)` |
+
+There are **two** token layers, and both matter. The shadcn set on `:root` (`--background`,
+`--foreground`, `--card`, `--border`, `--input`, `--muted`) and the storefront's own brand set from
+`storefront-v25.css` (`--bm-ink`, `--bm-surface`, `--bm-line`, `--bm-selected`, `--bm-secondary`).
+The admin screens read the brand set directly — the page heading is `color: var(--bm-ink)` — so
+missing it leaves headings in plum on a black page.
+
+Only text and surface tokens are redefined. `--primary`, `--destructive`, `--ring`, `--gold`,
+`--copper`, `--bm-action`, `--bm-navy`, `--bm-cyan`, `--bm-hover` and `--bm-on-dark` are left
+alone, and a test fails if any of them appears in the night-mode block. `--bm-ink` happens to hold
+the same plum as `--bm-action`, but it is the text token, so it turns white while the button colour
+beside it does not.
+
+The one thing that has to be said out loud: a panel that keeps a light background now has to keep
+its own dark text, because the page text around it is white. That is why the amber notice and the
+error line carry an explicit colour — the same ones daylight computes, not approximations.
+
+The navy button is kept as-is, so against a black page only its edge is hard to find. It gets a
+grey border, which gives it a shape without touching its colour.
 
 `color-scheme: dark` comes with it, so the browser darkens its own scrollbars, caret and native
 controls instead of leaving bright ones behind.
@@ -58,12 +90,13 @@ settings form and the stylesheet's specificity anchor.
 
 Mutations verified to fail: treating any stored value as dark, saving `light` as a value instead of
 clearing it, leaving the page dark after switching off, dropping the try/catch around storage,
-dropping the missing-browser guard, weakening the selector to `[data-theme='dark']`, and moving the
-switch inside the settings form.
+dropping the missing-browser guard, weakening the selector to `[data-theme='dark']`, moving the
+switch inside the settings form, recolouring `--primary` or `--bm-action`, inverting the save
+button, darkening the amber notice, leaving a light panel without dark text, and giving the brand
+text token anything other than white.
 
-Rendered in both themes against the built stylesheet and compared: dark gives `rgb(16, 20, 27)`
-behind `rgb(230, 232, 227)` text with the save button inverted, and light is byte-for-byte the
-screen that was there before.
+Rendered in both themes against the built stylesheet and compared computed value by computed
+value: the table above is that comparison.
 
 `npm run check:release` — TypeScript and 129 isolated suites, plus a full build.
 

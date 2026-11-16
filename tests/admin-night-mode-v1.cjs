@@ -88,10 +88,25 @@ assert.match(admin, /useEffect\(\(\) => \{ const saved = readTheme\(\); setNight
 
 // --- The stylesheet answers the attribute, and outranks the light tokens ---
 const css = fs.readFileSync(path.join(root, 'components/store/admin-theme.module.css'), 'utf8');
-assert.match(css, /:global\(html\[data-theme='dark'\]\) \{[\s\S]*?--background: #10141b/, 'dark redefines the shared tokens');
+assert.match(css, /:global\(html\[data-theme='dark'\]\) \{[\s\S]*?--background: #0c0c0e/, 'the background is blacked out');
+assert.match(css, /--foreground: #ffffff/, 'and the text is white');
 assert.match(css, /color-scheme: dark/, 'so the browser darkens its own controls too');
+// The owner's rule (Nov 16 2026): black background, white text, every other colour untouched.
+// These are the colours an earlier cut wrongly recoloured.
+const tokens = /:global\(html\[data-theme='dark'\]\) \{[\s\S]*?\n\}/.exec(css)[0];
+for (const kept of ['--primary:', '--destructive:', '--ring:', '--gold:', '--copper:',
+                    '--bm-action:', '--bm-navy:', '--bm-cyan:', '--bm-hover:', '--bm-on-dark:'])
+  assert(!tokens.includes(kept), kept + ' is a kept colour and must not be redefined in night mode');
+// The admin screens read the storefront's own brand tokens, so the text one has to move with the
+// rest of the text. It holds the same plum as the button colour beside it, which does not.
+assert.match(tokens, /--bm-ink: #ffffff/, 'the brand text token turns white');
+assert.match(tokens, /--bm-surface: #141417/, 'and its light panel surface goes dark');
+assert(!/\.button-dark[^}]*background:/.test(css), 'the navy save button keeps its colour');
+assert(!/\.notice[^}]*background:/.test(css), 'and the amber notice keeps its background');
+assert.match(css, /\.notice\) \{ color: #12243a; \}/, 'but a light panel keeps dark text, since the page text is now white');
+assert.match(css, /\.data-warning\) \{ color: #8b362c; \}/, 'including the error red, the exact one daylight uses');
 assert(!/:global\(\[data-theme/.test(css), 'every dark rule is anchored to html, which outranks :root whatever the load order');
 const nav = fs.readFileSync(path.join(root, 'components/store/admin-nav.module.css'), 'utf8');
 assert.match(nav, /:global\(html\[data-theme='dark'\]\) \.tabs/, 'the side nav has a dark pair, since it paints its own colours');
 
-console.log('PASS: night mode is a per-browser preference that defaults to light, survives a reload, clears itself outright when switched off, treats any other stored value as light, stays inert without a browser and when storage refuses, never reaches the store, and sits outside the settings form. No network.');
+console.log('PASS: night mode blacks out the background and whites the text while leaving the kept colours alone, and is a per-browser preference that defaults to light, survives a reload, clears itself outright when switched off, treats any other stored value as light, stays inert without a browser and when storage refuses, never reaches the store, and sits outside the settings form. No network.');
