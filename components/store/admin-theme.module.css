@@ -81,3 +81,34 @@
 .slider[aria-checked='true'] { background: #3f6b43; border-color: #3f6b43; }
 .slider[aria-checked='true']::after { transform: translateX(22px); }
 .slider:focus-visible { outline: 3px solid var(--ring); outline-offset: 3px; }
+
+/* ---------------------------------------------------------------------------------------------
+ * Screens whose markup uses global class names rather than a CSS module (owner, Nov 16 2026:
+ * "go through each page and correct colors"). The module-scoped screens carry their own night
+ * block; these are the ones that cannot, so they are corrected here.
+ * ------------------------------------------------------------------------------------------- */
+
+/* Change log. Secondary text lifts to the same grey the rest of administration uses, the two
+   quiet panels become surfaces, and the failed/attempted outcome colours keep their meaning at a
+   weight that reads on black. The dark plum difference heading is left alone: it was already a
+   dark fill with white on it. */
+:global(html[data-theme='dark'] .change-history-explanation),
+:global(html[data-theme='dark'] .change-coverage-footnote),
+:global(html[data-theme='dark'] .change-event-byline),
+:global(html[data-theme='dark'] .change-event-time),
+:global(html[data-theme='dark'] .change-missing-values),
+:global(html[data-theme='dark'] .change-value-label),
+:global(html[data-theme='dark'] .change-last-loaded) { color: #b4b4b9; }
+:global(html[data-theme='dark'] .change-event-outcome) { color: #ffffff; }
+:global(html[data-theme='dark'] .change-event-outcome[data-outcome='failed']),
+:global(html[data-theme='dark'] .change-filter-error),
+:global(html[data-theme='dark'] .change-history-error) { color: #f08a7e; }
+:global(html[data-theme='dark'] .change-event-outcome[data-outcome='attempted']) { color: #e8b878; }
+:global(html[data-theme='dark'] .change-coverage),
+:global(html[data-theme='dark'] .change-history-empty) { background: #1a1a1e; }
+:global(html[data-theme='dark'] .change-difference-row) { background: #141417; border-bottom-color: #2e2e34; }
+:global(html[data-theme='dark'] .change-event) { border-top-color: #2e2e34; }
+
+/* Search publishing report. */
+:global(html[data-theme='dark'] .seo-summary > div) { background: #1a1a1e; }
+:global(html[data-theme='dark'] .locations-grid section) { background: #1a1a1e; }
