@@ -25,3 +25,20 @@
   .open { grid-column:2; justify-self:start; }
   .sales { grid-template-columns:1fr; }
 }
+
+/* ---------------------------------------------------------------------------------------------
+ * Night mode (owner, Nov 16 2026: "go through each page and correct colors ... fix fonts colors
+ * and backgrounds"). Additive only -- every daylight rule above is untouched, so the light theme
+ * is provably unchanged. Surfaces go dark, text on them goes light, and the colours that carry
+ * meaning keep it: kept notice panels and solid button fills are deliberately absent below.
+ * ------------------------------------------------------------------------------------------- */
+:global(html[data-theme='dark']) .overview { color: #ffffff; }
+:global(html[data-theme='dark']) .heading p { color: #b4b4b9; }
+:global(html[data-theme='dark']) .item { background: #1a1a1e; }
+:global(html[data-theme='dark']) .count { color: #dcc4e8; }
+:global(html[data-theme='dark']) .text span { color: #b4b4b9; }
+:global(html[data-theme='dark']) .open { border: 1px solid #2e2e34; background: #141417; color: #dcc4e8; }
+:global(html[data-theme='dark']) .figure { background: #1a1a1e; }
+:global(html[data-theme='dark']) .figure span { color: #b4b4b9; }
+:global(html[data-theme='dark']) .figure small { color: #b4b4b9; }
+:global(html[data-theme='dark']) .muted { color: #b4b4b9; }

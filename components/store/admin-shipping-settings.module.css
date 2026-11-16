@@ -75,3 +75,29 @@
 .result { font-size:14px; font-weight:600; }
 .result[data-state=ok] { color:#1d5a2f; }
 .result[data-state=fail] { color:#8a1f1f; }
+
+/* ---------------------------------------------------------------------------------------------
+ * Night mode (owner, Nov 16 2026: "go through each page and correct colors ... fix fonts colors
+ * and backgrounds"). Additive only -- every daylight rule above is untouched, so the light theme
+ * is provably unchanged. Surfaces go dark, text on them goes light, and the colours that carry
+ * meaning keep it: kept notice panels and solid button fills are deliberately absent below.
+ * ------------------------------------------------------------------------------------------- */
+:global(html[data-theme='dark']) .settings { color: #ffffff; }
+:global(html[data-theme='dark']) .head p { color: #b4b4b9; }
+:global(html[data-theme='dark']) .sampleBar { background: #1a1a1e; }
+:global(html[data-theme='dark']) .sampleBar label { color: #dcc4e8; }
+:global(html[data-theme='dark']) .sampleBar select { border: 1px solid #2e2e34; background: #141417; color: #ffffff; }
+:global(html[data-theme='dark']) .secondary { background: #141417; color: #dcc4e8; }
+:global(html[data-theme='dark']) .preview li { background: #141417; color: #ffffff; }
+:global(html[data-theme='dark']) .preview small { color: #b4b4b9; }
+:global(html[data-theme='dark']) .table th { color: #b4b4b9; border-bottom: 1px solid #2e2e34; }
+:global(html[data-theme='dark']) .table td { border-bottom: 1px solid #2e2e34; }
+:global(html[data-theme='dark']) .table tr[data-enabled=true] { background: #1a1a1e; }
+:global(html[data-theme='dark']) .service small, :global(html[data-theme='dark']) .num small { color: #b4b4b9; }
+:global(html[data-theme='dark']) .dollar { color: #b4b4b9; }
+:global(html[data-theme='dark']) .table input[type=number], :global(html[data-theme='dark']) .wording input { border: 1px solid #2e2e34; background: #141417; color: #ffffff; }
+:global(html[data-theme='dark']) .muted { color: #b4b4b9; }
+:global(html[data-theme='dark']) .extras { border-top: 1px solid #2e2e34; }
+:global(html[data-theme='dark']) .field input { border: 1px solid #2e2e34; }
+:global(html[data-theme='dark']) .table tr { border-bottom: 1px solid #2e2e34; }
+:global(html[data-theme='dark']) .table td[data-label]::before { color: #b4b4b9; }
