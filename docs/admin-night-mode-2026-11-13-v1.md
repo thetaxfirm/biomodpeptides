@@ -66,6 +66,36 @@ Selectors are anchored to `html[data-theme='dark']`, never `[data-theme='dark']`
 attribute ties with `:root` on specificity and would then depend on which stylesheet happened to
 load last; `html` + attribute outranks it outright.
 
+## Screens that paint their own colours (Nov 16)
+
+The token work above covers anything that reads the shared sets. `orders-admin.module.css` did not:
+it hardcoded about twenty colours of its own, so night mode left the whole Orders table in plum on
+black — customer names, totals, statuses and every link.
+
+It now declares its palette once at the top (`--ord-ink`, `--ord-quiet`, `--ord-link`, `--ord-line`,
+`--ord-rule`, `--ord-surface`, `--ord-row`, `--ord-hover`, `--ord-soft`, `--ord-chosen`) with the
+exact values it already had, and night mode is a second set. Daylight is unchanged.
+
+One trap worth recording. Converting the hardcoded values with a find-and-replace rewrote the
+palette block itself, leaving `--ord-ink: var(--ord-ink)`. A custom property defined as itself is
+circular, resolves to nothing and falls back to the inherited colour — so every border and rule in
+the table silently went plum while no individual rule looked wrong. It was caught by reading the
+computed values out of a rendered page, not by reading the stylesheet. A test now pins each
+daylight value literally and fails on any `--ord-*: var(--ord-*)`.
+
+The brand plum needed one more distinction: `.text-button` is `color: var(--bm-action)`, so the
+same token is a button **fill** in one place and **link text** in another. As a fill it is kept
+untouched; as text on black it lifts to a light tint of itself, the same move the body text makes.
+
+### Easier to read, both themes
+
+The owner also asked for the table itself to be more legible. Changed for light and night alike:
+cells align to the top so a three-line cell and a one-line cell start level; column widths are set
+so the customer name stops wrapping after one word; `overflow-wrap` is `break-word` rather than
+`anywhere`, so an email breaks between its parts instead of mid-word; the leading status word in a
+cell is no longer the smallest text on the row; headers are uppercase and quiet; rows have a stripe
+and a stronger hover; and figures are tabular so totals line up.
+
 ## Failing quietly
 
 A display preference must never be able to stop administration from loading, so every path is
@@ -92,13 +122,14 @@ Mutations verified to fail: treating any stored value as dark, saving `light` as
 clearing it, leaving the page dark after switching off, dropping the try/catch around storage,
 dropping the missing-browser guard, weakening the selector to `[data-theme='dark']`, moving the
 switch inside the settings form, recolouring `--primary` or `--bm-action`, inverting the save
-button, darkening the amber notice, leaving a light panel without dark text, and giving the brand
-text token anything other than white.
+button, darkening the amber notice, leaving a light panel without dark text, giving the brand text
+token anything other than white, defining an orders token as itself, and letting a hardcoded colour
+back into the orders stylesheet.
 
 Rendered in both themes against the built stylesheet and compared computed value by computed
 value: the table above is that comparison.
 
-`npm run check:release` — TypeScript and 129 isolated suites, plus a full build.
+`npm run check:release` — TypeScript and 132 isolated suites, plus a full build.
 
 ## Known limit
 

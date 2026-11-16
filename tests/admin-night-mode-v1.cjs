@@ -106,6 +106,22 @@ assert(!/\.notice[^}]*background:/.test(css), 'and the amber notice keeps its ba
 assert.match(css, /\.notice\) \{ color: #12243a; \}/, 'but a light panel keeps dark text, since the page text is now white');
 assert.match(css, /\.data-warning\) \{ color: #8b362c; \}/, 'including the error red, the exact one daylight uses');
 assert(!/:global\(\[data-theme/.test(css), 'every dark rule is anchored to html, which outranks :root whatever the load order');
+// The brand plum is a button fill AND a link text colour. Kept as a fill; as text it has to lift,
+// or every Print label / Dropped off link is plum on black (owner's screenshot, Nov 16 2026).
+assert.match(css, /\.text-button\)[\s\S]{0,120}color: #dcc4e8/, 'brand-plum link text lifts to a readable tint of itself');
+// Orders declares its own palette, so it needs its own night pair rather than inheriting plum.
+const orders = fs.readFileSync(path.join(root, 'components/store/orders-admin.module.css'), 'utf8');
+assert.match(orders, /:global\(html\[data-theme='dark'\]\) \.orders \{[\s\S]*?--ord-ink: #ffffff/, 'the orders table has a night palette');
+const dayPalette = /\.orders \{([\s\S]*?)\n\}/.exec(orders)[1];
+// Daylight keeps its exact colours, declared literally. A find-and-replace once turned these into
+// --ord-ink: var(--ord-ink), which is circular, resolves to nothing and silently falls back to the
+// inherited colour -- every rule in the table went plum without a single rule looking wrong.
+for (const [name, value] of [['--ord-ink', '#2c1534'], ['--ord-quiet', '#655a68'], ['--ord-link', '#43284f'],
+                             ['--ord-line', '#d8cedd'], ['--ord-rule', '#ece6ef']])
+  assert(dayPalette.includes(name + ': ' + value), name + ' keeps its daylight value literally');
+assert(!/--ord-[a-z]+:\s*var\(--ord-/.test(orders), 'no token may be defined as itself');
+assert(!/(^|[^-])#(2c1534|655a68|43284f|d8cedd|ece6ef)/.test(orders.replace(dayPalette, '')),
+  'and outside that one block nothing hardcodes a colour that night mode has to override');
 const nav = fs.readFileSync(path.join(root, 'components/store/admin-nav.module.css'), 'utf8');
 assert.match(nav, /:global\(html\[data-theme='dark'\]\) \.tabs/, 'the side nav has a dark pair, since it paints its own colours');
 

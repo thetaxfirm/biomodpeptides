@@ -64,6 +64,12 @@
 /* The navy button is kept, so against a black page only its edge is hard to find: a grey border
    gives it a shape without touching its colour. */
 :global(html[data-theme='dark'] .button-dark) { border-color: #3c3c44; }
+/* The brand plum is both a button FILL and a link TEXT colour (.text-button reads --bm-action).
+   As a fill it is kept exactly. As text on black it cannot be read, so it lifts to a light tint of
+   the same plum -- the same move the body text makes, not a different colour. */
+:global(html[data-theme='dark'] .text-button),
+:global(html[data-theme='dark'] .announcement a),
+:global(html[data-theme='dark'] .editorial-link) { color: #dcc4e8; }
 
 /* The switch itself: a plain button, so administration gains no new component dependency. */
 .row { display: flex; align-items: flex-start; justify-content: space-between; gap: 22px; max-width: 720px; padding: 18px 0; border-bottom: 1px solid var(--border); }
