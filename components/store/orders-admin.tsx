@@ -199,7 +199,7 @@ export function OrdersAdmin({ reloadToken, viewRequest, checkoutRecovery, allowe
         if (paymentVerificationFailed(o)) return mainStep(o, s);
         if (o.data?.hold) return <span className={styles.nextGroup}>
             <span className={styles.holdTag}>On hold: {issueLabel(o.data.hold.issue)}</span>
-            {onEmailCustomer && o.data?.email && <button type="button" className="text-button" disabled={busy} onClick={() => onEmailCustomer(o)}>Open customer history & reply</button>}
+            {onEmailCustomer && o.data?.email && <button type="button" className="text-button" disabled={busy} onClick={() => onEmailCustomer(o)}>Open customer history &amp; reply</button>}
         </span>;
         const step = mainStep(o, s);
         return <span className={styles.nextGroup}>{step}</span>;
@@ -262,8 +262,10 @@ export function OrdersAdmin({ reloadToken, viewRequest, checkoutRecovery, allowe
             <div><h2 id="orders-title">Orders</h2><p>Choose the work to do. Payment and shipment are shown separately on every order.</p>
                 <div className={styles.sheetButtons}>
                     <a className="button button-dark" href="/api/admin/pick-list" target="_blank" rel="noopener">Print pick list</a>
-                    {allowed('orders:fulfill') && <a className="button button-gold" href="/api/admin/labels" target="_blank" rel="noopener">Print waiting labels</a>}
-                    <span>Printing changes nothing.</span>
+                    {/* A download, not a tab: it returns a zip of one borderless 4x6 PDF per parcel,
+                        in a folder named for today (owner, Nov 16 2026). */}
+                    {allowed('orders:fulfill') && <a className="button button-gold" href="/api/admin/labels" download>Download waiting labels</a>}
+                    <span>Labels download as 4&times;6 PDFs in a dated folder. Printing changes nothing.</span>
                 </div></div>
             <label className={styles.search}>Search orders
                 <input type="search" value={input} onChange={e => setInput(e.target.value)} placeholder="Name, email, order number or tracking"/>
@@ -273,7 +275,7 @@ export function OrdersAdmin({ reloadToken, viewRequest, checkoutRecovery, allowe
             <div className={styles.tabs} role="group" aria-label="Order work queues">
                 {queueTabs.filter(t => !t.secondary).map(t => <button key={t.id} type="button" aria-pressed={tab === t.id} onClick={() => setTab(t.id)}>{t.label}<span>{counts ? counts[t.id] : '…'}</span></button>)}
             </div>
-            <label className={styles.otherViews}>Completed & other records
+            <label className={styles.otherViews}>Completed &amp; other records
                 <select value={queueTabs.find(t => t.id === tab)?.secondary ? tab : ''} onChange={e => { if (e.target.value) setTab(e.target.value as QueueTab); }}>
                     <option value="">Choose a view</option>
                     {queueTabs.filter(t => t.secondary).map(t => <option key={t.id} value={t.id}>{t.label} ({counts ? counts[t.id] : '…'})</option>)}
@@ -373,7 +375,7 @@ export function OrdersAdmin({ reloadToken, viewRequest, checkoutRecovery, allowe
                             <label>Note (optional)<input value={problem.note} maxLength={500} onChange={e => setProblem({ ...problem, note: e.target.value })} placeholder="e.g. Restock expected late November"/></label>
                             <button type="submit" className="button button-dark" disabled={busy}>Hold order and prepare reply</button>
                         </form>}
-                        {onEmailCustomer && selected.data?.email && <button type="button" className="button button-dark" disabled={busy} onClick={() => { const order = selected; setSelected(null); onEmailCustomer(order); }}>Open customer history & reply</button>}
+                        {onEmailCustomer && selected.data?.email && <button type="button" className="button button-dark" disabled={busy} onClick={() => { const order = selected; setSelected(null); onEmailCustomer(order); }}>Open customer history &amp; reply</button>}
                         {canReconcile(selected) && <button type="button" className="button button-dark" disabled={busy} onClick={() => reconcile(selected)}>Check payment status</button>}
                         {allowed('orders:fulfill') && !selected.data?.hold && !paymentVerificationFailed(selected) && <ShippingLabel order={selected} onDone={reload}/>}
                         {allowed('orders:fulfill') && !selected.data?.hold && !paymentVerificationFailed(selected) && ['paid', 'shipped'].includes(selected.status) && (selected.data?.shipment
