@@ -42,3 +42,7 @@
 :global(html[data-theme='dark']) .figure span { color: #b4b4b9; }
 :global(html[data-theme='dark']) .figure small { color: #b4b4b9; }
 :global(html[data-theme='dark']) .muted { color: #b4b4b9; }
+/* The urgent count is set by .item[data-tone=urgent] .count, which out-specifies the plain .count
+   rule above, so it kept its daylight orange on a dark panel. Orange still means urgent -- it just
+   has to be an orange that reads on black. */
+:global(html[data-theme='dark']) .item[data-tone=urgent] .count { color: #f0a07a; }
