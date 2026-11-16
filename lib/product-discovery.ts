@@ -1,4 +1,4 @@
-import type { Product } from './catalog';
+import { productFormat, type Product } from './catalog';
 import publication from './seo-publication-v1.json';
 import { productReviewBlocks } from './seo-policy';
 import { packContents } from './packs';
@@ -11,6 +11,11 @@ export const eligibleDiscovery = (product: Product) => reviewedSlugs.has(product
 export const sizedVial = (product: Product) => product.categories.some(c => c.slug === 'research-compounds') && /\d\s*mg\b/i.test(packContents(product));
 export const vialTitle = (product: Product) => product.name.replace(/\s+\d+(?:\.\d+)?\s*mg$/i, '') + ' ' + packContents(product).replace(/\s*\/\s*vial\b/i, '').replace(/(\d)\s*mg\b/gi, '$1 mg');
 export const vialName = (product: Product) => sizedVial(product) ? vialTitle(product) : product.name;
+// Sprays and softgel bottles carry their format and contents in the heading ("APEX Spray 60 mg"),
+// matching their page title, instead of a bare product name.
+export const sizedBottle = (product: Product) => ['Spray', 'Softgels'].includes(productFormat(product)) && /\d/.test(product.sizes[0] || '');
+export const bottleTitle = (product: Product) => product.name + ' ' + productFormat(product) + ' ' + (product.sizes[0] || '').replace(/\s*\/\s*bottle\b/i, '').replace(/(\d)\s*mg\b/gi, '$1 mg');
+export const productHeading = (product: Product) => sizedVial(product) ? vialTitle(product) : sizedBottle(product) ? bottleTitle(product) : product.name;
 
 export function orderHomeVials(allProducts: Product[]): Product[] {
   const vials = allProducts.filter(product => product.categories.some(category => category.slug === 'research-compounds'));
