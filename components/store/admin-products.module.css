@@ -100,3 +100,63 @@
 
 .filterLabel { font-size:13px; font-weight:600; color:#665969; align-self:center; margin-right:4px; }
 .noCoa { color:#9a3412; font-weight:600; }
+
+/* ---------------------------------------------------------------------------------------------
+ * Night mode (owner, Nov 16 2026: "go through each page and correct colors ... fix fonts colors
+ * and backgrounds"). Additive only -- every daylight rule above is untouched, so the light theme
+ * is provably unchanged. Surfaces go dark, text on them goes light, and the colours that carry
+ * meaning keep it: kept notice panels and solid button fills are deliberately absent below.
+ * ------------------------------------------------------------------------------------------- */
+:global(html[data-theme='dark']) .products { color: #ffffff; }
+:global(html[data-theme='dark']) .heading p, :global(html[data-theme='dark']) .footnote { color: #b4b4b9; }
+:global(html[data-theme='dark']) .filters button { border: 1px solid #2e2e34; background: #141417; }
+:global(html[data-theme='dark']) .table th, :global(html[data-theme='dark']) .table td { border-bottom: 1px solid #2e2e34; }
+:global(html[data-theme='dark']) .table thead th { color: #b4b4b9; }
+:global(html[data-theme='dark']) .table small { color: #b4b4b9; }
+:global(html[data-theme='dark']) .editButton { color: #dcc4e8; border: 1px solid #2e2e34; }
+:global(html[data-theme='dark']) .editButton:hover { background: #1a1a1e; }
+:global(html[data-theme='dark']) .offer { color: #dcc4e8; }
+:global(html[data-theme='dark']) .empty { color: #b4b4b9; }
+:global(html[data-theme='dark']) .panel { background: #141417; border: 1px solid #2e2e34; }
+:global(html[data-theme='dark']) .panel h3, :global(html[data-theme='dark']) .statusChoices legend { color: #ffffff; }
+:global(html[data-theme='dark']) .panel>p { color: #b4b4b9; }
+:global(html[data-theme='dark']) .field input:disabled { background: #1a1a1e; }
+:global(html[data-theme='dark']) .help { color: #b4b4b9 !important; }
+:global(html[data-theme='dark']) .salePanel { border-color: #2e2e34; }
+:global(html[data-theme='dark']) .preview { background: #1a1a1e; color: #dcc4e8; }
+:global(html[data-theme='dark']) .preview strong { color: #dcc4e8; }
+:global(html[data-theme='dark']) .duration button { border: 1px solid #2e2e34; }
+:global(html[data-theme='dark']) .duration button:hover { background: #1a1a1e; }
+:global(html[data-theme='dark']) .statusChoice { border: 1px solid #2e2e34; }
+:global(html[data-theme='dark']) .statusChoice small { color: #b4b4b9; }
+:global(html[data-theme='dark']) .saveBar { background: #1a1a1e; }
+:global(html[data-theme='dark']) .saveBar p { color: #b4b4b9; }
+:global(html[data-theme='dark']) .table tr { border-bottom: 1px solid #2e2e34; }
+:global(html[data-theme='dark']) .table td[data-label]::before { color: #b4b4b9; }
+:global(html[data-theme='dark']) .field select, :global(html[data-theme='dark']) .field textarea { border: 1px solid #2e2e34; background: #141417; }
+:global(html[data-theme='dark']) .batchSummary { background: #1a1a1e; }
+:global(html[data-theme='dark']) .batchSummary dt { color: #b4b4b9; }
+:global(html[data-theme='dark']) .releaseReview>p { color: #b4b4b9; }
+:global(html[data-theme='dark']) .filterLabel { color: #b4b4b9; }
+
+/* The status pills are colour-coded pairs: an ink and a fill used together on the selected choice,
+   and the same ink alone as plain text in the table. Both halves move so blue stays blue, amber
+   stays amber and red stays red -- just at a weight that reads on black rather than on paper. */
+:global(html[data-theme='dark']) .available   { --status-ink:#8fc4e8; --status-fill:#132431; }
+:global(html[data-theme='dark']) .coming_soon { --status-ink:#e8b878; --status-fill:#2b2112; }
+:global(html[data-theme='dark']) .sold_out    { --status-ink:#f09aa2; --status-fill:#2e1518; }
+:global(html[data-theme='dark']) .unavailable { --status-ink:#b9b2bd; --status-fill:#1f1c22; }
+/* Sits on the page, not on a panel of its own, so it needs the lift the panelled notices do not. */
+:global(html[data-theme='dark']) .noCoa { color:#f0a07a; }
+
+/* The product groups are the same shape: an ink and a fill used together on the group heading,
+   and the same ink alone as the filter button's text. Darkening only the button's background
+   would have left that text dark-on-dark, so both halves move, per group, keeping each group's
+   own hue -- plum for vials, copper for sprays, blue for softgels. */
+:global(html[data-theme='dark']) .products  { --group-ink:#dcc4e8; --group-fill:#241a2b; }
+:global(html[data-theme='dark']) .vials     { --group-ink:#dcc4e8; --group-fill:#241a2b; }
+:global(html[data-theme='dark']) .sprays    { --group-ink:#e8b89a; --group-fill:#2b1e16; }
+:global(html[data-theme='dark']) .softgels  { --group-ink:#9cc6e0; --group-fill:#152229; }
+:global(html[data-theme='dark']) .other     { --group-ink:#c0bcc4; --group-fill:#1f1e21; }
+/* Stands alone on the page rather than on a panel of its own. */
+:global(html[data-theme='dark']) .error { color:#f08a7e; }
