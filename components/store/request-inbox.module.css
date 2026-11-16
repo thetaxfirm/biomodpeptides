@@ -1,4 +1,24 @@
-.inbox { --ink: var(--bm-ink, #2d1235); --line: var(--bm-border, #ddd5df); --soft: #f7f3f8; --muted: #5f5664; margin-bottom: 36px; min-width: 0; color: var(--ink); }
+/* Requests. Every colour the screen uses is a token on .inbox, so night mode is a second set
+ * of values at the bottom of this file rather than a second set of rules. Daylight is unchanged:
+ * each token below holds exactly the literal it replaced. */
+.inbox {
+  --ink: var(--bm-ink, #2d1235);      /* primary text */
+  --line: var(--bm-border, #ddd5df);  /* borders */
+  --soft: #f7f3f8;                    /* quiet panel / incoming bubble */
+  --muted: #5f5664;                   /* secondary text */
+  --panel: #fff;                      /* the desk, inputs, selects, plain buttons */
+  --rowline: #efe9f1;                 /* rule between list rows */
+  --rowhover: #fbf8fc;                /* list row under the pointer */
+  --writing: #fbf9fc;                 /* textarea while the assistant writes */
+  --on-ink: #fff;                     /* text on an --ink fill */
+  --sent: #eef3ee;                    /* outgoing bubble, attachments, replied */
+  --sent-ink: #2f6b45;                /* the green that means sent */
+  --sent-deep: #23452f;               /* text on a --sent panel */
+  --alert: #8b261e;                   /* error text */
+  --late: #a3321f;                    /* overdue */
+  --deep: #3d2a44;                    /* vial/lot line */
+  margin-bottom: 36px; min-width: 0; color: var(--ink);
+}
 .top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 24px; }
 .top h2 { margin: 0; }
 .learning { margin: 0; font-size: 14px; color: var(--muted); }
@@ -6,9 +26,9 @@
 .hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .note { font-size: 14px; color: var(--muted); margin: 6px 0; line-height: 1.5; }
 .warning { font-size: 14px; margin: 12px 0; padding: 10px 14px; border-radius: 6px; background: #fbf1e3; color: #5e3b0c; line-height: 1.5; }
-.error { color: #8b261e; font-weight: 500; font-size: 14px; margin: 8px 0; }
+.error { color: var(--alert); font-weight: 500; font-size: 14px; margin: 8px 0; }
 .link { font: inherit; font-size: 14px; background: none; border: 0; padding: 4px 2px; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
-.action { font: inherit; font-size: 14px; cursor: pointer; min-height: 40px; padding: 8px 14px; border-radius: 6px; border: 1px solid var(--line); background: white; color: var(--ink); white-space: nowrap; }
+.action { font: inherit; font-size: 14px; cursor: pointer; min-height: 40px; padding: 8px 14px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); white-space: nowrap; }
 .action:hover:not(:disabled) { background: var(--soft); }
 .inbox button:disabled, .inbox select:disabled { opacity: .5; cursor: not-allowed; }
 .inbox button:focus-visible, .inbox a:focus-visible, .inbox input:focus-visible, .inbox textarea:focus-visible, .inbox select:focus-visible, .original summary:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
@@ -22,27 +42,27 @@
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin: 18px 0 12px; }
 .filters { display: flex; flex-wrap: wrap; gap: 4px; }
 .filters button { font: inherit; font-size: 14px; cursor: pointer; min-height: 38px; padding: 6px 12px; border-radius: 6px; border: 0; background: transparent; color: var(--muted); }
-.filters button[aria-pressed="true"] { background: var(--ink); color: white; }
+.filters button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); }
 .filters button:not([aria-pressed="true"]):hover { background: var(--soft); color: var(--ink); }
 .filters span { margin-left: 5px; font-variant-numeric: tabular-nums; opacity: .8; }
 .search { flex: 0 1 300px; }
 .search input { width: 100%; min-height: 38px; padding: 7px 12px !important; font-size: 14px !important; border-radius: 6px !important; }
 
-.desk { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); border: 1px solid var(--line); border-radius: 10px; background: white; min-height: 560px; overflow: hidden; }
+.desk { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); border: 1px solid var(--line); border-radius: 10px; background: var(--panel); min-height: 560px; overflow: hidden; }
 .list { border-right: 1px solid var(--line); overflow-y: auto; max-height: 78vh; min-width: 0; }
-.row { border-bottom: 1px solid #efe9f1; }
+.row { border-bottom: 1px solid var(--rowline); }
 .row[data-selected="true"] { background: var(--soft); }
 .rowButton { display: grid; gap: 2px; width: 100%; text-align: left; padding: 12px 16px; background: none; border: 0; font: inherit; color: var(--ink); cursor: pointer; min-width: 0; }
-.rowButton:hover { background: #fbf8fc; }
+.rowButton:hover { background: var(--rowhover); }
 .rowTop { display: flex; justify-content: space-between; gap: 10px; }
 .rowTop strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .age, .late { font-size: 13px; font-variant-numeric: tabular-nums; color: var(--muted); flex: none; }
-.late { color: #a3321f; font-weight: 600; }
+.late { color: var(--late); font-weight: 600; }
 .rowSubject { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rowPreview { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rowState { font-size: 12px; font-weight: 600; color: var(--muted); margin-top: 2px; }
 .rowState[data-stage="todo"] { color: var(--ink); }
-.rowState[data-stage="sending"] { color: #2f6b45; }
+.rowState[data-stage="sending"] { color: var(--sent-ink); }
 .empty { padding: 28px 18px; color: var(--muted); }
 .placeholder { display: grid; place-items: center; padding: 40px; color: var(--muted); text-align: center; }
 
@@ -57,30 +77,30 @@
 .subjectLine { margin: 12px 0 10px; font-size: 15px; }
 .thread { list-style: none; margin: 0 0 16px; padding: 0; display: grid; gap: 10px; }
 .thread li { padding: 12px 14px; border-radius: 8px; background: var(--soft); max-width: 100%; width: 100%; box-sizing: border-box; justify-self: start; }
-.thread li[data-direction="outgoing"] { background: #eef3ee; justify-self: end; }
+.thread li[data-direction="outgoing"] { background: var(--sent); justify-self: end; }
 .meta { margin: 0 0 4px; font-size: 12px; color: var(--muted); }
 .message { margin: 0; white-space: pre-wrap; line-height: 1.55; font-size: 15px; }
 
 .composer { display: grid; gap: 10px; padding-top: 14px; border-top: 1px solid var(--line); }
 .composeHead { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; font-size: 14px; }
 .composeHead .note { margin: 0; }
-.composer textarea { width: 100%; min-width: 0; resize: vertical; font: inherit; font-size: 15px; line-height: 1.6; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: white; color: var(--ink); }
+.composer textarea { width: 100%; min-width: 0; resize: vertical; font: inherit; font-size: 15px; line-height: 1.6; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); }
 .composer textarea[name="replyBody"] { min-height: 150px; }
-.composer textarea[data-writing="true"] { background: #fbf9fc; color: var(--muted); }
+.composer textarea[data-writing="true"] { background: var(--writing); color: var(--muted); }
 .status { margin: 0; font-size: 14px; color: var(--muted); }
 .ask { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: stretch; }
 .ask textarea { min-height: 48px; font-size: 14px !important; }
-.mic { font: inherit; font-size: 14px; cursor: pointer; padding: 8px 14px; border-radius: 6px; border: 1px solid var(--line); background: white; color: var(--ink); }
-.mic[aria-pressed="true"] { background: #a3321f; border-color: #a3321f; color: white; }
+.mic { font: inherit; font-size: 14px; cursor: pointer; padding: 8px 14px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+.mic[aria-pressed="true"] { background: #a3321f; border-color: #a3321f; color: #fff; }
 .remember { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
 .inserts { display: flex; flex-wrap: wrap; gap: 10px 16px; }
 .inserts label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); flex: 1 1 220px; min-width: 0; }
-.inserts select { font: inherit; font-size: 14px; min-height: 38px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: white; color: var(--ink); width: 100%; }
-.attachment { margin: 0; font-size: 14px; padding: 8px 12px; border-radius: 6px; background: #eef3ee; }
+.inserts select { font: inherit; font-size: 14px; min-height: 38px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); width: 100%; }
+.attachment { margin: 0; font-size: 14px; padding: 8px 12px; border-radius: 6px; background: var(--sent); }
 .conflict { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 14px; background: #fbf1e3; color: #5e3b0c; border-radius: 6px; }
 .conflict p { margin: 0; flex: 1 1 100%; font-size: 14px; }
 .sendRow { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 4px; }
-.send { font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; min-height: 44px; padding: 10px 28px; border-radius: 6px; border: 1px solid var(--ink); background: var(--ink); color: white; }
+.send { font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; min-height: 44px; padding: 10px 28px; border-radius: 6px; border: 1px solid var(--ink); background: var(--ink); color: var(--on-ink); }
 .send:hover:not(:disabled) { background: #48204f; }
 .sendRow .note { margin: 0; }
 .original { margin-top: 18px; font-size: 13px; color: var(--muted); }
@@ -100,10 +120,10 @@
 
 .confirm, .forward { margin: 0 0 14px; padding: 12px 14px; border-radius: 8px; background: var(--soft); display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .confirm p { margin: 0; flex: 1 1 100%; font-size: 14px; }
-.danger { font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; min-height: 40px; padding: 8px 18px; border-radius: 6px; border: 1px solid #8b261e; background: #8b261e; color: white; }
+.danger { font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; min-height: 40px; padding: 8px 18px; border-radius: 6px; border: 1px solid #8b261e; background: #8b261e; color: #fff; }
 .forward { display: grid; gap: 10px; }
 .forward label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
-.forward select, .forward textarea { font: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: white; color: var(--ink); width: 100%; }
+.forward select, .forward textarea { font: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); width: 100%; }
 
 .activity { margin: 0 0 14px; font-size: 14px; }
 .activity summary { cursor: pointer; padding: 4px 0; color: var(--muted); }
@@ -113,11 +133,11 @@
 .ruleGroup { padding: 10px 0; border-top: 1px solid var(--line); }
 .ruleGroup h3 { margin: 0 0 4px; font-size: 15px; }
 .caseList { margin: 4px 0 6px; padding-left: 18px; display: grid; gap: 2px; font-size: 14px; }
-.ruleForm select { font: inherit; font-size: 14px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: white; color: var(--ink); max-width: 220px; }
+.ruleForm select { font: inherit; font-size: 14px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); max-width: 220px; }
 .orderNote { margin: 0 0 12px; padding: 10px 14px; border-radius: 8px; background: #fbf1e3; color: #5e3b0c; font-size: 14px; line-height: 1.5; }
 .case { display: grid; gap: 8px; margin: 0 0 14px; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--line); }
 .case > label, .caseNote { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
-.case select, .caseNote input { font: inherit; font-size: 14px; padding: 6px 10px !important; border: 1px solid var(--line); border-radius: 6px; background: white; color: var(--ink); max-width: 360px; }
+.case select, .caseNote input { font: inherit; font-size: 14px; padding: 6px 10px !important; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); max-width: 360px; }
 .case fieldset { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 14px; }
 .case legend { font-size: 13px; color: var(--muted); margin-bottom: 4px; padding: 0; }
 .check { display: inline-flex; align-items: center; gap: 6px; }
@@ -129,17 +149,17 @@
 .templates li .note { grid-column: 2; margin: 0; }
 
 .stateLine { margin: 4px 0 0 !important; font-size: 14px !important; font-weight: 600; color: var(--ink) !important; }
-.stateLine[data-stage="waiting"], .stateLine[data-stage="done"] { color: #2f6b45 !important; }
+.stateLine[data-stage="waiting"], .stateLine[data-stage="done"] { color: var(--sent-ink) !important; }
 .stateLine[data-stage="pitch"], .stateLine[data-stage="spam"], .stateLine[data-stage="deleted"] { color: var(--muted) !important; }
-.rowState[data-stage="waiting"], .rowState[data-stage="done"] { color: #2f6b45; font-weight: 500; }
+.rowState[data-stage="waiting"], .rowState[data-stage="done"] { color: var(--sent-ink); font-weight: 500; }
 .confirm input { flex: 1 1 260px; min-width: 0; font-size: 14px !important; padding: 7px 10px !important; }
 
 .alarm { font-size: 14px; margin: 12px 0; padding: 10px 14px; border-radius: 6px; background: #fbeceb; color: #842a22; border: 1px solid #ecc3bf; font-weight: 600; line-height: 1.5; }
-.vialLot { font-size: 14px; margin: 4px 0 10px; color: #3d2a44; }
+.vialLot { font-size: 14px; margin: 4px 0 10px; color: var(--deep); }
 
 /* Simple reply box (owner, Oct 15 2026: "if I want to write a message just make it easy. if we replied, let me know").
    Replied state uses the same green as sent bubbles in the thread; tools live under one quiet toggle. */
-.replied { margin: 4px 0 10px; padding: 9px 12px; border-radius: 6px; background: #eef3ee; color: #2f6b45; font-size: 14px; font-weight: 600; }
+.replied { margin: 4px 0 10px; padding: 9px 12px; border-radius: 6px; background: var(--sent); color: var(--sent-ink); font-size: 14px; font-weight: 600; }
 .more { margin-top: 14px; padding: 10px 12px; border-radius: 8px; background: var(--soft); font-size: 14px; }
 .more > summary { cursor: pointer; color: var(--muted); font-weight: 600; }
 .more[open] > summary { margin-bottom: 8px; }
@@ -147,7 +167,7 @@
 .more .templates { padding: 0; background: none; }
 
 /* Conversation clarity (Oct 16 2026): a plain summary, then every email labelled with who, to whom and who sent it. */
-.summary { margin: 4px 0 14px; padding: 12px 14px; border-radius: 8px; background: #eef3ee; color: #23452f; font-size: 15px; line-height: 1.5; }
+.summary { margin: 4px 0 14px; padding: 12px 14px; border-radius: 8px; background: var(--sent); color: var(--sent-deep); font-size: 15px; line-height: 1.5; }
 .summary[data-waiting="true"] { background: #fbf1e3; color: #5e3b0c; }
 .summary p { margin: 0; }
 .summaryNext { margin-top: 2px !important; font-weight: 600; }
@@ -200,11 +220,11 @@
 
 /* Drafting follows the evidence; PDF readiness is checked independently of saving. */
 .attachmentList { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.attachmentList li { display: grid; gap: 3px; padding: 10px 12px; background: #eef3ee; border-radius: 6px; }
+.attachmentList li { display: grid; gap: 3px; padding: 10px 12px; background: var(--sent); border-radius: 6px; }
 .attachmentProblem { margin: 0; font-size: 14px; line-height: 1.5; color: #5e3b0c; }
 .attachmentActions { display: flex; flex-wrap: wrap; align-items: end; gap: 8px 16px; }
 .reportSelect { display: grid; gap: 4px; flex: 1 1 280px; max-width: 560px; min-width: 0; }
-.reportSelect select { font: inherit; min-height: 42px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: white; color: var(--ink); width: 100%; }
+.reportSelect select { font: inherit; min-height: 42px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); width: 100%; }
 .draftTools { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; padding: 14px 0 4px; }
 .aiInstruction { display: grid; gap: 4px; flex: 1 1 100%; font-size: 13px; color: var(--muted); }
 .composer .aiInstruction textarea { min-height: 44px; }
@@ -217,3 +237,41 @@
 .pane .composeHead { margin: 0; }
 .pane .coaPicker { gap: 6px; }
 .pane .threadHead { margin-top: 8px; }
+
+/* ---------------------------------------------------------------------------------------------
+ * Night mode (owner, Nov 16 2026). Same rules, second set of values.
+ *
+ * Surfaces go dark and the text on them goes light. The colours that MEAN something keep their
+ * meaning: the sent/replied green is still green, overdue is still red, and the amber and red
+ * notice panels below are left exactly as they are in daylight -- they are kept colours, and they
+ * carry their own dark text, so they stay readable on a black page.
+ *
+ * Where a colour is read as TEXT it lifts to a light tint of itself; where it is a solid FILL
+ * (.danger, the active .mic) it is untouched and holds its own literal.
+ * ------------------------------------------------------------------------------------------- */
+:global(html[data-theme='dark']) .inbox {
+  --soft: #1a1a1e;
+  --muted: #b4b4b9;
+  --panel: #141417;
+  --rowline: #26262c;
+  --rowhover: #1c1c21;
+  --writing: #17171b;
+  --on-ink: #0c0c0e;
+  --sent: #16241b;
+  --sent-ink: #7fc49a;
+  --sent-deep: #9ed4b4;
+  --alert: #f08a7e;
+  --late: #ff9b86;
+  --deep: #d8c4de;
+}
+/* The kept notice panels stay light, so they must not inherit the page's white text. */
+:global(html[data-theme='dark']) .warning,
+:global(html[data-theme='dark']) .orderNote,
+:global(html[data-theme='dark']) .conflict,
+:global(html[data-theme='dark']) .attachmentProblem,
+:global(html[data-theme='dark']) .summary[data-waiting="true"] { color: #5e3b0c; }
+:global(html[data-theme='dark']) .alarm { color: #842a22; }
+/* Send is filled with --ink, which is white at night, so its hover cannot stay the dark plum it
+   uses in daylight: the button's text is dark now, and dark plum under dark text reads as nothing.
+   It lifts to a light tint of the same plum, the same move the link text makes. */
+:global(html[data-theme='dark']) .send:hover:not(:disabled) { background: #e8d4f0; }
