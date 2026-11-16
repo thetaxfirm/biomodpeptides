@@ -10,3 +10,7 @@
 .answer a:hover{text-decoration-thickness:2px}
 .answer a:focus-visible{outline:3px solid var(--ring);outline-offset:5px}
 @media(max-width:600px){.group{margin-top:36px}.group h2{font-size:24px;margin-bottom:22px}.answers{gap:28px}.answer h3{font-size:18px}}
+
+/* Night mode (owner, Nov 16 2026). Only the unpaired text moves: the rules that already set a
+   background and a colour together carry their own contrast and are left exactly as they are. */
+:global(html[data-theme='dark']) .faq, :global(html[data-theme='dark']) .faq p { color:#ffffff; }

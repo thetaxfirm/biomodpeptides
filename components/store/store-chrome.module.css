@@ -4,3 +4,12 @@
 .header a:last-child { color: inherit; text-decoration: underline; text-underline-offset: 4px; }
 .footer { padding: 32px 24px; text-align: center; color: #65556b; }
 @media (max-width: 600px) { .header { flex-wrap: wrap; gap: 16px; padding: 20px; } .header img { width: 150px; } .header span { flex-basis: calc(100% - 174px); } }
+
+/* ---------------------------------------------------------------------------------------------
+ * Night mode (owner, Nov 16 2026: "go through each page and correct colors ... fix fonts colors
+ * and backgrounds"). Additive only -- every daylight rule above is untouched, so the light theme
+ * is provably unchanged. Surfaces go dark, text on them goes light, and the colours that carry
+ * meaning keep it: kept notice panels and solid button fills are deliberately absent below.
+ * ------------------------------------------------------------------------------------------- */
+:global(html[data-theme='dark']) .header { background: #141417; }
+:global(html[data-theme='dark']) .footer { color: #b4b4b9; }
