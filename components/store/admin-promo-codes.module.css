@@ -10,3 +10,15 @@
 .actions { display: flex; gap: 12px; flex-wrap: wrap; }
 .sub { color: #5c5c5c; font-size: 13px; margin: 4px 0 12px; }
 .builtIn { color: #5c5c5c; font-size: 13px; line-height: 1.7; margin: 8px 0 0; }
+
+/* ---------------------------------------------------------------------------------------------
+ * Night mode (owner, Nov 16 2026: "go through each page and correct colors ... fix fonts colors
+ * and backgrounds"). Additive only -- every daylight rule above is untouched, so the light theme
+ * is provably unchanged. Surfaces go dark, text on them goes light, and the colours that carry
+ * meaning keep it: kept notice panels and solid button fills are deliberately absent below.
+ * ------------------------------------------------------------------------------------------- */
+:global(html[data-theme='dark']) .list li { border-bottom: 1px solid #2e2e34; }
+:global(html[data-theme='dark']) .off { color: #b4b4b9; }
+:global(html[data-theme='dark']) .meta { color: #b4b4b9; }
+:global(html[data-theme='dark']) .sub { color: #b4b4b9; }
+:global(html[data-theme='dark']) .builtIn { color: #b4b4b9; }

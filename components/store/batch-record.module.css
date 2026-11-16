@@ -27,3 +27,8 @@
 .coaEmail .coaFields label { display:grid; gap:4px; flex:1 1 150px; font-size:13px; }
 .coaEmail .coaFields label:nth-of-type(2) { flex-basis:210px; }
 .coaEmail .coaFields input { width:100%; }
+
+/* Night mode (owner, Nov 16 2026). Only the unpaired text moves: the rules that already set a
+   background and a colour together carry their own contrast and are left exactly as they are. */
+:global(html[data-theme='dark']) .coaEmail small { color:#b4b4b9; }
+:global(html[data-theme='dark']) .coaError { color:#f08a7e; }

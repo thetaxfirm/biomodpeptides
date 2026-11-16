@@ -22,3 +22,8 @@
   .toolbar { align-items: stretch; }
   .period { flex-basis: 100%; }
 }
+
+/* Night mode (owner, Nov 16 2026). --surface has no night value, so this select fell back to
+   white while `color: inherit` made its text white too. Stated outright rather than left to win
+   on specificity against the generic dark rule for selects. */
+:global(html[data-theme='dark']) .period select { background: #141417; color: #ffffff; border-color: #2e2e34; }

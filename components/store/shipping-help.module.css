@@ -15,3 +15,13 @@
 .label { margin: 16px 0; padding: 16px; background: #fff; border: 1px solid #d9cbdc; }
 .label img { display: block; width: auto; max-width: 100%; max-height: 680px; object-fit: contain; }
 @media (max-width: 640px) { .panel { padding: 16px; } .connection { flex-direction: column; gap: 12px; } .connection button { width: 100%; white-space: normal; } }
+
+/* ---------------------------------------------------------------------------------------------
+ * Night mode (owner, Nov 16 2026: "go through each page and correct colors ... fix fonts colors
+ * and backgrounds"). Additive only -- every daylight rule above is untouched, so the light theme
+ * is provably unchanged. Surfaces go dark, text on them goes light, and the colours that carry
+ * meaning keep it: kept notice panels and solid button fills are deliberately absent below.
+ * ------------------------------------------------------------------------------------------- */
+:global(html[data-theme='dark']) .panel { background: #141417; color: #ffffff; }
+:global(html[data-theme='dark']) .connection { border-block: 1px solid #2e2e34; }
+:global(html[data-theme='dark']) .label { background: #141417; }
