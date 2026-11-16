@@ -1,4 +1,5 @@
-// Batch label sheet: which labels qualify, their order, and that nothing is fabricated or injected.
+// Which labels are waiting to be printed, and in what order. The printable output itself moved to
+// a zip of borderless 4x6 PDFs on Nov 16 2026; see tests/label-archive-v1.cjs.
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),Module=require('node:module');
 const root=path.resolve(__dirname,'..'),ts=require('typescript');
 function load(file){const name=path.join(root,file),m=new Module(name,module);m.filename=name;m.paths=Module._nodeModulePaths(root);
@@ -29,15 +30,13 @@ const entries=L.labelEntries([order('11111111-1111-1111-1111-111111111111','paid
 assert.deepEqual(entries.map(e=>e.number),['#33333333','#11111111']);
 assert.equal(entries[0].tracking,'9400100000000000000000');
 
-const html=L.renderLabelSheet(entries,1760000000000);
-assert(html.includes('Labels to print · 2 orders'));
-assert((html.match(/class="sheet"/g)||[]).length===2,'one page per label');
-assert(html.includes('referrerpolicy="no-referrer"'),'label images do not leak the admin url');
-assert(html.includes('Printing does not mark anything shipped'));
-assert(html.includes('noindex'));
-// Nothing waiting reads as a sheet, not a crash.
-assert(L.renderLabelSheet([],1).includes('No bought labels are waiting'));
-// Saved names are escaped.
-const nasty=L.renderLabelSheet(L.labelEntries([order('dddddddd-1111-1111-1111-111111111111','paid',ship(),{name:'<img src=x onerror=alert(1)>'})]),1);
-assert(!nasty.includes('<img src=x onerror=alert(1)>')&&nasty.includes('&lt;img'),'markup in saved data is escaped');
-console.log('PASS: label eligibility incl. https-only, moving and test orders, oldest-first, one page per label, no-referrer, empty sheet, markup escaped.');
+// Saved customer text is carried, never interpreted: the archive names files from this.
+const nasty = L.labelEntries([order('dddddddd-1111-1111-1111-111111111111','paid',ship(),{name:'<img src=x onerror=alert(1)>'})]);
+assert.equal(nasty[0].customer,'<img src=x onerror=alert(1)>','the entry reports what is saved, unchanged');
+assert.equal(typeof nasty[0].labelUrl,'string');
+// The HTML sheet is gone. Nothing here renders a page any more.
+assert.equal(typeof L.renderLabelSheet,'undefined','the bordered print sheet was removed, not left behind');
+const source = fs.readFileSync(path.join(root,'lib/label-sheet.ts'),'utf8');
+assert(!/<img|<!doctype|page-break/i.test(source),'and no page markup is left in the module');
+
+console.log('PASS: only bought, https, still-waiting labels qualify, oldest first, internal tests and filed records excluded; saved text is carried unchanged; the bordered HTML sheet is gone.');
