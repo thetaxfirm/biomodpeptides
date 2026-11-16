@@ -122,7 +122,65 @@ for (const [name, value] of [['--ord-ink', '#2c1534'], ['--ord-quiet', '#655a68'
 assert(!/--ord-[a-z]+:\s*var\(--ord-/.test(orders), 'no token may be defined as itself');
 assert(!/(^|[^-])#(2c1534|655a68|43284f|d8cedd|ece6ef)/.test(orders.replace(dayPalette, '')),
   'and outside that one block nothing hardcodes a colour that night mode has to override');
+// Every admin screen, not just the ones that were looked at first (owner, Nov 16 2026: "go
+// through each page and correct colors ... stop doing it half ass"). A module that paints its own
+// colours needs its own night block, or that screen is plum-on-black while the rest is correct.
+const moduleDir = path.join(root, 'components/store');
+// A rule that sets a background AND a colour together is self-contained: it carries its own
+// contrast and reads the same on any page, so a status pill or a notice panel needs no night
+// value. What needs one is an UNPAIRED literal -- text with no background of its own (it lands on
+// whatever the page is) or a surface with no text colour (it takes the page's, which is white).
+const paintsOwnColours = (css) => {
+  const body = css.replace(/\/\*[\s\S]*?\*\//g, '')
+                  .replace(/:global\(html\[data-theme='dark'\]\)[^{]*\{[^}]*\}/g, '');
+  const literal = /(?:#[0-9a-fA-F]{3,6}|\bwhite\b)/;
+  for (const [, block] of body.matchAll(/\{([^{}]*)\}/g)) {
+    const decls = block.split(';').map(d => d.trim()).filter(Boolean);
+    const colour = decls.find(d => /^color\s*:/.test(d) && literal.test(d));
+    const surface = decls.find(d => /^background(-color)?\s*:/.test(d) && literal.test(d));
+    if (colour && surface) continue;
+    if (colour || surface) return true;
+  }
+  return false;
+};
+const unlit = [];
+for (const file of fs.readdirSync(moduleDir).filter(f => f.endsWith('.module.css'))) {
+  const css = fs.readFileSync(path.join(moduleDir, file), 'utf8');
+  if (paintsOwnColours(css) && !css.includes("data-theme='dark'")) unlit.push(file);
+}
+assert.deepEqual(unlit, [], 'these stylesheets paint their own colours but have no night block: ' + unlit.join(', '));
+
+// The failure that is invisible in review: a token defined as itself resolves to nothing and
+// silently inherits, so every rule reading it goes wrong while no rule looks wrong.
+for (const file of fs.readdirSync(moduleDir).filter(f => f.endsWith('.module.css'))) {
+  const css = fs.readFileSync(path.join(moduleDir, file), 'utf8');
+  const circular = [...css.matchAll(/(--[a-z-]+)\s*:\s*var\(\s*(--[a-z-]+)\s*\)/g)].filter(m => m[1] === m[2]);
+  assert.deepEqual(circular.map(m => m[1]), [], file + ' defines a token as itself');
+}
+
+// Requests was the screen the owner screenshotted: a white desk with white text on it, because
+// --ink flips to white while --soft and the panels stayed light.
+const inbox = fs.readFileSync(path.join(moduleDir, 'request-inbox.module.css'), 'utf8');
+const inboxDay = /\.inbox \{([\s\S]*?)\n\}/.exec(inbox)[1];
+for (const [name, value] of [['--soft', '#f7f3f8'], ['--muted', '#5f5664'], ['--panel', '#fff'],
+                             ['--on-ink', '#fff'], ['--sent', '#eef3ee'], ['--sent-ink', '#2f6b45']])
+  assert(inboxDay.includes(name + ': ' + value), 'requests keeps ' + name + ' at its daylight value');
+assert(!/background:\s*white\b/.test(inbox), 'and no surface is left hardcoded white');
+const inboxNight = /:global\(html\[data-theme='dark'\]\) \.inbox \{([\s\S]*?)\n\}/.exec(inbox)[1];
+for (const token of ['--soft', '--muted', '--panel', '--on-ink', '--sent', '--sent-ink', '--rowline'])
+  assert(inboxNight.includes(token + ':'), 'night mode moves ' + token);
+// --ink becomes white, so anything filled with --ink must not also be white text.
+assert(/--on-ink:\s*#0c0c0e/.test(inboxNight), 'text on an --ink fill goes dark when --ink goes white');
+
+// The status pills are ink+fill pairs; moving only one half leaves dark-on-dark or light-on-light.
+const products = fs.readFileSync(path.join(moduleDir, 'admin-products.module.css'), 'utf8');
+for (const pill of ['available', 'coming_soon', 'sold_out', 'unavailable']) {
+  const rule = new RegExp(":global\\(html\\[data-theme='dark'\\]\\) \\." + pill + "\\s*\\{([^}]*)\\}").exec(products);
+  assert(rule, pill + ' has a night pair');
+  assert(/--status-ink:/.test(rule[1]) && /--status-fill:/.test(rule[1]), pill + ' moves both halves of the pair');
+}
+
 const nav = fs.readFileSync(path.join(root, 'components/store/admin-nav.module.css'), 'utf8');
 assert.match(nav, /:global\(html\[data-theme='dark'\]\) \.tabs/, 'the side nav has a dark pair, since it paints its own colours');
 
-console.log('PASS: night mode blacks out the background and whites the text while leaving the kept colours alone, and is a per-browser preference that defaults to light, survives a reload, clears itself outright when switched off, treats any other stored value as light, stays inert without a browser and when storage refuses, never reaches the store, and sits outside the settings form. No network.');
+console.log('PASS: every admin stylesheet that paints its own colours has a night block, no token is defined as itself, Requests keeps its daylight palette and moves every surface token, the status pills move as pairs; night mode blacks out the background and whites the text while leaving the kept colours alone, and is a per-browser preference that defaults to light, survives a reload, clears itself outright when switched off, treats any other stored value as light, stays inert without a browser and when storage refuses, never reaches the store, and sits outside the settings form. No network.');
