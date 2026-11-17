@@ -158,6 +158,30 @@ for (const file of fs.readdirSync(moduleDir).filter(f => f.endsWith('.module.css
   assert.deepEqual(circular.map(m => m[1]), [], file + ' defines a token as itself');
 }
 
+// Half a pair is worse than none. When a daylight rule sets a background AND a colour together,
+// darkening only the background leaves that rule's own dark text on a dark surface -- which is
+// exactly what happened to the admin header bar, the first thing on every page. Changing only the
+// COLOUR is allowed and deliberate: that is how a kept amber or red notice panel stays light while
+// no longer inheriting the page's white text.
+const literal = /(?:#[0-9a-fA-F]{3,6}|\bwhite\b)/;
+for (const file of fs.readdirSync(moduleDir).filter(f => f.endsWith('.module.css'))) {
+  const css = fs.readFileSync(path.join(moduleDir, file), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const day = [], night = {};
+  for (const [, sel, block] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const decls = block.split(';').map(d => d.trim()).filter(Boolean);
+    const colour = decls.some(d => /^color\s*:/.test(d) && literal.test(d));
+    const surface = decls.some(d => /^background(-color)?\s*:/.test(d) && literal.test(d));
+    if (sel.includes("data-theme='dark'"))
+      night[sel.replace(":global(html[data-theme='dark'])", '').trim()] = { colour, surface };
+    else if (colour && surface) day.push(sel);
+  }
+  for (const sel of day) for (const part of sel.split(',').map(p => p.trim())) {
+    const over = night[part];
+    if (over && over.surface && !over.colour)
+      assert.fail(file + ': "' + part + '" sets a background and a colour together, but night mode moves only the background, leaving its own dark text on a dark surface');
+  }
+}
+
 // Requests was the screen the owner screenshotted: a white desk with white text on it, because
 // --ink flips to white while --soft and the panels stayed light.
 const inbox = fs.readFileSync(path.join(moduleDir, 'request-inbox.module.css'), 'utf8');
@@ -183,4 +207,4 @@ for (const pill of ['available', 'coming_soon', 'sold_out', 'unavailable']) {
 const nav = fs.readFileSync(path.join(root, 'components/store/admin-nav.module.css'), 'utf8');
 assert.match(nav, /:global\(html\[data-theme='dark'\]\) \.tabs/, 'the side nav has a dark pair, since it paints its own colours');
 
-console.log('PASS: every admin stylesheet that paints its own colours has a night block, no token is defined as itself, Requests keeps its daylight palette and moves every surface token, the status pills move as pairs; night mode blacks out the background and whites the text while leaving the kept colours alone, and is a per-browser preference that defaults to light, survives a reload, clears itself outright when switched off, treats any other stored value as light, stays inert without a browser and when storage refuses, never reaches the store, and sits outside the settings form. No network.');
+console.log('PASS: every admin stylesheet that paints its own colours has a night block, no token is defined as itself, no colour pair is only half moved, Requests keeps its daylight palette and moves every surface token, the status pills move as pairs; night mode blacks out the background and whites the text while leaving the kept colours alone, and is a per-browser preference that defaults to light, survives a reload, clears itself outright when switched off, treats any other stored value as light, stays inert without a browser and when storage refuses, never reaches the store, and sits outside the settings form. No network.');
