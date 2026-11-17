@@ -1,5 +1,6 @@
-// Restaurant partner slots (owner, Nov 13 2026): twenty fixed slots, a name becomes a link and a
-// code, and nothing prices an order until the owner switches it on. Pure functions; no I/O.
+// Business partner slots (owner, Nov 13 2026; widened from restaurants to any business on Nov 17
+// 2026). Twenty fixed slots, a name becomes a link and a code, and nothing prices an order until
+// the owner switches it on. Pure functions; no I/O.
 const assert = require('node:assert/strict'), fs = require('node:fs'), path = require('node:path'), Module = require('node:module');
 const ts = require('typescript');
 const root = path.resolve(__dirname, '..');
@@ -20,7 +21,10 @@ assert.equal(P.codeFromName('Café Rio', 3, 20), 'CAFRIO20', 'an accent is not a
 assert.equal(P.codeFromName('', 3, 15), '', 'no name, no code');
 assert.equal(P.codeFromName('Mario', 1, 0), 'MARIO', 'before a discount is set the code is the name alone');
 assert.equal(P.codeFromName('Jo', 4, 15), 'JO15', 'a short name plus its discount already clears the floor');
-assert.equal(P.codeFromName('Jo', 4, 0), 'JOEAT4', 'a short name with no discount still gets a usable code');
+assert.equal(P.codeFromName('Jo', 4, 0), 'JOBIZ4', 'a short name with no discount still gets a usable code');
+// The padding must not read as a word for one trade: the programme covers med spas and clinics as
+// well as restaurants (owner, Nov 17 2026), and a clinic called Jo should not be handed JOEAT4.
+assert(!/EAT/.test(P.codeFromName('Jo', 4, 0)), 'the filler is trade-neutral');
 assert.equal(P.codeFromName('x'.repeat(80), 5, 15).length, 40, 'codes are capped at the store limit');
 assert(P.codeFromName('x'.repeat(80), 5, 15).endsWith('15'), 'and the discount survives the cut');
 assert(/^[A-Z0-9]{3,40}$/.test(P.codeFromName("Mario's Pizza", 1, 15)), 'and always satisfy the store code rule');
@@ -55,7 +59,7 @@ assert.equal(partial[1].active, true); assert.equal(partial[2].active, false);
 assert.deepEqual(P.livePartnerCodes(partial), [{ code: 'READY10', percentOff: 10 }], 'only a complete, switched-on slot offers a code');
 assert.deepEqual(P.livePartnerCodes(P.normalizePartners([])), []);
 
-// --- Two restaurants cannot collide, and neither can shadow a store code ---
+// --- Two partners cannot collide, and neither can shadow a store code ---
 const clash = P.normalizePartners([
   { slot: 1, name: 'Rio', percentOff: 5, active: true },
   { slot: 2, name: 'Rio', percentOff: 5, active: true },
@@ -66,7 +70,7 @@ assert.deepEqual(clash.slice(0, 3).map(r => r.code), ['RIO5', 'RIO5B', 'RIO5C'])
 assert.deepEqual(clash.slice(0, 3).map(r => r.slug), ['rio5', 'rio5b', 'rio5c']);
 assert.equal(new Set(clash.slice(0, 3).map(r => r.code)).size, 3, 'three distinct codes');
 // Built from the real built-in list, so it stays a genuine collision as that list changes: a
-// built-in like BIOMOD15 is exactly what a restaurant called Biomod at 15% would produce.
+// built-in like BIOMOD15 is exactly what a business called Biomod at 15% would produce.
 const collidable = built.map(c => /^([A-Z]+)(\d{1,2})$/.exec(c)).find(Boolean);
 assert(collidable, 'at least one built-in code is a word followed by its discount');
 const reserved = P.normalizePartners([{ slot: 1, name: collidable[1], percentOff: Number(collidable[2]), active: true }]);
@@ -100,4 +104,4 @@ assert.equal(P.normalizePartners([{ slot: 1, name: 'Over', percentOff: 999, acti
 assert.equal(P.normalizePartners([{ slot: 1, name: 'Over', percentOff: 999, active: true }])[0].active, false);
 assert.equal(P.normalizePartners([{ slot: 1, name: 'Frac', percentOff: 10.5, active: true }])[0].percentOff, 0, 'and so is a fractional one');
 
-console.log('PASS: twenty fixed restaurant slots; a name and its discount become one code that is also the link; collisions separate; a built-in store code is never shadowed; a slot prices nothing until it is complete and switched on; stored text is untrusted throughout.');
+console.log('PASS: twenty fixed business slots; a name and its discount become one code that is also the link; collisions separate; a built-in store code is never shadowed; a slot prices nothing until it is complete and switched on; stored text is untrusted throughout.');

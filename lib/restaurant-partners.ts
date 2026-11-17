@@ -1,9 +1,10 @@
 /**
- * Restaurant partners: twenty fixed slots the owner fills in by typing a name (owner, Nov 13 2026).
+ * Business partners: twenty fixed slots the owner fills in by typing a name (owner, Nov 13 2026;
+ * widened from restaurants to businesses Nov 17 2026, "there can also be med spas and clinics").
  *
  * Deliberately its own program, with its own slots, its own naming and its own switches, rather
  * than more rows in the general promo code list. The owner asked for it kept apart from everything
- * else, and a restaurant deal is a different thing from a one-off discount code.
+ * else, and a standing partner deal is a different thing from a one-off discount code.
  *
  * What it is NOT is a second pricing path. A slot that is switched on writes its code into the
  * ordinary stored-promo row, so checkout pricing, the /r/ links, affiliate approval and the promo
@@ -14,7 +15,9 @@
 import { cleanPercentOff, cleanPromoCode, builtInCodes, MAX_PERCENT_OFF } from './promo-codes';
 import { legacyRoutes } from './legacy-routes';
 
-export const RESTAURANT_PARTNERS_KEY = 'restaurant_partners_v1';
+// The settings row keeps its original name. The programme was called Restaurants when it was
+// built and the key is what every saved slot is stored under: renaming it would orphan all twenty.
+export const BUSINESS_PARTNERS_KEY = 'restaurant_partners_v1';
 export const PARTNER_SLOTS = 20;
 export { MAX_PERCENT_OFF };
 
@@ -26,21 +29,25 @@ export type PartnerSlot = {
     percentOff: number;    // 0 until the owner sets one; a slot cannot go live without it
     active: boolean;
     // Codes this slot has used before. A rename must take the old code down with it, and the
-    // programme can only do that if it remembers what it issued: otherwise a renamed restaurant
+    // programme can only do that if it remembers what it issued: otherwise a renamed partner
     // leaves a live discount behind that credits nobody.
     previous: string[];
     updated: number;
     by: string;
 };
 
+/** Padding for a name too short to make a code on its own. Trade-neutral: the programme covers
+ *  clinics and med spas as well as restaurants, so it cannot read as a word for one of them. */
+const FILLER = 'BIZ';
+
 /**
  * The name and its discount as one code: "Mario's Pizza" at 15% -> "MARIOSPIZZA15" (owner, Nov 13
- * 2026). The link is the same string in lower case, so a restaurant has one identifier to hand out
+ * 2026). The link is the same string in lower case, so a partner has one identifier to hand out
  * rather than two to keep straight.
  *
  * Codes allow only letters and digits, so there is nothing to separate the words with. Three
  * characters is the floor the store's own code rule sets, and a name shorter than that gets its
- * slot number rather than being refused: the owner is typing a real restaurant's name, and the
+ * slot number rather than being refused: the owner is typing a real business's name, and the
  * machine should cope with it.
  *
  * Because the discount is part of the code, changing the percentage changes the code and the link.
@@ -52,7 +59,7 @@ export function codeFromName(value: unknown, slot: number, percentOff = 0, max =
     const room = max - suffix.length;
     const letters = String(value ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, room);
     if (!letters) return '';
-    const base = letters.length >= 3 || suffix.length >= 3 - letters.length ? letters : (letters + 'EAT' + slot).slice(0, room);
+    const base = letters.length >= 3 || suffix.length >= 3 - letters.length ? letters : (letters + FILLER + slot).slice(0, room);
     return (base + suffix).slice(0, max);
 }
 
@@ -60,7 +67,7 @@ export function codeFromName(value: unknown, slot: number, percentOff = 0, max =
 export const slugFromCode = (code: unknown): string => String(code ?? '').trim().toLowerCase();
 
 /**
- * Keeps two restaurants with the same name apart, without silently repointing either.
+ * Keeps two partners with the same name apart, without silently repointing either.
  *
  * A letter, not a number: the code already ends in its discount, and RIO15 followed by RIO152
  * reads as a hundred and fifty-two per cent.
@@ -75,7 +82,7 @@ function unique(wanted: string, taken: Set<string>): string {
 }
 
 /**
- * Top-level names the storefront already owns. A restaurant link is a bare path --
+ * Top-level names the storefront already owns. A partner link is a bare path --
  * trybiomod.com/mariospizza15 -- so a code landing on one of these would be shadowed by the real
  * page and the link would quietly do nothing (owner, Nov 13 2026).
  *
@@ -101,7 +108,7 @@ export const RESERVED_SLUGS: readonly string[] = [
 ];
 const reserved = new Set<string>([
     ...RESERVED_SLUGS,
-    // Every old URL that is a single segment: those still redirect, so a restaurant link landing on
+    // Every old URL that is a single segment: those still redirect, so a partner link landing on
     // one would be sent to the old destination instead of the shop.
     ...Object.keys(legacyRoutes).filter(route => !route.includes('/')).map(route => route.toLowerCase()),
 ]);
@@ -123,7 +130,7 @@ export function previousCodes(raw: unknown, current: string): string[] {
     return [...seen];
 }
 
-/** A slot may only be switched on once it names a restaurant, a link, a code and a discount. */
+/** A slot may only be switched on once it names a business, a link, a code and a discount. */
 export const slotReady = (row: PartnerSlot): boolean =>
     Boolean(row.name && row.slug && row.code && row.percentOff > 0);
 
@@ -141,7 +148,7 @@ export function normalizePartners(raw: unknown): PartnerSlot[] {
         const found = rows.find(entry => entry && typeof entry === 'object' && Number((entry as Record<string, unknown>).slot) === slot) as Record<string, unknown> | undefined;
         if (!found) { out.push(emptySlot(slot)); continue; }
         const name = String(found.name ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
-        // An emptied slot still carries the codes it issued, so clearing a restaurant retires its
+        // An emptied slot still carries the codes it issued, so clearing a partner retires its
         // discount instead of abandoning it live with nobody to credit.
         if (!name) { out.push({ ...emptySlot(slot), previous: previousCodes(found.previous, '') }); continue; }
         const percentOff = cleanPercentOff(found.percentOff);
@@ -185,9 +192,9 @@ export function partnerCodeForSlug(rows: PartnerSlot[], slug: unknown): string {
 }
 
 /**
- * The slug a bare request path could name, or '' when it could not be a restaurant link at all.
+ * The slug a bare request path could name, or '' when it could not be a partner link at all.
  *
- * Only ever one segment: a restaurant's address is trybiomod.com/mariospizza15, and treating the
+ * Only ever one segment: a partner's address is trybiomod.com/mariospizza15, and treating the
  * first segment of a deeper path as a link would hand /mariospizza15/anything to the shop too.
  */
 export function linkSlugCandidate(path: readonly string[] | null | undefined): string {
@@ -203,11 +210,11 @@ export function parsePartners(value: string | null | undefined): PartnerSlot[] {
 }
 
 export async function readPartners(db: D1Database): Promise<{ value: string | null; rows: PartnerSlot[] }> {
-    const row = await db.prepare('SELECT value FROM settings WHERE key=?').bind(RESTAURANT_PARTNERS_KEY).first<{ value: string }>();
+    const row = await db.prepare('SELECT value FROM settings WHERE key=?').bind(BUSINESS_PARTNERS_KEY).first<{ value: string }>();
     return { value: row?.value ?? null, rows: parsePartners(row?.value) };
 }
 
-/** Never throws: a restaurant programme that cannot be read must not stop a customer checking out. */
+/** Never throws: a partner programme that cannot be read must not stop a customer checking out. */
 export async function partnerSlots(db?: D1Database | null): Promise<PartnerSlot[]> {
     if (!db) return normalizePartners([]);
     try { return (await readPartners(db)).rows; }
@@ -218,15 +225,15 @@ export async function partnerSlots(db?: D1Database | null): Promise<PartnerSlot[
  * Makes the stored promo row agree with the slots, in one compare-and-set.
  *
  * One write for all twenty, not twenty writes: a per-slot loop that failed halfway would leave some
- * restaurants live and others not, with no record of which. Codes the restaurant programme does not
- * own are copied through untouched, so a code added on the Promo codes tab is never disturbed.
+ * partners live and others not, with no record of which. Codes the partner programme does not own
+ * are copied through untouched, so a code added on the Promo codes tab is never disturbed.
  */
 export async function syncPartnerCodes(db: D1Database, rows: PartnerSlot[], by: string, now = Date.now()): Promise<{ live: string[]; retired: string[] }> {
     const { readStoredPromos, PROMO_CODES_KEY: KEY } = await import('./promo-codes');
     const before = await readStoredPromos(db);
     const live = new Map(livePartnerCodes(rows).map(entry => [entry.code, entry.percentOff]));
     // Every code the programme has ever issued, current and retired, so switching a slot off or
-    // renaming a restaurant takes the old code down with it.
+    // renaming a partner takes the old code down with it.
     const owned = new Set(rows.flatMap(row => [row.code, ...row.previous]).filter(Boolean));
     const kept = before.rows.filter(promo => !owned.has(promo.code));
     const retired: string[] = [];

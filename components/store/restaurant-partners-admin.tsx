@@ -1,6 +1,7 @@
 'use client';
-// Twenty restaurant slots inside the Affiliates tab (owner, Nov 13 2026). Type a restaurant's name
-// and the slot names its own link and discount code; the switch decides whether it prices anything.
+// Twenty business slots inside the Affiliates tab (owner, Nov 13 2026; widened from restaurants to
+// businesses Nov 17 2026, "there can also be med spas and clinics"). Type a business name and the
+// slot names its own link and discount code; the switch decides whether it prices anything.
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { PARTNER_SLOTS, MAX_PERCENT_OFF, slugFromCode, codeFromName, type PartnerSlot } from '@/lib/restaurant-partners';
@@ -44,14 +45,14 @@ export function RestaurantPartners() {
     }
 
     if (error && !slots) return <p className="notice">{error}</p>;
-    if (!slots) return <p>Loading restaurant slots…</p>;
+    if (!slots) return <p>Loading business slots…</p>;
 
     const filled = slots.filter(s => s.name).length;
     const live = slots.filter(s => s.active).length;
 
-    return <section aria-label="Restaurant partners">
-        <p>{filled} of {PARTNER_SLOTS} slots filled · {live} live. Type a restaurant&apos;s name and the slot writes its own link and discount code. Nothing is discounted until you switch a slot on.</p>
-        <p className="notice">A link only gives a restaurant credit once that restaurant is an approved affiliate with an accepted agreement and schedule. Until then the link still applies the discount, but the sale is credited to nobody.</p>
+    return <section aria-label="Business partners">
+        <p>{filled} of {PARTNER_SLOTS} slots filled · {live} live. Works for any business &mdash; restaurant, med spa, clinic, gym. Type its name and the slot writes its own link and discount code. Nothing is discounted until you switch a slot on.</p>
+        <p className="notice">A link only gives a business credit once that business is an approved affiliate with an accepted agreement and schedule. Until then the link still applies the discount, but the sale is credited to nobody.</p>
         {error && <p className="notice">{error}</p>}
         {slots.map(slot => {
             const edit = draft[slot.slot] ?? { name: slot.name, percentOff: slot.percentOff ? String(slot.percentOff) : '' };
@@ -65,8 +66,8 @@ export function RestaurantPartners() {
             return <article className="account-record" key={slot.slot}>
                 <h4>Slot {slot.slot}{slot.name ? ' · ' + slot.name : ' · empty'}{slot.active ? ' · LIVE' : ''}</h4>
                 <div className="form-row">
-                    <label className="field">Restaurant name
-                        <input value={edit.name} maxLength={80} placeholder="Mario&apos;s Pizza" disabled={working}
+                    <label className="field">Business name
+                        <input value={edit.name} maxLength={80} placeholder="Mario&apos;s Pizza, Lakeside Med Spa…" disabled={working}
                             onChange={e => set({ name: e.target.value })}/>
                     </label>
                     <label className="field">Discount (%)

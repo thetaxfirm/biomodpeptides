@@ -3,13 +3,13 @@ import { requireStaff } from '@/lib/auth';
 import { runtime } from '@/lib/runtime';
 import { auditRun, recordChange } from '@/lib/change-history';
 import {
-    RESTAURANT_PARTNERS_KEY, PARTNER_SLOTS, MAX_PERCENT_OFF,
+    BUSINESS_PARTNERS_KEY, PARTNER_SLOTS, MAX_PERCENT_OFF,
     readPartners, normalizePartners, slotReady, syncPartnerCodes, type PartnerSlot,
 } from '@/lib/restaurant-partners';
 export const dynamic = 'force-dynamic';
 const j = (value: unknown, status = 200) => NextResponse.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
 
-/** The twenty restaurant slots. Filling one in names a link and a code; the switch decides whether
+/** The twenty business slots. Filling one in names a link and a code; the switch decides whether
  * it prices anything. Kept apart from the general promo code list on purpose (owner, Nov 13 2026). */
 export async function GET() {
     try {
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
             return j({ error: 'Choose one of the ' + PARTNER_SLOTS + ' slots.' }, 400);
 
         // Read, change, write back only if the row is byte-for-byte what was read. Two people
-        // filling slots at once would otherwise silently drop one of the two restaurants.
+        // filling slots at once would otherwise silently drop one of the two businesses.
         const before = await readPartners(env.DB);
         const current = before.rows;
         const existing = current[slot - 1];
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
         const saved = next[slot - 1];
 
         if (body.active === true && !slotReady(saved))
-            return j({ error: 'A slot needs a restaurant name and a discount between 1 and ' + MAX_PERCENT_OFF + '% before it can be switched on.' }, 400);
+            return j({ error: 'A slot needs a business name and a discount between 1 and ' + MAX_PERCENT_OFF + '% before it can be switched on.' }, 400);
         if (saved.name && !saved.slug)
             return j({ error: 'That name matches a page the site already serves, so the link would not work. Use a different name for this slot.' }, 409);
         if (saved.name && !saved.code)
@@ -73,18 +73,20 @@ export async function POST(req: NextRequest) {
 
         const value = JSON.stringify(next);
         const written = before.value !== null
-            ? await auditRun(env.DB, context, 'UPDATE settings SET value=? WHERE key=? AND value=?', value, RESTAURANT_PARTNERS_KEY, before.value)
-            : await auditRun(env.DB, context, 'INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO NOTHING', RESTAURANT_PARTNERS_KEY, value);
-        if (!written.meta.changes) return j({ error: 'Restaurant slots changed while this page was open. Reload administration and try again.' }, 409);
+            ? await auditRun(env.DB, context, 'UPDATE settings SET value=? WHERE key=? AND value=?', value, BUSINESS_PARTNERS_KEY, before.value)
+            : await auditRun(env.DB, context, 'INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO NOTHING', BUSINESS_PARTNERS_KEY, value);
+        if (!written.meta.changes) return j({ error: 'Business slots changed while this page was open. Reload administration and try again.' }, 409);
 
         // Only now does anything price an order. If this fails the slots are saved and nothing is
         // live, which is the safe direction: the owner sees the error and presses save again.
         const sync = await syncPartnerCodes(env.DB, next, actor.email);
 
-        const summary = body.clear === true ? 'Restaurant slot ' + slot + ' cleared.'
-            : saved.active ? 'Restaurant slot ' + slot + ' (' + saved.name + ') is on at ' + saved.percentOff + '% with code ' + saved.code + '.'
-            : 'Restaurant slot ' + slot + (saved.name ? ' (' + saved.name + ')' : '') + ' saved, switched off.';
+        const summary = body.clear === true ? 'Business slot ' + slot + ' cleared.'
+            : saved.active ? 'Business slot ' + slot + ' (' + saved.name + ') is on at ' + saved.percentOff + '% with code ' + saved.code + '.'
+            : 'Business slot ' + slot + (saved.name ? ' (' + saved.name + ')' : '') + ' saved, switched off.';
         try {
+            // The event type keeps its original name on purpose: it is the stable identifier the
+            // change log groups by, and renaming it would split this programme's history in two.
             await recordChange(env.DB, { ...context, action: 'store.restaurant_partner', entityType: 'setting', entityId: String(slot), status: 'succeeded', changes: [], summary });
         } catch { /* the slot is saved; a missing history row must not suggest otherwise */ }
 
