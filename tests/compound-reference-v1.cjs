@@ -94,6 +94,26 @@ const validCas = cas => { const m = /^(\d{2,7})-(\d\d)-(\d)$/.exec(cas); return 
   }
   // Run & Gun is a blend: it links to the CJC-1295 No DAC reference, which lists it after the single vial.
   assert.deepEqual(compounds.find(c => c.slug === 'cjc-1295-no-dac').products, ['cjc-1295-no-dac-10mg', 'run-gun-10mg']);
+  // Sprays and softgels whose catalog identity names a referenced compound are listed under it, after the
+  // vial, so the reference page links them and they link back (November 17, 2026). BIONIC holds BPC-157
+  // arginate, a different salt, so it is listed under KPV only.
+  const formats = { 'aod-9604': ['softgel-chisel-aod-9604'], 'bpc-157': ['forge-bpc-157-spray', 'klow-spray'], epitalon: ['softgel-delta-pinealon-epithalon'],
+    'ghk-cu': ['glow-spray', 'klow-spray'], kpv: ['klow-spray', 'softgel-bionic-bpc-157-arginate-kpv-vitamin-e'], nad: ['flux-nad-spray'],
+    'pt-141': ['ignite-pt-141-oxy-spray'], selank: ['equil-selank-spray'], semax: ['apex-semax-spray'] };
+  for (const [slug, listedFormats] of Object.entries(formats)) {
+    const c = compounds.find(x => x.slug === slug);
+    assert.deepEqual(c.products.slice(1), listedFormats, slug + ': spray and softgel listings follow the vial');
+    for (const productSlug of listedFormats) {
+      const p = products.find(x => x.slug === productSlug);
+      const identity = p.identity.toLowerCase().replace('epithalon', 'epitalon');
+      assert(identity.includes(c.name.toLowerCase()), productSlug + ': catalog identity names ' + c.name + ' (' + p.identity + ')');
+      if (!publication.productSlugs.includes(productSlug) || productReviewBlocks[productSlug]) continue;
+      assert(productLinks(render(React.createElement(CompoundPage, { slug }))).includes(productSlug), slug + ' reference page links ' + productSlug);
+      const back = render(React.createElement(ProductResearchDetails, { product: p }));
+      assert(back.includes('href="/compounds/' + compounds.find(x => x.products.includes(productSlug)).slug + '"'), productSlug + ' links back to a compound reference');
+    }
+  }
+  assert(!compounds.find(c => c.slug === 'bpc-157').products.includes('softgel-bionic-bpc-157-arginate-kpv-vitamin-e'), 'BPC-157 arginate is not listed as BPC-157');
 
   for (const x of comparisons) {
     const info = pageInfo('/compare/' + x.slug);

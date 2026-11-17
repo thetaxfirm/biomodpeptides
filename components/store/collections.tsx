@@ -31,7 +31,7 @@ export function CollectionPage({ slug }: { slug: string }) {
   const { store } = useStore();
   const c = collectionAt(slug)!;
   const items = listed(c, store.products);
-  const references = collectionCompounds(c).filter(publishedCompound);
+  const references = c.byFormat ? [] : collectionCompounds(c).filter(publishedCompound); // format collections group by container
   const others = collections.filter(x => x.slug !== c.slug && publishedCollection(x));
   return <div className={styles.page}>
     <nav aria-label="Breadcrumb" className={styles.crumbs}><a href="/shop">Shop</a><span aria-hidden="true">/</span><a href="/collections">Collections</a><span aria-hidden="true">/</span><span>{c.name}</span></nav>

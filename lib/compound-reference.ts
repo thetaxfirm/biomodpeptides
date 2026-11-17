@@ -17,15 +17,15 @@ export type Compound = {
   weight: string; // g/mol, as PubChem computes it
   sequence?: string;
   residues?: number;
-  products: string[]; // single-compound listings first, then blends that contain it
+  products: string[]; // single-compound vial first, then blends, sprays and softgels whose identity names it
 };
 
 export const compounds: Compound[] = [
   { slug: 'aod-9604', name: 'AOD 9604', aliases: ['AOD-9604', 'Tyr-hGH 177-191'], cas: '221231-10-3', cid: 71300630, formula: 'C78H123N23O23S2', weight: '1815.1',
-    summary: 'AOD 9604 is a synthetic analog of the C-terminal region (residues 177 to 191) of human growth hormone with an added N-terminal tyrosine.', products: ['aod-9604-10mg'] },
+    summary: 'AOD 9604 is a synthetic analog of the C-terminal region (residues 177 to 191) of human growth hormone with an added N-terminal tyrosine.', products: ['aod-9604-10mg', 'softgel-chisel-aod-9604'] },
   { slug: 'bpc-157', name: 'BPC-157', aliases: ['BPC157', 'BPC 157', 'Body Protection Compound 157'], cas: '137525-51-0', cid: 9941957, formula: 'C62H98N16O22', weight: '1419.5',
     sequence: 'Gly-Glu-Pro-Pro-Pro-Gly-Lys-Pro-Ala-Asp-Asp-Ala-Gly-Leu-Val', residues: 15,
-    summary: 'BPC-157 is a synthetic 15-amino-acid sequence, named Body Protection Compound 157, first described as a partial sequence of a protein isolated from gastric juice.', products: ['bpc-157-10mg'] },
+    summary: 'BPC-157 is a synthetic 15-amino-acid sequence, named Body Protection Compound 157, first described as a partial sequence of a protein isolated from gastric juice.', products: ['bpc-157-10mg', 'forge-bpc-157-spray', 'klow-spray'] },
   { slug: 'cjc-1295-no-dac', name: 'CJC-1295 No DAC', aliases: ['Mod GRF 1-29', 'Modified GRF (1-29)', 'CJC-1295 without DAC'], cas: '863288-34-0', cid: 56841945, formula: 'C152H252N44O42', weight: '3367.9',
     sequence: 'Tyr-D-Ala-Asp-Ala-Ile-Phe-Thr-Gln-Ser-Tyr-Arg-Lys-Val-Leu-Ala-Gln-Leu-Ser-Ala-Arg-Lys-Leu-Leu-Gln-Asp-Ile-Leu-Ser-Arg-NH2', residues: 29,
     summary: 'CJC-1295 No DAC, also called Mod GRF 1-29, is a modified 29-amino-acid analog of growth hormone-releasing hormone (GHRH 1-29) without the drug affinity complex (DAC).', products: ['cjc-1295-no-dac-10mg', 'run-gun-10mg'] },
@@ -34,10 +34,10 @@ export const compounds: Compound[] = [
     summary: 'DSIP (emideltide) is a nine-amino-acid sequence first isolated in 1977 from rabbit cerebral venous blood.', products: ['dsip-10mg'] },
   { slug: 'epitalon', name: 'Epitalon', aliases: ['Epithalon', 'Ala-Glu-Asp-Gly', 'AEDG'], cas: '307297-39-8', cid: 219042, formula: 'C14H22N4O9', weight: '390.35',
     sequence: 'Ala-Glu-Asp-Gly', residues: 4,
-    summary: 'Epitalon is the synthetic four-amino-acid sequence Ala-Glu-Asp-Gly.', products: ['epitalon-50mg'] },
+    summary: 'Epitalon is the synthetic four-amino-acid sequence Ala-Glu-Asp-Gly.', products: ['epitalon-50mg', 'softgel-delta-pinealon-epithalon'] },
   { slug: 'ghk-cu', name: 'GHK-Cu', aliases: ['Prezatide Copper', 'GHK copper complex'], cas: '89030-95-5', cid: 71587328, formula: 'C14H23CuN6O4+', weight: '402.92',
     sequence: 'Gly-His-Lys · Cu(II)', residues: 3,
-    summary: 'GHK-Cu (prezatide copper) is the copper(II) complex of glycyl-L-histidyl-L-lysine. CAS 89030-95-5 identifies the copper complex; copper-free GHK is a separate substance (49557-75-7).', products: ['ghk-cu-50mg'] },
+    summary: 'GHK-Cu (prezatide copper) is the copper(II) complex of glycyl-L-histidyl-L-lysine. CAS 89030-95-5 identifies the copper complex; copper-free GHK is a separate substance (49557-75-7).', products: ['ghk-cu-50mg', 'glow-spray', 'klow-spray'] },
   { slug: 'glutathione', name: 'Glutathione', aliases: ['Reduced L-Glutathione', 'GSH'], cas: '70-18-8', cid: 124886, formula: 'C10H17N3O6S', weight: '307.33',
     sequence: 'γ-Glu-Cys-Gly', residues: 3,
     summary: 'Reduced L-glutathione (GSH) is γ-L-glutamyl-L-cysteinylglycine, a three-residue thiol compound.', products: ['glutathione-reduced-l-glutathione'] },
@@ -45,20 +45,20 @@ export const compounds: Compound[] = [
     summary: 'Kisspeptin-10 is the C-terminal ten-amino-acid fragment of kisspeptin, the product of the KISS1 gene.', products: ['kisspeptin-10mg'] },
   { slug: 'kpv', name: 'KPV', aliases: ['Lys-Pro-Val', 'α-MSH (11-13)'], cas: '67727-97-3', cid: 125672, formula: 'C16H30N4O4', weight: '342.43',
     sequence: 'Lys-Pro-Val', residues: 3,
-    summary: 'KPV is Lys-Pro-Val, the C-terminal three-amino-acid sequence (residues 11 to 13) of alpha-melanocyte-stimulating hormone.', products: ['kpv-10mg'] },
+    summary: 'KPV is Lys-Pro-Val, the C-terminal three-amino-acid sequence (residues 11 to 13) of alpha-melanocyte-stimulating hormone.', products: ['kpv-10mg', 'klow-spray', 'softgel-bionic-bpc-157-arginate-kpv-vitamin-e'] },
   { slug: 'mots-c', name: 'MOTS-c', aliases: ['MOTSc', 'Mitochondrial ORF of the 12S rRNA type-c'], cas: '1627580-64-6', cid: 146675088, formula: 'C101H152N28O22S2', weight: '2174.6',
     sequence: 'Met-Arg-Trp-Gln-Glu-Met-Gly-Tyr-Ile-Phe-Tyr-Pro-Arg-Lys-Leu-Arg', residues: 16,
     summary: 'MOTS-c is a 16-amino-acid sequence encoded within the mitochondrial 12S rRNA gene.', products: ['mots-c-10mg', 'mots-c-40mg'] },
   { slug: 'nad', name: 'NAD+', aliases: ['Nicotinamide Adenine Dinucleotide', 'Nadide', 'β-NAD'], cas: '53-84-9', cid: 5892, formula: 'C21H27N7O14P2', weight: '663.4',
-    summary: 'NAD+ (nicotinamide adenine dinucleotide, nadide) is a dinucleotide coenzyme made of nicotinamide and adenine nucleotides joined through their phosphate groups.', products: ['nad-500mg'] },
+    summary: 'NAD+ (nicotinamide adenine dinucleotide, nadide) is a dinucleotide coenzyme made of nicotinamide and adenine nucleotides joined through their phosphate groups.', products: ['nad-500mg', 'flux-nad-spray'] },
   { slug: 'pt-141', name: 'PT-141', aliases: ['Bremelanotide', 'PT141'], cas: '189691-06-3', cid: 9941379, formula: 'C50H68N14O10', weight: '1025.2',
-    summary: 'PT-141 (bremelanotide) is a synthetic cyclic seven-amino-acid analog of alpha-melanocyte-stimulating hormone.', products: ['pt-141-10mg'] },
+    summary: 'PT-141 (bremelanotide) is a synthetic cyclic seven-amino-acid analog of alpha-melanocyte-stimulating hormone.', products: ['pt-141-10mg', 'ignite-pt-141-oxy-spray'] },
   { slug: 'selank', name: 'Selank', aliases: ['TP-7'], cas: '129954-34-3', cid: 11765600, formula: 'C33H57N11O9', weight: '751.9',
     sequence: 'Thr-Lys-Pro-Arg-Pro-Gly-Pro', residues: 7,
-    summary: 'Selank is a synthetic seven-amino-acid analog of tuftsin (Thr-Lys-Pro-Arg) extended with Pro-Gly-Pro.', products: ['selank'] },
+    summary: 'Selank is a synthetic seven-amino-acid analog of tuftsin (Thr-Lys-Pro-Arg) extended with Pro-Gly-Pro.', products: ['selank', 'equil-selank-spray'] },
   { slug: 'semax', name: 'Semax', aliases: ['ACTH (4-7) Pro-Gly-Pro', 'MEHFPGP'], cas: '80714-61-0', cid: 9811102, formula: 'C37H51N9O10S', weight: '813.9',
     sequence: 'Met-Glu-His-Phe-Pro-Gly-Pro', residues: 7,
-    summary: 'Semax is a synthetic seven-amino-acid sequence: the ACTH (4-7) fragment Met-Glu-His-Phe extended with Pro-Gly-Pro.', products: ['semax'] },
+    summary: 'Semax is a synthetic seven-amino-acid sequence: the ACTH (4-7) fragment Met-Glu-His-Phe extended with Pro-Gly-Pro.', products: ['semax', 'apex-semax-spray'] },
   { slug: 'ss-31', name: 'SS-31', aliases: ['Elamipretide', 'MTP-131'], cas: '736992-21-5', cid: 11764719, formula: 'C32H49N9O5', weight: '639.8',
     sequence: 'D-Arg-Dmt-Lys-Phe-NH2', residues: 4,
     summary: 'SS-31 (elamipretide) is a synthetic four-residue Szeto-Schiller compound, D-Arg-Dmt-Lys-Phe-NH2, where Dmt is 2′,6′-dimethyltyrosine.', products: ['ss-31-10mg', 'ss-31-50mg'] },
