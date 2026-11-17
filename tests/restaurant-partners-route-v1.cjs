@@ -1,4 +1,4 @@
-// The restaurant slots endpoint against isolated SQLite, plus the /r vanity link. No network.
+// The business slots endpoint against isolated SQLite, plus the /r vanity link. No network.
 const assert = require('node:assert/strict'), fs = require('node:fs'), path = require('node:path'), Module = require('node:module');
 const { DatabaseSync } = require('node:sqlite'), ts = require('typescript');
 const root = path.resolve(__dirname, '..');
@@ -79,7 +79,7 @@ const slots = () => JSON.parse(db.prepare("SELECT value FROM settings WHERE key=
 
   // A slot with no discount cannot be switched on, and nothing changes when it is refused.
   r = await post({ slot: 4, name: 'No Discount', active: true });
-  assert.equal(r.status, 400); assert.match(r.body.error, /needs a restaurant name and a discount/);
+  assert.equal(r.status, 400); assert.match(r.body.error, /needs a business name and a discount/);
   assert.equal(promos().length, 1, 'the refused slot added no code');
 
   // Renaming follows through to the link and the code, and retires the old code rather than
@@ -91,7 +91,7 @@ const slots = () => JSON.parse(db.prepare("SELECT value FROM settings WHERE key=
   assert.equal(after.find(p => p.code === 'MARIOSPIZZA12').active, false, 'the old code is switched off, not removed');
   assert.equal(after.find(p => p.code === 'MARIOSTRATTORIA12').active, true);
 
-  // A code added on the Promo codes tab is never disturbed by the restaurant programme.
+  // A code added on the Promo codes tab is never disturbed by the partner programme.
   const keep = [...promos(), { code: 'VIXEN15', percentOff: 15, active: true, created: 5, by: 'logan' }];
   db.prepare("UPDATE settings SET value=? WHERE key='promo_codes_v1'").run(JSON.stringify(keep));
   r = await post({ slot: 5, name: 'Keg And Grill', percentOff: 10, active: true });
@@ -112,7 +112,7 @@ const slots = () => JSON.parse(db.prepare("SELECT value FROM settings WHERE key=
 
   // Every save is recorded, and never with a customer or a secret in it.
   assert(events.length >= 5);
-  for (const e of events) { assert.equal(e.actor, 'logan@example.invalid'); assert.equal(e.action, 'store.restaurant_partner'); assert.deepEqual(e.changes, []); }
+  for (const e of events) { assert.equal(e.actor, 'logan@example.invalid'); assert.equal(e.action, 'store.restaurant_partner', 'the event type keeps its original name so the change log does not split'); assert.deepEqual(e.changes, []); }
   assert(events.some(e => /is on at 12% with code MARIOSPIZZA12/.test(e.summary)));
 
   // A slot changed underneath the page loses the race rather than clobbering it.
@@ -124,7 +124,7 @@ const slots = () => JSON.parse(db.prepare("SELECT value FROM settings WHERE key=
   assert.equal(r.body.slots[8].name, 'Someone Else', "another administrator's slot survives");
 
   // --- The link itself: following trybiomod.com/<code> must apply that discount ---
-  // Handing a restaurant a link is pointless if the customer still has to type the code, so the
+  // Handing a partner a link is pointless if the customer still has to type the code, so the
   // /r route is exercised for real here rather than grepped.
   for (const sql of [
     'CREATE TABLE affiliate_members(code TEXT, owner TEXT, agreement_id TEXT, status TEXT)',
@@ -184,19 +184,25 @@ const slots = () => JSON.parse(db.prepare("SELECT value FROM settings WHERE key=
   assert.match(ui, /codeFromName\(edit\.name, slot\.slot, Number\(edit\.percentOff\) \|\| 0\)/, 'the preview carries the typed discount');
   assert.match(ui, /previewSlug = slugFromCode\(previewCode\)/, 'and the previewed link is that code');
   assert.doesNotMatch(ui, /slugFromName/, 'the old two-identifier preview is gone');
+  // The page must offer the programme to any business, or med spas and clinics never apply
+  // (owner, Nov 17 2026). The old wording asked for a restaurant name and nothing else.
+  assert.match(ui, /Business name/, 'the field asks for a business, not a restaurant');
+  assert.match(ui, /med spa/i, 'and says outright who else it is for');
+  assert.doesNotMatch(ui, /Restaurant name/, 'the restaurant-only wording is gone');
   const proxy = fs.readFileSync(path.join(root, 'proxy.ts'), 'utf8');
-  assert.match(proxy, /partnerCodeForSlug\(await partnerSlots\(database\(\)\), slug\)/, 'a bare path resolves a restaurant link');
+  assert.match(proxy, /partnerCodeForSlug\(await partnerSlots\(database\(\)\), slug\)/, 'a bare path resolves a partner link');
   assert.match(proxy, /NextResponse\.redirect\(partner, 302\)/, 'and hands off to the route that owns the cookie');
   assert.match(ui, /credited to nobody/, 'it says plainly that a link alone earns no credit');
   assert.match(ui, /Retired codes/, 'and surfaces codes kept switched off');
   // Its own page in the side nav, under the Affiliates dropdown -- not a fold in the middle of
-  // the affiliate page, which is where it started (owner, Nov 13 2026).
+  // the affiliate page, which is where it started (owner, Nov 13 2026). The address stays
+  // ?tab=restaurants so links already saved keep working; only the label changed.
   const shell = fs.readFileSync(path.join(root, 'components/store/admin.tsx'), 'utf8');
-  assert.match(shell, /<TabsContent value="restaurants">\{activeTab === 'restaurants' && <RestaurantPartners\/>\}<\/TabsContent>/, 'Restaurants is a page of its own');
+  assert.match(shell, /<TabsContent value="restaurants">\{activeTab === 'restaurants' && <RestaurantPartners\/>\}<\/TabsContent>/, 'Businesses is a page of its own');
   assert.match(shell, /\{ label: 'Affiliates', tabs: \['affiliates', 'restaurants'\] \}/, 'reached from the Affiliates section');
   assert.match(shell, /tab !== 'restaurants' \|\| role === 'owner'/, 'and stays the owner\'s page');
   const tab = fs.readFileSync(path.join(root, 'components/store/affiliate-program.tsx'), 'utf8');
   assert.doesNotMatch(tab, /RestaurantPartners/, 'the affiliate page no longer carries it');
 
-  console.log('PASS: restaurant slots endpoint gates origin and sign-in, bounds the slot number, derives link and code from a name, applies that discount when the bare link is followed and refuses to for a retired, switched-off or unknown one while leaving approved affiliate links alone, prices nothing until switched on, retires rather than deletes a renamed or switched-off code, leaves unrelated promo codes untouched, records every save, preserves a concurrent edit to another slot, and is reached from its own page under the Affiliates section. Isolated SQLite only.');
+  console.log('PASS: business slots endpoint gates origin and sign-in, bounds the slot number, derives link and code from a name, applies that discount when the bare link is followed and refuses to for a retired, switched-off or unknown one while leaving approved affiliate links alone, prices nothing until switched on, retires rather than deletes a renamed or switched-off code, leaves unrelated promo codes untouched, records every save, preserves a concurrent edit to another slot, offers itself to any business rather than restaurants alone, and is reached from its own page under the Affiliates section. Isolated SQLite only.');
 })().catch(e => { console.error(e); process.exitCode = 1; }).finally(() => db.close());
