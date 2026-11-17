@@ -62,4 +62,4 @@
  * meaning keep it: kept notice panels and solid button fills are deliberately absent below.
  * ------------------------------------------------------------------------------------------- */
 :global(html[data-theme='dark']) .lots article { background: #141417; }
-:global(html[data-theme='dark']) .verify input { background: #141417; }
+:global(html[data-theme='dark']) .verify input { background: #141417; color: #ffffff; border-color: #2e2e34; }
