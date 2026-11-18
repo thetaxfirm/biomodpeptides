@@ -3,13 +3,14 @@ import { useState, FormEvent } from 'react';
 import { ArrowRight } from 'lucide-react';
 import type { Product } from '@/lib/catalog';
 import { compounds, compoundAt, comparisonAt, comparisons, comparisonsFor, compoundQuestions, isPeptideCompound, isPeptideComparison, publishedCompound, publishedComparison, pubchemUrl, type Compound } from '@/lib/compound-reference';
-import { eligibleDiscovery, vialName } from '@/lib/product-discovery';
+import { eligibleDiscovery, productHeading } from '@/lib/product-discovery';
 import { batchFor, batchPath, batchRecords, batchRecordsFor, batchStatusLabel, matchingCertificateFor, reportedResult } from '@/lib/testing';
 import { collections, publishedCollection } from '@/lib/collections';
 import { useStore } from './provider';
 import styles from './compound-reference.module.css';
 
-const productName = vialName;
+// Sprays and softgels read with their format and contents ("FORGE Spray 50 mg"), as on their own page.
+const productName = productHeading;
 const listed = (c: Compound, products: Product[]) => c.products.map(slug => products.find(p => p.slug === slug)).filter((p): p is Product => Boolean(p && eligibleDiscovery(p)));
 const ruo = <p className={styles.ruo}>For laboratory research use only. Not for human or animal use. Biomod does not provide dosing or medical advice.</p>;
 

@@ -37,7 +37,7 @@ Module._load = function (request, parent, isMain) {
 };
 const { seoConfig, sitemapPaths, mayIndex, pageInfo, productReviewBlocks, isPeptideVial } = require('../lib/seo-policy.ts');
 const { compounds, comparisons, compoundQuestions, publishedCompound, isPeptideCompound, isPeptideComparison } = require('../lib/compound-reference.ts');
-const { eligibleDiscovery, vialName } = require('../lib/product-discovery.ts');
+const { eligibleDiscovery, productHeading } = require('../lib/product-discovery.ts');
 const { routeStructuredData } = require('../lib/seo.ts');
 const { StoreProvider } = require('../components/store/provider.tsx');
 const { CompoundIndex, CompoundPage, ComparisonPage, VerifyCoa } = require('../components/store/compound-reference.tsx');
@@ -88,7 +88,7 @@ const validCas = cas => { const m = /^(\d{2,7})-(\d\d)-(\d)$/.exec(cas); return 
     const faq = data['@graph'].find(node => node['@type'] === 'FAQPage');
     assert(faq, c.slug + ' FAQPage');
     assert.deepEqual(faq.mainEntity.map(q => q.name), visible, c.slug + ': FAQPage questions match the page');
-    const expected = compoundQuestions(c, c.products.map(slug => products.find(p => p.slug === slug)).filter(eligibleDiscovery).map(vialName));
+    const expected = compoundQuestions(c, c.products.map(slug => products.find(p => p.slug === slug)).filter(eligibleDiscovery).map(productHeading));
     assert.deepEqual(faq.mainEntity.map(q => q.acceptedAnswer.text), expected.map(q => q.answer));
     assert(data['@graph'].some(node => node['@type'] === 'BreadcrumbList'), c.slug + ' breadcrumbs');
   }
@@ -113,6 +113,14 @@ const validCas = cas => { const m = /^(\d{2,7})-(\d\d)-(\d)$/.exec(cas); return 
       assert(back.includes('href="/compounds/' + compounds.find(x => x.products.includes(productSlug)).slug + '"'), productSlug + ' links back to a compound reference');
     }
   }
+  // Lot headings and the products answer name sprays and softgels as their own page heading does
+  // ("FORGE Spray 50 mg"), not as a bare brand word (November 18, 2026).
+  const bpcHtml = render(React.createElement(CompoundPage, { slug: 'bpc-157' }));
+  for (const heading of ['BPC-157 10 mg', 'FORGE Spray 50 mg', 'KLOW Spray 140 mg']) {
+    assert(text(bpcHtml).includes(heading), 'bpc-157 reference names ' + heading);
+  }
+  const bpcFaq = (await routeStructuredData('/compounds/bpc-157', config))['@graph'].find(node => node['@type'] === 'FAQPage');
+  assert(bpcFaq.mainEntity.some(q => q.acceptedAnswer.text.startsWith('BPC-157 10 mg, FORGE Spray 50 mg, KLOW Spray 140 mg.')), 'bpc-157 products answer uses sized headings');
   assert(!compounds.find(c => c.slug === 'bpc-157').products.includes('softgel-bionic-bpc-157-arginate-kpv-vitamin-e'), 'BPC-157 arginate is not listed as BPC-157');
 
   for (const x of comparisons) {

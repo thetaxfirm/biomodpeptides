@@ -14,7 +14,7 @@ import { compoundAt, comparisonAt, compoundQuestions } from './compound-referenc
 import { collectionAt } from './collections';
 import { storeLocationNodes } from './store-locations';
 import { products as catalogProducts } from './catalog';
-import { eligibleDiscovery, vialName } from './product-discovery';
+import { eligibleDiscovery, productHeading } from './product-discovery';
 import { headers } from 'next/headers';
 
 export const currentSEO = () => seoConfig(runtime());
@@ -122,7 +122,7 @@ export async function routeStructuredData(path: string, config: SEOConfig = curr
     { '@type': 'ListItem', position: 2, name: info.title, item: config.origin + clean },
   ] });
   if (compound) graph.push(faqPage(config.origin + clean, compoundQuestions(compound,
-    compound.products.map(slug => catalogProducts.find(p => p.slug === slug)).filter(p => p && eligibleDiscovery(p)).map(p => vialName(p!)))));
+    compound.products.map(slug => catalogProducts.find(p => p.slug === slug)).filter(p => p && eligibleDiscovery(p)).map(p => productHeading(p!)))));
   // Question markup mirrors the visible /faq answers exactly.
   if (clean === '/locations') graph.push(...storeLocationNodes(config.origin, String(organization['@id'])));
   if (clean === '/faq') graph.push(faqPage(config.origin + clean, researchFaqSchemaItems().map(item => ({ question: item.question, answer: item.answer }))));
