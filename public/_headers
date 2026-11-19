@@ -4,3 +4,10 @@
 # out of search. tests/certificate-hold-noindex-v1.cjs keeps this list in step with the holds.
 /certificates/klow-80mg-lot-503-80-0001-vanguard-v260304-6-022.pdf
   X-Robots-Tag: noindex, nofollow
+# Reports moved from the retired biomodpeptides.com host (lib/coa-hosted-files-v1.json).
+/certificates/GLOW_70-mg.pdf
+  X-Robots-Tag: noindex, nofollow
+/certificates/TB-500-5mg_BPC-157-5-mg.pdf
+  X-Robots-Tag: noindex, nofollow
+/certificates/TB-500_10-mg.pdf
+  X-Robots-Tag: noindex, nofollow

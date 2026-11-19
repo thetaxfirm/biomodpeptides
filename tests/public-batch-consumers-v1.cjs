@@ -89,6 +89,9 @@ assert.equal(certificateProperties(product.id,{...product,resolvedBatch:null}).l
 // A failed runtime read must not fall back to original source documents.
 ready=false;currentProducts=[{...product,resolvedBatch:null}];assert(render(Testing).includes('Loading current product lots'));assert(!render(Testing).includes(original.product_lot));assert(!render(QualityGuide).includes(original.product_lot));
 ready=true;loadError='Current records could not be loaded';assert(render(Testing).includes(loadError));assert(render(Testing).includes('Retry batch documents'));assert(!render(Testing).includes('SYNTHETIC-NEW-LOT'));
+// A lot already resolved for this page stays visible when a later cart or account read fails.
+currentProducts=[{...product,resolvedBatch:matched}];for(const loaded of [false,true]){ready=loaded;const kept=render(Testing);assert(kept.includes('SYNTHETIC-NEW-LOT'),'Resolved lots stay on the page');assert(!kept.includes(loadError)&&!kept.includes('Retry batch documents'),'A failed read does not replace resolved lots');}
+ready=false;currentProducts=[{...product,resolvedBatch:null}];assert(render(Testing).includes('Retry batch documents'),'No resolved lot and a failed read still fails closed');assert(!render(Testing).includes('SYNTHETIC-NEW-LOT'));ready=true;
 // The catch-all page and metadata accept a new current lot without source edits.
 (async()=>{
  currentProducts=[{...product,resolvedBatch:matched}];

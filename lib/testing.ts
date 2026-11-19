@@ -1,8 +1,17 @@
 import source from './coas-source-v1.json';
 import additions from './coas-additions-v1.json';
 import reconciliations from './coas-reconciliations-v1.json';
+import hosted from './coa-hosted-files-v1.json';
 import { products, type Product } from './catalog';
-export const laboratoryDocuments = [...source.documents, ...reconciliations.documents] as any[];
+// Reports first published on the retired biomodpeptides.com host are served from
+// this site. That host refuses search crawlers, so a link to it reads as blocked.
+// The file, its hash and every recorded fact are unchanged; only the address moves.
+const hostedDocuments: Record<string, { path: string }> = hosted.documents;
+export const hostedDocumentUrl = (url: unknown) => typeof url === 'string' && Object.hasOwn(hostedDocuments, url) ? 'https://trybiomod.com' + hostedDocuments[url].path : url;
+const hostedAddresses = <T,>(value: T): T => Array.isArray(value) ? value.map(hostedAddresses) as T
+  : value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).map(([key, item]) => [key, hostedAddresses(item)])) as T
+  : hostedDocumentUrl(value) as T;
+export const laboratoryDocuments = hostedAddresses([...source.documents, ...reconciliations.documents]) as any[];
 // Customer-facing status wording, shared by the batch library, product pages and the public catalog.
 export const statusLabels = { matched: 'Lab report available', printed: 'Printed COA included with order', request: 'COA available on request', pending: 'Update in progress' } as const;
 // Nominal strength as printed: "50mg / vial" is 50mg, and a blend printed "5 mg/5 mg" is its 10mg total.
@@ -11,7 +20,7 @@ export const normalizedStrength = (value: unknown) => {
   const compact = value.toLowerCase().replace(/\s/g, '').replace(/\/vial$/, ''), parts = compact.split('/');
   return parts.length > 1 && parts.every(part => /^\d+(?:\.\d+)?mg$/.test(part)) ? parts.reduce((sum, part) => sum + Number(part.slice(0, -2)), 0) + 'mg' : compact;
 };
-export const batchRecords = [...source.records, ...additions].filter(record => products.some(product => product.id === record.product_id)).map(record => {
+export const batchRecords = hostedAddresses([...source.records, ...additions] as any[]).filter(record => products.some(product => product.id === record.product_id)).map(record => {
   // A reviewed certificate association is specific to the source record, product
   // identity, size and listed lot. Future catalog or source changes fail closed.
   const review = reconciliations.reconciliations.find(item => item.product_id === record.product_id && item.product_slug === record.product_slug && item.product_lot === record.product_lot && item.previous_document_id === record.document_id);

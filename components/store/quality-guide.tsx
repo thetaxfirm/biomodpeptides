@@ -13,7 +13,7 @@ const checks = [
 export function QualityGuide() {
   const { store, ready, loadError } = useStore();
   const candidate = store.products.find(p => p.id === 753);
-  const product = !loadError && (ready || candidate?.resolvedBatch) ? candidate : undefined;
+  const product = candidate?.resolvedBatch || (ready && !loadError) ? candidate : undefined;
   const example = product ? batchFor(product.id, product) : undefined;
   const certificate = matchingCertificateFor(example);
   return <article className={styles.guide}>

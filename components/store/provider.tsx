@@ -120,10 +120,19 @@ export function StoreProvider({ children, initialCatalog = initialProducts, shop
         mounted.current = true;
         const life = ++lifetime.current;
         repriceLocalProducts();
+        // A failed first read leaves the server-rendered page as it is. The cart
+        // message waits for the visitor's first action, after one more attempt,
+        // so a page that is only being read never has an error laid over it.
+        const gestures = ['pointerdown', 'keydown'] as const;
+        const retryOnFirstAction = () => {
+            gestures.forEach(type => document.removeEventListener(type, retryOnFirstAction));
+            if (!mounted.current || life !== lifetime.current || measurementStatus.current.ready) return;
+            refresh().catch(() => { if (mounted.current && life === lifetime.current) toast.error('Saved cart is temporarily unavailable. Please refresh to try again.'); });
+        };
         api('auth-refresh', {}).catch(() => null).then(() => {
             if (mounted.current && life === lifetime.current) return refresh();
-        }).catch(() => { if (mounted.current && life === lifetime.current) toast.error('Saved cart is temporarily unavailable. Please refresh to try again.'); });
-        return () => { mounted.current = false; lifetime.current += 1; ownerVersion.current += 1; readVersion.current += 1; };
+        }).catch(() => { if (mounted.current && life === lifetime.current) gestures.forEach(type => document.addEventListener(type, retryOnFirstAction)); });
+        return () => { gestures.forEach(type => document.removeEventListener(type, retryOnFirstAction)); mounted.current = false; lifetime.current += 1; ownerVersion.current += 1; readVersion.current += 1; };
     }, []);
     useEffect(() => {
         const boundary = nextSaleBoundary(store.products, Date.now());

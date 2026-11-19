@@ -28,6 +28,23 @@ const noindexed = p => Object.entries(rules).some(([pattern, headers]) => new Re
 
 const slugFor = {};
 for (const r of coas.reconciliations) if (r.source_url) slugFor[new URL(r.source_url).pathname] = r.product_slug;
+// Reports moved from the retired host keep their source record; the file must still be the recorded original.
+const hosted = require('../lib/coa-hosted-files-v1.json');
+const source = require('../lib/coas-source-v1.json');
+const { laboratoryDocuments, batchRecords, hostedDocumentUrl } = require('../lib/testing.ts');
+for (const [url, file] of Object.entries(hosted.documents)) {
+  const record = source.records.find(r => r.coa_pdf_url === url), document = source.documents.find(d => d.url === url);
+  assert.ok(record && document?.is_certificate, url + ' is a recorded certificate of one product');
+  assert.match(file.path, /^\/certificates\/[A-Za-z0-9._-]+\.pdf$/);
+  assert.equal(require('node:crypto').createHash('sha256').update(fs.readFileSync(path.join(root, 'public', file.path))).digest('hex'), document.sha256, file.path + ' is the recorded original, byte for byte');
+  assert.equal(file.sha256, document.sha256);
+  assert.equal(hostedDocumentUrl(url), 'https://trybiomod.com' + file.path);
+  slugFor[file.path] = record.product_slug;
+}
+assert.equal(hostedDocumentUrl('https://biomodpeptides.com/wp-content/uploads/2026/05/Selank-10mg.pdf'), 'https://biomodpeptides.com/wp-content/uploads/2026/05/Selank-10mg.pdf', 'A report that is not hosted here keeps its recorded address');
+// No public record or document may still send a reader, or a crawler, to a moved report on the old host.
+const leftovers = JSON.stringify([laboratoryDocuments, batchRecords]).match(/https:\/\/biomodpeptides\.com\/wp-content\/[^"]+\.pdf/g) || [];
+assert.deepEqual(leftovers.filter(url => Object.hasOwn(hosted.documents, url)), [], 'Moved reports are addressed on this site everywhere');
 const files = fs.readdirSync(path.join(root, 'public/certificates')).filter(f => f.endsWith('.pdf'));
 assert.ok(files.length >= 5, 'certificates found');
 const held = [];
