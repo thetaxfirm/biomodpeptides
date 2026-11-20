@@ -1,3 +1,10 @@
+/* Administration is a dense data tool, not a page of prose, so it does not take the storefront's
+ * 1440px reading width. At that cap the Orders table squeezed Payment and Shipment to about 95px
+ * each -- the two columns carrying the most text on the row -- while roughly 465px of a 1920px
+ * screen sat unused (owner, Nov 20 2026). Only the admin route widens; the storefront keeps its
+ * cap. The hook is data-traffic-path on <main> in app/[...path]/page.tsx. */
+:global(main[data-traffic-path='/admin']) { max-width: none; }
+
 /* Night mode for administration (owner, Nov 13 2026; colour rule owner, Nov 16 2026).
  *
  * The rule is deliberately narrow: black out the background, put white text on it, and leave every

@@ -65,5 +65,11 @@ function nodes(t,out=[]){if(Array.isArray(t))t.forEach(x=>nodes(x,out));else if(
  for(const email of ['ash@biomodcompounds.com','chris@biomodcompounds.com']){providerEmail=email;assert.equal(await GET(req),'/admin');}
  providerEmail='packer@example.invalid';assert.equal(await GET(req),'/admin');
  providerEmail='buyer@example.invalid';assert.equal(await GET(req),'/account/profile');fail=true;assert.equal(await GET(req),'/login');
+ // Administration drops the storefront's 1440px reading width, because the Orders table needs the
+ // room. The rule hangs off data-traffic-path on <main>, so renaming that attribute would silently
+ // narrow every admin screen again (owner, Nov 20 2026).
+ const pageRoute=fs.readFileSync(path.join(root,'app/[...path]/page.tsx'),'utf8');
+ assert.match(pageRoute,/data-traffic-path=\{'\/' \+ route\}/,'the admin width rule hangs off data-traffic-path');
+ assert.match(fs.readFileSync(path.join(root,'components/store/admin-theme.module.css'),'utf8'),/main\[data-traffic-path='\/admin'\]\)\s*\{[^}]*max-width:\s*none/,'administration drops the storefront reading width');
  console.log('PASS: both approved admins land in backend; buyers and lookalikes retain customer landing; explicit customer paths preserved; header links and OAuth authenticated identity route correctly; auth failures fail closed.');
 })().catch(e=>{console.error(e);process.exitCode=1});
