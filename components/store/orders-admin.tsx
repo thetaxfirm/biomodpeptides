@@ -17,6 +17,7 @@ import { CarrierConnection } from './fulfillment-admin';
 import { ShippingLabel, post as shippingPost } from './shipping-admin';
 import { OrderDetails } from './order-admin';
 import { LabelCell, CustomerOrders } from './customer-orders';
+import { OrderTracking } from './order-tracking';
 import { paymentLine, paymentAdvice, savedPaymentCheck } from '@/lib/payment-check';
 import styles from './orders-admin.module.css';
 
@@ -379,8 +380,11 @@ export function OrdersAdmin({ reloadToken, viewRequest, checkoutRecovery, allowe
                         {onEmailCustomer && selected.data?.email && <button type="button" className="button button-dark" disabled={busy} onClick={() => { const order = selected; setSelected(null); onEmailCustomer(order); }}>Open customer history &amp; reply</button>}
                         {canReconcile(selected) && <button type="button" className="button button-dark" disabled={busy} onClick={() => reconcile(selected)}>Check payment status</button>}
                         {allowed('orders:fulfill') && !selected.data?.hold && !paymentVerificationFailed(selected) && <ShippingLabel order={selected} onDone={reload}/>}
+                        {/* Which number the order is followed on, and the slot to change it. Above the
+                            manual form on purpose: this one asks the carrier, that one does not. */}
+                        <OrderTracking order={selected} allowed={allowed} busy={busy} onDone={reload}/>
                         {allowed('orders:fulfill') && !selected.data?.hold && !paymentVerificationFailed(selected) && ['paid', 'shipped'].includes(selected.status) && (selected.data?.shipment
-                            ? <details className={styles.manual}><summary>Manual confirmation (only if the carrier is not tracking this parcel)</summary><ManualForm order={selected} formGeneration={formGeneration} submit={submit} markDraft={markDraft} busy={busy}/></details>
+                            ? <details className={styles.manual}><summary>Manual confirmation: your own statement, not checked with the carrier (use only if EasyPost cannot read the number)</summary><ManualForm order={selected} formGeneration={formGeneration} submit={submit} markDraft={markDraft} busy={busy}/></details>
                             : <ManualForm order={selected} formGeneration={formGeneration} submit={submit} markDraft={markDraft} busy={busy}/>)}
                         {!allowed('orders:fulfill') && !canReconcile(selected) && <p className={styles.panelMeta}>No actions available for your role on this order.</p>}
                     </div>
