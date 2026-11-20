@@ -54,7 +54,14 @@ const { LabelCell, CustomerOrders } = load('components/store/customer-orders.tsx
 const html = o => renderToStaticMarkup(React.createElement(LabelCell, { order: { ...o, bucket: 'shipped' } }));
 const bought = html(order('shipped', { labelCreatedAt: Date.UTC(2026, 9, 28, 20), shipment: shipment({ status: 'failure', checkedAt: Date.UTC(2026, 10, 2, 15) }) }));
 assert.match(bought, /href="https:\/\/example.invalid\/label.png"[^>]*>View label</);
-assert.match(bought, />Track</); assert.match(bought, /USPS Priority · 9400FIXTURE/); assert.match(bought, /Signature required/); assert.match(bought, /Delivery failed/);
+assert.match(bought, />Track</); assert.match(bought, /USPS Priority · 9400FIXTURE/); assert.match(bought, /Signature required/);
+// The Label cell states the label and what was bought with it. The carrier's verdict belongs to the
+// Shipment line, which sits beside it in both the Orders table and the customer list, so repeating
+// it here put the same words in a row twice. It is not repeated -- and it still has to exist there.
+assert.doesNotMatch(bought, /Delivery failed/, 'Carrier state is the Shipment line, not the Label cell');
+const { orderShipmentStatus } = load('lib/fulfillment.ts');
+assert.equal(orderShipmentStatus(order('shipped', { shipment: shipment({ status: 'failure' }) })).label, 'Delivery failed');
+assert.equal(orderShipmentStatus(order('shipped', { shipment: shipment({ status: 'delivered' }) })).label, 'Delivered');
 assert.match(bought, /rel="noopener noreferrer"/);
 assert.match(html(order('paid')), /<strong>Missing<\/strong>.*No label bought yet/);
 assert.doesNotMatch(html(order('awaiting_payment')), /Missing/);
