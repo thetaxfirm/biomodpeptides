@@ -234,4 +234,15 @@ assert.match(archiveBlock, /canArchive\(orderBucket/, 'the server refuses to arc
 assert.match(archiveBlock, /json_set\(data,'\$\.archivedAt'/); assert.match(archiveBlock, /json_remove\(data,'\$\.archivedAt','\$\.archivedBy'\)/);
 assert(!/SET status|status=\?/.test(archiveBlock), 'archive never changes order status');
 assert.match(ui, /change\('order-archive', \{ orderId: o\.id \}/); assert.match(ui, /restore: true/);
+// Below 760px the table hides its header and names every cell with data-label, so a cell without one
+// is unlabelled on a phone. Order, Customer and Next step were missing theirs (owner, Nov 20 2026).
+const tableOpen = ui.indexOf('<table className={styles.table}>');
+assert(tableOpen > 0, 'the orders table is still rendered here');
+const tableBlock = ui.slice(tableOpen, ui.indexOf('</table>', tableOpen));
+const cells = tableBlock.match(/<td(?=[ >])[^>]*>/g) || [];
+assert.equal(cells.length, 9, 'the orders row has nine cells');
+for (const cell of cells) assert.match(cell, /data-label="/, 'every orders cell needs a data-label: ' + cell);
+assert.match(fs.readFileSync(path.join(root, 'components/store/orders-admin.module.css'), 'utf8'), /td\[data-label\]::before/, 'the stacked view still reads data-label');
+// Each fact once per row: insurance and signature are the Label column's, not the Shipment line's.
+assert(!/protectionLine/.test(ui), 'insurance and signature belong to the Label column, not Shipment');
 console.log('PASS: order queue buckets, counts, search, ordering, paging, lookup and wiring');
