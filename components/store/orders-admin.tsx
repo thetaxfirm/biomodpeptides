@@ -59,19 +59,15 @@ function carrierLine(o: QueueRow) {
     }
     return words + (Number.isFinite(s.checkedAt) ? ' · ' + shortTime(s.checkedAt) : '');
 }
-/** Insurance and signature bought with the label, so staff know what the parcel carries. */
-function protectionLine(o: QueueRow) {
-    const s = o.data?.shipment;
-    return [s?.insuredCents ? 'Insured ' + money(s.insuredCents) : '', s?.signature ? 'Signature' : ''].filter(Boolean).join(' · ');
-}
-/** The line under the status: what the carrier said, why an order closed, and when it was archived. */
+/** The line under the status: what the carrier said, why an order closed, and when it was archived.
+ *  Insurance and signature are not repeated here; the Label column beside it already carries them. */
 function statusLine(o: QueueRow) {
     const archived = isArchived(o) ? 'Archived ' + new Date(o.data.archivedAt).toLocaleDateString([], { dateStyle: 'medium' }) : '';
     const why = o.bucket === 'closed' ? closedReason(o) || 'Cancelled' : '';
     // Says so when a flag was accepted, so a returning or unscanned parcel sitting under Shipped is
     // never a mystery: the carrier words beside it are still the carrier's own.
     const dismissed = flagDismissed(o) ? 'Flag dismissed ' + shortTime(Number(o.data.dismissed.at)) + ' by ' + String(o.data.dismissed.by || 'staff') : '';
-    return [o.data?.shipment?.status ? carrierLine(o) : '', why, protectionLine(o), dismissed, archived].filter(Boolean).join(' · ');
+    return [o.data?.shipment?.status ? carrierLine(o) : '', why, dismissed, archived].filter(Boolean).join(' · ');
 }
 
 const money2 = (c: number | null) => c === null ? '' : money(c);
@@ -310,16 +306,21 @@ export function OrdersAdmin({ reloadToken, viewRequest, checkoutRecovery, allowe
         {!viewReady ? <p className={styles.empty} role="status">{viewError ? 'Orders for this view are unavailable. Retry to load them.' : 'Loading orders…'}</p> : !visibleRows.length ? <p className={styles.empty}>{q ? 'No orders match this search in ' + current.label + '. Try All.' : 'No orders in ' + current.label + '.'}</p> :
             <table className={styles.table}>
                 <thead><tr><th>Order</th><th>Customer</th><th className={styles.number}>Items</th><th className={styles.number}>Total</th><th>Payment</th><th>Shipment</th><th>Label</th><th>Last contact recorded</th><th>Next step</th></tr></thead>
-                <tbody>{visibleRows.map(o => { const payment = orderPaymentStatus(o), shipment = orderShipmentStatus(o); const due = tabForOrder(o) === 'to_ship' ? shipDue(o) : null; const urgent = due && due.state !== 'upcoming'; return <tr key={o.id}>
-                    <td>{urgent && <span className={styles.star} role="img" aria-label={due.label} title={due.label}>★</span>}<button type="button" className={styles.orderButton} onClick={() => setSelected(o)}>{orderNumber(o.id)}</button>{due && <span className={urgent ? styles.dueUrgent : styles.sub}>{due.label}</span>}<span className={styles.sub}>{new Date(o.created).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span></td>
-                    <td>{o.data?.address?.name || 'Name not recorded'}<span className={styles.sub}>{[place(o), o.data?.email].filter(Boolean).join(' · ')}</span></td>
+                <tbody>{visibleRows.map(o => { const payment = orderPaymentStatus(o), shipment = orderShipmentStatus(o); const due = tabForOrder(o) === 'to_ship' ? shipDue(o) : null; const urgent = due && due.state !== 'upcoming';
+                    // Read once per row. A held order carries the hold tag in Next step, which names the
+                    // actual issue, so the generic attention reason above it printed the hold twice.
+                    const attention = o.data?.hold ? '' : orderAttentionReason(o);
+                    const pendingPayment = ['unpaid', 'review'].includes(o.bucket) ? paymentLine(savedPaymentCheck(o.data?.paymentCheck)) : '';
+                    return <tr key={o.id}>
+                    <td data-label="Order">{urgent && <span className={styles.star} role="img" aria-label={due.label} title={due.label}>★</span>}<button type="button" className={styles.orderButton} onClick={() => setSelected(o)}>{orderNumber(o.id)}</button>{due && <span className={urgent ? styles.dueUrgent : styles.sub}>{due.label}</span>}<span className={styles.sub}>{new Date(o.created).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span></td>
+                    <td data-label="Customer">{o.data?.address?.name || 'Name not recorded'}<span className={styles.sub}>{[place(o), o.data?.email].filter(Boolean).join(' · ')}</span></td>
                     <td data-label="Items" className={styles.number}>{units(o)}</td>
                     <td data-label="Order total" className={styles.number}>{money(Number(o.total) || 0)}</td>
-                    <td data-label="Payment"><strong>{payment.label}</strong>{payment.detail && <span className={styles.sub}>{payment.detail}</span>}{['unpaid', 'review'].includes(o.bucket) && paymentLine(savedPaymentCheck(o.data?.paymentCheck)) && <span className={styles.sub}>{paymentLine(savedPaymentCheck(o.data?.paymentCheck))}</span>}</td>
+                    <td data-label="Payment"><strong>{payment.label}</strong>{payment.detail && <span className={styles.sub}>{payment.detail}</span>}{pendingPayment && <span className={styles.sub}>{pendingPayment}</span>}</td>
                     <td data-label="Shipment"><strong>{shipment.label}</strong>{shipment.detail && <span className={styles.sub}>{shipment.detail}</span>}{statusLine(o) && <span className={styles.sub}>{statusLine(o)}</span>}</td>
                     <td data-label="Label"><LabelCell order={o}/></td>
                     <td data-label="Last contact recorded" className={styles.messaged}><MessagedCell order={o}/></td>
-                    <td className={styles.next}>{orderAttentionReason(o) && <span className={styles.attentionReason}>{orderAttentionReason(o)}</span>}{nextStep(o)}</td>
+                    <td data-label="Next step" className={styles.next}>{attention && <span className={styles.attentionReason}>{attention}</span>}{nextStep(o)}</td>
                 </tr>; })}</tbody>
             </table>}
         {viewReady && result?.hasMore && <div className={styles.more}><button type="button" className="button button-dark" disabled={loading} onClick={() => fetchPage(rows.length)}>{loading ? 'Loading…' : 'Load more (' + (result.total - rows.length) + ' left)'}</button></div>}
