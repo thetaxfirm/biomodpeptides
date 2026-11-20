@@ -4,6 +4,7 @@
 // and nothing would ever correct it. This sweep re-reads the carrier for parcels nobody has heard
 // about in a while and applies the same transition, so a forgotten order still settles itself.
 import { readShipmentTracking } from './easypost';
+import { readTrackingCode } from './easypost-tracker';
 
 export type SweepEnvironment = { DB: D1Database } & Record<string, unknown>;
 export type SweepHealth = { checkedAt: number; due: number; read: number; changed: number; failed: number; skipped: number };
@@ -21,16 +22,26 @@ export const sweepSettings = (env: Record<string, unknown>) => ({
     limit: int(env.TRACKING_RECHECK_LIMIT, 15, 1, 100),
 });
 
-type Row = { id: string; status: string; tracking: string; shipmentId: string; carrier: string | null };
+type Row = { id: string; status: string; tracking: string; shipmentId: string | null; carrier: string | null };
+/**
+ * What identifies this parcel for an optimistic guard: the shipment reference when this store
+ * bought the label, otherwise the tracking number. A parcel reshipped on a label bought elsewhere
+ * has no shp_ reference at all, and keying every write on one is what made the sweep skip it.
+ */
+const parcelKey = (row: Row) => row.shipmentId || row.tracking;
 
-/** Parcels with a label, still in flight, that nobody has checked recently. Oldest silence first. */
+/**
+ * Parcels with a tracking number, still in flight, that nobody has checked recently. Oldest silence
+ * first. A shipment reference is NOT required: a replacement parcel posted on a label bought
+ * outside this store has only a tracking number, and requiring shp_ here meant such a parcel was
+ * read once when it was entered and then never asked about again (owner, Nov 20 2026).
+ */
 const DUE = `SELECT id, status,
         json_extract(data,'$.shipment.tracking') AS tracking,
         json_extract(data,'$.shipment.shipmentId') AS shipmentId,
         json_extract(data,'$.shipment.status') AS carrier
     FROM orders
     WHERE status IN ('paid','shipped')
-      AND json_extract(data,'$.shipment.shipmentId') IS NOT NULL
       AND json_extract(data,'$.shipment.tracking') IS NOT NULL
       AND coalesce(json_extract(data,'$.shipment.status'),'') NOT IN ('delivered','return_to_sender','failure','cancelled')
       AND coalesce(json_extract(data,'$.shipment.sweptAt'), json_extract(data,'$.shipment.checkedAt'), json_extract(data,'$.labelCreatedAt'), created) < ?
@@ -50,7 +61,7 @@ const APPLY = `UPDATE orders SET
             WHEN ? IN ('in_transit','out_for_delivery','available_for_pickup') AND status='paid' THEN 'shipped'
             ELSE status END,
         updated=?
-    WHERE id=? AND json_extract(data,'$.shipment.shipmentId')=?
+    WHERE id=? AND coalesce(json_extract(data,'$.shipment.shipmentId'),json_extract(data,'$.shipment.tracking'))=?
       AND coalesce(json_extract(data,'$.shipment.checkedAt'),0)<=?`;
 
 /**
@@ -64,7 +75,7 @@ const APPLY = `UPDATE orders SET
  * collect to fill the per-run limit nothing behind them is ever reached again.
  */
 const STAMP = `UPDATE orders SET data=json_remove(json_set(data,'$.shipment.sweptAt',?),'$.shipment.readFails')
-    WHERE id=? AND json_extract(data,'$.shipment.shipmentId')=?`;
+    WHERE id=? AND coalesce(json_extract(data,'$.shipment.shipmentId'),json_extract(data,'$.shipment.tracking'))=?`;
 
 /**
  * The same back-off, plus a count of consecutive reads the carrier refused. A parcel whose shipment
@@ -74,7 +85,7 @@ const STAMP = `UPDATE orders SET data=json_remove(json_set(data,'$.shipment.swep
  * that was never the problem. The count is cleared by the first successful read.
  */
 const STAMP_FAILED = `UPDATE orders SET data=json_set(data,'$.shipment.sweptAt',?,'$.shipment.readFails',coalesce(json_extract(data,'$.shipment.readFails'),0)+1)
-    WHERE id=? AND json_extract(data,'$.shipment.shipmentId')=?`;
+    WHERE id=? AND coalesce(json_extract(data,'$.shipment.shipmentId'),json_extract(data,'$.shipment.tracking'))=?`;
 
 /**
  * One pass. Never throws for a single unreachable parcel: a carrier outage must not stop the rest,
@@ -106,13 +117,18 @@ export async function runTrackingSweep(env: SweepEnvironment, now = Date.now()):
     health.due = due.length;
     const stamp = async (row: Row, unreadable = false) => {
         // A stamp that does not land leaves the parcel where it was: first in the queue next run.
-        try { await env.DB.prepare(unreadable ? STAMP_FAILED : STAMP).bind(now, row.id, row.shipmentId).run(); } catch { /* reported by the outcome already counted */ }
+        try { await env.DB.prepare(unreadable ? STAMP_FAILED : STAMP).bind(now, row.id, parcelKey(row)).run(); } catch { /* reported by the outcome already counted */ }
     };
     for (const row of due) {
-        if (typeof row.tracking !== 'string' || typeof row.shipmentId !== 'string') { health.skipped += 1; await stamp(row, true); continue; }
+        if (typeof row.tracking !== 'string' || !row.tracking) { health.skipped += 1; await stamp(row, true); continue; }
         let status: string | null = null;
         try {
-            status = await readShipmentTracking(env as never, row.shipmentId, row.tracking);
+            // No carrier hint is sent: the shipment's stored service is a service name ("USPS
+            // Priority"), not a carrier, and EasyPost already holds this tracker from when the
+            // number was recorded, so asking again returns it rather than billing for another.
+            status = typeof row.shipmentId === 'string' && row.shipmentId
+                ? await readShipmentTracking(env as never, row.shipmentId, row.tracking)
+                : (await readTrackingCode(env as unknown as Record<string, string | undefined>, row.tracking)).status;
             health.read += 1;
         } catch {
             // A carrier that cannot be reached still backs off, so one broken parcel cannot hold a
@@ -122,7 +138,7 @@ export async function runTrackingSweep(env: SweepEnvironment, now = Date.now()):
         if (status === null) { await stamp(row, true); continue; }
         if (status === row.carrier) { await stamp(row); continue; }
         try {
-            const saved = await env.DB.prepare(APPLY).bind(status, now, now, status, status, now, row.id, row.shipmentId, now).run();
+            const saved = await env.DB.prepare(APPLY).bind(status, now, now, status, status, now, row.id, parcelKey(row), now).run();
             if (saved.meta.changes) health.changed += 1;
             else await stamp(row); // a newer stored observation won; still back off
         } catch {

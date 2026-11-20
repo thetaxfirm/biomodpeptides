@@ -1,0 +1,52 @@
+/* Tracking numbers on one order. Every colour is a token set here in daylight and redefined once
+ * in the night block below, so the two themes can never drift apart rule by rule. */
+.tracking {
+  --panel: #ffffff;
+  --ink: #2a1033;
+  --quiet: #5f5664;
+  --line: #efe9f1;
+  --dead: #b3261e;
+  --deadInk: #8b261e;
+  --liveDot: #2f6b45;
+  --liveInk: #23452f;
+  --fieldBg: #ffffff;
+  --fieldInk: #2a1033;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  color: var(--ink);
+}
+.tracking h3 { font-size: 15px; margin-bottom: 10px; }
+.quiet { display: block; color: var(--quiet); font-size: 13px; font-weight: 400; }
+
+.list { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.parcel { display: flex; align-items: flex-start; gap: 10px; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 11px 13px; }
+.dot { flex: none; width: 11px; height: 11px; margin-top: 5px; border-radius: 50%; background: var(--dead); }
+.parcel[data-live='true'] .dot { background: var(--liveDot); }
+.body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.number { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 14px; overflow-wrap: anywhere; }
+.number a { text-decoration: underline; text-underline-offset: 3px; }
+.state { font-size: 13px; font-weight: 650; }
+.verdict { font-size: 12px; font-weight: 650; color: var(--deadInk); }
+.parcel[data-live='true'] .verdict { color: var(--liveInk); }
+
+.form { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+.lead { font-size: 14px; }
+.form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 650; }
+.form input { background: var(--fieldBg); color: var(--fieldInk); border: 1px solid var(--line); border-radius: 6px; padding: 9px 11px; font-weight: 400; }
+.form button { align-self: flex-start; }
+
+/* Night: the surfaces go dark and the text on them goes light in the same step, and the two dot
+ * colours lift to tints that still read as red and green on black without becoming new colours. */
+:global(html[data-theme='dark']) .tracking {
+  --panel: #141417;
+  --ink: #ffffff;
+  --quiet: #b4b4b9;
+  --line: #2e2e34;
+  --dead: #f08a7e;
+  --deadInk: #f08a7e;
+  --liveDot: #7fc49a;
+  --liveInk: #7fc49a;
+  --fieldBg: #141417;
+  --fieldInk: #ffffff;
+}
