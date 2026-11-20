@@ -260,7 +260,7 @@ export function orderPaymentStatus(order: FulfillmentOrder): OrderStateLabel {
     const verified = data?.paymentVerified;
     if (paymentVerificationFailed(order)) return { label: 'Check payment', tone: 'problem', detail: 'Provider could not verify the recorded payment' };
     if (Number.isFinite(verified?.at) && ['settled', 'captured'].includes(verified.state)) return { label: verified.state === 'settled' ? 'Paid · settled' : 'Paid · captured', tone: 'done', detail: 'Confirmed by payment provider' };
-    if (['paid', 'labeling', 'shipped', 'delivered'].includes(order.status)) return { label: 'Paid · recorded', tone: 'done', detail: 'No independent provider verification recorded' };
+    if (['paid', 'labeling', 'shipped', 'delivered'].includes(order.status)) return { label: 'Paid · recorded', tone: 'done', detail: 'No provider verification on file' };
     if (order.status === 'review') return { label: 'Payment review', tone: 'problem' };
     if (order.status === 'failed') return { label: 'Payment unsuccessful', tone: 'problem' };
     return { label: 'Not confirmed', tone: 'waiting', detail: 'No confirmed payment on this checkout' };
