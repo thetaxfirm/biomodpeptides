@@ -154,4 +154,28 @@ export const legacyRoutes: Record<string, string> = {
   'es/tag/mvl': '/',
   'es/tag/neuroprotection': '/',
   'es/tag/peptide-delivery-methods': '/',
+  // Old-domain URLs listed by Bing (DuckDuckGo site:biomodpeptides.com, November 20, 2026) that still
+  // ended in a 404. Reference and trend posts go to the compound reference, sourcing guides to the
+  // supplier guide, testing topics to batch documents. Topics BioMod does not carry go to the homepage.
+  'tag/peptide-basics-explained': '/compounds',
+  'using-sterile-peptides-in-research-lab-standards-guide': '/quality-standard',
+  'novel-peptide-applications-in-preclinical-research-2026-analytical-trends': '/compounds',
+  'las-vegas-life-sciences-supplier-a-reference-for-research-peptide-procurement': '/choosing-a-research-supplier',
+  'research-peptides-henderson-a-procurement-guide-for-laboratory-chemicals': '/choosing-a-research-supplier',
+  'microbiology-research-peptide-reagents-in-las-vegas': '/shop',
+  'research-peptide-stability-testing-methods-a-protocol-for-analytical-integrity': '/testing',
+  'es/tag/peptide-synergy': '/',
+  'es/tag/synthetic-peptides': '/shop',
+  'es/tag/pilot-study': '/',
+  'es/tag/buffer-conditions': '/quality-standard',
+  'es/tag/nrs-332': '/about',
+  'es/tag/glp-1-peptide-women': '/',
+  'es/tag/laboratory-analysis': '/testing',
+  'es/tag/chemical-analysis': '/testing',
+  // The TB-500 guide goes to the shop, not a product: TB-500 is on a publication hold.
+  'neuroscience-peptide-procurement-guide-2026': '/collections/neuroscience-research',
+  'avoiding-hidden-costs-in-peptide-sourcing-a-research-lab-buying-guide': '/choosing-a-research-supplier',
+  'peptide-standards-procurement-guide-for-nevada-labs': '/choosing-a-research-supplier',
+  'tb-500-for-research-labs-in-las-vegas-a-procurement-and-purity-guide': '/shop',
+  'tag/peptide-research-guide': '/choosing-a-research-supplier',
 };
