@@ -178,4 +178,12 @@ export const legacyRoutes: Record<string, string> = {
   'peptide-standards-procurement-guide-for-nevada-labs': '/choosing-a-research-supplier',
   'tb-500-for-research-labs-in-las-vegas-a-procurement-and-purity-guide': '/shop',
   'tag/peptide-research-guide': '/choosing-a-research-supplier',
+  // Old-domain URLs still forwarded here on November 21, 2026 that ended in a 404. tag/lab-supply is
+  // listed by Bing for "biomod research supply company". The former store's sitemap index, feed and
+  // news category are addresses crawlers already know; they now reach the live sitemap and news page.
+  'tag/lab-supply': '/about',
+  'category/news': '/news',
+  'feed': '/news',
+  'sitemap_index.xml': '/sitemap.xml',
+  'wp-sitemap.xml': '/sitemap.xml',
 };
