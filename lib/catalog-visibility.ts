@@ -39,6 +39,13 @@ export function adminOrderView(data: Record<string, any>) {
     promo: data.promo ? { code: data.promo.code, savings: data.promo.savings } : null,
     shippingService: data.shippingService,
     shipment: data.shipment,
+    // The parcel this order carried before a replacement was recorded, so the order panel can show
+    // which number is out of use beside the one being followed. Without it the panel only ever sees
+    // the live parcel and the superseded one is invisible (owner, Nov 22 2026).
+    ...(data.previousShipment ? { previousShipment: data.previousShipment } : {}),
+    // When payment was confirmed, as opposed to when the checkout was started. The gap between
+    // created and this is how long an order takes to reach Pack & ship.
+    ...(Number.isFinite(data.paidAt) ? { paidAt: data.paidAt } : {}),
     shippedAt: data.shippedAt,
     labelCreatedAt: data.labelCreatedAt,
     ...(data.handoff ? { handoff: data.handoff } : {}),
