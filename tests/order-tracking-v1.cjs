@@ -14,6 +14,7 @@ function load(file,extra={}){const name=path.join(root,file),m=new Module(name,m
     if(id.endsWith('.module.css'))return{__esModule:true,default:new Proxy({},{get:(_,k)=>String(k)})};
     if(id==='./easypost'||id==='@/lib/easypost')return{readShipmentTracking:async(_e,shipmentId,tracking)=>{shipmentReads.push({shipmentId,tracking});return shipmentAnswer(tracking);}};
     if(id==='./easypost-tracker'||id==='@/lib/easypost-tracker')return{readTrackingCode:async(_e,code)=>{trackerReads.push(code);return trackerAnswer(code);}};
+    if(id.endsWith('.json'))return require(path.join(root,id.replace(/^@\//,'').replace(/^\.\//,'lib/')));
     if(id.startsWith('./')||id.startsWith('@/'))return load(id.replace(/^@\//,'').replace(/^\.\//,'lib/')+(id.endsWith('.ts')||id.endsWith('.tsx')?'':'.ts'));
     return require(id);};
   m._compile(ts.transpileModule(fs.readFileSync(name,'utf8'),{compilerOptions:{module:1,target:9,jsx:4,esModuleInterop:true}}).outputText,name);return m.exports;}
@@ -107,6 +108,15 @@ const read=(db,id)=>{const r=db.raw.prepare('SELECT status,data FROM orders WHER
  // It never offers to set a status by hand: the carrier decides, which is the whole point.
  assert(!/<select/.test(html),'no status is offered for a person to choose');
  assert(/carrier is asked about the number before anything is saved/.test(empty));
+
+ // The admin order view is a whitelist, so the superseded parcel has to be on it. Without this the
+ // panel is handed only the live shipment and the red line can never render, however many parcels
+ // the order has actually carried (owner, Nov 22 2026).
+ const {adminOrderView}=load('lib/catalog-visibility.ts');
+ const viewed=adminOrderView({items:[],address:{},shipment:{tracking:'NEW',status:'delivered'},previousShipment:{tracking:'OLD',status:'failure'},paidAt:1760000000000});
+ assert.equal(viewed.previousShipment&&viewed.previousShipment.tracking,'OLD','the superseded parcel reaches the order panel');
+ assert.equal(viewed.paidAt,1760000000000,'when payment landed reaches the admin');
+ assert.equal(adminOrderView({items:[],address:{},shipment:{tracking:'NEW'}}).previousShipment,undefined,'an order that never had a replacement carries none');
 
  // Wiring: the panel carries it, above the manual confirmation form.
  const ui=fs.readFileSync(path.join(root,'components/store/orders-admin.tsx'),'utf8');
