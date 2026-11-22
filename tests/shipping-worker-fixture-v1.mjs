@@ -5,7 +5,9 @@ import os from 'node:os';
 import {fileURLToPath} from 'node:url';
 import {Miniflare,Log,LogLevel} from 'miniflare';
 import {migrationStatements} from './sql-migration-fixture.mjs';
-export async function shippingWorkerFixture({preview=false,port=3067,extraBindings={}}={}) {
+// extraOutbound lets one suite stand in for a provider of its own (the mail provider, say): it
+// answers the request or returns nothing, and everything it does not answer stays forbidden.
+export async function shippingWorkerFixture({preview=false,port=3067,extraBindings={},extraOutbound=null}={}) {
  const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..'),built=path.join(root,'dist/server');
  const config=JSON.parse(await fs.readFile(path.join(built,'wrangler.json'),'utf8'));
  const files=(await fs.readdir(built,{recursive:true})).filter(n=>/\.(?:m?js)$/.test(n));
@@ -16,6 +18,7 @@ export async function shippingWorkerFixture({preview=false,port=3067,extraBindin
  const calls={rates:0,buys:[],hosted:[],paymentReads:[],forbidden:0};
  const rates=[{id:'rate_ground',carrier:'USPS',service:'GroundAdvantage',rate:'9.00',currency:'USD',delivery_days:3},{id:'rate_expedited',carrier:'UPS',service:'2ndDayAir',rate:'15.00',currency:'USD',delivery_days:2},{id:'rate_overnight',carrier:'UPSDAP',service:'NextDayAir',rate:'25.00',currency:'USD',delivery_days:1}];
  const mf=new Miniflare({name:'isolated-shipping',...(preview?{host:'127.0.0.1',port}:{}),cf:false,modules:[config.main,...files.filter(n=>n!==config.main)].map(n=>({type:'ESModule',path:path.join(built,n)})),modulesRoot:built,compatibilityDate:config.compatibility_date,compatibilityFlags:config.compatibility_flags,assets:{directory:path.join(root,'dist/client'),binding:'ASSETS',routerConfig:{has_user_worker:true,invoke_user_worker_ahead_of_assets:false}},bindings,d1Databases:{DB:'isolated-shipping'},d1Persist:path.join(temporary,'d1'),outboundService:async req=>{
+  if(extraOutbound){const answered=await extraOutbound(req);if(answered)return answered;}
   if(req.url==='https://auth.example.invalid/auth/v1/user'&&req.method==='GET')return Response.json(user);
   if(preview&&req.url.startsWith('https://auth.example.invalid/auth/v1/token?')&&req.method==='POST')return Response.json({user,access_token:'isolated-preview-only',refresh_token:'isolated-refresh-only',expires_in:3600});
   if(req.url==='https://api.easypost.com/v2/shipments'&&req.method==='POST'){calls.rates++;return Response.json({id:'shp_fixture',mode:'production',rates});}

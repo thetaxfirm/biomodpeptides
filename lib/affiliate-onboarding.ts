@@ -170,9 +170,11 @@ export async function offerPacket(db: D1Database, owner: string) {
  const state = await affiliateState(db), schedule = await affiliateSchedule(db, owner) as (Awaited<ReturnType<typeof affiliateSchedule>> & { code: string | null; discount_percent: number | null; channels: string; talking_points_id: string | null }) | null;
  const m = await stmt(db, 'SELECT * FROM affiliate_members WHERE owner=?', owner).first<Member>();
  const tax = await taxSummary(db, owner), ids = await idDocuments(db, owner);
- const points = schedule?.talking_points_id ? await stmt(db, 'SELECT id,version,title,body,created FROM affiliate_documents WHERE id=?', schedule.talking_points_id).first<TalkingPoints>() : null;
+ // An offer that came from an invitation may predate the first published talking points, so it
+ // carries none of its own and signs the current version instead. It cannot be signed with none.
+ const points = schedule?.talking_points_id ? await stmt(db, 'SELECT id,version,title,body,created FROM affiliate_documents WHERE id=?', schedule.talking_points_id).first<TalkingPoints>() : schedule?.code ? await currentTalkingPoints(db) : null;
  const agreement: Agreement | null = state.agreement;
- const missing = [!m && 'application', !tax && 'tax details (W-9)', !ids.some(d => d.side === 'front') && 'driver’s license photo', !schedule && 'an offer from Biomod', schedule && !schedule.code && 'a promo code on the offer', !agreement && 'a published agreement'].filter(Boolean) as string[];
+ const missing = [!m && 'application', !tax && 'tax details (W-9)', !ids.some(d => d.side === 'front') && 'driver’s license photo', !schedule && 'an offer from Biomod', schedule && !schedule.code && 'a promo code on the offer', schedule?.code && !points && 'the one-page partner guide from Biomod', !agreement && 'a published agreement'].filter(Boolean) as string[];
  if (missing.length || !m || !tax || !schedule || !agreement) return { ready: false as const, missing, signed: schedule?.accepted ? true : false };
  const address = JSON.parse(tax.address) as z.infer<typeof addressSchema>;
  const packet = {

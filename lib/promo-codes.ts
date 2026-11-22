@@ -102,3 +102,16 @@ export async function saveStoredPromo(db: D1Database, code: string, percentOff: 
     if (!written.meta.changes) throw new Error('Promo codes changed while this page was open. Reload and try again.');
     return existing ? 'updated' : 'created';
 }
+
+/** Switch one stored code off without deleting it, with the same compare-and-swap. Used when a
+ * partner invitation is revoked or renamed: the code it issued must stop pricing orders, but it
+ * stays in the list and the report, and a customer typing it is told it is not valid. True when the
+ * code was on and is now off; false when there was nothing to switch off. */
+export async function switchOffStoredPromo(db: D1Database, code: string): Promise<boolean> {
+    const before = await readStoredPromos(db), existing = before.rows.find(promo => promo.code === code);
+    if (!existing || !existing.active || before.value === null) return false;
+    const value = JSON.stringify(before.rows.map(promo => promo.code === code ? { ...promo, active: false } : promo));
+    const written = await db.prepare('UPDATE settings SET value=? WHERE key=? AND value=?').bind(value, PROMO_CODES_KEY, before.value).run();
+    if (!written.meta.changes) throw new Error('Promo codes changed while this page was open. Reload and try again.');
+    return true;
+}

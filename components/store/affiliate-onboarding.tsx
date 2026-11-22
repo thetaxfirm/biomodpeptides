@@ -105,7 +105,7 @@ export function AffiliateOnboardingAdmin({ members, reloadProgram }: { members: 
  return <section className="affiliate-onboarding-admin" aria-label="Partner onboarding and payments"><h3>Partner offers, W-9s and payments</h3>
   {!data.vaultReady && <p role="alert">Secure storage key AFFILIATE_VAULT_KEY is not set on the server. Partners cannot submit SSNs or license photos until it is.</p>}
   {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
-  <p>Send each invited partner <strong>https://trybiomod.com/account/affiliate</strong>. They sign in with the invited email, apply, add their W-9 and license photo, then sign the offer you set below.</p>
+  <p>A partner you invited with terms has their offer as soon as they apply at <strong>https://trybiomod.com/account/affiliate</strong>. They add their W-9 and license photo, then sign it. Use “Send a new offer” on a partner below to change their terms later.</p>
   <details><summary>One-page talking points{data.talkingPoints ? ' · version ' + data.talkingPoints.version + ' published' : ' · not published yet'}</summary>
    {data.canOwn ? <form className="store-form" onSubmit={form('talkingPoints', v => ({ version: v.version, title: v.title, body: v.body, confirmed: v.confirmed === 'on' }))}><p>{'{CODE}'} and {'{DISCOUNT}'} are filled in with each partner’s code and percent. Each version is kept; signed packets keep the version that was signed.</p>
     <Field label="Version (new and unique)" name="version" defaultValue={data.talkingPoints ? '' : points.version}/><Field label="Title" name="title" defaultValue={points.title}/>

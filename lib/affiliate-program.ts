@@ -38,12 +38,20 @@ export async function affiliatePortal(db: D1Database, owner: string, email = '')
  const member = await stmt(db,'SELECT * FROM affiliate_members WHERE owner=?',owner).first<Member>();
  if(!member && !await invitedAffiliate(db,email)) throw Error('This program is invitation-only. Sign in using the email address Biomod invited.');
  const schedule=await affiliateSchedule(db,owner);
+ // Before they apply, an invited person sees the terms the owner set for them (owner, Nov 21 2026).
+ const invitation = member ? null : await invitationOffer(db,email);
  const acceptedAgreement = member ? await stmt(db,'SELECT id,version,title,body,commission_bps,hold_days,minimum_payout_cents,company,contact,payout_schedule,payout_methods,created FROM affiliate_agreements WHERE id=?',member.agreement_id).first<Agreement>() : null;
- return { ...state, schedule, earnings: await affiliateEarnings(db,owner), member: member ? { name:member.name,website:member.website,audience:member.audience,status:member.status,code:member.code,agreement_id:member.agreement_id,accepted:member.accepted,created:member.created } : null,
+ return { ...state, schedule, invitation, earnings: await affiliateEarnings(db,owner), member: member ? { name:member.name,website:member.website,audience:member.audience,status:member.status,code:member.code,agreement_id:member.agreement_id,accepted:member.accepted,created:member.created } : null,
  acceptedAgreement, needsAcceptance: Boolean(member && state.agreement && member.agreement_id !== state.agreement.id) };
 }
 export async function affiliateAdmin(db: D1Database) {
- return { ...await affiliateState(db), agreementDocument, invitations:(await db.prepare('SELECT email,active,created,updated FROM affiliate_invitations ORDER BY updated DESC LIMIT 500').all()).results, earnings: await affiliateEarnings(db), schedules:(await db.prepare('SELECT f.*,fa.accepted FROM affiliate_schedule_state ss JOIN affiliate_schedules f ON f.id=ss.schedule_id LEFT JOIN affiliate_schedule_acceptances fa ON fa.schedule_id=f.id').all()).results, members:(await db.prepare('SELECT * FROM affiliate_members ORDER BY updated DESC LIMIT 500').all<Member>()).results,
+ return { ...await affiliateState(db), agreementDocument, invitations:(await db.prepare(`SELECT i.email,i.active,i.created,i.updated,i.name,i.code,i.discount_percent,i.commission_bps,i.hold_days,i.payout_methods,i.channels,
+ (SELECT m.owner FROM affiliate_members m WHERE m.email=i.email COLLATE NOCASE LIMIT 1) member,
+ (SELECT e.status FROM affiliate_invitation_emails e WHERE e.email=i.email ORDER BY e.created DESC LIMIT 1) email_status,
+ (SELECT e.created FROM affiliate_invitation_emails e WHERE e.email=i.email ORDER BY e.created DESC LIMIT 1) emailed
+ FROM affiliate_invitations i ORDER BY i.updated DESC LIMIT 500`).all()).results,
+ // Partners sign the one-page talking points with their offer, so an invitation is not finishable until one is published.
+ talkingPointsReady:Boolean(await db.prepare("SELECT 1 FROM affiliate_documents WHERE kind='talking_points' LIMIT 1").first()), earnings: await affiliateEarnings(db), schedules:(await db.prepare('SELECT f.*,fa.accepted FROM affiliate_schedule_state ss JOIN affiliate_schedules f ON f.id=ss.schedule_id LEFT JOIN affiliate_schedule_acceptances fa ON fa.schedule_id=f.id').all()).results, members:(await db.prepare('SELECT * FROM affiliate_members ORDER BY updated DESC LIMIT 500').all<Member>()).results,
  agreements:(await db.prepare('SELECT id,version,title,created FROM affiliate_agreements ORDER BY created DESC').all()).results,
  events:(await db.prepare('SELECT id,owner,actor,action,detail,created FROM affiliate_events ORDER BY created DESC LIMIT 100').all()).results,
  codes:activePromotions(await storedPromotions(db)).map(p=>p.code) };
@@ -76,6 +84,7 @@ export async function applyAffiliate(db:D1Database,user:{id:string;email:string}
  if(!current.open || current.agreement?.id!==input.agreementId) throw Error('Enrollment is closed or the agreement changed. Reload before applying.');
  const existing=await stmt(db,'SELECT owner FROM affiliate_members WHERE owner=?',user.id).first();
  if(existing) throw Error('Your application is already saved. Check its status below.');
+ const scheduleId=crypto.randomUUID();
  // INSERT ... SELECT repeats the open/version checks at write time. The acceptance
  // and audit insert depend on the member, so a concurrent program change saves nothing.
  await db.batch([
@@ -83,9 +92,19 @@ export async function applyAffiliate(db:D1Database,user:{id:string;email:string}
  SELECT ?,?,?,?,?,'pending',?,?,?,? FROM affiliate_program_state WHERE id=1 AND open=1 AND agreement_id=? AND EXISTS(SELECT 1 FROM affiliate_invitations WHERE email=? COLLATE NOCASE AND active=1)`,user.id,user.email,input.name,input.website,input.audience,input.agreementId,now,now,now,input.agreementId,user.email.trim()),
  stmt(db,`INSERT INTO affiliate_acceptances(owner,agreement_id,accepted) SELECT owner,agreement_id,accepted FROM affiliate_members WHERE owner=? AND accepted=?`,user.id,now),
  stmt(db,`INSERT INTO affiliate_events(id,owner,actor,action,detail,created) SELECT ?,owner,?,'application.submitted','{}',? FROM affiliate_members WHERE owner=? AND accepted=?`,crypto.randomUUID(),user.id,now,user.id,now),
+ // Terms the owner set on the invitation (code, customer discount, commission) become this partner's
+ // offer now, so there is nothing for the owner to come back and fill in (owner, Nov 21 2026). Each
+ // statement reads the row the one before it wrote, so an application that did not save attaches nothing.
+ stmt(db,`INSERT INTO affiliate_schedules(id,owner,agreement_id,commission_bps,hold_days,payout_methods,code,discount_percent,channels,talking_points_id,created,actor)
+ SELECT ?,m.owner,m.agreement_id,i.commission_bps,i.hold_days,i.payout_methods,i.code,i.discount_percent,i.channels,(SELECT id FROM affiliate_documents WHERE kind='talking_points' ORDER BY created DESC LIMIT 1),?,i.actor
+ FROM affiliate_members m JOIN affiliate_invitations i ON i.email=m.email COLLATE NOCASE AND i.active=1 AND i.code IS NOT NULL AND i.discount_percent IS NOT NULL AND i.commission_bps IS NOT NULL AND i.hold_days IS NOT NULL AND i.payout_methods IS NOT NULL AND i.channels IS NOT NULL
+ WHERE m.owner=? AND m.accepted=? AND NOT EXISTS(SELECT 1 FROM affiliate_members o WHERE o.code=i.code AND o.owner<>m.owner)`,scheduleId,now,user.id,now),
+ stmt(db,`INSERT INTO affiliate_schedule_state(owner,schedule_id) SELECT owner,id FROM affiliate_schedules WHERE id=?`,scheduleId),
+ stmt(db,`INSERT INTO affiliate_events(id,owner,actor,action,detail,created) SELECT ?,owner,actor,'offer.attached',json_object('id',id,'code',code,'discountPercent',discount_percent,'commissionBps',commission_bps,'holdDays',hold_days,'source','invitation'),? FROM affiliate_schedules WHERE id=?`,crypto.randomUUID(),now,scheduleId),
  ]);
  if(!await stmt(db,'SELECT owner FROM affiliate_members WHERE owner=?',user.id).first()) throw Error('The agreement changed. Reload and try again.');
- return {message:'Application saved for review. Acceptance does not grant affiliate access.'};
+ const offered=await stmt(db,'SELECT 1 FROM affiliate_schedules WHERE id=?',scheduleId).first();
+ return {message:offered?'Application saved. Your offer is ready below: add your tax details and license photo, then sign it.':'Application saved for review. Acceptance does not grant affiliate access.'};
 }
 export async function acceptAffiliateAgreement(db:D1Database,owner:string,raw:unknown,now=Date.now()) {
  const input=z.object({agreementId:z.string().uuid(),accepted:z.literal(true)}).parse(raw);
@@ -175,6 +194,11 @@ export async function acceptAffiliateSchedule(db:D1Database,owner:string,raw:unk
  return {message:'Your individual financial terms are accepted.'};
 }
 
+/** Terms the owner set while inviting this address: the code, what customers get and what the partner earns. */
+export type InvitationOffer={name:string;code:string;discount_percent:number;commission_bps:number;hold_days:number;payout_methods:string;channels:string};
+export async function invitationOffer(db:D1Database,email:string) {
+ return stmt(db,'SELECT name,code,discount_percent,commission_bps,hold_days,payout_methods,channels FROM affiliate_invitations WHERE email=? COLLATE NOCASE AND active=1 AND code IS NOT NULL AND discount_percent IS NOT NULL AND commission_bps IS NOT NULL AND hold_days IS NOT NULL AND payout_methods IS NOT NULL AND channels IS NOT NULL',email.trim()).first<InvitationOffer>();
+}
 export async function invitedAffiliate(db:D1Database,email:string) {
  return Boolean(await stmt(db,'SELECT email FROM affiliate_invitations WHERE email=? COLLATE NOCASE AND active=1',email.trim()).first());
 }

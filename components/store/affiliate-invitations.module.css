@@ -1,0 +1,38 @@
+/* Inviting a partner with their terms. Built from the store's shared form classes; only what those
+ * do not cover lives here. */
+.invitations { display: grid; gap: 12px; min-width: 0; }
+.invitations h3 { font-size: 20px; margin: 10px 0 0; }
+.invitations .listTitle { margin-top: 26px; }
+.invitations h4 { font-size: 17px; margin: 0 0 4px; overflow-wrap: anywhere; }
+/* The terms the owner rarely changes read as one quiet line until opened. */
+.invitations .terms > summary { font-weight: 400; color: #3d4a5c; padding: 4px 0; }
+.invitations .terms[open] > summary { margin-bottom: 12px; }
+.address { font-weight: 400; color: #5c5c5c; font-size: 15px; margin-left: 6px; }
+.code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.04em; }
+.summary { margin: 0; font-size: 15px; color: #3d4a5c; }
+.saved { margin: 0; font-weight: 600; }
+.meta { color: #5c5c5c; font-size: 14px; }
+.actions { display: flex; flex-wrap: wrap; gap: 4px 20px; align-items: center; }
+/* Two checkboxes side by side under one legend; the shared .field stacks its children. */
+.channels { border: 0; padding: 0; margin: 14px 0 0; flex-direction: row; flex-wrap: wrap; gap: 6px 24px; font-weight: 400; }
+.channels legend { font-weight: 600; padding: 0; margin-bottom: 7px; }
+/* The email exactly as it will be sent, so it is read before it goes. */
+.preview { display: grid; gap: 14px; max-width: 720px; margin-top: 12px; padding: 16px 18px; border: 1px solid #d9d6c8; border-radius: 6px; background: #faf9f4; }
+.preview p { margin: 0; }
+.message { margin: 0; padding: 14px 16px; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: 15px; line-height: 1.55; background: #fff; border: 1px solid #e4e4da; border-radius: 4px; }
+
+/* Phone width. The shared .form-row wraps from tablet width down and stacks at phone width, and
+ * with three fields the two rules together send the third into a second column off the screen.
+ * Stacked rows in this form never wrap, so every field keeps the full width. */
+@media (max-width: 480px) {
+  .invitations :global(.form-row) { flex-wrap: nowrap; }
+  .invitations :global(.form-row) > :global(.field) { flex: 0 0 auto; }
+}
+
+/* Night mode: surfaces go dark and the text on them goes light. Additive only. */
+:global(html[data-theme='dark']) .address,
+:global(html[data-theme='dark']) .meta,
+:global(html[data-theme='dark']) .summary,
+:global(html[data-theme='dark']) .invitations .terms > summary { color: #b4b4b9; }
+:global(html[data-theme='dark']) .preview { background: #141417; border-color: #2e2e34; }
+:global(html[data-theme='dark']) .message { background: #0c0c0e; border-color: #2e2e34; color: #ffffff; }
