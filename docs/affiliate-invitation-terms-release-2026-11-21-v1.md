@@ -127,4 +127,21 @@ columns and table are inert without the new code, so reverting the source commit
 
 ## Live record
 
-Recorded after deployment in the section below.
+- Source commit 01dfb15 on main (author Ash Taha via Claude), pushed 2026-11-22 05:27 UTC (Nov 21,
+  9:27 p.m. Pacific). GitHub release check: success. Cloudflare Workers Build 40f724a1: success.
+- Worker `biomod-peptides` version fdb8909f-5766-41c5-8323-6729f9ec422b at 05:29:42 UTC, 100% of
+  traffic. This log's own commit redeploys the same code under a later version id.
+- Production D1: `d1_migrations` latest is `0037_affiliate_invitation_terms.sql`;
+  `affiliate_invitations` has the seven new columns; `affiliate_invitation_emails` and both new
+  indexes exist.
+- Data before and after the release, unchanged: 2 invitations, none with terms, no partner
+  applications, 6 stored promo codes, no invitation emails.
+- Read-only live checks, signed out: `/`, `/shop` and `/account/affiliate` return 200; `/admin`
+  redirects to sign-in; the admin read of `/api/affiliates` returns 403; a cross-origin POST returns
+  403; same-origin `inviteTerms` and `inviteEmail` posts are refused with 400 and wrote nothing. The
+  live script served to `/account/affiliate` carries the new form and the partner's terms block,
+  and the live stylesheet carries the form's own rules.
+- Change-history import run with `--remote`; the Changes page data shows this commit's build checks
+  and the Worker version.
+- Still open, as listed under Gaps: no signed-in live check of the owner screen, and no real
+  invitation email has been sent.
