@@ -26,10 +26,10 @@ export const orderNumber = (id: string) => '#' + id.slice(0, 8).toUpperCase();
  * sold under.
  *
  * Deliberately not the pack size (owner, Nov 23 2026: "lets remove the 3 pack 5 pack 10 pack
- * wording on the pick list its confusing people ... i dont need to know what pack its in"). How the
- * units were priced says nothing about which box to open, and the Qty column already says how many
- * to pull. It also made the sheet wrong: the same product bought as a 5-pack and as a 10-pack read
- * as two different notes, so mergeLines kept both and printed the identical lot and COA twice.
+ * wording on the pick list its confusing people ... i dont know what pack its in"). How the units
+ * were priced says nothing about which box to open, and the Qty column already says how many to
+ * pull. It also made the sheet wrong: the same product bought as a 5-pack and as a 10-pack read as
+ * two different notes, so mergeLines kept both and printed the identical lot and COA twice.
  *
  * The customer's own receipt and the payment descriptor still carry the pack, through itemDetail in
  * order-summary. This is the warehouse copy and answers a different question.
@@ -110,11 +110,23 @@ th.qty{font-size:8.5px;font-weight:400}
 .tick span{display:inline-block;width:11px;height:11px;border:1px solid #555;margin-top:1px}
 .name{font-weight:650}
 .detail{display:block;color:#3a3a3a;font-size:9.5px;margin-top:2px}
-.pull{border:1.5px solid #000;padding:6px 8px;margin-bottom:10px}
-.order{border-top:1px solid #000;padding-top:4px;margin-top:8px}
+/* Every section is a closed box, so a picker can never read a line from one order against the
+   heading of another (owner, Nov 23 2026: "i need to make this very hard to mess up"). The combined
+   pull is the heavier box; each order is its own. break-inside keeps a box whole on one page, and a
+   box too tall for a page still breaks rather than vanishing. */
+.pull{border:2px solid #000;margin-bottom:12px;break-inside:avoid;page-break-inside:avoid}
+.order{border:1.5px solid #000;margin-bottom:10px;break-inside:avoid;page-break-inside:avoid}
+.pull h2,.order h2{background:#efefef;border-bottom:1.5px solid #000;padding:5px 8px;margin:0;
+  /* Browsers drop background colour when printing unless told otherwise. The black rule under the
+     bar carries the structure on its own, so the sheet still reads if a printer ignores this. */
+  -webkit-print-color-adjust:exact;print-color-adjust:exact}
 .order h2,.order .sub{page-break-after:avoid;break-after:avoid}
 .order h2{display:flex;justify-content:space-between;gap:10px}
-.sub{color:#444;font-size:9.5px;margin:0 0 2px}
+.sub{color:#333;font-size:9.5px;margin:0;padding:4px 8px 0}
+/* The table runs to the box edge, so its first and last cells keep the box's own gutter. */
+th:first-child,td:first-child{padding-left:8px}
+th:last-child,td:last-child{padding-right:8px}
+tbody tr:last-child td{border-bottom:0}
 .foot{margin-top:10px;border-top:1px solid #999;padding-top:4px;font-size:9px;color:#444}
 .empty{padding:14px;border:1px dashed #888;color:#444}
 @media print{body{padding:0}.noprint{display:none}}
@@ -146,7 +158,11 @@ export function renderPickList(entries: PickEntry[], generatedAt: number, single
     const body = !entries.length
         ? '<p class="empty">Nothing is waiting to be picked right now.</p>'
         : (single ? '' : '<section class="pull"><h2>Pull from stock · all ' + entries.length + ' order'
-            + (entries.length === 1 ? '' : 's') + ' together</h2>' + table(totals, 'Product') + '</section>')
+            + (entries.length === 1 ? '' : 's') + ' together</h2>'
+            // Said out loud, because picking this box AND the order boxes below would pull twice.
+            + '<p class="sub">Pull this once. Then split it between the ' + entries.length + ' order'
+            + (entries.length === 1 ? '' : 's') + ' below · ' + units + ' units in total.</p>'
+            + table(totals, 'Product') + '</section>')
           + entries.map(orderBlock).join('');
     return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
         + '<meta name="robots" content="noindex"><title>' + esc(title) + ' · TryBiomod</title><style>' + STYLE + '</style></head><body>'
