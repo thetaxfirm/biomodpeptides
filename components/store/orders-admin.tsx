@@ -330,7 +330,7 @@ export function OrdersAdmin({ reloadToken, viewRequest, checkoutRecovery, allowe
             <summary>Shipping and checkout help</summary>
             <div className={styles.recovery}>
                 <h3>Unpaid checkout recovery</h3>
-                <p>{checkoutRecovery?.enabled ? 'Enabled for new checkouts' : 'Not enabled'}. One reminder after 24 hours without payment or payment-page activity, with an additional 7.5% off after existing discounts. Internal tests and payments under review are excluded.</p>
+                <p>{checkoutRecovery?.enabled ? 'Enabled for new checkouts' : 'Not enabled'}. One reminder after 48 hours without payment or payment-page activity, with an additional 7.5% off after existing discounts. Internal tests and payments under review are excluded.</p>
                 <p>Last scheduler check: {checkoutRecovery?.health?.checkedAt ? new Date(checkoutRecovery.health.checkedAt).toLocaleString() + ' · ' + checkoutRecovery.health.status : 'Not recorded'}. Accepted by the mail provider does not confirm inbox delivery.</p>
             </div>
             <CarrierConnection/>
