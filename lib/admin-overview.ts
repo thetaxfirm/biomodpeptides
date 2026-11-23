@@ -31,7 +31,13 @@ const plural = (n: number, one: string, many = one + 's') => n + ' ' + (n === 1 
 
 export function orderAttention(orders: OverviewOrder[], products: Product[], now: number): Attention[] {
     const out: Attention[] = [];
-    const bucketed = orders.filter(o => !isArchived(o)).map(o => ({ ...o, work: tabForOrder(o, now) }));
+    // Only orders the store has been paid for. A checkout that was started and abandoned, or one
+    // whose card the bank declined or held, is not a placed order: there is no money and nothing to
+    // pack (owner, Nov 23 2026: "i want the order to move into the system only after payment").
+    // Filtered here rather than per card, so no card can be built from an unpaid checkout however
+    // the buckets are rearranged later, and against the same PAID set the sales windows use. The
+    // records stay in the Orders queue; this is the home screen, and it shows only paid-for work.
+    const bucketed = orders.filter(o => !isArchived(o) && PAID.has(o.status)).map(o => ({ ...o, work: tabForOrder(o, now) }));
     const toShip = bucketed.filter(o => o.work === 'to_ship');
     if (toShip.length) {
         const blocked = !COA_REQUIRED_TO_SHIP ? [] : toShip.filter(o => (Array.isArray(o.data?.items) ? o.data.items : []).some((i: any) => !hasCoa(products.find(p => p.id === Number(i?.id ?? i?.product?.id)))));
@@ -41,7 +47,7 @@ export function orderAttention(orders: OverviewOrder[], products: Product[], now
             detail: `Oldest waiting ${ago(now, oldest)}. ${labels} with a label ready; no handoff recorded.` + (blocked.length ? ` ${blocked.length} can't ship until a COA is attached.` : '') });
     }
     const review = bucketed.filter(o => o.work === 'review');
-    if (review.length) out.push({ id: 'review', tab: 'orders', count: review.length, tone: 'urgent', title: (review.length === 1 ? '1 order needs' : review.length + ' orders need') + ' attention', detail: 'Check the reason on each order: payment, order hold, label approval or delivery issue.' });
+    if (review.length) out.push({ id: 'review', tab: 'orders', count: review.length, tone: 'urgent', title: (review.length === 1 ? '1 order needs' : review.length + ' orders need') + ' attention', detail: 'Check the reason on each order: a payment that did not verify, an order hold, label approval or a delivery issue.' });
     // Waiting on stock has its own card, or an order held for a batch that never arrives would
     // leave the dashboard entirely the moment it stopped counting as attention (owner, Oct 30 2026).
     const backorder = bucketed.filter(o => o.work === 'backorder');
@@ -50,8 +56,9 @@ export function orderAttention(orders: OverviewOrder[], products: Product[], now
         out.push({ id: 'backorder', tab: 'orders', count: backorder.length, tone: now - oldest > 14 * DAY ? 'urgent' : 'normal', title: plural(backorder.length, 'order') + ' waiting on stock',
             detail: `Oldest waiting ${ago(now, oldest)}. Held for an item not in stock, or carrying a preorder line. None can be packed until the batch arrives.` });
     }
-    const unpaid = bucketed.filter(o => o.work === 'unpaid');
-    if (unpaid.length) out.push({ id: 'unpaid', tab: 'orders', count: unpaid.length, tone: 'normal', title: plural(unpaid.length, 'abandoned cart'), detail: 'Started and never paid, or expired. Check payment and customer history before preparing a follow-up. An unfinished checkout is not proof of a failed purchase.' });
+    // No abandoned-cart card. An unfinished checkout is not work and not a sale, and putting it on
+    // the home screen made orders that were never placed look like orders waiting on the owner.
+    // They are still recorded, and still listed under Abandoned carts in the Orders queue.
     return out;
 }
 
