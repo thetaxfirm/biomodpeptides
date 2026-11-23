@@ -7,6 +7,13 @@ import { unavailableOrder } from './catalog-visibility';
 import { coaEmail, coaSender, coaHash } from './coa-delivery';
 import { readCoaConfig, type CoaEnvironment } from './coa-outbox';
 export const RECOVERY_DAY = 86400000;
+/**
+ * How long a checkout is left alone before the single reminder goes out, and how long after the
+ * customer last opened the payment form (owner, Nov 23 2026: "make the retention email longer than
+ * 24 hours make it 48 hours"). Deliberately its own constant: RECOVERY_DAY still measures the
+ * daily send cap and the provider's idempotency window, which are not this and must not move.
+ */
+export const RECOVERY_WAIT = 2 * RECOVERY_DAY;
 const WEEK = 7 * RECOVERY_DAY;
 const json = (s: string): any => { try { return JSON.parse(s); } catch { return null; } };
 type Order = { id:string; owner:string; status:string; data:string; total:number; checkout_ref:string; created:number; payment_ref?:string|null; notification_id?:string|null };
@@ -25,7 +32,7 @@ export function recoveryAmounts(saved:Record<string,any>) {
 export function recoveryEligible(order:Order,env:CoaEnvironment,startsAt:number,now:number):boolean {
  const d=json(order.data), email=coaEmail(d?.email);
  const admin=(env.STORE_ADMIN_EMAILS||'').toLowerCase().split(',').map(x=>x.trim());
- return Boolean(d && email && !admin.includes(email) && !d.internalTest && !d.recovery && !d.campaignId && !orderHasPreorder(d) && !order.payment_ref && !order.notification_id && ['awaiting_payment','pending'].includes(order.status) && d.environment===paymentEnvironment(env) && getPaymentStatus(env).state==='live' && getPaymentStatus(env).checkoutEnabled && order.created>=startsAt && now-order.created>=RECOVERY_DAY && now-order.created<WEEK && (!d.lastPaymentFormAt || (Number.isSafeInteger(d.lastPaymentFormAt) && now-d.lastPaymentFormAt>=RECOVERY_DAY)) && !unavailableOrder(d));
+ return Boolean(d && email && !admin.includes(email) && !d.internalTest && !d.recovery && !d.campaignId && !orderHasPreorder(d) && !order.payment_ref && !order.notification_id && ['awaiting_payment','pending'].includes(order.status) && d.environment===paymentEnvironment(env) && getPaymentStatus(env).state==='live' && getPaymentStatus(env).checkoutEnabled && order.created>=startsAt && now-order.created>=RECOVERY_WAIT && now-order.created<WEEK && (!d.lastPaymentFormAt || (Number.isSafeInteger(d.lastPaymentFormAt) && now-d.lastPaymentFormAt>=RECOVERY_WAIT)) && !unavailableOrder(d));
 }
 export async function recoveryAdminStatus(env:CoaEnvironment) {
  const row=await env.DB.prepare("SELECT value FROM settings WHERE key='checkout_recovery_v1'").first<{value:string}>();
@@ -55,7 +62,7 @@ export async function runCheckoutRecovery(env:CoaEnvironment,deps:Dependencies={
   const verify=deps.verify||createPaymentAdapter(env).verifyPayment;
   const {replyTo}=await readCoaConfig(env);
   // Bounded work; oldest eligible records first. Only post-activation checkouts.
-  const orders=(await env.DB.prepare("SELECT o.* FROM orders o LEFT JOIN checkout_recovery r ON r.order_id=o.id LEFT JOIN checkout_recovery_checks c ON c.order_id=o.id WHERE (c.next_check IS NULL OR c.next_check<=?) AND r.order_id IS NULL AND o.status IN ('awaiting_payment','pending') AND o.created>=? AND o.created<=? AND o.created>? AND COALESCE(json_extract(o.data,'$.lastPaymentFormAt'),0)<=? AND COALESCE(json_extract(o.data,'$.internalTest'),0)=0 ORDER BY o.created LIMIT 3").bind(now,config.startsAt,now-RECOVERY_DAY,now-WEEK,now-RECOVERY_DAY).all<Order>()).results;
+  const orders=(await env.DB.prepare("SELECT o.* FROM orders o LEFT JOIN checkout_recovery r ON r.order_id=o.id LEFT JOIN checkout_recovery_checks c ON c.order_id=o.id WHERE (c.next_check IS NULL OR c.next_check<=?) AND r.order_id IS NULL AND o.status IN ('awaiting_payment','pending') AND o.created>=? AND o.created<=? AND o.created>? AND COALESCE(json_extract(o.data,'$.lastPaymentFormAt'),0)<=? AND COALESCE(json_extract(o.data,'$.internalTest'),0)=0 ORDER BY o.created LIMIT 3").bind(now,config.startsAt,now-RECOVERY_WAIT,now-WEEK,now-RECOVERY_WAIT).all<Order>()).results;
   for(const order of orders){
    await env.DB.prepare('INSERT INTO checkout_recovery_checks(order_id,next_check) VALUES(?,?) ON CONFLICT(order_id) DO UPDATE SET next_check=excluded.next_check').bind(order.id,now+6*3600000).run();
    if(!recoveryEligible(order,env,config.startsAt,now))continue;
