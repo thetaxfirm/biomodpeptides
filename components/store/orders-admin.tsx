@@ -344,6 +344,13 @@ export function OrdersAdmin({ reloadToken, viewRequest, checkoutRecovery, allowe
                     <div className={styles.stateSummary}><p><strong>Payment: {orderPaymentStatus(selected).label}</strong><span className={styles.sub}>{orderPaymentStatus(selected).detail}</span></p><p><strong>Shipment: {orderShipmentStatus(selected).label}</strong><span className={styles.sub}>{orderShipmentStatus(selected).detail}</span></p></div>
                     {orderAttentionReason(selected) && <p className={styles.attentionReason}>{orderAttentionReason(selected)}</p>}
                     {statusLine(selected) && <p className={styles.statusLine}>{statusLine(selected)}</p>}
+                    {/* Beside the shipment state, not at the foot of the panel. It used to sit below
+                        the customer's other orders and the whole contact history, 83% of the way down
+                        a 3,600px panel, so nobody scrolled far enough to find it (owner, Nov 23 2026:
+                        "i also still dont see the place where a manualy made shipping lable tracking
+                        label to enter it"). The manual confirmation form stays under Actions: this one
+                        asks the carrier, that one is a person's own word. */}
+                    <OrderTracking order={selected} allowed={allowed} busy={busy} onDone={reload}/>
                     {/* Label, delivery and contact for this order and every other order from the same customer (owner, Nov 8 2026). */}
                     <CustomerOrders email={String(selected.data?.email || '')} currentId={selected.id} onOpen={setSelected}/>
                     {!paymentVerificationFailed(selected) && awaitingLabelApproval(selected) && <p className={styles.coaHold}>This label quotes {money(Number(selected.data?.labelApproval?.cents) || 0)}, above your {money(Number(selected.data?.labelApproval?.limitCents) || 0)} automatic limit, so it was not bought. Buying it below approves that cost. Nothing has been charged.</p>}
@@ -380,9 +387,6 @@ export function OrdersAdmin({ reloadToken, viewRequest, checkoutRecovery, allowe
                         {onEmailCustomer && selected.data?.email && <button type="button" className="button button-dark" disabled={busy} onClick={() => { const order = selected; setSelected(null); onEmailCustomer(order); }}>Open customer history &amp; reply</button>}
                         {canReconcile(selected) && <button type="button" className="button button-dark" disabled={busy} onClick={() => reconcile(selected)}>Check payment status</button>}
                         {allowed('orders:fulfill') && !selected.data?.hold && !paymentVerificationFailed(selected) && <ShippingLabel order={selected} onDone={reload}/>}
-                        {/* Which number the order is followed on, and the slot to change it. Above the
-                            manual form on purpose: this one asks the carrier, that one does not. */}
-                        <OrderTracking order={selected} allowed={allowed} busy={busy} onDone={reload}/>
                         {allowed('orders:fulfill') && !selected.data?.hold && !paymentVerificationFailed(selected) && ['paid', 'shipped'].includes(selected.status) && (selected.data?.shipment
                             ? <details className={styles.manual}><summary>Manual confirmation: your own statement, not checked with the carrier (use only if EasyPost cannot read the number)</summary><ManualForm order={selected} formGeneration={formGeneration} submit={submit} markDraft={markDraft} busy={busy}/></details>
                             : <ManualForm order={selected} formGeneration={formGeneration} submit={submit} markDraft={markDraft} busy={busy}/>)}
