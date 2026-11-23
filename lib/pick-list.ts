@@ -26,10 +26,10 @@ export const orderNumber = (id: string) => '#' + id.slice(0, 8).toUpperCase();
  * sold under.
  *
  * Deliberately not the pack size (owner, Nov 23 2026: "lets remove the 3 pack 5 pack 10 pack
- * wording on the pick list its confusing people ... i dont know what pack its in"). How the units
- * were priced says nothing about which box to open, and the Qty column already says how many to
- * pull. It also made the sheet wrong: the same product bought as a 5-pack and as a 10-pack read as
- * two different notes, so mergeLines kept both and printed the identical lot and COA twice.
+ * wording on the pick list its confusing people ... i dont need to know what pack its in"). How the
+ * units were priced says nothing about which box to open, and the Qty column already says how many
+ * to pull. It also made the sheet wrong: the same product bought as a 5-pack and as a 10-pack read
+ * as two different notes, so mergeLines kept both and printed the identical lot and COA twice.
  *
  * The customer's own receipt and the payment descriptor still carry the pack, through itemDetail in
  * order-summary. This is the warehouse copy and answers a different question.
