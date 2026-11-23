@@ -66,6 +66,26 @@ assert.deepEqual(totals.map(t=>[t.name,t.quantity]),[['AZURE 10 mg',5],['FORGE 5
 // Zero-quantity lines never reach the sheet.
 assert.deepEqual(p.pickEntry(order('cccccccc-1111-1111-1111-111111111111','paid',{items:[{id:1,quantity:0,lineTotal:0,product:{name:'Nothing'}}]})).lines,[]);
 
+// The warehouse copy carries the lot and the certificate, never the pack the units were priced in
+// (owner, Nov 23 2026). The same product bought as a 5-pack and as a 10-pack off one lot is one
+// line with the lot printed once: the pack wording used to make those read as two different notes.
+const packs=p.pickEntry(order('ffffffff-1111-1111-1111-111111111111','paid',{items:[
+  {id:1,quantity:2,lineTotal:1,packSize:10,packKind:'mixed',product:{name:'Tesamorelin',soldBatch:{lot:'301-10-0001',coaAvailable:true,reportId:'BIOM2604200372'}}},
+  {id:1,quantity:5,lineTotal:1,packSize:5,packKind:'fixed',product:{name:'Tesamorelin',soldBatch:{lot:'301-10-0001',coaAvailable:true,reportId:'BIOM2604200372'}}}]}));
+const packSheet=p.renderPickList([packs],1,true);
+assert(!/-pack/i.test(packSheet),'no 5-pack or 10-pack wording on a pick sheet');
+assert(!/mixed|fixed/i.test(packSheet),'nor the pack kind');
+assert.equal((packSheet.match(/Lot 301-10-0001/g)||[]).length,1,'one lot, printed once, not once per pack size');
+assert.equal((packSheet.match(/COA BIOM2604200372/g)||[]).length,1,'and one certificate');
+assert.equal(p.mergeLines(packs.lines)[0].quantity,7,'both saved lines still count toward the pull');
+// Two genuinely different lots of one product still both have to be found.
+const lots=p.pickEntry(order('99999999-1111-1111-1111-111111111111','paid',{items:[
+  {id:1,quantity:1,lineTotal:1,product:{name:'AZURE',soldBatch:{lot:'A-1',coaAvailable:false}}},
+  {id:1,quantity:1,lineTotal:1,product:{name:'AZURE',soldBatch:{lot:'A-2',coaAvailable:false}}}]}));
+assert.equal(p.mergeLines(lots.lines)[0].detail,'Lot A-1 · Lot A-2','distinct lots are still both named');
+// The name and its lot are separate elements, or they print as one run of text.
+assert(/<span class="name">AZURE<\/span><span class="detail">/.test(p.renderPickList([lots],1,true)),'the lot sits under the name, not against it');
+
 // The sheet shows what to pull, and withholds what a picker has no need for.
 const html=p.renderPickList(entries,1760000000000);
 assert(html.includes('Pull from stock'));
@@ -83,4 +103,4 @@ assert(p.renderPickList([],1760000000000).includes('Nothing is waiting'));
 // Order names are escaped, never injected.
 const nasty=p.renderPickList(p.pickEntries([order('dddddddd-1111-1111-1111-111111111111','paid',{name:'<script>alert(1)</script>'})]),1);
 assert(!nasty.includes('<script>alert(1)</script>')&&nasty.includes('&lt;script&gt;'),'markup in saved data is escaped');
-console.log('PASS: picking covers to-ship and label-bought, excludes moving/held/test, oldest-first queue, one row per product with quantities summed and notes kept, combined pull totals, single-order sheet, empty sheet, contact details withheld, markup escaped.');
+console.log('PASS: picking covers to-ship and label-bought, excludes moving/held/test, oldest-first queue, one row per product with quantities summed, lots kept and pack wording off the sheet, combined pull totals, single-order sheet, empty sheet, contact details withheld, markup escaped.');
