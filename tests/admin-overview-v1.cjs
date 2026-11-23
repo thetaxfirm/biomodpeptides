@@ -38,7 +38,16 @@ const orders = [
   // Owner, Oct 30 2026: an out-of-stock hold is a back order, with its own card, not attention.
   assert.equal(byId.review, undefined, 'the held order is no longer counted as attention');
   assert.equal(byId.backorder.count, 1, 'it is counted as waiting on stock'); assert.match(byId.backorder.title, /waiting on stock/);
-  assert.equal(byId.unpaid.count, 2, 'Dashboard and queue include the same unarchived checkouts'); assert.match(byId.unpaid.title, /abandoned cart/);
+  // Owner, Nov 23 2026: "i want the order to move into the system only after payment". The fixture
+  // holds two abandoned checkouts; neither is work, so neither reaches the home screen. They are
+  // still recorded and still listed under Abandoned carts in the Orders queue.
+  assert.equal(byId.unpaid, undefined, 'an abandoned checkout gets no card');
+  assert(!work.some(w => /abandoned cart/i.test(w.title)), 'the home screen never mentions abandoned carts');
+  // Nothing the store has not been paid for can produce a card at all, whatever bucket it lands in.
+  const unpaidOnly = ['awaiting_payment', 'pending', 'review', 'cancelled', 'failed'].map(status => order(status, now - 3 * DAY));
+  assert.deepEqual(orderAttention(unpaidOnly, products, now), [], 'no unpaid order produces attention');
+  // A declined card that was later approved is a paid order again, and does come back.
+  assert(orderAttention([order('paid', now - 3 * DAY, { hold: { issue: 'website' } })], products, now).some(w => w.id === 'review'), 'a paid order on hold is still attention');
   assert(!work.some(w => w.id === 'test'), 'Internal tests never count');
   const { queryOrders } = require('../lib/order-queue.ts');
   const mixed = [...orders,
