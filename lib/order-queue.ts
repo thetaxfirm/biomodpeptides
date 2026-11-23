@@ -13,7 +13,7 @@ export const queueTabs: { id: QueueTab; label: string; detail: string; secondary
     { id: 'backorder', label: 'Back order', detail: 'Waiting on stock: held because an item is not in stock, or carrying a preorder line whose batch has not arrived. Nothing here can be packed yet.' },
     { id: 'shipped', label: 'Track parcels', detail: 'Parcels handed over, moving, or with an acknowledged carrier issue. The shipment column states the evidence.' },
     { id: 'all', label: 'All orders', detail: 'Unarchived customer orders, including completed and closed orders. Internal tests are separate.' },
-    { id: 'unpaid', label: 'Abandoned carts', detail: 'Checkouts that never became a payment: started and not paid, or expired. Payment is not confirmed for any of them.', secondary: true },
+    { id: 'unpaid', label: 'Abandoned carts', detail: 'Checkouts that never became a payment: started and not paid, expired, or a card the bank declined or held. Payment is not confirmed for any of them.', secondary: true },
     { id: 'delivered', label: 'Delivered', detail: 'Delivery recorded by the carrier or store; the shipment column distinguishes them.', secondary: true },
     { id: 'refunded', label: 'Refunded', detail: 'Orders recorded as refunded. Refunds do not establish where the parcel is.', secondary: true },
     { id: 'cancelled', label: 'Cancelled', detail: 'Orders cancelled after a decision. Expired checkouts are under Abandoned carts. This does not mean a refund was issued.', secondary: true },
@@ -39,6 +39,13 @@ export function tabForOrder(order: FulfillmentOrder, now = Date.now()): QueueTab
     // pack, and leaving it in either one is what made both lists untrustworthy.
     if (backOrdered(order)) return 'backorder';
     if (paymentVerificationFailed(order)) return 'review';
+    // A card the bank declined or held is an unpaid checkout, not fulfilment work. It joins the
+    // other unpaid ones rather than standing in Needs attention, where every other row is a parcel
+    // somebody can actually act on (owner, Nov 23 2026: "anything that is not paid for needs to go
+    // into a seprate hidden tab ... i also still dont see the place"). A failed payment
+    // verification is the opposite case and is handled above: that order WAS paid and the provider
+    // disagreed afterwards, so it stays in front of a person.
+    if (bucket === 'review' && !['paid', 'labeling', 'shipped', 'delivered'].includes(order.status)) return 'unpaid';
     if (bucket === 'label' && Number.isFinite(order.data?.handoff?.at)) return 'shipped';
     if (bucket === 'label') return 'to_ship';
     return bucket;
