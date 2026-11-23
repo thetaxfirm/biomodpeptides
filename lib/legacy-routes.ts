@@ -186,4 +186,18 @@ export const legacyRoutes: Record<string, string> = {
   'feed': '/news',
   'sitemap_index.xml': '/sitemap.xml',
   'wp-sitemap.xml': '/sitemap.xml',
+  // Old-domain tag archives Bing listed (November 20-23, 2026) that still ended in a 404. Sourcing
+  // topics go to the supplier guide, storage to the COA standard, reference topics to the compound
+  // reference. tag/tb500 goes to the shop, not a product: TB-500 is on a publication hold. Protocol
+  // topics BioMod does not publish go to the homepage.
+  'tag/peptide-selection': '/choosing-a-research-supplier',
+  'tag/peptide-storage': '/quality-standard',
+  'tag/tb500': '/shop',
+  'tag/peptide-inflammation-protocol': '/',
+  'tag/budget-approval': '/choosing-a-research-supplier',
+  'es/tag/biochemistry': '/compounds',
+  'es/tag/peptide-protocol-men': '/',
+  'es/tag/supplier-backorder': '/choosing-a-research-supplier',
+  'es/tag/supplier-verification': '/choosing-a-research-supplier',
+  'es/tag/mitochondrial-targeted-peptide': '/compounds',
 };

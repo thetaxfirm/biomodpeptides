@@ -148,6 +148,17 @@ const mappings = {
   '/peptide-standards-procurement-guide-for-nevada-labs': '/choosing-a-research-supplier',
   '/tb-500-for-research-labs-in-las-vegas-a-procurement-and-purity-guide': '/shop',
   '/tag/peptide-research-guide': '/choosing-a-research-supplier',
+  // Old tag archives listed by Bing (November 20-23, 2026) and still ending in a 404 on November 23.
+  '/tag/peptide-selection': '/choosing-a-research-supplier',
+  '/tag/peptide-storage': '/quality-standard',
+  '/tag/tb500': '/shop',
+  '/tag/peptide-inflammation-protocol': '/',
+  '/tag/budget-approval': '/choosing-a-research-supplier',
+  '/es/tag/biochemistry': '/compounds',
+  '/es/tag/peptide-protocol-men': '/',
+  '/es/tag/supplier-backorder': '/choosing-a-research-supplier',
+  '/es/tag/supplier-verification': '/choosing-a-research-supplier',
+  '/es/tag/mitochondrial-targeted-peptide': '/compounds',
   // Forwarded from the old domain on November 21, 2026 and still ending in a 404.
   // tag/lab-supply is listed by Bing for "biomod research supply company".
   '/tag/lab-supply': '/about',
@@ -193,7 +204,7 @@ const mappings = {
       await assert.rejects(handler(props(form)), error => error.digest === 'NEXT_REDIRECT;replace;/sitemap.xml;308;', form + ' must permanently redirect');
     }
   }
-  for (const unknown of ['/tag/lab-supply/extra', '/tag/lab', '/category/news/extra', '/category', '/feed/extra', '/sitemap_index', '/post-sitemap.xml', '/product-tag/not-a-tag', '/product-tag/blends/extra', '/tag/not-a-tag', '/tag/reproducibility/extra', '/research-peptides', '/research-peptides/not-a-category', '/tag/nevada-research-supply/extra', '/tag/peptides/extra', '/peptide-softgel-starter-kit', '/signup/extra', '/sign-up', '/research-peptides/all-research-peptides/extra', '/tag/las-vegas-peptides/extra', '/tag/softgels/extra', '/es/tag/not-a-tag', '/es/tag/nrs-332/extra', '/tag/peptide-basics', '/microbiology-research-peptide-reagents']) {
+  for (const unknown of ['/tag/tb500/extra', '/tag/tb-500', '/tag/peptide', '/tag/budget', '/es/tag/supplier', '/es/tag/biochemistry/extra', '/tag/lab-supply/extra', '/tag/lab', '/category/news/extra', '/category', '/feed/extra', '/sitemap_index', '/post-sitemap.xml', '/product-tag/not-a-tag', '/product-tag/blends/extra', '/tag/not-a-tag', '/tag/reproducibility/extra', '/research-peptides', '/research-peptides/not-a-category', '/tag/nevada-research-supply/extra', '/tag/peptides/extra', '/peptide-softgel-starter-kit', '/signup/extra', '/sign-up', '/research-peptides/all-research-peptides/extra', '/tag/las-vegas-peptides/extra', '/tag/softgels/extra', '/es/tag/not-a-tag', '/es/tag/nrs-332/extra', '/tag/peptide-basics', '/microbiology-research-peptide-reagents']) {
     for (const handler of [generateMetadata, Page]) {
       await assert.rejects(handler(props(unknown)), error => error.digest === 'NEXT_HTTP_ERROR_FALLBACK;404', unknown + ' must remain a genuine 404');
     }
