@@ -118,7 +118,7 @@ assert.equal(q.tabForOrder(order('ab6', 'cancelled', { releasedReason: 'owner_ca
 // Still archivable from its new home: the bucket is unchanged, only the tab moved.
 assert.equal(q.canArchive(q.orderBucket(order('ab7', 'cancelled', { releasedReason: 'unpaid_checkout_expired' }))), true);
 const abandoned = q.queryOrders([...rows, order('ab8', 'cancelled', { releasedReason: 'unpaid_checkout_expired' })], { tab: 'unpaid' });
-assert.equal(abandoned.total, 3, 'the tab lists both the unpaid and the expired');
+assert.equal(abandoned.total, 4, 'the tab lists the unpaid, the expired and the declined');
 assert.equal(abandoned.counts.cancelled, 0, 'and Cancelled no longer counts it');
 // The tab row itself: Back order is work, Abandoned carts is filed away.
 assert.equal(q.queueTabs.find(t => t.id === 'backorder').label, 'Back order');
@@ -127,9 +127,19 @@ assert.equal(q.queueTabs.find(t => t.id === 'unpaid').label, 'Abandoned carts');
 assert.equal(q.queueTabs.find(t => t.id === 'unpaid').secondary, true, 'Abandoned carts moves out of the main row');
 assert.equal(q.requestedTab('unpaid'), 'unpaid', 'an old link still resolves');
 
+// A card the bank declined or held is an unpaid checkout, so it leaves Needs attention and joins
+// the other unpaid ones (owner, Nov 23 2026). Needs attention is left holding only parcels a person
+// can act on. The stored status is untouched, and the bucket still reads 'review'.
+assert.equal(q.tabForOrder(order('dec1', 'review')), 'unpaid', 'a declined card is an unpaid checkout, not fulfilment work');
+assert.equal(q.orderBucket(order('dec2', 'review')), 'review', 'its stored classification is unchanged');
+// A payment that WAS taken and then failed verification is the opposite case and stays in front of
+// a person: there is money involved and somebody has to look at it.
+assert.equal(q.tabForOrder(order('ver1', 'paid', { paymentVerified: { at: 1, state: 'failed' } })), 'review', 'a failed verification on a paid order still needs attention');
+assert.equal(q.tabForOrder(order('rts9', 'shipped', { shipment: { status: 'return_to_sender' } })), 'review', 'and so does a carrier problem on a paid parcel');
+
 // Action queues separate delivery, refund and cancellation without changing stored status.
 const all = q.queryOrders(rows, { tab: 'all' });
-assert.deepEqual(all.counts, { to_ship: 4, review: 2, backorder: 0, unpaid: 2, shipped: 2, all: 13, delivered: 2, refunded: 1, cancelled: 0, failed: 0, test: 1, archived: 0 });
+assert.deepEqual(all.counts, { to_ship: 4, review: 1, backorder: 0, unpaid: 3, shipped: 2, all: 13, delivered: 2, refunded: 1, cancelled: 0, failed: 0, test: 1, archived: 0 });
 assert.equal(q.queryOrders(rows, { tab: 'shipped' }).orders.length, 2, 'tracking excludes completed deliveries');
 assert.equal(q.queryOrders(rows, { tab: 'delivered' }).orders.length, 2);
 assert.equal(q.queryOrders(rows, { tab: 'refunded' }).orders[0].status, 'refunded');
