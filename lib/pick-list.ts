@@ -93,15 +93,15 @@ const when = (ms: number) => new Date(ms).toISOString().slice(0, 16).replace('T'
 // Pages fill top to bottom: an order may run over a break rather than leave a gap behind it.
 // Only a single item row is kept whole, and a heading never sits alone at the foot of a page.
 const STYLE = `
-@page{size:portrait;margin:10mm}
+@page{size:portrait;margin:8mm}
 *{box-sizing:border-box}
-body{font:11px/1.3 -apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#000;margin:0;padding:18px}
+body{font:11px/1.25 -apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#000;margin:0;padding:14px}
 h1{font-size:15px;margin:0}
 h2{font-size:11px;margin:0;text-transform:uppercase;letter-spacing:.05em}
-.meta{color:#444;font-size:9.5px;margin:1px 0 8px}
+.meta{color:#444;font-size:9.5px;margin:1px 0 6px}
 table{width:100%;border-collapse:collapse}
-th{text-align:left;font-size:8.5px;text-transform:uppercase;letter-spacing:.04em;color:#444;border-bottom:1px solid #000;padding:0 6px 2px}
-td{padding:5px 6px;border-bottom:1px solid #e0e0e0;vertical-align:top}
+th{text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:.04em;color:#444;border-bottom:1px solid #000;padding:0 6px 1px}
+td{padding:2px 6px;border-bottom:1px solid #e0e0e0;vertical-align:top}
 thead{display:table-header-group}
 tr{page-break-inside:avoid;break-inside:avoid}
 .qty{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:700;width:34px;font-size:14px;padding-right:10px;border-right:1px solid #e0e0e0}
@@ -109,25 +109,31 @@ th.qty{font-size:8.5px;font-weight:400}
 .tick{width:20px}
 .tick span{display:inline-block;width:11px;height:11px;border:1px solid #555;margin-top:1px}
 .name{font-weight:650}
-.detail{display:block;color:#3a3a3a;font-size:9.5px;margin-top:2px}
+.detail{display:block;color:#3a3a3a;font-size:9px;margin-top:0}
 /* Every section is a closed box, so a picker can never read a line from one order against the
    heading of another (owner, Nov 23 2026: "i need to make this very hard to mess up"). The combined
    pull is the heavier box; each order is its own. break-inside keeps a box whole on one page, and a
    box too tall for a page still breaks rather than vanishing. */
-.pull{border:2px solid #000;margin-bottom:12px;break-inside:avoid;page-break-inside:avoid}
-.order{border:1.5px solid #000;margin-bottom:10px;break-inside:avoid;page-break-inside:avoid}
-.pull h2,.order h2{background:#efefef;border-bottom:1.5px solid #000;padding:5px 8px;margin:0;
+.pull{border:2px solid #000;margin-bottom:8px;break-inside:avoid;page-break-inside:avoid}
+.order{border:1.5px solid #000;margin:0 0 7px;break-inside:avoid;page-break-inside:avoid}
+.pull h2,.order h2{background:#efefef;border-bottom:1.5px solid #000;padding:3px 8px;margin:0;
   /* Browsers drop background colour when printing unless told otherwise. The black rule under the
      bar carries the structure on its own, so the sheet still reads if a printer ignores this. */
   -webkit-print-color-adjust:exact;print-color-adjust:exact}
+/* Two across, as inline blocks rather than CSS columns: a multi-column layout clips a box that
+   meets a page boundary, so the box lost its bottom edge and read as if it continued overleaf.
+   Inline blocks paginate in normal flow, so a box that does not fit moves down whole. */
+.orders{font-size:0}
+.orders>.order{display:inline-block;width:calc(50% - 3px);font-size:11px;vertical-align:top;margin:0 0 6px}
+.orders>.order:nth-child(odd){margin-right:6px}
 .order h2,.order .sub{page-break-after:avoid;break-after:avoid}
 .order h2{display:flex;justify-content:space-between;gap:10px}
-.sub{color:#333;font-size:9.5px;margin:0;padding:4px 8px 0}
+.sub{color:#333;font-size:9px;margin:0;padding:3px 8px 0}
 /* The table runs to the box edge, so its first and last cells keep the box's own gutter. */
 th:first-child,td:first-child{padding-left:8px}
 th:last-child,td:last-child{padding-right:8px}
 tbody tr:last-child td{border-bottom:0}
-.foot{margin-top:10px;border-top:1px solid #999;padding-top:4px;font-size:9px;color:#444}
+.foot{margin-top:6px;border-top:1px solid #999;padding-top:3px;font-size:9px;color:#444}
 .empty{padding:14px;border:1px dashed #888;color:#444}
 @media print{body{padding:0}.noprint{display:none}}
 .noprint{margin-bottom:12px}
@@ -163,7 +169,7 @@ export function renderPickList(entries: PickEntry[], generatedAt: number, single
             + '<p class="sub">Pull this once. Then split it between the ' + entries.length + ' order'
             + (entries.length === 1 ? '' : 's') + ' below · ' + units + ' units in total.</p>'
             + table(totals, 'Product') + '</section>')
-          + entries.map(orderBlock).join('');
+          + (single ? entries.map(orderBlock).join('') : '<div class="orders">' + entries.map(orderBlock).join('') + '</div>');
     return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
         + '<meta name="robots" content="noindex"><title>' + esc(title) + ' · TryBiomod</title><style>' + STYLE + '</style></head><body>'
         + '<div class="noprint"><button type="button" onclick="window.print()">Print this sheet</button></div>'
