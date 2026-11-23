@@ -86,6 +86,20 @@ assert.equal(p.mergeLines(lots.lines)[0].detail,'Lot A-1 · Lot A-2','distinct l
 // The name and its lot are separate elements, or they print as one run of text.
 assert(/<span class="name">AZURE<\/span><span class="detail">/.test(p.renderPickList([lots],1,true)),'the lot sits under the name, not against it');
 
+// Least paper: order boxes run two across, because one per line threw away the right-hand half of
+// every page (owner, Nov 23 2026). They are inline blocks, NOT a CSS multi-column layout: multicol
+// clipped a box that met a page boundary, so it printed without its bottom edge and read as if it
+// carried on overleaf. Each box still refuses to split, so an order is never half on another page.
+const many=p.renderPickList(p.pickEntries([
+  order('11111111-1111-1111-1111-111111111111','paid',{created:1}),
+  order('22222222-2222-2222-2222-222222222222','paid',{created:2})]),1);
+assert(/<div class="orders">/.test(many),'multi-order sheets lay the boxes out two across');
+assert(/\.orders>\.order\{display:inline-block/.test(many),'as inline blocks that paginate in normal flow');
+assert(!/\.orders\{[^}]*column-count|\.orders\{[^}]*columns:/.test(many),'never CSS multi-column: it clips a box at a page boundary');
+assert(/\.order\{[^}]*break-inside:avoid/.test(many),'and a box is still never split across pages');
+// A single-order sheet has nothing to sit beside, so it keeps the full width.
+assert(!/<div class="orders">/.test(p.renderPickList([entries[0]],1,true)),'one order uses the whole sheet');
+
 // The sheet shows what to pull, and withholds what a picker has no need for.
 const html=p.renderPickList(entries,1760000000000);
 assert(html.includes('Pull from stock'));
@@ -103,4 +117,4 @@ assert(p.renderPickList([],1760000000000).includes('Nothing is waiting'));
 // Order names are escaped, never injected.
 const nasty=p.renderPickList(p.pickEntries([order('dddddddd-1111-1111-1111-111111111111','paid',{name:'<script>alert(1)</script>'})]),1);
 assert(!nasty.includes('<script>alert(1)</script>')&&nasty.includes('&lt;script&gt;'),'markup in saved data is escaped');
-console.log('PASS: picking covers to-ship and label-bought, excludes moving/held/test, oldest-first queue, one row per product with quantities summed, lots kept and pack wording off the sheet, combined pull totals, single-order sheet, empty sheet, contact details withheld, markup escaped.');
+console.log('PASS: picking covers to-ship and label-bought, excludes moving/held/test, oldest-first queue, one row per product with quantities summed, lots kept and pack wording off the sheet, combined pull totals, two-across order boxes that never split, single-order sheet, empty sheet, contact details withheld, markup escaped.');
