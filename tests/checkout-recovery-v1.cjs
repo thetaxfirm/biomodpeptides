@@ -6,7 +6,11 @@ let checkoutRuntime;
 let paymentState={state:'pending',noPaymentFound:true},verificationHook=async()=>{},mailMode='ok';
 Module._load=function(name,parent,...rest){if(parent?.filename.endsWith('/lib/checkout.ts')){if(name==='./runtime')return checkoutRuntime;if(name==='./auth'||name==='./commerce'||name==='./easypost')return {};if(name==='./order-summary')return {sendOrderNotification:async()=>{throw Error('Unexpected paid notification')}};}if(name.endsWith('/payments')||name==='./payments')return {paymentEnvironment:()=> 'authorizenet:live',getPaymentStatus:()=>({state:'live',checkoutEnabled:true}),createPaymentAdapter:()=>({verifyPayment:async(...args)=>{await verificationHook(...args);return paymentState;}})};if(name==='./catalog-visibility')return{unavailableOrder:d=>!d.items?.length||d.items.some(i=>i.id===999)};return original.call(this,name,parent,...rest)};
 require.extensions['.ts']=(m,f)=>m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,esModuleInterop:true}}).outputText,f);
-const {runCheckoutRecovery,recoveryAmounts,suppressRecovery}=require('../lib/checkout-recovery.ts');
+const {runCheckoutRecovery,recoveryAmounts,suppressRecovery,RECOVERY_DAY,RECOVERY_WAIT}=require('../lib/checkout-recovery.ts');
+// The wait before the reminder and the daily send cap are different clocks and must stay that way:
+// lengthening the wait to 48 hours must not quietly double how many reminders may go out in a day.
+assert.equal(RECOVERY_DAY,86400000,'the send cap and provider idempotency window stay on 24 hours');
+assert.equal(RECOVERY_WAIT,2*86400000,'the reminder waits 48 hours');
 const {applyPromotion,activePromotions}=require('../lib/promotions.ts');
 const {anetOrderDetails,orderEmailHtml}=require('../lib/order-summary.ts');
 const DAY=86400000,BASE=Date.parse('2026-10-12T00:00:00Z');
@@ -30,7 +34,12 @@ function fixture(){
   const applied=applyPromotion([{lineTotal:9999},{lineTotal:3251}],promo.code.toLowerCase());const subtotal=15000,packDiscount=1750,amount=applied.items.reduce((s,i)=>s+i.lineTotal,0),data={...applied,subtotal,discount:packDiscount+applied.promoDiscount,shipping:500,tax:0,total:amount+500};
   const r=recoveryAmounts(data);assert.equal(r.savings,Math.round(amount*0.075));assert.equal(r.items.reduce((s,i)=>s+i.lineTotal,0),amount-r.savings);assert(r.items.every(i=>i.lineTotal>=0));assert.equal(data.promo.code,promo.code);assert.throws(()=>recoveryAmounts({...data,recovery:{}}));
  }
- let f=fixture(),id=f.seed();now=BASE+DAY-1;await f.run();assert.equal(mail.length,0);assert(!f.job(id));now=BASE+DAY;
+ let f=fixture(),id=f.seed();
+ // The reminder waits two days, not one (owner, Nov 23 2026). A checkout left overnight is not yet
+ // abandoned, and chasing it after a single day was reaching people who were still deciding.
+ now=BASE+DAY;await f.run();assert.equal(mail.length,0,'nothing goes out at 24 hours');assert(!f.job(id));
+ now=BASE+2*DAY-1;await f.run();assert.equal(mail.length,0,'nor a moment before 48 hours');assert(!f.job(id));
+ now=BASE+2*DAY;
  await f.run();let o=f.order(id),j=f.job(id);assert.equal(j.status,'accepted');assert.equal(o.status,'awaiting_payment');assert.equal(o.data.recovery.savings,638);assert.equal(o.data.tax,658);assert.equal(o.total,9020);assert.equal(o.data.promo.code,'BIOMOD15');assert.equal(o.data.promo.savings,1500);assert.equal(JSON.parse(j.original_snapshot).total,9712);assert.match(anetOrderDetails(o.data).note,/additional|Additional/);assert.match(orderEmailHtml(id,o.data),/7.5%/);assert.match(JSON.parse(mail[0].body).text,/after any existing promo/);await f.run();assert.equal(mail.length,1);
  const firstMail=JSON.parse(mail[0].body);assert.equal(firstMail.from,'Kim C. | BioMod Customer Care <contact@trybiomod.com>');assert.match(firstMail.text,/Thank you,\nKim C\.\nBioMod Customer Care/);assert.equal(firstMail.reply_to,'reply@example.invalid');assert.deepEqual(firstMail.to,[id+'@example.invalid']);
  // Additional recovery savings never make paid expedited shipping free or reprice its handling fee.
@@ -48,7 +57,7 @@ function fixture(){
  f=fixture();id=f.seed();mailMode='timeout';const before=mail.length;await f.run();j=f.job(id);assert.equal(j.status,'queued');now+=300001;mailMode='ok';await f.run();assert.equal(f.job(id).status,'accepted');assert.equal(mail[before].body,mail[before+1].body);assert.equal(mail[before].headers['Idempotency-Key'],mail[before+1].headers['Idempotency-Key']);
  f=fixture();id=f.seed();mailMode='timeout';await f.run();now+=23*3600000;await f.run();assert.equal(f.job(id).status,'review');mailMode='ok';
  // Unsubscribe needs no login and prevents retry. No GET side effect in route.
- now=BASE+DAY;f=fixture();id=f.seed();mailMode='timeout';await f.run();j=f.job(id);assert(await suppressRecovery(f.env,j.unsubscribe_token));now+=300001;mailMode='ok';const n=mail.length;await f.run();assert.equal(f.job(id).status,'skipped');assert.equal(mail.length,n);assert.equal(await suppressRecovery(f.env,'bad-token'),false);
+ now=BASE+2*DAY;f=fixture();id=f.seed();mailMode='timeout';await f.run();j=f.job(id);assert(await suppressRecovery(f.env,j.unsubscribe_token));now+=300001;mailMode='ok';const n=mail.length;await f.run();assert.equal(f.job(id).status,'skipped');assert.equal(mail.length,n);assert.equal(await suppressRecovery(f.env,'bad-token'),false);
  // Paid between attempt and retry stops further mail, without changing payment history.
  f=fixture();id=f.seed();mailMode='timeout';await f.run();f.db.prepare("UPDATE orders SET status='paid',payment_ref='fixture',notification_id='fixture' WHERE id=?").run(id);now+=300001;mailMode='ok';await f.run();assert.equal(f.job(id).status,'skipped');assert.equal(f.order(id).status,'paid');
  // Real reconciliation cannot mark a changed amount paid after an in-flight verification.
@@ -59,5 +68,5 @@ function fixture(){
  await assert.rejects(()=>reconcile('synthetic-owner',id),/order changed during verification/);assert.equal(f.order(id).status,'awaiting_payment');assert.equal(f.order(id).payment_ref,null);
  verificationHook=async()=>{};paymentState={state:'pending',noPaymentFound:true,message:'No payment found.'};
  f.db.prepare("UPDATE orders SET status='pending' WHERE id=?").run(id);assert.equal((await reconcile('synthetic-owner',id)).status,'awaiting_payment');
- console.log('PASS: actual recovery scheduler, 24-hour boundary, every promo stacking, tax, saved receipt, CAS payment race, paid/test/held exclusions, immutable retry, opt-out and no duplicate mail. Isolated fixtures only.');
+ console.log('PASS: actual recovery scheduler, 48-hour wait with the send cap still daily, every promo stacking, tax, saved receipt, CAS payment race, paid/test/held exclusions, immutable retry, opt-out and no duplicate mail. Isolated fixtures only.');
 }finally{databases.forEach(db=>db.close());Module._load=original;}})().catch(e=>{console.error(e);process.exitCode=1});
