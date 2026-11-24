@@ -8,8 +8,17 @@ const publicRoutes: Readonly<Record<string, TrafficPageGroup>> = {
   '/research-use-only': 'policy', '/shipping-policy': 'policy', '/returns-refunds': 'policy',
   '/terms-of-sale': 'policy', '/privacy-policy': 'policy',
 };
-export function trafficPageGroup(pathname: string, reviewedProductSlugs: readonly string[], publishedNewsSlugs: readonly string[] = []): TrafficPageGroup | null {
+// New discovery pages are grouped only when the server's sitemap lists the exact route.
+export function discoveryPageGroup(pathname: string): TrafficPageGroup | null {
+  if (pathname === '/collections' || pathname.startsWith('/collections/')) return 'catalog';
+  if (pathname === '/compounds' || pathname.startsWith('/compounds/') || pathname.startsWith('/compare/')) return 'guide';
+  if (pathname === '/verify') return 'documents';
+  return null;
+}
+export function trafficPageGroup(pathname: string, reviewedProductSlugs: readonly string[], publishedNewsSlugs: readonly string[] = [], reviewedDiscoveryPaths: readonly string[] = []): TrafficPageGroup | null {
   if (Object.prototype.hasOwnProperty.call(publicRoutes, pathname)) return publicRoutes[pathname];
+  const discovery = discoveryPageGroup(pathname);
+  if (discovery) return reviewedDiscoveryPaths.includes(pathname) ? discovery : null;
   const news = /^\/news\/([a-z0-9]+(?:-[a-z0-9]+)*)$/.exec(pathname);
   if (news) return publishedNewsSlugs.includes(news[1]) ? 'guide' : null;
   const match = /^\/product\/([a-z0-9]+(?:-[a-z0-9]+)*)$/.exec(pathname);

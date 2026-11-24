@@ -35,6 +35,7 @@ const props = url => ({ params: Promise.resolve({ path: url.split('/').filter(Bo
 
 // Each URL was listed by Bing for site:biomodpeptides.com on October 14, 2026 and ended in a 404.
 const mappings = {
+  '/product-category/spray-products': '/collections/research-sprays',
   '/biomod-peptide-quality-standards': '/quality-standard',
   '/henderson-lab-supplies-sourcing-high-purity-research-peptides-in-nevada': '/quality-standard',
   '/peptide-supplier-with-third-party-testing-2026-analytical-standards': '/testing',

@@ -25,7 +25,7 @@ assert.match(css, /@keyframes nav-feature-shake\{0%,58%\{transform:none\}/);
 const shake = css.match(/@keyframes nav-feature-shake\{.*?\}\}/)[0];
 assert([...shake.matchAll(/rotate\((-?[\d.]+)deg\)/g)].every(m => Math.abs(Number(m[1])) <= 3), 'shake stays at 3 degrees or less');
 // Softgels and Sprays are the featured menu items, in both menus.
-assert.match(header, /featuredNav = new Set\(\['\/softgels', '\/shop\?category=spray-products', '\/locations'\]\)/);
+assert.match(header, /featuredNav = new Set\(\['\/softgels', '\/collections\/research-sprays', '\/locations'\]\)/);
 assert.equal((header.match(/className=\{navClass\(p\)\}/g) || []).length, 2);
 assert.match(layout, /import "\.\/storefront-v36\.css";/);
 console.log('PASS: offer bar reads the live 10-pack discount and shipping threshold, pauses and respects reduced motion; Softgels, Sprays and Locations featured in both menus');

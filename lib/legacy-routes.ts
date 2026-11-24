@@ -40,7 +40,7 @@ export const legacyRoutes: Record<string, string> = {
   'es/tag/traceability': '/testing',
   'product-category/research-peptides': '/shop',
   'product-category/softgels': '/softgels',
-  'product-category/spray-products': '/shop?category=spray-products',
+  'product-category/spray-products': '/collections/research-sprays',
   'product-category/aminos-liquids': '/shop?category=aminos-liquids',
   'my-account': '/account',
   // Old-domain "My Account" page, listed by Bing for "biomod peptides" (November 2-3, 2026) and ending in a 404.

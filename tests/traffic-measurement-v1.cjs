@@ -27,11 +27,19 @@ function text(tree) {if(tree==null||typeof tree==='boolean')return '';if(Array.i
 const find=(host,predicate)=>{const node=nodes(host.tree).find(predicate);assert(node,'expected node is present');return node;};
 const shared=load('lib/traffic-metrics.ts');
 const helpers=load('lib/traffic-navigation.ts');
+const discoveryPages = [
+  ['/collections', 'catalog'],
+  ['/collections/research-sprays', 'catalog'],
+  ['/compounds', 'guide'],
+  ['/compounds/bpc-157', 'guide'],
+  ['/compare/mots-c-vs-ss-31', 'guide'],
+  ['/verify', 'documents'],
+];
 let pathname='/',search='',storeState,props,requests,frames,frameId,observers;
 function fresh(options={}) {
   pathname=options.pathname||'/';search=options.search||'';requests=[];frames=new Map();frameId=0;observers=new Set();
   storeState={ready:true,loadError:'',store:{admin:false},...options.storeState};
-  props={enabled:true,reviewedProductSlugs:['reviewed-vial'],publishedNewsSlugs:['published-announcement'],...options.props};
+  props={enabled:true,reviewedProductSlugs:['reviewed-vial'],publishedNewsSlugs:['published-announcement'],reviewedDiscoveryPaths:discoveryPages.map(([path])=>path),...options.props};
   const listeners=new Map();
   const doc={visibilityState:'visible',referrer:'https://www.google.com/search?q=private-query',body:{},marker:pathname,
     querySelector(selector){assert.equal(selector,'main[data-traffic-path]');return this.marker===null?null:{getAttribute:key=>{assert.equal(key,'data-traffic-path');return this.marker;}};},
@@ -83,6 +91,26 @@ for(const [referrer,search,expected] of [['','?utm_source=chatgpt.com','ai'],[''
   fresh({pathname:'/news/published-announcement',search:'?measurement=off'});newsHost=mount();paint();assert.equal(requests.length,0);newsHost.unmount();
   const actualNews=load('lib/press-releases.ts').pressReleases.map(release=>release.slug);
   for(const slug of actualNews)assert.equal(helpers.trafficPageGroup('/news/'+slug,[],actualNews),'guide');
+
+  for (const [pathname, pageGroup] of discoveryPages) {
+    fresh({ pathname });
+    const discoveryHost = mount();
+    paint();
+    assert.deepEqual(payloads(), [{ event: 'page_view', pageGroup, sourceGroup: 'search' }], pathname);
+    discoveryHost.unmount();
+  }
+  for (const pathname of ['/collections/research-blends', '/compounds/unknown', '/compare/unknown', '/collections/research-sprays/extra', '/verify/private-lot']) {
+    fresh({ pathname });
+    const discoveryHost = mount();
+    paint();
+    assert.equal(requests.length, 0, pathname);
+    discoveryHost.unmount();
+  }
+  fresh({ pathname: '/verify', search: '?measurement=off', props: { reviewedDiscoveryPaths: ['/verify'] } });
+  const optedOutDiscoveryHost = mount();
+  paint();
+  assert.equal(requests.length, 0);
+  optedOutDiscoveryHost.unmount();
 
   fresh({storeState:{ready:false}});let host=mount();paint();assert.equal(requests.length,0,'Wait for store readiness before identifying administrators');
   storeState.ready=true;document.marker='/old-page';host.render();paint();assert.equal(requests.length,0,'A stale route is not a completed page view');

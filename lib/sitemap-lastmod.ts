@@ -37,8 +37,10 @@ export const pageLastmod: Record<string, string> = {
   '/product/semax': '2026-11-04',
   '/product/selank': '2026-11-04',
   '/product/tesamorelin-10mg': '2026-11-04',
-  // October 14: initial homepage cards now include every publication-reviewed vial.
-  '/': '2026-10-14',
+  // November 24: link to the canonical spray collection from the home and softgel pages.
+  '/': '2026-11-24',
+  '/softgels': '2026-11-24',
+  '/locations': '2026-11-24',
   // fb54b09: batch status wording on shop cards, the FAQ, batch library and COA guide.
   '/shop': '2026-10-13',
   '/testing': '2026-10-13',

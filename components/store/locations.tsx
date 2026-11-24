@@ -1,13 +1,23 @@
 import { ArrowUpRight } from 'lucide-react';
+import { storeDirectionsUrl, storeLocality, storeLocations } from '@/lib/store-locations';
 
 export function Locations() {
   return <div className="locations-page locations-original">
     <div className="locations-overview"><div className="locations-heading"><h1>Locations</h1><p>Las Vegas is where our research compound retail story began. Visit a BIOMOD store in Nevada, Utah and now El Paso, Texas, with Dallas and Los Angeles planned next.</p></div>
     <img className="locations-original-photo" src="/brand/original-locations-v11.jpeg" alt="BIOMOD branded window display from the original Locations page" width={1024} height={559} fetchPriority="high"/></div>
     <div className="locations-grid">
-      <section><div className="location-heading-row"><p className="location-region">Nevada</p><span className="location-status">Current location</span></div><h2>Las Vegas</h2><address>6625 S Valley View Blvd<br/>Suite D420<br/>Las Vegas, NV 89118</address><a className="editorial-link" href="/contact?subject=Las%20Vegas%20location">Contact the Las Vegas team <ArrowUpRight size={18}/></a></section>
-      <section><div className="location-heading-row"><p className="location-region">Utah</p><span className="location-status">Current location</span></div><h2>St. George</h2><address>422 W Lamond Circle<br/>Washington, UT 84780</address><a className="editorial-link" href="/contact?subject=Utah%20location">Contact the Utah team <ArrowUpRight size={18}/></a></section>
-      <section className="location-new"><div className="location-heading-row"><p className="location-region">Texas</p><span className="location-status">New location</span></div><h2>El Paso</h2><address>2079 Sun Bolt Way<br/>El Paso, TX 79938</address><a className="editorial-link" href="/contact?subject=El%20Paso%20location">Contact the El Paso team <ArrowUpRight size={18}/></a></section>
+      {storeLocations.map(store => <section key={store.id} id={store.id} className={store.status === 'New location' ? 'location-new' : undefined}>
+        <div className="location-heading-row">
+          <p className="location-region">{store.state}</p>
+          <span className="location-status">{store.status}</span>
+        </div>
+        <h2>{store.label}</h2>
+        <address>{store.street}<br/>{store.suite && <>{store.suite}<br/></>}{storeLocality(store)}</address>
+        <div style={{ marginTop: 'auto' }}>
+          <div><a className="editorial-link" href={storeDirectionsUrl(store)}>Directions to {store.label} <ArrowUpRight size={18} aria-hidden="true"/></a></div>
+          <a className="editorial-link" href={'/contact?subject=' + encodeURIComponent(store.contactRegion + ' location')}>Contact the {store.contactRegion} team <ArrowUpRight size={18} aria-hidden="true"/></a>
+        </div>
+      </section>)}
       <section className="location-planned"><div className="location-heading-row"><p className="location-region">Texas</p><span className="location-status">Planned for 2026</span></div><h2>Dallas</h2><p>Coming soon.</p></section>
       <section className="location-planned"><div className="location-heading-row"><p className="location-region">California</p><span className="location-status">Planned for 2026</span></div><h2>Los Angeles</h2><p>Coming soon.</p></section>
     </div>
