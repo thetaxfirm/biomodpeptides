@@ -78,6 +78,28 @@ const node = (data, type) => data['@graph'].find(item => item['@type'] === type)
     assert(!/\b(dos(e|ing)|treat|cure|heal|human use)\b/i.test(info.title + ' ' + info.description.replace(/not for human or animal use/i, '')), 'No dosing or medical claims: ' + path);
   }
 
+  // A spray is sold under a mark, so its title also names the listed compound when it fits.
+  // The compound comes from the catalog record; blends too long for a result line, softgels
+  // and vials keep their existing titles, and the Product name is unchanged.
+  const sprayTitles = {
+    'apex-semax-spray': 'Buy APEX Semax 60mg Spray', 'equil-selank-spray': 'Buy EQUIL Selank 60mg Spray',
+    'flux-nad-spray': 'Buy FLUX NAD+ 1000mg Spray', 'forge-bpc-157-spray': 'Buy FORGE BPC-157 50mg Spray',
+    'glow-spray': 'Buy GLOW GHK-Cu 100mg Spray', 'ignite-pt-141-oxy-spray': 'Buy IGNITE PT-141 + Oxy 35mg Spray',
+    'solara-melanotan-ii-spray': 'Buy SOLARA Melanotan II 20mg Spray', 'klow-spray': 'Buy KLOW 140mg Spray',
+  };
+  const { compound } = require('../lib/catalog.ts');
+  for (const [slug, title] of Object.entries(sprayTitles)) {
+    const product = products.find(p => p.slug === slug), info = pageInfo('/product/' + slug);
+    assert(publication.productSlugs.includes(slug), slug + ' is a published spray');
+    assert.equal(info.title, title);
+    assert.equal(info.name, `${product.name} ${title.match(/\d+mg/)[0]} Spray`, slug + ': Product name keeps the mark-only form');
+    if (slug !== 'klow-spray') assert(compound(product).startsWith(title.slice(('Buy ' + product.name + ' ').length).replace(/ \d+mg Spray$/, '')), slug + ': the titled compound is the catalog compound');
+    assert.equal(routeMetadata('/product/' + slug, new URLSearchParams(), config).title.absolute, title + ' | Biomod Research Supply Company');
+  }
+  assert.equal(pageInfo('/product/softgel-chisel-aod-9604').title, 'Buy CHISEL 60 caps Softgels');
+  assert.equal(pageInfo('/product/softgel-eraser-tesofensine').title, 'Buy ERASER 60 caps Softgels');
+  assert.equal(pageInfo('/product/kpv-10mg').title, 'Buy KPV 10mg Peptide Vial');
+
   for (const slug of publication.productSlugs) {
     const path = '/product/' + slug;
     const data = await routeStructuredData(path, config);

@@ -101,7 +101,13 @@ export function pageInfo(path: string) {
     const name = `${p.name}${strength}${format === 'Vial' ? (isPeptideVial(p) ? ' Peptide Vial' : ' Research Vial') : format === 'Research supply' ? '' : ' ' + format}`;
     // Keep "Buy <product> Research Vial | <brand>" within a 70-character result line;
     // a long product name drops the word Research from the title only.
-    const title = ('Buy ' + name + ' | Biomod Research Supply Company').length > 70 ? `Buy ${p.name}${strength} ${format}` : 'Buy ' + name;
+    const plainTitle = ('Buy ' + name + ' | Biomod Research Supply Company').length > 70 ? `Buy ${p.name}${strength} ${format}` : 'Buy ' + name;
+    // A spray is sold under a mark (APEX, FORGE) that says nothing about its contents, so
+    // the title also names the listed compound when the whole result line still fits in
+    // 70 characters. A longer blend keeps the mark-only title; vials and softgels never change.
+    const listed = format === 'Spray' ? (descriptionAliases(p)[0] || '').replace(/\s*\([^()]*\)$/, '') : '';
+    const namedTitle = `Buy ${p.name} ${listed}${strength} ${format}`;
+    const title = listed && (namedTitle + ' | Biomod Research Supply Company').length <= 70 ? namedTitle : plainTitle;
     if (p.slug === 'bpc-157-10mg') return { title: 'Buy BPC-157 10mg Peptide Vials', name,
       description: 'BPC-157 (BPC157) 10 mg research peptide vials from BIOMOD. Compare packs, current pricing, batch records and the Wolverine blend. Research use only.', eligible: !productReviewBlocks[p.slug] };
     const aliases = descriptionAliases(p);
