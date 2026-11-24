@@ -18,7 +18,11 @@ export type StaffPermission =
   | 'store:write'      // settings, presales, rewards, promos, affiliates, COA email settings
   | 'catalog:write'    // product editor: prices, pack prices, sales, lot and COA report links
   | 'reports:read'     // promo/affiliate, sales, traffic, search and change reports
-  | 'team:manage';     // add, change or remove staff
+  | 'team:manage'      // add, change or remove staff
+  // Website update requests (owner request, Nov 24 2026). Not part of any role: owners hold it,
+  // and an owner grants it to one person at a time in the Team tab (site_update_access). The
+  // server adds it to that person's permissions; see lib/site-updates.ts.
+  | 'site:request';
 
 const permissions: Record<StaffRole, readonly StaffPermission[]> = {
   owner: ['orders:read', 'orders:fulfill', 'orders:reconcile', 'requests:write', 'requests:send', 'store:write', 'catalog:write', 'reports:read', 'team:manage'],
@@ -49,7 +53,7 @@ export const tabPermission: Record<string, StaffPermission> = {
   overview: 'orders:read', orders: 'orders:read', requests: 'requests:write',
   promos: 'reports:read', contacts: 'reports:read', diagnostics: 'reports:read', traffic: 'reports:read', search: 'reports:read', changes: 'reports:read',
   affiliates: 'store:write', restaurants: 'store:write', settings: 'store:write', products: 'catalog:write', presales: 'store:write', rewards: 'store:write',
-  team: 'team:manage',
+  team: 'team:manage', updates: 'site:request',
 };
 export const canSeeTab = (role: StaffRole | null | undefined, tab: string) => Boolean(tabPermission[tab]) && can(role, tabPermission[tab]);
 

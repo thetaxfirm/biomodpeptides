@@ -6,16 +6,17 @@ import { assignableRoles, roleDetails, type AssignableRole } from '@/lib/staff';
 
 type Member = { email: string; name: string; role: AssignableRole; active: number; updated: number; updated_by: string };
 type Audit = { actor: string; email: string; role: string; active: number; created: number };
-type Team = { ready: boolean; owners: string[]; staff: Member[]; audit: Audit[] } | null;
+type Team = { ready: boolean; owners: string[]; staff: Member[]; audit: Audit[]; siteUpdateAccess?: string[] } | null;
 type Props = {
   team: Team; busy: boolean; formKey: number;
   onDraft: () => void;
   onAdd: (e: FormEvent<HTMLFormElement>) => void;
   onChange: (member: Member, patch: { role?: AssignableRole; active?: boolean }) => void;
+  onSiteUpdates: (member: Member, active: boolean) => void;
 };
 
 // Owner-only. Owners themselves are listed but managed in Cloudflare (STORE_ADMIN_EMAILS).
-export function TeamAdmin({ team, busy, formKey, onDraft, onAdd, onChange }: Props) {
+export function TeamAdmin({ team, busy, formKey, onDraft, onAdd, onChange, onSiteUpdates }: Props) {
   if (!team) return <Blank title="Only owners can manage staff."/>;
   if (!team.ready) return <Blank title="Staff access is not switched on yet.">The staff table has not been added to the store database. Apply the 0019_staff_access migration, then refresh.</Blank>;
   return <>
@@ -35,11 +36,13 @@ export function TeamAdmin({ team, busy, formKey, onDraft, onAdd, onChange }: Pro
       {(['owner', ...assignableRoles] as const).map(role => <TableRow key={role}><TableCell>{roleDetails[role].label}</TableCell><TableCell>{roleDetails[role].description}</TableCell></TableRow>)}
     </TableBody></Table>
     <h3>People with access</h3>
-    <Table><TableHeader><TableRow><TableHead>Email</TableHead><TableHead>Role</TableHead><TableHead>Status</TableHead><TableHead>Action</TableHead></TableRow></TableHeader><TableBody>
-      {team.owners.map(email => <TableRow key={'owner:' + email}><TableCell>{email}</TableCell><TableCell>Owner</TableCell><TableCell>Active</TableCell><TableCell>Set in Cloudflare</TableCell></TableRow>)}
+    <p>Website updates lets a person send picture, lab report and wording changes for trybiomod.com from the Website updates page. It is separate from their role. Prices, stock, policies and product claims still wait for an owner.</p>
+    <Table><TableHeader><TableRow><TableHead>Email</TableHead><TableHead>Role</TableHead><TableHead>Website updates</TableHead><TableHead>Status</TableHead><TableHead>Action</TableHead></TableRow></TableHeader><TableBody>
+      {team.owners.map(email => <TableRow key={'owner:' + email}><TableCell>{email}</TableCell><TableCell>Owner</TableCell><TableCell>Always</TableCell><TableCell>Active</TableCell><TableCell>Set in Cloudflare</TableCell></TableRow>)}
       {team.staff.map(member => <TableRow key={member.email}>
         <TableCell>{member.email}{member.name ? ' · ' + member.name : ''}</TableCell>
         <TableCell><select aria-label={'Role for ' + member.email} value={member.role} disabled={busy || !member.active} onChange={e => onChange(member, { role: e.target.value as AssignableRole })}>{assignableRoles.map(role => <option key={role} value={role}>{roleDetails[role].label}</option>)}</select></TableCell>
+        <TableCell><label className="check"><input type="checkbox" aria-label={'Website updates for ' + member.email} checked={Boolean(member.active) && (team.siteUpdateAccess || []).includes(member.email)} disabled={busy || !member.active} onChange={e => onSiteUpdates(member, e.target.checked)}/><span>Can send</span></label></TableCell>
         <TableCell>{member.active ? 'Active' : 'Removed'}</TableCell>
         <TableCell><button type="button" className="text-button" disabled={busy} onClick={() => onChange(member, { active: !member.active })}>{member.active ? 'Remove access' : 'Restore access'}</button></TableCell>
       </TableRow>)}

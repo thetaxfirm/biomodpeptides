@@ -150,6 +150,7 @@ dependencies['@/lib/auth'].requireStaff = async permission => { if(scenario.atta
 dependencies['@/lib/auth'].requireStaffAny = async permissions => { assert.deepEqual(permissions, ['orders:read', 'catalog:write']); return { ...(await dependencies['@/lib/auth'].requireAdmin()), role: 'owner' }; };
 dependencies['@/lib/auth'].staffRole = async () => null;
 dependencies['@/lib/staff'] = require('./staff-module-fixture.cjs').loadStaffModule();
+dependencies['@/lib/site-updates'] = require('./site-updates-module-fixture.cjs').loadSiteUpdatesModule();
 dependencies['@/lib/staff-store'] = { staffDirectory: async () => { checkedAdmin(); return { ready: true, owners: [], staff: [], audit: [] }; }, saveStaffMember: async () => { throw Error('Staff writes are outside this suite'); } };
 
 class FixtureResponse extends Response {

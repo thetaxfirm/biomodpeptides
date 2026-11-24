@@ -1,0 +1,43 @@
+.updates { color:#321b3b; max-width:980px; }
+.lead { margin:4px 0 18px; color:#665969; font-size:15px; line-height:1.55; max-width:70ch; }
+.form textarea { width:100%; min-height:110px; font:inherit; padding:10px 12px; border:1px solid #c8b8cf; border-radius:4px; background:#fff; color:inherit; resize:vertical; }
+.form select { width:100%; }
+.hint { display:block; margin-top:4px; font-size:13px; font-weight:400; color:#665969; line-height:1.5; }
+.picked { list-style:none; margin:8px 0 0; padding:0; display:grid; gap:4px; font-size:13px; color:#4b225a; }
+.sectionTitle { font-size:17px; margin:30px 0 10px; }
+.list { list-style:none; margin:0; padding:0; display:grid; gap:10px; }
+.item { padding:16px; background:#faf7fb; border-radius:6px; display:grid; gap:10px; }
+.item[data-status=question], .item[data-status=needs_owner] { background:#fdf2ee; }
+.item[data-status=done] { background:#eef7f0; }
+.top { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:6px 16px; }
+.top strong { font-size:15px; }
+.status { font-size:13px; font-weight:700; color:#4b225a; white-space:nowrap; }
+.item[data-status=question] .status, .item[data-status=needs_owner] .status { color:#9a3412; }
+.item[data-status=done] .status { color:#1d5a2f; }
+.item[data-status=cancelled] .status { color:#665969; }
+.meta { margin:0; font-size:13px; color:#665969; line-height:1.5; }
+.message { margin:0; font-size:15px; line-height:1.55; white-space:pre-wrap; overflow-wrap:anywhere; }
+.files { list-style:none; margin:0; padding:0; display:flex; flex-wrap:wrap; gap:6px 16px; font-size:13px; }
+.files a { color:#4b225a; font-weight:600; }
+.thread { list-style:none; margin:0; padding:0; display:grid; gap:8px; }
+.note { padding:10px 12px; background:#fff; border-radius:4px; display:grid; gap:4px; }
+.note[data-from=claude] { border-left:3px solid #4b225a; }
+.note span { font-size:12px; color:#665969; font-weight:600; }
+.note p { margin:0; font-size:14px; line-height:1.55; white-space:pre-wrap; overflow-wrap:anywhere; }
+.reply { display:grid; gap:8px; }
+.reply textarea { width:100%; min-height:64px; font:inherit; padding:8px 10px; border:1px solid #c8b8cf; border-radius:4px; background:#fff; color:inherit; resize:vertical; }
+.actions { display:flex; flex-wrap:wrap; align-items:center; gap:8px 16px; }
+.empty { padding:14px 16px; background:#faf7fb; border-radius:6px; font-size:14px; margin:0; color:#665969; }
+
+/* Night mode. Additive only, same palette as the Today page. */
+:global(html[data-theme='dark']) .updates { color:#ffffff; }
+:global(html[data-theme='dark']) .lead, :global(html[data-theme='dark']) .hint, :global(html[data-theme='dark']) .meta, :global(html[data-theme='dark']) .note span, :global(html[data-theme='dark']) .empty { color:#b4b4b9; }
+:global(html[data-theme='dark']) .item, :global(html[data-theme='dark']) .empty { background:#1a1a1e; }
+:global(html[data-theme='dark']) .item[data-status=question], :global(html[data-theme='dark']) .item[data-status=needs_owner] { background:#2a1c16; }
+:global(html[data-theme='dark']) .item[data-status=done] { background:#152219; }
+:global(html[data-theme='dark']) .status, :global(html[data-theme='dark']) .files a, :global(html[data-theme='dark']) .picked { color:#dcc4e8; }
+:global(html[data-theme='dark']) .item[data-status=question] .status, :global(html[data-theme='dark']) .item[data-status=needs_owner] .status { color:#f5b08a; }
+:global(html[data-theme='dark']) .item[data-status=done] .status { color:#8fd6a4; }
+:global(html[data-theme='dark']) .note { background:#141417; }
+:global(html[data-theme='dark']) .note[data-from=claude] { border-left-color:#dcc4e8; }
+:global(html[data-theme='dark']) .form textarea, :global(html[data-theme='dark']) .reply textarea { background:#141417; border-color:#2e2e34; color:#ffffff; }

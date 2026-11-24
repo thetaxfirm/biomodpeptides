@@ -39,8 +39,9 @@ import { anetOrderDetails } from '@/lib/order-summary';
 import { packSizes, supportsPacks, standardPackPrices } from '@/lib/packs';
 import { searchReport, seoConfig } from '@/lib/seo-policy';
 import { salesDiagnostics } from '@/lib/sales-diagnostics';
-import { can, permissionsFor, type StaffPermission } from '@/lib/staff';
+import { assignableRoles, can, permissionsFor, type StaffPermission } from '@/lib/staff';
 import { saveStaffMember, staffDirectory } from '@/lib/staff-store';
+import { hasSiteUpdateAccess, setSiteUpdateAccess, siteUpdateAccessList, SiteUpdateError } from '@/lib/site-updates';
 import { coaBlockedItems, coaBlockMessage, noCoaProducts } from '@/lib/coa-shipping';
 import { adminOverview } from '@/lib/admin-overview';
 export const dynamic = 'force-dynamic';
@@ -49,7 +50,7 @@ const adminActionPermission: Record<string, StaffPermission> = {
     'admin-orders': 'orders:read', 'admin-order': 'orders:fulfill', 'admin-order-archive': 'orders:fulfill', 'admin-order-handoff': 'orders:fulfill', 'admin-reconcile': 'orders:reconcile',
     'admin-request': 'requests:write', 'admin-request-reply': 'requests:write', 'admin-reply-attachments': 'requests:write', 'admin-reply-desk': 'requests:write', 'admin-request-replies': 'requests:write', 'admin-reply-rule': 'requests:write', 'admin-retire-reply-drafts': 'requests:write', 'admin-request-forward': 'requests:write', 'admin-order-conversation': 'requests:write', 'admin-order-hold': 'requests:write', 'admin-win-back': 'requests:write', 'admin-mark-replied': 'requests:write', 'admin-win-back-preview': 'requests:write', 'admin-request-issue': 'requests:write', 'admin-case-log': 'requests:write', 'admin-coa-process': 'requests:write',
     'admin-config': 'store:write', 'admin-product': 'catalog:write', 'admin-campaign': 'store:write', 'admin-reward': 'store:write', 'admin-coa-config': 'store:write',
-    'admin-staff': 'team:manage',
+    'admin-staff': 'team:manage', 'admin-staff-site-updates': 'team:manage',
 };
 const j = (value: unknown, status = 200) => NextResponse.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
 const cartImports = () => createCartImports({ db: database(), normalize: validateLines, validate: quote });
@@ -270,15 +271,17 @@ export async function GET(req: NextRequest, { params }: {
         }
         if (action === 'admin') {
             // Each section is sent only to roles that hold it. Catalog staff get products and lot reports, never orders.
-            const { role } = await requireStaffAny(['orders:read', 'catalog:write']);
+            const { role, email: actorEmail } = await requireStaffAny(['orders:read', 'catalog:write']);
+            // Website updates is granted per person, not per role, so it is added to the role's list here.
+            const siteRequests = await hasSiteUpdateAccess(database(), { email: actorEmail, role });
             const allowed = (permission: StaffPermission) => can(role, permission);
             const requests = allowed('requests:write') ? await all<{ id: string; data: string }>("SELECT * FROM requests WHERE kind IN ('contact','stock','affiliate') ORDER BY created DESC LIMIT 200") : [];
             const adminProducts = await catalog(false, allowed('catalog:write'));
-            return j({ role, permissions: permissionsFor(role), batchRecords: allowed('catalog:write') ? await adminBatchRecords(database(), adminProducts) : [], checkoutRecovery: await recoveryAdminStatus(runtime()), searchPublishing: allowed('reports:read') ? searchReport(seoConfig(runtime())) : null, config: await config(), products: adminProducts, orders: allowed('orders:read') ? (await all<{
+            return j({ role, permissions: [...permissionsFor(role), ...(siteRequests ? ['site:request'] : [])], batchRecords: allowed('catalog:write') ? await adminBatchRecords(database(), adminProducts) : [], checkoutRecovery: await recoveryAdminStatus(runtime()), searchPublishing: allowed('reports:read') ? searchReport(seoConfig(runtime())) : null, config: await config(), products: adminProducts, orders: allowed('orders:read') ? (await all<{
                     data: string;
                 }>('SELECT id,owner,status,total,data,created FROM orders ORDER BY created DESC LIMIT 200')).map(o => ({ ...o, data: adminOrderView(parse(o.data, {})) })) : [], requests: requests.map(o => ({ ...o, data: parse(o.data, {}) })), requestReplies: allowed('requests:write') ? await summarizeRequestReplies(runtime(), requests.map(r => r.id)) : {}, coaAutomation: allowed('requests:write') ? await coaAutomationStatus(runtime(), requests.map(r => r.id)) : null, campaigns: allowed('store:write') ? (await all<{
                     data: string;
-                }>('SELECT * FROM campaigns')).map<Record<string, any>>(o => { const {data, ...row}=o; return { ...row, ...parse<Record<string, any>>(data, {}) }; }).filter(c=>currentSelection(c.productIds)).map(c=>presentationData(c)) : [], team: allowed('team:manage') ? await staffDirectory(runtime()) : null });
+                }>('SELECT * FROM campaigns')).map<Record<string, any>>(o => { const {data, ...row}=o; return { ...row, ...parse<Record<string, any>>(data, {}) }; }).filter(c=>currentSelection(c.productIds)).map(c=>presentationData(c)) : [], team: allowed('team:manage') ? { ...await staffDirectory(runtime()), siteUpdateAccess: await siteUpdateAccessList(database()) } : null });
         }
         return j({ error: 'Not found.' }, 404);
     }
@@ -602,8 +605,14 @@ export async function POST(req: NextRequest, { params }: {
                 return j({ message: number + ' marked dropped off. It moves to Shipped when the carrier scans it.' });
             }
             if (action === 'admin-staff') {
-                const member = z.object({ email: z.string().trim().min(3).max(254), name: z.string().trim().max(100).optional(), role: z.enum(['manager', 'fulfillment', 'support']), active: z.boolean() }).parse(b);
+                const member = z.object({ email: z.string().trim().min(3).max(254), name: z.string().trim().max(100).optional(), role: z.enum(assignableRoles), active: z.boolean() }).parse(b);
                 return j(await saveStaffMember(auditEnv(), actor.email, member));
+            }
+            if (action === 'admin-staff-site-updates') {
+                // Owner-only. Lets one named staff member send website update requests (pictures, lab reports, wording).
+                const grant = z.object({ email: z.string().trim().min(3).max(254), active: z.boolean() }).parse(b);
+                try { return j(await setSiteUpdateAccess(database(), actor.email, grant.email, grant.active)); }
+                catch (e) { if (e instanceof SiteUpdateError) return j({ error: e.message }, e.status); throw e; }
             }
             if (action === 'admin-coa-config') {
                 const settings = z.object({ enabled: z.boolean(), replyTo: z.string().email(), notifyTo: z.string().email().nullable().optional() }).parse(b);
