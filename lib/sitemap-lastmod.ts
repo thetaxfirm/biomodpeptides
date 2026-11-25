@@ -12,7 +12,13 @@ import { pressReleases } from './press-releases';
 // every page, so no entry below can be older than this (lastmodFor takes the later of the two).
 // November 15, 2026: the owner restored "peptide" wording. Titles, descriptions and headings changed on
 // the home page, shop, guides, FAQ, collections, compound reference and every peptide vial page.
-export const siteLastmod = '2026-11-15';
+// November 24, 2026: c3bde91 moved the "Sprays" header item and the "Spray products" footer link
+// on every page from a shop filter to /collections/research-sprays. The pages had also changed
+// between those dates without a new date here: spray and softgel headings (69fc7cc, November 16),
+// the compound reference product lists (ef23210 and 615b6a1, November 17 and 18), the spray,
+// softgel and lab-supply list on the shop, the guides and every vial page (3a22a06, November 23)
+// and seven spray titles (6662f66, November 24).
+export const siteLastmod = '2026-11-24';
 // October 17: da848db added free USPS Priority Mail at $250 and the 2 p.m. Pacific same-day
 // wording to every product page; 589ae41 moved the product images to WebP.
 // The same day the store was renamed Biomod Research Supply Company, changing every page's title.

@@ -68,6 +68,19 @@ loaded._compile(transpile(filename), filename);
   // pages first went live on November 2, so none of them may be dated before it.
   for (const slug of ['semax', 'selank', 'tesamorelin-10mg']) if (release.productSlugs.includes(slug)) assert(lastmodFor('/product/' + slug) >= '2026-11-04', slug + ' description changed on 2026-11-04');
   for (const [route, date] of entries) if (/^\/(compounds|compare|collections|verify)/.test(route)) assert(date >= '2026-11-02', route + ' went live on 2026-11-02 but is dated ' + date);
+  // c3bde91 (November 24) pointed the header "Sprays" item and the footer "Spray products" link on
+  // every page at the spray collection, and 6662f66 the same day put the compound in seven spray
+  // titles. 80 of 83 pages kept November 15 until this check was added. Read from the real header,
+  // footer and title builder, so the date and the content cannot drift apart silently again.
+  const headerSource = fs.readFileSync(path.join(root, 'components/store/header.tsx'), 'utf8');
+  assert(/\['Sprays', '\/collections\/research-sprays'\]/.test(headerSource), 'header Sprays item links the spray collection');
+  assert(footer.includes('href="/collections/research-sprays"') && !footer.includes('/shop?category=spray-products'), 'footer links the spray collection');
+  for (const [route, date] of entries) assert(date >= '2026-11-24', route + ' shows the November 24 header and footer link but is dated ' + date);
+  const { pageInfo } = require('../lib/seo-policy.ts');
+  const { products } = require('../lib/catalog.ts');
+  const sprayTitles = products.filter(p => release.productSlugs.includes(p.slug) && /spray/.test(p.slug)).map(p => [p.slug, pageInfo('/product/' + p.slug).title]);
+  assert(sprayTitles.length >= 8, 'published sprays found');
+  for (const [slug, title] of sprayTitles.filter(([, title]) => !/^Buy [A-Z]+ \d+mg Spray$/.test(title))) assert(lastmodFor('/product/' + slug) >= '2026-11-24', slug + ' title "' + title + '" changed on 2026-11-24');
   // A specific page date can never pull a page below the sitewide date.
   for (const route of Object.keys(pageLastmod)) assert.equal(lastmodFor(route), pageLastmod[route] > siteLastmod ? pageLastmod[route] : siteLastmod, route);
   // Honest by construction: every date is a hand-set constant tied to a release, never "today".
