@@ -73,12 +73,16 @@ async function main(){
  type(host,'replyInstruction','um make it friendlier');
  nodes(host.tree).find(n=>n.type==='button'&&text(n)==='Apply changes').props.onClick();await flush(host);
  assert.deepEqual(preparations[0],{id:'new-old',mode:'ai',purpose:'reply',body:'Hi there, use code BM10 (10% off at checkout)',instruction:'um make it friendlier',expectedRevision:null,coaSha256:'a'.repeat(64)});
- assert(text(host.tree).includes('AI is writing'));assert.equal(field(host,'replyBody').props.readOnly,true);
- type(host,'replyBody','ignored while writing');assert.equal(field(host,'replyBody').props.value,'Hi there, use code BM10 (10% off at checkout)');
- // The finished AI draft replaces the text, with undo back to what was there.
+ // The AI draft never locks the box (owner, Nov 25 2026): staff can type their own reply while it is being written.
+ assert(text(host.tree).includes('AI is writing'));assert.equal(field(host,'replyBody').props.readOnly,false);
+ type(host,'replyBody','My own reply, typed while the AI writes');assert.equal(field(host,'replyBody').props.value,'My own reply, typed while the AI writes');
+ assert(text(host.tree).includes('Your own reply'));
+ // The finished AI draft does not replace typed text; it is offered, with undo back to the staff text.
  host.props.requestReplies={...replies,'new-old':reply('new-old',{revision:1,status:'ready',body:'Hello! Use code BM10 for 10% off.',updated:Date.parse('2026-10-15T08:00:00Z')})};host.render();
- assert.equal(field(host,'replyBody').props.value,'Hello! Use code BM10 for 10% off.');
- nodes(host.tree).find(n=>n.type==='button'&&text(n)==='Undo change').props.onClick();host.render();assert.equal(field(host,'replyBody').props.value,'Hi there, use code BM10 (10% off at checkout)');
+ assert.equal(field(host,'replyBody').props.value,'My own reply, typed while the AI writes');
+ nodes(host.tree).find(n=>n.type==='button'&&text(n)==='Use the AI draft instead').props.onClick();host.render();assert.equal(field(host,'replyBody').props.value,'Hello! Use code BM10 for 10% off.');
+ nodes(host.tree).find(n=>n.type==='button'&&text(n)==='Undo change').props.onClick();host.render();assert.equal(field(host,'replyBody').props.value,'My own reply, typed while the AI writes');
+ type(host,'replyBody','Hi there, use code BM10 (10% off at checkout)');
  // Send is one click and one request, marked as an owner send of exactly this text.
  send().props.onClick();send().props.onClick();await flush(host);
  const sends=preparations.filter(p=>p.send);assert.equal(sends.length,1,'Double click sends once');
@@ -91,10 +95,10 @@ async function main(){
   const editorLabel=nodes(workingHost.tree).find(n=>n.type==='label'&&n.props.htmlFor==='reply-body-'+workId);
   assert.match(text(card(workingHost,workId)),mode==='ai'?/AI is writing a draft/:/Saving draft/);
   assert.match(text(editorLabel),mode==='ai'?/AI is writing/:/Saving draft/);
-  assert.equal(field(workingHost,'replyBody').props.placeholder,mode==='ai'?'The AI is writing…':'Saving your draft…');
-  assert.equal(field(workingHost,'replyBody').props.value,workBody,'Status copy never rewrites the reply');assert.equal(field(workingHost,'replyBody').props.readOnly,true);
+  assert.equal(field(workingHost,'replyBody').props.placeholder,mode==='ai'?'The AI is writing a draft. You can type your own reply here now.':'Saving your draft…');
+  assert.equal(field(workingHost,'replyBody').props.value,workBody,'Status copy never rewrites the reply');assert.equal(field(workingHost,'replyBody').props.readOnly,mode==='staff','Only a staff save locks the box; an AI draft never does');
   assert(button(workingHost.tree,mode==='ai'?'Creating AI draft…':'Saving draft…').props.disabled);assert(button(workingHost.tree,'Save draft').props.disabled);
-  assert(text(workingHost.tree).includes(mode==='ai'?'AI is writing. This usually takes under a minute.':'Saving the draft…'));
+  assert(text(workingHost.tree).includes(mode==='ai'?'AI is writing. You do not have to wait: type your own reply now.':'Saving the draft…'));
   if(mode==='staff')assert.doesNotMatch(text(workingHost.tree),/AI is writing|Creating AI draft/,'Saving staff text never claims AI is generating it');
   workingHost.unmount();
  }
