@@ -2,6 +2,7 @@ import { classifyVerifiedAddress, type AddressCheck } from './address-check';
 import { customerMailFrom, CUSTOMER_MAIL_SIGNATURE_HTML } from './customer-mail';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { shipmentEmailText } from './fulfillment';
+import { packingPlan, planParcel } from './packing';
 import { normalizeShippingOptions, shippingCarrier, shippingTier, shippingTierEnabled, shippingHandling, serviceKey, enabledServiceSetting, catalogService, shippingCarriers, type ShippingOptionsConfig, type ShippingOption, type ShippingCarrier, minimumService, tierRank, labelProtection, freeEligible } from './shipping-options';
 // EasyPost shipping: live checkout rates, label purchase and tracking webhooks.
 // Everything stays off until EASYPOST_API_KEY is set; checkout then falls back to the flat rate in store settings.
@@ -36,8 +37,18 @@ export function shipFrom(env: Environment) {
         phone: env.SHIP_FROM_PHONE || '7024982144',
     };
 }
-/** Package estimate: one box plus a per-unit weight. Vials are light; softgel and spray bottles are heavier. Override with env values. */
+/**
+ * Package estimate: one box plus a per-unit weight. Vials are light; softgel and spray bottles are
+ * heavier. Override with env values.
+ *
+ * A gel-cap-only order is sized against the boxes the owner actually packs it in (lib/packing.ts)
+ * rather than the one fixed box every order used to be quoted as. Anything else -- vials, sprays,
+ * or a cart that mixes gel caps with them -- keeps that general estimate, because nobody has
+ * counted how those fill a box yet and a guess here is a guess at the customer's shipping price.
+ */
 export function parcelFor(items: ShipItem[], env: Environment): Parcel {
+    const plan = packingPlan(items, number(env.SHIP_BOTTLE_OZ, 5));
+    if (plan) return planParcel(plan);
     const [length, width, height] = (env.SHIP_BOX_INCHES || '8x6x4').split('x').map(v => number(v, 6));
     let weight = number(env.SHIP_BOX_OZ, 6);
     for (const item of items) {

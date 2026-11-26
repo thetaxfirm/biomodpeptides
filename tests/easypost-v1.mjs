@@ -18,11 +18,24 @@ try {
   await fs.writeFile(file, (await fs.readFile(file, 'utf8')).replace("'./customer-mail'", "'./customer-mail.mjs'"));
   await fs.writeFile(path.join(temp, 'address-check.mjs'), ts.transpileModule(await fs.readFile(new URL('../lib/address-check.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText);
   await fs.writeFile(file, (await fs.readFile(file, 'utf8')).replace("'./address-check'", "'./address-check.mjs'"));
+  await fs.writeFile(path.join(temp, 'packing.mjs'), ts.transpileModule(await fs.readFile(new URL('../lib/packing.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText);
+  await fs.writeFile(file, (await fs.readFile(file, 'utf8')).replace("'./packing'", "'./packing.mjs'"));
   const e = await import(file);
   const env = { EASYPOST_API_KEY: 'EZTK_test_key_123456' };
   const vial = { quantity: 2, product: { categories: [{ slug: 'research-compounds' }] } };
   const bottle = { quantity: 1, product: { categories: [{ slug: 'softgels' }] } };
   assert.deepEqual(e.parcelFor([vial, bottle], env), { length: 8, width: 6, height: 4, weight: 14 });
+  // A gel-cap-only order is sized against the box it is actually packed in (lib/packing.ts), not
+  // the one fixed box every order used to be quoted as (owner, Nov 25 2026).
+  const caps = n => ({ quantity: n, product: { categories: [{ slug: 'softgels' }] } });
+  assert.deepEqual(e.parcelFor([caps(9)], env), { length: 7, width: 7, height: 6, weight: 50 }, 'nine gel caps are a 7x7x6 box');
+  assert.deepEqual(e.parcelFor([caps(15)], env), { length: 11, width: 8.5, height: 5.5, weight: 79 }, 'fifteen are a medium flat rate');
+  assert.deepEqual(e.parcelFor([caps(25)], env), { length: 12, width: 12, height: 5.5, weight: 131 }, 'twenty-five are a large flat rate');
+  assert.deepEqual(e.parcelFor([caps(40)], env), { length: 12, width: 12, height: 11, weight: 210 }, 'forty are quoted as the two boxes stacked');
+  assert.deepEqual(e.parcelFor([caps(9)], { ...env, SHIP_BOX_INCHES: '20x20x20' }), { length: 7, width: 7, height: 6, weight: 50 }, 'the general box setting does not override a counted box');
+  // The moment anything else is in the cart the general estimate comes back, unchanged.
+  assert.deepEqual(e.parcelFor([caps(9), vial], env), { length: 8, width: 6, height: 4, weight: 54 }, 'a vial in the cart returns the order to the estimate');
+  assert.deepEqual(e.parcelFor([{ quantity: 2, product: { categories: [{ slug: 'spray-products' }] } }], env), { length: 8, width: 6, height: 4, weight: 16 }, 'sprays are not counted into a box yet');
   assert.equal(e.easypostReady({}), false);
   assert.equal(e.easypostReady(env), true);
   const to = { name: 'Ada Lovelace', line1: '1 Main St', city: 'Las Vegas', state: 'NV', zip: '89118', phone: '702-498-2144' };
