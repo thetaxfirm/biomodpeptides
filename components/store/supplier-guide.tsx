@@ -1,3 +1,4 @@
+import { RelatedNews } from './newsroom';
 import styles from './quality-guide.module.css';
 
 export function SupplierGuide() {
@@ -33,6 +34,8 @@ export function SupplierGuide() {
       <h2 id="resolve-open-questions">Resolve open questions before ordering</h2>
       <p>Keep the supplier’s written response with your procurement records. <a href="/contact?subject=Research%20supplier%20documentation%20question">Contact Biomod about current documentation</a> if a lot, specification or document is unclear. These checks help assess evidence; they do not establish suitability for human or animal use.</p>
     </section>
+
+    <RelatedNews path="/choosing-a-research-supplier"/>
 
     <footer className={styles.sources}>
       <p><a href="https://www.fda.gov/regulatory-information/search-fda-guidance-documents/q7a-good-manufacturing-practice-guidance-active-pharmaceutical-ingredients">FDA Q7A, section 11.4</a> describes certificate contents in the API manufacturing context. It does not certify Biomod or other research suppliers.</p>

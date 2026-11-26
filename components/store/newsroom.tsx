@@ -1,5 +1,5 @@
 import { ArrowRight } from 'lucide-react';
-import { pressBoilerplate, pressContact, pressDate, pressReleases } from '@/lib/press-releases';
+import { otherReleases, pressBoilerplate, pressContact, pressDate, pressReleases, releasesLinking } from '@/lib/press-releases';
 import styles from './quality-guide.module.css';
 
 export function Newsroom() {
@@ -31,10 +31,24 @@ export function PressReleasePage({ slug }: { slug: string }) {
       {release.body.slice(1).map(paragraph => <p key={paragraph}>{paragraph}</p>)}
       <ul>{release.links.map(link => <li key={link.href}><a href={link.href}>{link.label}</a></li>)}</ul>
     </section>
+    {otherReleases(slug).length > 0 && <section className={styles.section} aria-labelledby="more-news">
+      <h2 id="more-news">More news</h2>
+      <ul>{otherReleases(slug).map(other => <li key={other.slug}><a href={'/news/' + other.slug}>{other.headline}</a> (<time dateTime={other.date}>{pressDate(other.date)}</time>)</li>)}</ul>
+    </section>}
     <section className={styles.section} aria-labelledby="about-biomod">
       <h2 id="about-biomod">About Biomod Research Supply Company</h2>
       <p>{pressBoilerplate}</p>
       <p>Media contact: <a href={'mailto:' + pressContact}>{pressContact}</a></p>
     </section>
   </article>;
+}
+
+/** Back-link from a page to the press releases that announce or point to it. Renders nothing when there are none. */
+export function RelatedNews({ path }: { path: string }) {
+  const releases = releasesLinking(path);
+  if (!releases.length) return null;
+  return <section className={styles.section} aria-labelledby="related-news">
+    <h2 id="related-news">From the newsroom</h2>
+    <ul>{releases.map(release => <li key={release.slug}><a href={'/news/' + release.slug}>{release.headline}</a> (<time dateTime={release.date}>{pressDate(release.date)}</time>)</li>)}</ul>
+  </section>;
 }

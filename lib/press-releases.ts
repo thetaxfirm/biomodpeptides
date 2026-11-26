@@ -51,5 +51,9 @@ export const pressReleases: PressRelease[] = [
   },
 ];
 
+// Releases that announce or point to a page. That page links back to them, so a release is
+// reachable from the pages it is about and not only from the /news list.
+export const releasesLinking = (path: string) => pressReleases.filter(release => release.links.some(link => link.href === path));
+export const otherReleases = (slug: string) => pressReleases.filter(release => release.slug !== slug);
 export const pressReleaseAt = (path: string) => path.startsWith('/news/') ? pressReleases.find(release => release.slug === path.slice(6)) : undefined;
 export const pressDate = (iso: string) => new Date(iso + 'T12:00:00Z').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });

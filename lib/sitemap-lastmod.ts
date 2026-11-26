@@ -55,10 +55,15 @@ export const pageLastmod: Record<string, string> = {
   '/contact': '2026-10-14',
   // 628f8c0 (October 16): these four pages now end with the research vial index.
   // October 26: official-store and current-price source answers added to the visible FAQ.
-  '/faq': '2026-10-26',
   '/about': '2026-10-16',
-  '/quality-standard': '2026-10-16',
-  '/choosing-a-research-supplier': '2026-10-16',
+  // November 26: the COA guide, the supplier checklist and the FAQ each gained a "From the
+  // newsroom" section linking the press releases that announce them, and each release page
+  // gained a "More news" list (components/store/newsroom.tsx).
+  '/faq': '2026-11-26',
+  '/quality-standard': '2026-11-26',
+  '/choosing-a-research-supplier': '2026-11-26',
+  '/news/biomod-online-store-trybiomod': '2026-11-26',
+  '/news/guide-to-reading-coa': '2026-11-26',
 };
 
 const later = (a: string, b: string) => (a > b ? a : b);

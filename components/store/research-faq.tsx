@@ -1,6 +1,7 @@
 import { shippingTerms } from '@/lib/shipping-terms';
 import { useStore } from './provider';
 import { researchFaqGroups as groups } from '@/lib/research-faq';
+import { RelatedNews } from './newsroom';
 import styles from './research-faq.module.css';
 
 export function ResearchFAQ() {
@@ -19,5 +20,6 @@ export function ResearchFAQ() {
         <a href={item.href}>{item.link}</a>
       </div>)}</div>
     </section>)}
+    <RelatedNews path="/faq"/>
   </article>;
 }

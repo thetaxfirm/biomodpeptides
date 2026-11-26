@@ -1,6 +1,7 @@
 'use client';
 import { useStore } from './provider';
 import { batchFor, batchPath, matchingCertificateFor } from '@/lib/testing';
+import { RelatedNews } from './newsroom';
 import styles from './quality-guide.module.css';
 
 const checks = [
@@ -61,6 +62,8 @@ export function QualityGuide() {
       <p>Use the <a href="/choosing-a-research-supplier">research supplier checklist</a> to compare identity, lot documentation, handling records and complete order costs.</p>
       <a className="editorial-link" href="/contact?subject=Product%20lot%20and%20COA%20question">Ask about a product lot or report</a>
     </section>
+
+    <RelatedNews path="/quality-standard"/>
 
     <footer className={styles.sources}>
       <h2>Source documents</h2>
