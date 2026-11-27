@@ -228,16 +228,14 @@ export async function partnerSlots(db?: D1Database | null): Promise<PartnerSlot[
  * partners live and others not, with no record of which. Codes the partner programme does not own
  * are copied through untouched, so a code added on the Promo codes tab is never disturbed.
  */
-export async function syncPartnerCodes(db: D1Database, rows: PartnerSlot[], by: string, now = Date.now()): Promise<{ live: string[]; retired: string[] }> {
-    const { readStoredPromos, PROMO_CODES_KEY: KEY } = await import('./promo-codes');
-    const before = await readStoredPromos(db);
+export function partnerPromoChanges(rows: PartnerSlot[], existingRows: import('./promo-codes').StoredPromo[], by: string, now = Date.now()) {
     const live = new Map(livePartnerCodes(rows).map(entry => [entry.code, entry.percentOff]));
     // Every code the programme has ever issued, current and retired, so switching a slot off or
     // renaming a partner takes the old code down with it.
     const owned = new Set(rows.flatMap(row => [row.code, ...row.previous]).filter(Boolean));
-    const kept = before.rows.filter(promo => !owned.has(promo.code));
+    const kept = existingRows.filter(promo => !owned.has(promo.code));
     const retired: string[] = [];
-    for (const promo of before.rows) {
+    for (const promo of existingRows) {
         if (!owned.has(promo.code) || live.has(promo.code)) continue;
         // Kept, switched off, never deleted: the code may already be printed on a table card, and a
         // customer typing it should be told it is not valid rather than quietly charged full price
@@ -247,16 +245,24 @@ export async function syncPartnerCodes(db: D1Database, rows: PartnerSlot[], by: 
     }
     const next = [...kept];
     for (const [code, percentOff] of live) {
-        const existing = before.rows.find(promo => promo.code === code);
+        const existing = existingRows.find(promo => promo.code === code);
         const entry = { code, percentOff, active: true, created: existing?.created || now, by: by.slice(0, 120) };
         const at = next.findIndex(promo => promo.code === code);
         if (at >= 0) next[at] = entry; else next.push(entry);
     }
+    if (next.length > 100) throw new Error('The promotion limit is reached. Retire unused manual codes before adding another business.');
+    return { rows: next, live: [...live.keys()], retired };
+}
+export async function syncPartnerCodes(db: D1Database, rows: PartnerSlot[], by: string, now = Date.now()): Promise<{ live: string[]; retired: string[] }> {
+    const { readStoredPromos, PROMO_CODES_KEY: KEY } = await import('./promo-codes');
+    const before = await readStoredPromos(db);
+    const change = partnerPromoChanges(rows, before.rows, by, now);
+    const next = change.rows;
     const value = JSON.stringify(next);
-    if (before.value === value) return { live: [...live.keys()], retired };
+    if (before.value === value) return { live: change.live, retired: change.retired };
     const written = before.value !== null
         ? await db.prepare('UPDATE settings SET value=? WHERE key=? AND value=?').bind(value, KEY, before.value).run()
         : await db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO NOTHING').bind(KEY, value).run();
     if (!written.meta.changes) throw new Error('Promo codes changed while this page was open. Reload and try again.');
-    return { live: [...live.keys()], retired };
+    return { live: change.live, retired: change.retired };
 }

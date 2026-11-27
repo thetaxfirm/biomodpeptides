@@ -1,3 +1,4 @@
+import { storedPromotions } from './promo-codes';
 // Private operational correspondence. These functions never send email.
 import { coaEmail, coaHash, coaMessage, exactCoaReport, labelLotMismatch, labelLotOf, hasInvalidLabelLot, lotComparisonKey, resolveLotOriginal, reportForLabelLot, coaReportByHash, readCoaOriginal, verifiedCoaAttachment, isCoaRequest, type OriginalCoaMetadata } from './coa-delivery';
 import { customerContext, orderFollowUp, type CustomerContext } from './customer-context';
@@ -245,7 +246,7 @@ export async function replyDeskOptions(env:Env):Promise<ReplyDeskOptions>{
  const recent=(await env.DB.prepare('SELECT changed FROM request_reply_learning ORDER BY created DESC LIMIT 20').all<{changed:number}>()).results;
  const seen=await env.DB.prepare('SELECT seen FROM request_reply_bridge_seen WHERE id=1').first<{seen:number}>();
  const legacy=await env.DB.prepare('SELECT COUNT(*) n FROM request_reply_drafts WHERE '+LEGACY_REPLY_WHERE).bind(LEGACY_REPLY_CUTOFF).first<{n:number}>();
- return {coas,codes:activePromotions(),rules,legacyDrafts:legacy?.n||0,learning:{recent:recent.length,unchanged:recent.filter(r=>!r.changed).length},bridgeSeen:seen?.seen||null};
+ return {coas,codes:activePromotions(await storedPromotions(env.DB)),rules,legacyDrafts:legacy?.n||0,learning:{recent:recent.length,unchanged:recent.filter(r=>!r.changed).length},bridgeSeen:seen?.seen||null};
 }
 export async function saveReplyRule(env:Env,input:{rule?:string;removeId?:string;issue?:string|null},actor:Actor){
  if(!['owner','manager','support'].includes(actor.role))fail('Not permitted.',403);const db=dbFor(env,actor);
@@ -288,7 +289,7 @@ export async function handleReplyBridge(env:Env,payload:unknown):Promise<Record<
   const staffSender=row.approved_at&&row.approved_by?await env.DB.prepare('SELECT 1 x FROM staff WHERE email=?').bind(String(row.approved_by).toLowerCase()).first():null;
   const bcc=staffSender?await staffSendBcc(env):null;
   return {job:{id:row.id,requestId:row.request_id,revision:row.revision,leaseToken:token,mode:row.mode,sender:row.sender,recipient:row.recipient,subject:row.subject,instruction:draftInstruction(row),proposedBody:row.proposed_body,request:source(request!),history:(await historyFor(env,request!)).map(({id,direction,body,created})=>({id,direction,body,created})),coa:plan.coa,...('attachment' in plan&&plan.attachment?{attachment:plan.attachment}:{}),...(plan.extras?.length?{extraAttachments:plan.extras}:{}),preparedBy:row.prepared_by,...(bcc?{bcc}:{}),...(gate?{latestIncomingAt:gate.latestIncomingAt,linkedEmails:gate.linkedEmails,linkedOrders:gate.linkedOrders}:{}),...(row.mode==='ai'?{customerHistory:(await customerHistoryFor(env,request!)).map(({id,direction,body,created})=>({id,direction,body,created})),customer:await customerContext(env.DB as any,source(request!).email,source(request!).subject+'\n'+source(request!).message).catch(()=>undefined)}:{}),...(row.approved_at?{approved:{by:row.approved_by||'',at:row.approved_at}}:{}),...(row.mode==='ai'?await (async()=>{const c=await env.DB.prepare('SELECT issue,resolutions,note FROM request_issues WHERE request_id=?').bind(row.request_id).first<{issue:string;resolutions:string;note:string}>().catch(()=>null);let res:string[]=[];try{res=c?JSON.parse(c.resolutions):[];}catch{res=[];}
-   return {style:await replyStyle(env,c?.issue||null),codes:activePromotions(),...(c?{caseInfo:`Issue: ${issueLabel(c.issue)}.${res.length?' Recorded resolution: '+res.map(resolutionLabel).join(', ')+'.':''}${c.note?' Staff note: '+c.note.slice(0,500):''}`}:{})};})():{})}};
+   return {style:await replyStyle(env,c?.issue||null),codes:activePromotions(await storedPromotions(env.DB)),...(c?{caseInfo:`Issue: ${issueLabel(c.issue)}.${res.length?' Recorded resolution: '+res.map(resolutionLabel).join(', ')+'.':''}${c.note?' Staff note: '+c.note.slice(0,500):''}`}:{})};})():{})}};
  }
  if(p.action==='retired_drafts')return {drafts:(await env.DB.prepare("SELECT id,revision FROM request_reply_drafts WHERE status='cancelled' AND reason='retired_reply_policy_v2' ORDER BY updated DESC LIMIT 200").all<{id:string;revision:number}>()).results};
  if(p.action==='open_requests')return {requests:await openRequestsForBridge(env)};

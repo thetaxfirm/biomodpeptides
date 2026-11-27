@@ -7,7 +7,7 @@ const {DatabaseSync}=require('node:sqlite');
 const root=path.resolve(__dirname,'..'),ts=require('typescript');
 let overrides={};
 function load(file){const name=path.join(root,file),m=new Module(name,module);m.filename=name;m.paths=Module._nodeModulePaths(root);
-  m.require=id=>{if(Object.hasOwn(overrides,id))return overrides[id];
+  m.require=id=>{if(Object.hasOwn(overrides,id))return overrides[id]; if(id.startsWith('./') && overrides['@/lib/'+id.slice(2)])return overrides['@/lib/'+id.slice(2)];
     return id.startsWith('./')||id.startsWith('@/')?load(id.replace(/^@\//,'').replace(/^\.\//,'lib/')+(id.endsWith('.ts')?'':'.ts')):require(id);};
   m._compile(ts.transpileModule(fs.readFileSync(name,'utf8'),{compilerOptions:{module:1,target:9,esModuleInterop:true}}).outputText,name);return m.exports;}
 
@@ -70,7 +70,7 @@ assert.throws(()=>promos.applyPromotion(lines,'SPRING15',[{code:'SPRING15',perce
 function database(rows={}){const db=new DatabaseSync(':memory:');
   db.exec('CREATE TABLE settings(key TEXT PRIMARY KEY,value TEXT)');
   for(const [k,v] of Object.entries(rows)) db.prepare('INSERT INTO settings VALUES(?,?)').run(k,v);
-  const api={raw:db,prepare(sql){return{bind(...v){return{async first(){return db.prepare(sql).get(...v)||null;},async run(){const r=db.prepare(sql).run(...v);return{meta:{changes:r.changes}};}};}};}};
+  const api={raw:db,prepare(sql){return{bind(...v){return{async first(){return db.prepare(sql).get(...v)||null;},async all(){return {results:db.prepare(sql).all(...v)};},async run(){const r=db.prepare(sql).run(...v);return{meta:{changes:r.changes}};}};}};}};
   return api;}
 const KEY=codes.PROMO_CODES_KEY;
 assert.equal(KEY,'promo_codes_v1');
@@ -86,18 +86,17 @@ assert.equal(KEY,'promo_codes_v1');
 
   assert.deepEqual(await codes.storedPromotions(database()),[],'no row saved yet is not an error');
   assert.deepEqual(await codes.storedPromotions(database({[KEY]:'{{broken'})),[]);
-  assert.deepEqual(await codes.storedPromotions({prepare(){throw Error('down');}}),[],
-    'an unreadable settings row leaves built-ins working and stored codes refused, never a wrong price');
+  await assert.rejects(codes.storedPromotions({prepare(){throw Error('down');}}), /down/);
 
   // --- The real endpoint. ---
   const history=[];
   // `raceWith` lands a competing save in the row after the route has read it and before it writes,
   // which is the only way to exercise the compare-and-set from outside.
-  function routeFor(db,{email='owner@example.invalid',allow=true,raceWith=null}={}){
+  function routeFor(db,{email='owner@example.invalid',allow=true,raceWith=null,role='manager'}={}){
     const responses=[];let raced=false;
     overrides={
       'next/server':{NextResponse:{json:(value,init)=>({status:init?.status||200,async json(){return value;}})}},
-      '@/lib/auth':{requireStaff:async scope=>{if(!allow)throw Error('denied');responses.push(scope);return{email};}},
+      '@/lib/auth':{requireStaff:async scope=>{if(!allow)throw Error('denied');responses.push(scope);return{email,role};}},
       '@/lib/runtime':{runtime:()=>({DB:db})},
       '@/lib/change-history':{
         auditRun:async(_db,_ctx,sql,...values)=>{
@@ -196,6 +195,17 @@ assert.equal(KEY,'promo_codes_v1');
   assert.deepEqual(listing.custom.map(p=>p.code),['SPRING15']);
   assert.equal(routeFor(db).scopes.length,0,'scope is asserted per call, not cached across them');
 
+  const owned = database({restaurant_partners_v1: JSON.stringify([{slot:1,name:'Example Business',code:'BIZ10',slug:'biz10',percentOff:10,active:true}])});
+  res=await routeFor(owned,{role:'owner'}).POST(request({code:'BIZ10',percentOff:30}));
+  assert.equal(res.status,409,'business-managed terms cannot be repriced from generic promos');
+  res=await routeFor(db,{role:'owner'}).POST(request({code:'BM10',percentOff:12,reason:'Owner reviewed new price'}));
+  assert.equal(res.status,200); assert.equal(promos.promotion('BM10',await codes.storedPromotions(db)).percentOff,12);
+  res=await routeFor(db,{role:'owner'}).POST(request({code:'BM10',active:false,reason:'Owner retired old code'}));
+  assert.equal(res.status,200);
+
+  const retired=await codes.storedPromotions(db); assert.throws(()=>promos.promotion('BM10',retired),/not valid/);
+  db.raw.prepare('DELETE FROM settings WHERE key=?').run(codes.BUILTIN_PROMO_OVERRIDES_KEY);
+
   // Finally: deleting really removes it from pricing.
   res=await routeFor(db).POST(request({code:'SPRING15',remove:true}));
   assert.equal(res.status,200);
@@ -221,8 +231,8 @@ assert.equal(KEY,'promo_codes_v1');
   const outage={prepare(){throw Error('isolated database unavailable');}};
   assert.deepEqual(await savedCode(outage,'SPRING15'),{code:'',deleted:false},
     'an unreadable stored list refuses the discount for now but must preserve its cookie for recovery');
-  assert.deepEqual(await savedCode(outage,'BM10'),{code:'BM10',deleted:false},
-    'a built-in code remains available even while stored settings cannot be read');
+  assert.deepEqual(await savedCode(outage,'BM10'),{code:'',deleted:false},
+    'an override outage cannot silently reactivate a retired built-in code');
   assert.deepEqual(await savedCode(database(),'SPRING15'),{code:'',deleted:true},
     'a successful complete read can conclusively reject a removed code');
   const restored=database({[KEY]:JSON.stringify([{code:'SPRING15',percentOff:15,active:true}])});
@@ -248,7 +258,7 @@ assert.equal(KEY,'promo_codes_v1');
   assert.doesNotMatch(admin,/AdminPromoCodes/,'and administration\'s shell did not have to change');
   const panel=fs.readFileSync(path.join(root,'components/store/admin-promo-codes.tsx'),'utf8');
   assert.match(panel,/Add a promo code/,'the button says what it does');
-  assert.match(panel,/cannot be edited here/,'and the panel says built-ins are not editable');
+  assert.match(panel,/owner can change built-in codes/,'owner authority is explicit');
   // A reader with report access but no settings access is refused by the endpoint, and the panel
   // then renders nothing rather than an error on a screen they can legitimately use.
   assert.match(panel,/if \(denied\) return null;/,'no permission means no panel');

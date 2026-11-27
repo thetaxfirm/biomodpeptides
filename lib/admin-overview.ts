@@ -58,7 +58,7 @@ export function orderAttention(orders: OverviewOrder[], products: Product[], now
 export function productAttention(products: Product[], waitingOrders: { items: unknown }[]): Attention[] {
     const out: Attention[] = [];
     const selling = products.filter(p => productAvailability(p) === 'available');
-    const blocked = noCoaProducts(selling, waitingOrders).filter(p => p.waitingOrders > 0);
+    const blocked = (COA_REQUIRED_TO_SHIP ? noCoaProducts(selling, waitingOrders) : []).filter(p => p.waitingOrders > 0);
     if (blocked.length) out.push({ id: 'coa_blocked', tab: 'products', count: blocked.length, tone: 'urgent', title: plural(blocked.length, 'product') + ' holding up paid orders: no COA', detail: blocked.slice(0, 4).map(p => p.name).join(', ') + (blocked.length > 4 ? ` and ${blocked.length - 4} more` : '') + '. Attach the COA to release them.' });
     // catalog() already sets inStock=false for zero stock. Evaluate that normalized state
     // before filtering to sellable products; publication holds and coming-soon remain excluded.
@@ -66,8 +66,8 @@ export function productAttention(products: Product[], waitingOrders: { items: un
     if (out0.length) out.push({ id: 'out_of_stock', tab: 'products', count: out0.length, tone: 'urgent', title: plural(out0.length, 'product') + ' out of stock', detail: out0.slice(0, 4).map(p => p.name).join(', ') + '.' });
     const low = selling.filter(p => p.stockQuantity != null && p.stockQuantity > 0 && p.stockQuantity <= 5);
     if (low.length) out.push({ id: 'low_stock', tab: 'products', count: low.length, tone: 'normal', title: plural(low.length, 'product') + ' low on stock (5 or fewer)', detail: low.slice(0, 4).map(p => `${p.name} (${p.stockQuantity})`).join(', ') + '.' });
-    const noCoa = noCoaProducts(selling).length;
-    if (noCoa) out.push({ id: 'no_coa', tab: 'products', count: noCoa, tone: 'normal', title: plural(noCoa, 'product') + ' for sale without a COA', detail: "Customers can order these, but they can't ship until the COA for the current lot is attached." });
+    const noCoa = selling.filter(p => !hasCoa(p)).length;
+    if (noCoa) out.push({ id: 'no_coa', tab: 'products', count: noCoa, tone: 'normal', title: plural(noCoa, 'product') + ' for sale without a COA', detail: COA_REQUIRED_TO_SHIP ? "Attach the original COA for the current lot before shipping." : "The current lot has no attached COA. Shipping follows the current fulfillment policy." });
     return out;
 }
 

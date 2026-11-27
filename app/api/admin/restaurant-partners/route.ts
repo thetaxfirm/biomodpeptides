@@ -1,10 +1,13 @@
+import { settingsSnapshot, saveRawSettingsSnapshots, SettingsConflict } from '@/lib/settings-version';
+import { normalizeStoredPromos, PROMO_CODES_KEY } from '@/lib/promo-codes';
+import { promoOwners } from '@/lib/promo-ownership';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireStaff } from '@/lib/auth';
 import { runtime } from '@/lib/runtime';
-import { auditRun, recordChange } from '@/lib/change-history';
+import { recordChange } from '@/lib/change-history';
 import {
     BUSINESS_PARTNERS_KEY, PARTNER_SLOTS, MAX_PERCENT_OFF,
-    readPartners, normalizePartners, slotReady, syncPartnerCodes, type PartnerSlot,
+    readPartners, normalizePartners, slotReady, partnerPromoChanges, parsePartners, type PartnerSlot,
 } from '@/lib/restaurant-partners';
 export const dynamic = 'force-dynamic';
 const j = (value: unknown, status = 200) => NextResponse.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -37,8 +40,9 @@ export async function POST(req: NextRequest) {
 
         // Read, change, write back only if the row is byte-for-byte what was read. Two people
         // filling slots at once would otherwise silently drop one of the two businesses.
-        const before = await readPartners(env.DB);
-        const current = before.rows;
+        const [partnerSnapshot, promoSnapshot] = await Promise.all([settingsSnapshot(env.DB, BUSINESS_PARTNERS_KEY), settingsSnapshot(env.DB, PROMO_CODES_KEY)]);
+        const current = parsePartners(partnerSnapshot.value);
+        const promoRows = normalizeStoredPromos(JSON.parse(promoSnapshot.value || '[]'));
         const existing = current[slot - 1];
 
         const draft: Record<string, unknown> = body.clear === true
@@ -71,15 +75,17 @@ export async function POST(req: NextRequest) {
         if (saved.name && !saved.code)
             return j({ error: 'That name matches a built-in store code. Edit the code for this slot so it is different.' }, 409);
 
-        const value = JSON.stringify(next);
-        const written = before.value !== null
-            ? await auditRun(env.DB, context, 'UPDATE settings SET value=? WHERE key=? AND value=?', value, BUSINESS_PARTNERS_KEY, before.value)
-            : await auditRun(env.DB, context, 'INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO NOTHING', BUSINESS_PARTNERS_KEY, value);
-        if (!written.meta.changes) return j({ error: 'Business slots changed while this page was open. Reload administration and try again.' }, 409);
-
-        // Only now does anything price an order. If this fails the slots are saved and nothing is
-        // live, which is the safe direction: the owner sees the error and presses save again.
-        const sync = await syncPartnerCodes(env.DB, next, actor.email);
+        const existingCodes = new Set(current.flatMap(row => [row.code, ...row.previous]));
+        if (saved.code && !existingCodes.has(saved.code)) {
+            const managed = (await promoOwners(env.DB))[saved.code];
+            if (managed || promoRows.some(row => row.code === saved.code)) return j({ error: 'This code already belongs to another promotion or affiliate. Choose a different business name.' }, 409);
+        }
+        const sync = partnerPromoChanges(next, promoRows, actor.email);
+        // Slot state and checkout pricing either both save or neither does.
+        await saveRawSettingsSnapshots(env.DB, [
+            { before: partnerSnapshot, value: JSON.stringify(next) },
+            { before: promoSnapshot, value: JSON.stringify(sync.rows) },
+        ], context);
 
         const summary = body.clear === true ? 'Business slot ' + slot + ' cleared.'
             : saved.active ? 'Business slot ' + slot + ' (' + saved.name + ') is on at ' + saved.percentOff + '% with code ' + saved.code + '.'
@@ -98,6 +104,6 @@ export async function POST(req: NextRequest) {
         });
     }
     catch (e) {
-        return j({ error: e instanceof Error ? e.message : 'Request failed.' }, 400);
+        return j({ error: e instanceof Error ? e.message : 'Request failed.' }, e instanceof SettingsConflict ? 409 : 400);
     }
 }

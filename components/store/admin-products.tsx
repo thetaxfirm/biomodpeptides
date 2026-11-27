@@ -1,7 +1,7 @@
 'use client';
 import { hasCoa } from '@/lib/coa-shipping';
 
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { money, type Product } from '@/lib/catalog';
 import { standardPackPrices, supportsPacks } from '@/lib/packs';
 import { hasPublicationHold, blockedReleaseLot, productAvailability, productAvailabilityLabel, type ProductAvailability } from '@/lib/availability';
@@ -43,6 +43,7 @@ type BatchChoice = { ref: string; lot: string | null; reportId: string; filename
 type BatchRecord = { productId: number; lot: string | null; reportRef: string | null; coaAvailable: boolean; attached: BatchChoice | null; choices: BatchChoice[] };
 
 type Props = {
+    viewRequest?: { id: string; token: number };
     batchRecords?: BatchRecord[];
     canRelease?: boolean;
     /** Catalog staff: prices, sales and lot/COA only. The server keeps stock and availability regardless. */
@@ -61,15 +62,20 @@ type Props = {
 
 // Quick views of products that need the owner's attention. COA uses the same rule as the shipping block.
 const issues = [
-    { id: 'no_coa', label: 'No COA', test: (p: Product) => !hasCoa(p) },
+    { id: 'no_coa', label: 'No COA', test: (p: Product) => productAvailability(p) === 'available' && !hasCoa(p) },
     { id: 'stock_unset', label: 'Stock not entered', test: (p: Product) => p.stockQuantity == null },
-    { id: 'low', label: 'Low stock (5 or fewer)', test: (p: Product) => p.stockQuantity != null && p.stockQuantity > 0 && p.stockQuantity <= 5 },
-    { id: 'out', label: 'Out of stock', test: (p: Product) => p.stockQuantity != null && p.stockQuantity <= 0 },
+    { id: 'low', label: 'Low stock (5 or fewer)', test: (p: Product) => productAvailability(p) === 'available' && p.stockQuantity != null && p.stockQuantity > 0 && p.stockQuantity <= 5 },
+    { id: 'out', label: 'Out of stock', test: (p: Product) => productAvailability(p) === 'sold_out' },
 ] as const;
 export function AdminProducts(props: Props) {
     const [format, setFormat] = useState('all');
     const [issue, setIssue] = useState<string | null>(null);
     const { products, edited, query, busy, onQuery, onEdit, batchRecords = [] } = props;
+    useEffect(() => {
+        if (!props.viewRequest) return;
+        const views: Record<string, string> = { out_of_stock: 'out', low_stock: 'low', no_coa: 'no_coa', coa_blocked: 'no_coa' };
+        setIssue(views[props.viewRequest.id] || null); setFormat('all'); onQuery('');
+    }, [props.viewRequest?.token]);
     if (edited) return <ProductEditor key={`${props.formKey}:${edited.id}`} {...props} product={edited}/>;
     const needle = query.trim().toLowerCase();
     const issueTest = issues.find(i => i.id === issue)?.test;

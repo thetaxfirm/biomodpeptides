@@ -5,26 +5,28 @@ const promotions: Readonly<Record<string, number>> = Object.freeze({ BM10: 10, B
     JENM20: 20,
     // Come-back codes for win-back and service emails (owner, Oct 13 2026). Not advertised on the site.
     COMEBACK10: 10, COMEBACK15: 15, COMEBACK20: 20, COMEBACK25: 25, COMEBACK30: 30 });
-export type PromoRecord = { code: string; percentOff: number };
+export type PromoRecord = { code: string; percentOff: number; overrideBuiltIn?: boolean; active?: boolean; expiresAt?: number | null };
 /**
  * The table above plus any codes the owner added in administration, which arrive as `extra` from
  * ./promo-codes. Callers that pass nothing see exactly the built-in table, so every existing call
  * site keeps its old behaviour.
  *
- * Built-ins win every collision. A stored row naming a built-in code is dropped rather than applied,
- * so no edit in administration can quietly reprice a code that is already printed on a card or sitting
- * in a customer's cookie. Nothing here reads a percentage from a browser.
+ * Ordinary stored codes cannot shadow built-ins. Only validated owner overrides carry the explicit
+ * marker that can change or retire one. Checkout never accepts this marker from browser input.
  */
 function table(extra: readonly PromoRecord[]): Record<string, number> {
-    const added: Record<string, number> = {};
+    const known: Record<string, number> = { ...promotions };
     for (const entry of extra || []) {
         const code = String(entry?.code ?? '').trim().toUpperCase();
         const percentOff = Number(entry?.percentOff);
-        if (!/^[A-Z0-9]{1,40}$/.test(code) || Object.hasOwn(promotions, code)) continue;
+        if (!/^[A-Z0-9]{1,40}$/.test(code)) continue;
+        // This marker is created only from the owner-controlled override setting, never the cart.
+        if (Object.hasOwn(promotions, code) && entry.overrideBuiltIn !== true) continue;
         if (!Number.isInteger(percentOff) || percentOff < 1 || percentOff > 100) continue;
-        added[code] = percentOff;
+        if (entry.active === false || (entry.expiresAt != null && entry.expiresAt <= Date.now())) { delete known[code]; continue; }
+        known[code] = percentOff;
     }
-    return { ...promotions, ...added };
+    return known;
 }
 export function activePromotions(extra: readonly PromoRecord[] = []): PromoRecord[] {
     return Object.entries(table(extra)).map(([code, percentOff]) => ({ code, percentOff }));

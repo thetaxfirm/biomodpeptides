@@ -3,8 +3,8 @@ const assert = require('node:assert/strict'), fs = require('node:fs'), path = re
 const { DatabaseSync } = require('node:sqlite'), ts = require('typescript');
 const root = path.resolve(__dirname, '..');
 const db = new DatabaseSync(':memory:');
-db.exec('CREATE TABLE settings(key TEXT PRIMARY KEY, value TEXT)');
-const D1 = { prepare(q) { const st = db.prepare(q); let args = []; const api = { bind(...a) { args = a; return api; },
+db.exec('CREATE TABLE settings(key TEXT PRIMARY KEY, value TEXT); CREATE TABLE transaction_guards(id TEXT PRIMARY KEY,valid INTEGER CHECK(valid=1))');
+const D1 = { async batch(statements) { db.exec('BEGIN'); try { const out=[]; for(const st of statements) out.push(await st.run()); db.exec('COMMIT'); return out; } catch(e) {db.exec('ROLLBACK'); throw e;} }, prepare(q) { const st = db.prepare(q); let args = []; const api = { bind(...a) { args = a; return api; },
   async first() { return st.get(...args) || null; }, async all() { return { results: st.all(...args) }; },
   async run() { return { meta: { changes: st.run(...args).changes } }; } }; return api; } };
 
@@ -17,6 +17,7 @@ function loadReal(file, extra = {}) {
   m.filename = name; m.paths = Module._nodeModulePaths(root);
   m.require = id => {
     if (extra[id]) return extra[id];
+    if (id.startsWith('./') && extra['@/lib/'+id.slice(2)]) return extra['@/lib/'+id.slice(2)];
     if (id.startsWith('./')) return loadReal('lib/' + id.slice(2) + '.ts', extra);
     if (id.startsWith('@/lib/')) return loadReal('lib/' + id.slice(6) + '.ts', extra);
     throw Error('Unexpected dependency ' + id);
@@ -31,13 +32,14 @@ const stubs = {
   '@/lib/auth': { requireStaff: async p => { assert.equal(p, 'store:write'); if (!allowed) throw Error('nope'); return { email: 'logan@example.invalid', role: 'owner' }; } },
   '@/lib/runtime': { runtime: () => ({ DB: D1 }), database: () => D1, timestamp: () => ++now },
   '@/lib/change-history': {
+    withAuditDb: database => database,
     auditRun: async (database, ctx, sql, ...v) => { assert.equal(database, D1); assert.deepEqual(ctx, { source: 'admin', actor: 'logan@example.invalid', actorType: 'staff' }); return { meta: { changes: db.prepare(sql).run(...v).changes } }; },
     recordChange: async (_d, e) => { events.push(e); },
   },
 };
 const filename = path.join(root, 'app/api/admin/restaurant-partners/route.ts'), m = new Module(filename, module);
 m.filename = filename; m.paths = Module._nodeModulePaths(root);
-m.require = id => stubs[id] || (id.startsWith('@/lib/') ? loadReal('lib/' + id.slice(6) + '.ts') : (() => { throw Error('Unexpected import ' + id); })());
+m.require = id => stubs[id] || (id.startsWith('@/lib/') ? loadReal('lib/' + id.slice(6) + '.ts', stubs) : (() => { throw Error('Unexpected import ' + id); })());
 m._compile(ts.transpileModule(fs.readFileSync(filename, 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText, filename);
 
 const request = (body, origin = 'https://trybiomod.com') => { const r = new Request('https://trybiomod.com/api/admin/restaurant-partners', { method: 'POST', headers: { origin, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); r.nextUrl = new URL(r.url); return r; };
@@ -127,16 +129,16 @@ const slots = () => JSON.parse(db.prepare("SELECT value FROM settings WHERE key=
   // Handing a partner a link is pointless if the customer still has to type the code, so the
   // /r route is exercised for real here rather than grepped.
   for (const sql of [
-    'CREATE TABLE affiliate_members(code TEXT, owner TEXT, agreement_id TEXT, status TEXT)',
+    "CREATE TABLE affiliate_members(code TEXT, owner TEXT, agreement_id TEXT, status TEXT, name TEXT DEFAULT '')",
     'CREATE TABLE affiliate_program_state(id INTEGER, agreement_id TEXT)',
     'CREATE TABLE affiliate_schedule_state(owner TEXT, schedule_id TEXT)',
-    'CREATE TABLE affiliate_schedules(id TEXT, agreement_id TEXT)',
+    'CREATE TABLE affiliate_schedules(id TEXT, agreement_id TEXT, code TEXT)',
     'CREATE TABLE affiliate_schedule_acceptances(schedule_id TEXT, owner TEXT)',
   ]) db.exec(sql);
-  db.exec("INSERT INTO affiliate_members VALUES('ANNAX20','anna','a1','approved')");
+  db.exec("INSERT INTO affiliate_members(code,owner,agreement_id,status) VALUES('ANNAX20','anna','a1','approved')");
   db.exec("INSERT INTO affiliate_program_state VALUES(1,'a1')");
   db.exec("INSERT INTO affiliate_schedule_state VALUES('anna','s1')");
-  db.exec("INSERT INTO affiliate_schedules VALUES('s1','a1')");
+  db.exec("INSERT INTO affiliate_schedules(id,agreement_id) VALUES('s1','a1')");
   db.exec("INSERT INTO affiliate_schedule_acceptances VALUES('s1','anna')");
   const stored = JSON.parse(db.prepare("SELECT value FROM settings WHERE key='promo_codes_v1'").get()?.value || '[]');
   db.prepare("INSERT OR REPLACE INTO settings(key,value) VALUES('promo_codes_v1',?)")

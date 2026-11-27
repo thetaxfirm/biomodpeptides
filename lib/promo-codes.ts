@@ -10,12 +10,13 @@
 import { activePromotions, type PromoRecord } from './promotions';
 
 export const PROMO_CODES_KEY = 'promo_codes_v1';
+export const BUILTIN_PROMO_OVERRIDES_KEY = 'builtin_promo_overrides_v1';
 export const MAX_STORED_PROMOS = 100;
 /** A whole-order discount, so the ceiling is deliberate: a 100% code is a free-checkout hole on a
  * public storefront, and nothing on this store needs one. Comp an order by refunding it instead. */
 export const MAX_PERCENT_OFF = 90;
 
-export type StoredPromo = { code: string; percentOff: number; active: boolean; created: number; by: string };
+export type StoredPromo = { code: string; percentOff: number; active: boolean; created: number; by: string; expiresAt?: number | null; reason?: string };
 
 export function cleanPromoCode(value: unknown): string {
     const code = String(value ?? '').trim().toUpperCase();
@@ -48,6 +49,8 @@ export function normalizeStoredPromos(raw: unknown): StoredPromo[] {
             active: row.active !== false,
             created: Number.isSafeInteger(created) && created > 0 ? created : 0,
             by: typeof row.by === 'string' ? row.by.slice(0, 120) : '',
+            ...(row.expiresAt === null ? { expiresAt: null } : Number.isSafeInteger(row.expiresAt) && Number(row.expiresAt) > 0 ? { expiresAt: Number(row.expiresAt) } : {}),
+            ...(typeof row.reason === 'string' ? { reason: row.reason.slice(0, 500) } : {}),
         });
         if (rows.length >= MAX_STORED_PROMOS) break;
     }
@@ -73,17 +76,26 @@ export async function storedPromoList(db?: D1Database | null): Promise<StoredPro
     try { return (await readStoredPromos(db)).rows; }
     catch { return []; }
 }
-/** What pricing may honour. An unreadable settings row leaves the built-in codes working and the
- * stored ones refused, which is the safe direction: a customer sees "not valid", never a wrong price. */
+/** Validated owner overrides are separate from ordinary partner and manual codes. */
+export function normalizeBuiltInOverrides(raw: unknown): StoredPromo[] {
+    if (!Array.isArray(raw)) return [];
+    const known = new Set(builtInCodes());
+    return raw.filter(row => row && known.has(row.code) && cleanPercentOff(row.percentOff) && typeof row.active === 'boolean' && typeof row.reason === 'string' && row.reason.trim().length >= 8)
+        .map(row => ({ code: row.code, percentOff: row.percentOff, active: row.active, created: Number(row.created) || 0, by: String(row.by || '').slice(0, 120), reason: row.reason.slice(0, 500), expiresAt: Number.isSafeInteger(row.expiresAt) && row.expiresAt > 0 ? row.expiresAt : null }));
+}
+export async function readBuiltInOverrides(db: D1Database) {
+    const row = await db.prepare('SELECT value FROM settings WHERE key=?').bind(BUILTIN_PROMO_OVERRIDES_KEY).first<{ value: string }>();
+    const raw = row?.value ? JSON.parse(row.value) : [];
+    const rows = normalizeBuiltInOverrides(raw);
+    if (!Array.isArray(raw) || rows.length !== raw.length) throw new Error('Promotion overrides could not be verified.');
+    return { value: row?.value ?? null, rows };
+}
 export async function storedPromotions(db?: D1Database | null, options: { throwOnReadError?: boolean } = {}): Promise<PromoRecord[]> {
-    // Pricing can fail closed to built-ins. A saved-cookie resolver must distinguish an outage
-    // from a successful empty list before deciding that a customer's code was removed.
-    let rows: StoredPromo[];
-    if (options.throwOnReadError) {
-        if (!db) throw new Error('Promo settings are unavailable.');
-        rows = (await readStoredPromos(db)).rows;
-    } else rows = await storedPromoList(db);
-    return rows.filter(promo => promo.active).map(({ code, percentOff }) => ({ code, percentOff }));
+    // A failed override read cannot silently restore a retired built-in discount.
+    if (!db) throw new Error('Promotion settings are unavailable. Please try again.');
+    const [stored, overrides] = await Promise.all([readStoredPromos(db), readBuiltInOverrides(db)]);
+    return [...stored.rows.filter(promo => promo.active && (promo.expiresAt == null || promo.expiresAt > Date.now())).map(({ code, percentOff }) => ({ code, percentOff })),
+        ...overrides.rows.map(({ code, percentOff, active, expiresAt }) => ({ code, percentOff, active, expiresAt, overrideBuiltIn: true }))];
 }
 
 /** Create or reprice one stored code with the same compare-and-swap as administration. Used when an

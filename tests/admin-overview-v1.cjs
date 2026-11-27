@@ -60,7 +60,7 @@ const orders = [
   for (const card of orderAttention(mixed, products, now)) assert.equal(card.count, sharedCounts[card.id], card.id + ' dashboard count matches order queue');
   const items = productAttention(products, [{ items: [{ id: 2 }] }]);
   const p = Object.fromEntries(items.map(i => [i.id, i]));
-  assert.equal(p.coa_blocked, undefined, 'COA shipping rule removed: nothing held'); assert.equal(p.out_of_stock.count, 1); assert.match(p.low_stock.detail, /KPV \(3\)/); assert.equal(p.no_coa, undefined, 'COA shipping rule removed: no can\'t-ship warning');
+  assert.equal(p.coa_blocked, undefined, 'COA shipping rule removed: nothing held'); assert.equal(p.out_of_stock.count, 1); assert.match(p.low_stock.detail, /KPV \(3\)/); assert.equal(p.no_coa.count, 1); assert.doesNotMatch(p.no_coa.detail, /before shipping|can.t ship/);
   const sales = salesWindows(orders, now);
   assert.deepEqual(sales.map(s => [s.label, s.live.paymentRecorded, s.live.grossCents]), [['Today (UTC, partial)', 1, 10000], ['Last 7 complete days (UTC)', 4, 40000], ['Last 30 complete days (UTC)', 5, 50000]], 'Recorded live payment states count even when fulfillment is held; sandbox and internal tests stay out');
   // Real normalized availability, including zero stock and an explicitly sold-out product.
