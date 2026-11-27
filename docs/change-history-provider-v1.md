@@ -28,7 +28,7 @@ Event IDs are deterministic and imports use a parameterized `INSERT ... SELECT .
 
 - GitHub read access works through the existing CLI login.
 - Cloudflare deployment/version APIs work through the existing Wrangler login. The initial read exposed 198 retained deployments and 202 versions; these counts are an observation, not a permanent total.
-- Account Audit Logs v2 returned HTTP 403/code 10000. Direct dashboard, DNS and platform-setting changes therefore **are not fully covered** with the current login. Cloudflare requires Account Settings Read or Write to read this endpoint. No token or permissions were created or changed by this implementation.
+- Account Audit Logs v2 returned HTTP 403/code 10000. Direct dashboard, DNS and platform-setting changes therefore **are not fully covered** with the current login. The current endpoint accepts Audit Logs Read or the broader Account Settings Read permission. No token or permissions were created or changed by this implementation.
 - The Workers Builds REST endpoint also returned HTTP 403. GitHub's Cloudflare check-runs supply independent exact-commit build evidence; the importer does not invent a direct association between a Cloudflare deployment and a GitHub SHA based on timing.
 - TryBiomod's verified current production runtime is Cloudflare Workers and D1. Vercel is marked **not connected** to this history, not “no changes.” No Vercel project or BiomodPro setup was changed.
 - Shared credentials and self-reported Git names cannot reliably distinguish Ash, Chris, Logan, Codex or Claude. Application events use authenticated staff identity. Provider/Git records explicitly name their different evidence basis. Unrecorded historical admin edits cannot be retroactively assigned to a person.

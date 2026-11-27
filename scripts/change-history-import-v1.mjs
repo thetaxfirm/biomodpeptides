@@ -74,7 +74,7 @@ export async function collectHistory({ now = Date.now(), gh = github, cf, filePa
       cursor = next;
     }
     state('cloudflare_audit', complete ? 'active' : 'partial', `${count} TryBiomod-scoped platform events read in the 30 days ending ${before}. ${complete ? 'Available pages exhausted.' : 'Pagination incomplete.'} Only exact Worker/database resources or the trybiomod.com zone are retained. Settings values, IP addresses and raw requests are never imported.`);
-  } catch { state('cloudflare_audit', 'unavailable', 'Cloudflare account audit logs could not be read with the current login. Dashboard, DNS and direct platform settings changes are not fully covered. The Account Settings Read permission is required; no permissions were changed.'); }
+  } catch { state('cloudflare_audit', 'unavailable', 'Cloudflare account audit logs could not be read with the current login. Dashboard, DNS and direct platform settings changes are not fully covered. Audit Logs Read or the broader Account Settings Read permission is required; no permissions were changed.'); }
   state('vercel', 'unavailable', 'The current TryBiomod production runtime is Cloudflare Workers and D1. Vercel is not connected to this history. No Vercel project or BiomodPro account was inspected or changed.');
   return { events, sync };
 }
