@@ -183,7 +183,7 @@ async function request(action, data, headers = {}) {
 (async () => {
   // Neither unauthenticated nor ordinary signed-in visitors may read queues or act.
   for (const role of ['signedout', 'customer']) {
-    reset({ role }); let result = await request('admin'); assert.equal(result.status, 400); assert.deepEqual(calls.map(c => c.name), ['customer', 'requireAdmin']);
+    reset({ role }); let result = await request('admin'); assert.equal(result.status, 403); assert.deepEqual(calls.map(c => c.name), ['customer', 'requireAdmin']);
     for (const [action, body] of [['admin-coa-config', { enabled: true, replyTo: 'reply@example.invalid' }], ['admin-coa-process', { id: requestId }]]) {
       reset({ role }); result = await request(action, body); assert.equal(result.status, 400); assert.deepEqual(calls.map(c => c.name), ['session', 'rateLimit', 'requireAdmin']);
     }
