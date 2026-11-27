@@ -115,7 +115,8 @@
   .pane { padding: 16px; }
   .ask { grid-template-columns: minmax(0, 1fr) auto; }
   .ask textarea { grid-column: 1 / -1; }
-  .search { flex-basis: 100%; }
+  .search { flex-basis: 100%; min-width: 0; }
+  .queueControls label { min-width: 0; max-width: 100%; }
 }
 
 .confirm, .forward { margin: 0 0 14px; padding: 12px 14px; border-radius: 8px; background: var(--soft); display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }

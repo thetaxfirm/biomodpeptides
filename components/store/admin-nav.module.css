@@ -23,6 +23,8 @@
  * every page is listed, because a menu that only opens on hover would be unreachable. */
 @media (max-width: 900px) {
   .shell { flex-direction: column; }
+  /* In a column, flex:1 no longer constrains width. Keep tables and inboxes inside the viewport. */
+  .shell > [data-slot=tabs-content] { width: 100%; max-width: 100%; }
   .tabs { position: static; width: 100%; flex: none; flex-direction: row; flex-wrap: wrap; gap: 4px; margin-bottom: 22px; }
   .tabs [data-slot=tabs-trigger] { width: auto; flex: none; }
   .section { display: contents; }

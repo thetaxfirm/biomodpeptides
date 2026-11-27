@@ -56,12 +56,12 @@ export function AdminPromoCodes() {
         {editing && <form className="store-form" onSubmit={save}>
             <h3>{editing === 'new' ? 'New code' : 'Edit ' + editing.code}</h3>
             <div className="form-row">
-                <label className="store-field">Code<input value={draft.code} readOnly={editing !== 'new'} required minLength={3} maxLength={40} pattern="[A-Za-z0-9]{3,40}" disabled={working} onChange={e => setDraft(d => ({...d,code:e.target.value.toUpperCase()}))}/></label>
-                <label className="store-field">Discount (%)<input type="number" min={1} max={data?.maxPercentOff || 90} step={1} value={draft.percent} required disabled={working} onChange={e => setDraft(d => ({...d,percent:e.target.value}))}/></label>
-                <label className="store-field">Expires (local time, optional)<input type="datetime-local" value={draft.expires} disabled={working} onChange={e => setDraft(d => ({...d,expires:e.target.value}))}/></label>
+                <label className="field">Code<input value={draft.code} readOnly={editing !== 'new'} required minLength={3} maxLength={40} pattern="[A-Za-z0-9]{3,40}" disabled={working} onChange={e => setDraft(d => ({...d,code:e.target.value.toUpperCase()}))}/></label>
+                <label className="field">Discount (%)<input type="number" min={1} max={data?.maxPercentOff || 90} step={1} value={draft.percent} required disabled={working} onChange={e => setDraft(d => ({...d,percent:e.target.value}))}/></label>
+                <label className="field">Expires (local time, optional)<input type="datetime-local" value={draft.expires} disabled={working} onChange={e => setDraft(d => ({...d,expires:e.target.value}))}/></label>
             </div>
             <label><input type="checkbox" checked={draft.active} disabled={working} onChange={e => setDraft(d => ({...d,active:e.target.checked}))}/> Active for new orders</label>
-            <label className="store-field">Reason for change<textarea value={draft.reason} required minLength={8} maxLength={500} disabled={working} onChange={e => setDraft(d => ({...d,reason:e.target.value}))}/></label>
+            <label className="field">Reason for change<textarea value={draft.reason} required minLength={8} maxLength={500} disabled={working} onChange={e => setDraft(d => ({...d,reason:e.target.value}))}/></label>
             <p>Clear Active to retire this code. Expiry stops new uses automatically. Historical orders retain their original discount.</p>
             <div className={styles.actions}><button className="button button-dark" disabled={working}>{working ? 'Saving…' : 'Save code'}</button><button type="button" className="text-button" disabled={working} onClick={() => setEditing(null)}>Cancel</button></div>
         </form>}

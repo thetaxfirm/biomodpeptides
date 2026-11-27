@@ -70,8 +70,8 @@ export function AdminOrderAlerts({ busy, onDraft, onSaved }: { busy: boolean; on
         <h2>New-order alerts</h2>
         <p>One address per line, up to ten. Everyone here gets an email the moment an order is paid for, and the 9 a.m. parcel digest. Customers never see this list.</p>
         {error ? <p className="notice error" role="alert">{error}</p> : <>
-            <label className="store-field">Send alerts to
-                <textarea rows={5} value={value} disabled={!loaded || busy || saving} spellCheck={false} autoCapitalize="off" autoCorrect="off"
+            <label className={'field ' + styles.field}>Send alerts to
+                <textarea aria-label="Send alerts to" rows={5} value={value} disabled={!loaded || busy || saving} spellCheck={false} autoCapitalize="off" autoCorrect="off"
                     placeholder={loaded ? 'you@example.com\nother-owner@example.com' : 'Loading…'}
                     onChange={e => { setValue(e.target.value); changed('email'); }}/>
             </label>
@@ -86,13 +86,13 @@ export function AdminOrderAlerts({ busy, onDraft, onSaved }: { busy: boolean; on
                 <li>Make a group and add your bot to it. Then send <code>/start@yourbotname</code> in that group — a bot cannot see ordinary messages in a group, only commands aimed at it.</li>
                 <li>Press <strong>Find my chats</strong>, pick the group, then save and send a test.</li>
             </ol>
-            <label className="store-field">Bot token
+            <label className={'field ' + styles.field}>Bot token
                 <input type="password" value={token} disabled={!loaded || busy || Boolean(chatBusy)} autoComplete="off" spellCheck={false}
                     placeholder={configured ? 'A token is saved. Type a new one to replace it.' : '1234567890:AA…'}
                     onChange={e => { setToken(e.target.value); changed('telegram'); }}/>
             </label>
             <p className={styles.sub}>{configured ? 'A bot token is saved. It is never shown again, and leaving this box empty keeps it as it is — type a new one only to replace it.' : 'No bot token saved yet.'}</p>
-            <label className="store-field">Chat IDs
+            <label className={'field ' + styles.field}>Chat IDs
                 <input value={chats} disabled={!loaded || busy || Boolean(chatBusy)} spellCheck={false} autoComplete="off"
                     placeholder="-1001234567890" onChange={e => { setChats(e.target.value); changed('telegram'); }}/>
             </label>
