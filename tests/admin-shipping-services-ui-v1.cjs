@@ -40,6 +40,18 @@ const button = (h, label) => { const n = nodes(h.tree).find(n => n.type === 'but
 const settle = () => new Promise(r => setTimeout(r, 0));
 
 (async () => {
+ // Reloaded administration uses the persisted minutes; a shipping-save response uses milliseconds.
+ // Both shapes must retain the owner's exact delay through another save, including a zero delay.
+ for (const auto of [{ enabled: true, delayMinutes: 37, dailyCapCents: 65000 }, { enabled: false, delayMinutes: 0, dailyCapCents: 0 }, { enabled: true, delayMs: 2220000, dailyCapCents: 65000 }]) {
+  const expected = auto.delayMinutes ?? auto.delayMs / 60000;
+  const reloaded = mount({ shippingCents: 700, freeShippingAt: 20000, autoLabel: auto });
+  const label = nodes(reloaded.tree).find(n => n.type === 'label' && text(n).startsWith('Wait after payment (minutes)'));
+  assert.equal(nodes(label).find(n => n.type === 'input').props.value, String(expected), 'Reload retains the configured delay without NaN');
+  reply = () => ({ settings: requests.at(-1).body.settings, freeShippingAt: 20000, shippingCents: 700 });
+  await button(reloaded, 'Save shipping and check it').props.onClick();
+  assert.equal(requests.at(-1).body.settings.autoLabel.delayMinutes, expected, 'Saving again retains the delay');
+  assert.equal(requests.at(-1).body.settings.autoLabel.dailyCapCents, auto.dailyCapCents);
+ }
  // Before the first save: mirrors today's checkout (USPS + UPS, all speeds, $10 overnight fee) and says so.
  let h = mount({ shippingCents: 1500, freeShippingAt: 20000 });
  assert(text(h.tree).includes('Not set up yet'));

@@ -5,7 +5,8 @@ import { money } from '@/lib/catalog';
 import { normalizeShippingOptions, shippingServiceCatalog, defaultMinimumServiceKey, signatureOptions, defaultSignatureConfirmation, type CatalogService, type ShippingOptionsConfig, type ShippingServiceSetting } from '@/lib/shipping-options';
 import styles from './admin-shipping-settings.module.css';
 
-type AutoLabel = { enabled: boolean; delayMs: number; dailyCapCents: number; maxLabelCents?: number };
+// Main administration returns stored minutes; the shipping endpoint returns normalized milliseconds.
+type AutoLabel = { enabled?: boolean; delayMinutes?: number; delayMs?: number; dailyCapCents?: number; maxLabelCents?: number };
 /** What the last scheduled run did. Null means no run has reported yet, which is not the same as a failure. */
 type AutoLabelHealth = { checkedAt: number; status: string; enabled: boolean; bought: number; failed: number; blocked: number; addressHeld?: number; needsApproval?: number; due: number; recovered: number; released: number; capReached: boolean } | null;
 type ShippingSettingsConfig = { shippingCents: number | null; freeShippingAt: number; shippingOptions?: unknown; autoLabel?: AutoLabel; automaticSpend?: { cents: number; labels: number }; autoLabelHealth?: AutoLabelHealth };
@@ -39,9 +40,10 @@ function startingRows(options: ShippingOptionsConfig): Row[] {
 function draftFrom(config: ShippingSettingsConfig): Draft {
     const options = normalizeShippingOptions(config.shippingOptions);
     const auto = config.autoLabel;
+    const delay = auto?.delayMinutes ?? (auto?.delayMs === undefined ? 20 : auto.delayMs / 60000);
     return { rows: startingRows(options), freeStandardEnabled: options.freeStandardEnabled, threshold: centsText(config.freeShippingAt), fallback: config.shippingCents == null ? '' : centsText(config.shippingCents), minimumServiceKey: options.minimumServiceKey || defaultMinimumServiceKey, signatureConfirmation: options.signatureConfirmation || defaultSignatureConfirmation,
         signatureOver: options.signatureOverCents == null ? '' : centsText(options.signatureOverCents), insureOver: options.insureOverCents == null ? '' : centsText(options.insureOverCents),
-        autoEnabled: auto ? auto.enabled : true, autoDelay: String(auto ? Math.round(auto.delayMs / 60000) : 20), autoCap: centsText(auto ? auto.dailyCapCents : 50000), autoMax: centsText(auto?.maxLabelCents ?? 7500) };
+        autoEnabled: auto?.enabled ?? true, autoDelay: String(Math.round(Number.isFinite(delay) ? delay : 20)), autoCap: centsText(auto?.dailyCapCents ?? 50000), autoMax: centsText(auto?.maxLabelCents ?? 7500) };
 }
 /** Validated save payload. Throws a message the owner can act on. */
 export function shippingServicesPayload(draft: Draft) {
