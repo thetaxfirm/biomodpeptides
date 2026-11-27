@@ -1,12 +1,12 @@
+import { calendarMetricsReport } from './traffic-calendar-report';
 import {
-  TRAFFIC_ORIGIN, TRAFFIC_PAGE_GROUPS, TRAFFIC_SOURCE_GROUPS, TRAFFIC_DAILY_CAP,
+  TRAFFIC_ORIGIN, TRAFFIC_DAILY_CAP,
   TRAFFIC_RETENTION_DAYS, TRAFFIC_MAX_BODY_BYTES, TRAFFIC_DAY_MS,
   trafficConfiguration, trafficUtcDay, validTrafficEvent,
-  type TrafficEvent, type TrafficFlags, type TrafficReport, type TrafficDay,
-  type TrafficCleanupHealth, type TrafficPageGroup, type TrafficSourceGroup,
+  type TrafficEvent, type TrafficFlags, type TrafficCleanupHealth,
 } from './traffic-metrics';
 
-import { SHOPPING_STAGES, SHOPPING_DAILY_CAP, SHOPPING_RETENTION_DAYS, shoppingConfiguration, validShoppingEvent, type ShoppingEvent, type ShoppingStage, type ShoppingDay, type ShoppingReport } from './shopping-metrics';
+import { SHOPPING_DAILY_CAP, shoppingConfiguration, validShoppingEvent, type ShoppingEvent } from './shopping-metrics';
 
 type Dependencies = { env: () => TrafficFlags; database: () => D1Database; now?: () => number };
 type ReportDependencies = Dependencies & { requireAdmin: () => Promise<unknown> };
@@ -36,6 +36,8 @@ export const shoppingSql = {
     RETURNING event_count`,
   cleanup: 'DELETE FROM shopping_daily WHERE day < ?',
 };
+const coverageSql = `INSERT INTO metrics_time_coverage(kind,started_at) SELECT ?,? WHERE changes()>0
+  ON CONFLICT(kind) DO UPDATE SET started_at=MIN(metrics_time_coverage.started_at,excluded.started_at)`;
 async function cleanupHealth(db: D1Database): Promise<TrafficCleanupHealth> {
   const row = await db.prepare('SELECT last_attempt,last_success,last_failure,last_status FROM traffic_metrics_health WHERE id=1')
     .first<{ last_attempt: number; last_success: number | null; last_failure: number | null; last_status: 'ok' | 'failed' }>();
@@ -51,6 +53,8 @@ export async function cleanupTraffic(db: D1Database, now = Date.now()): Promise<
     await db.batch([
       db.prepare(trafficSql.cleanup).bind(cutoff),
       db.prepare(shoppingSql.cleanup).bind(cutoff),
+      db.prepare('DELETE FROM traffic_minute WHERE bucket < ?').bind(Date.parse(cutoff + 'T00:00:00Z')),
+      db.prepare('DELETE FROM shopping_minute WHERE bucket < ?').bind(Date.parse(cutoff + 'T00:00:00Z')),
       db.prepare(healthSql).bind(now, now, null, 'ok'),
     ]);
     return await cleanupHealth(db);
@@ -63,16 +67,29 @@ export async function recordTraffic(db: D1Database, event: TrafficEvent, now = D
   if (!validTrafficEvent(event)) throw new Error('Invalid traffic event.');
   const day = trafficUtcDay(now);
   await cleanupTraffic(db, now);
-  // One conditional statement is serialized by SQLite/D1, including cross-dimension increments.
-  const row = await db.prepare(trafficSql.record).bind(day, event.pageGroup, event.sourceGroup, day, TRAFFIC_DAILY_CAP).first();
-  return row !== null;
+  // D1 executes the batch transactionally. changes() links the next write to acceptance
+  // of the preceding increment, so a capped event cannot enter the minute aggregates.
+  const result = await db.batch([
+    db.prepare(trafficSql.record).bind(day, event.pageGroup, event.sourceGroup, day, TRAFFIC_DAILY_CAP),
+    db.prepare(`INSERT INTO traffic_minute(bucket,page_group,source_group,event_count)
+      SELECT ?,?,?,1 WHERE changes()>0 ON CONFLICT(bucket,page_group,source_group)
+      DO UPDATE SET event_count=traffic_minute.event_count+1`).bind(Math.floor(now / 60000) * 60000, event.pageGroup, event.sourceGroup),
+    db.prepare(coverageSql).bind('traffic', now),
+  ]);
+  return result[0].meta.changes > 0;
 }
 export async function recordShopping(db: D1Database, event: ShoppingEvent, now = Date.now()): Promise<boolean> {
   if (!validShoppingEvent(event)) throw new Error('Invalid shopping event.');
   const day = trafficUtcDay(now);
   await cleanupTraffic(db, now);
-  const row = await db.prepare(shoppingSql.record).bind(day, event.event, day, SHOPPING_DAILY_CAP).first();
-  return row !== null;
+  const result = await db.batch([
+    db.prepare(shoppingSql.record).bind(day, event.event, day, SHOPPING_DAILY_CAP),
+    db.prepare(`INSERT INTO shopping_minute(bucket,stage,event_count)
+      SELECT ?,?,1 WHERE changes()>0 ON CONFLICT(bucket,stage)
+      DO UPDATE SET event_count=shopping_minute.event_count+1`).bind(Math.floor(now / 60000) * 60000, event.event),
+    db.prepare(coverageSql).bind('shopping', now),
+  ]);
+  return result[0].meta.changes > 0;
 }
 async function smallJson(req: Request): Promise<unknown> {
   const length = req.headers.get('content-length');
@@ -117,139 +134,5 @@ export async function handleTrafficPost(req: Request, deps: Dependencies): Promi
   }
   catch { return response(503, 'Traffic recording is temporarily unavailable.'); }
 }
-const emptyDay = (date: string): TrafficDay => ({
-  date, events: 0, capReached: false,
-  byPageGroup: TRAFFIC_PAGE_GROUPS.map(pageGroup => ({ pageGroup, events: 0 })),
-  bySourceGroup: TRAFFIC_SOURCE_GROUPS.map(sourceGroup => ({ sourceGroup, events: 0 })),
-});
-const limitations = [
-  'Counts are accepted page-view events, not unique visitors, confirmed humans, conversions, or attributable sales.',
-  'Opt-outs, blocked scripts, known administrators and QA visits are excluded. Anonymous staff and bots cannot be reliably identified.',
-  'Blank or missing referrers do not establish direct traffic or absence of AI referrals.',
-  'Dates before activation are unavailable. Zero means no accepted events recorded, not no visitors. Collection pauses or failures can reduce counts.',
-  'Totals include completed UTC days only. The activation day and current day are reported separately when partial.',
-  'Only the current UTC date and preceding 89 dates are retained. A daily scheduled sweep and recording/report requests perform deletion.',
-];
-export async function trafficReport(req: Request, deps: ReportDependencies): Promise<Response> {
-  // Keep authorization ahead of query validation, environment inspection, and every storage call.
-  try { await deps.requireAdmin(); } catch { return response(403, 'Administrator access is required.'); }
-  const params = new URL(req.url).searchParams;
-  const value = params.get('days');
-  if (req.method !== 'GET' || [...params.keys()].some(key => key !== 'days') || params.getAll('days').length > 1
-    || (value !== null && !['7', '30', '90'].includes(value))) return response(400, 'Choose 7, 30, or 90 days.');
-  const days = (value === '7' ? 7 : value === '90' ? 90 : 30) as 7 | 30 | 90;
-  const now = deps.now?.() ?? Date.now();
-  try {
-    const today = trafficUtcDay(now);
-    const todayMs = Math.floor(now / TRAFFIC_DAY_MS) * TRAFFIC_DAY_MS;
-    const requestedFrom = Math.max(0, todayMs - days * TRAFFIC_DAY_MS);
-    const retainedFrom = Math.max(0, todayMs - (TRAFFIC_RETENTION_DAYS - 1) * TRAFFIC_DAY_MS);
-    const configuration = trafficConfiguration(deps.env(), now);
-    const started = configuration.startedAt ? Date.parse(configuration.startedAt) : null;
-    const available = started !== null && started <= now;
-    const db = deps.database();
-    const cleanup = await cleanupTraffic(db, now);
-    const from = Math.max(requestedFrom, retainedFrom, available ? Math.floor(started! / TRAFFIC_DAY_MS) * TRAFFIC_DAY_MS : todayMs);
-    const rows = available ? (await db.prepare('SELECT day,page_group,source_group,event_count FROM traffic_daily WHERE day>=? AND day<=? ORDER BY day,page_group,source_group')
-      .bind(trafficUtcDay(from), today).all<{ day: string; page_group: TrafficPageGroup; source_group: TrafficSourceGroup; event_count: number }>()).results : [];
-    const grouped = new Map<string, TrafficDay>();
-    if (available) for (let day = from; day <= todayMs; day += TRAFFIC_DAY_MS) grouped.set(trafficUtcDay(day), emptyDay(trafficUtcDay(day)));
-    for (const row of rows) {
-      const day = grouped.get(row.day);
-      if (!day || !TRAFFIC_PAGE_GROUPS.includes(row.page_group) || !TRAFFIC_SOURCE_GROUPS.includes(row.source_group)
-        || !Number.isSafeInteger(row.event_count) || row.event_count < 1 || row.event_count > TRAFFIC_DAILY_CAP) throw new Error('Invalid aggregate.');
-      day.events += row.event_count;
-      if (day.events > TRAFFIC_DAILY_CAP) throw new Error('Invalid daily aggregate.');
-      day.capReached = day.events >= TRAFFIC_DAILY_CAP;
-      day.byPageGroup.find(item => item.pageGroup === row.page_group)!.events += row.event_count;
-      day.bySourceGroup.find(item => item.sourceGroup === row.source_group)!.events += row.event_count;
-    }
-    const activationDate = available ? trafficUtcDay(started!) : null;
-    const partialActivation = available && started! % TRAFFIC_DAY_MS !== 0;
-    const allDays = [...grouped.values()];
-    const completedDays = allDays.filter(day => day.date !== today && !(partialActivation && day.date === activationDate));
-    const totals = emptyDay('');
-    for (const day of completedDays) {
-      totals.events += day.events;
-      day.byPageGroup.forEach((entry, i) => { totals.byPageGroup[i].events += entry.events; });
-      day.bySourceGroup.forEach((entry, i) => { totals.bySourceGroup[i].events += entry.events; });
-    }
-    const report: TrafficReport = {
-      asOf: new Date(now).toISOString(), status: available ? 'available' : 'unavailable', configuration,
-      window: { requestedDays: days, timeZone: 'UTC', start: trafficUtcDay(from), endExclusive: today, retainedFrom: trafficUtcDay(retainedFrom) },
-      completedDays,
-      activationDayPartial: partialActivation && activationDate !== today ? grouped.get(activationDate!) || null : null,
-      partialToday: available ? grouped.get(today) || null : null,
-      totals: { events: available && completedDays.length > 0 ? totals.events : null, byPageGroup: available && completedDays.length > 0 ? totals.byPageGroup : [], bySourceGroup: available && completedDays.length > 0 ? totals.bySourceGroup : [] },
-      cap: { dailyLimit: TRAFFIC_DAILY_CAP, daysReached: allDays.filter(day => day.capReached).map(day => day.date) }, cleanup, limitations,
-    };
-    return new Response(JSON.stringify(report), { headers: { ...headers, 'Content-Type': 'application/json' } });
-  } catch { return response(503, 'Traffic reporting is temporarily unavailable.'); }
-}
-
-const emptyShoppingDay = (date: string): ShoppingDay => ({
-  date, events: 0, capReached: false, byStage: SHOPPING_STAGES.map(stage => ({ stage, events: 0 })),
-});
-const shoppingLimitations = [
-  'Counts are accepted stage events, not unique people, linked journeys, conversion rates, abandonment rates or attributable sales.',
-  'Only eligible-product carts in live checkout are measured. Mixed eligible/unreviewed carts, known administrators, opt-outs and QA visits are excluded.',
-  'View stages count once per document navigation; confirmed actions can recur. Counts across stages cannot identify the same person or be added into a visitor total.',
-  'A checkout handoff means the store returned a payment URL. It does not establish that the payment page opened, a charge occurred or an order was paid.',
-  'Blocked scripts, network loss, collection pauses, anonymous staff and bots affect these unlinked client-reported counts. Server validation cannot prove a genuine shopping action.',
-  'Dates before shopping measurement activation are unavailable. Zero means no accepted events recorded, not no activity. Page views and order diagnostics remain separate.',
-  'Period totals include completed UTC days only. Partial activation and current-day counts are separate; only the current date and preceding 89 dates are retained.',
-];
-export async function shoppingReport(req: Request, deps: ReportDependencies): Promise<Response> {
-  // No query, environment, cleanup or aggregate access before authorization.
-  try { await deps.requireAdmin(); } catch { return response(403, 'Administrator access is required.'); }
-  const params = new URL(req.url).searchParams;
-  const value = params.get('days');
-  if (req.method !== 'GET' || [...params.keys()].some(key => key !== 'days') || params.getAll('days').length > 1
-    || (value !== null && !['7', '30', '90'].includes(value))) return response(400, 'Choose 7, 30, or 90 days.');
-  const days = (value === '7' ? 7 : value === '90' ? 90 : 30) as 7 | 30 | 90;
-  const now = deps.now?.() ?? Date.now();
-  try {
-    const today = trafficUtcDay(now);
-    const todayMs = Math.floor(now / TRAFFIC_DAY_MS) * TRAFFIC_DAY_MS;
-    const requestedFrom = Math.max(0, todayMs - days * TRAFFIC_DAY_MS);
-    const retainedFrom = Math.max(0, todayMs - (SHOPPING_RETENTION_DAYS - 1) * TRAFFIC_DAY_MS);
-    const configuration = shoppingConfiguration(deps.env(), now);
-    const started = configuration.startedAt ? Date.parse(configuration.startedAt) : null;
-    const available = started !== null && started <= now;
-    const db = deps.database();
-    const cleanup = await cleanupTraffic(db, now);
-    const from = Math.max(requestedFrom, retainedFrom, available ? Math.floor(started! / TRAFFIC_DAY_MS) * TRAFFIC_DAY_MS : todayMs);
-    const rows = available ? (await db.prepare('SELECT day,stage,event_count FROM shopping_daily WHERE day>=? AND day<=? ORDER BY day,stage')
-      .bind(trafficUtcDay(from), today).all<{ day: string; stage: ShoppingStage; event_count: number }>()).results : [];
-    const grouped = new Map<string, ShoppingDay>();
-    if (available) for (let day = from; day <= todayMs; day += TRAFFIC_DAY_MS) grouped.set(trafficUtcDay(day), emptyShoppingDay(trafficUtcDay(day)));
-    for (const row of rows) {
-      const day = grouped.get(row.day);
-      if (!day || !SHOPPING_STAGES.includes(row.stage) || !Number.isSafeInteger(row.event_count)
-        || row.event_count < 1 || row.event_count > SHOPPING_DAILY_CAP) throw new Error('Invalid aggregate.');
-      day.events += row.event_count;
-      if (day.events > SHOPPING_DAILY_CAP) throw new Error('Invalid daily aggregate.');
-      day.capReached = day.events >= SHOPPING_DAILY_CAP;
-      day.byStage.find(item => item.stage === row.stage)!.events += row.event_count;
-    }
-    const activationDate = available ? trafficUtcDay(started!) : null;
-    const partialActivation = available && started! % TRAFFIC_DAY_MS !== 0;
-    const allDays = [...grouped.values()];
-    const completedDays = allDays.filter(day => day.date !== today && !(partialActivation && day.date === activationDate));
-    const totals = emptyShoppingDay('');
-    for (const day of completedDays) {
-      totals.events += day.events;
-      day.byStage.forEach((entry, i) => { totals.byStage[i].events += entry.events; });
-    }
-    const report: ShoppingReport = {
-      asOf: new Date(now).toISOString(), status: available ? 'available' : 'unavailable', configuration,
-      window: { requestedDays: days, timeZone: 'UTC', start: trafficUtcDay(from), endExclusive: today, retainedFrom: trafficUtcDay(retainedFrom) },
-      completedDays,
-      activationDayPartial: partialActivation && activationDate !== today ? grouped.get(activationDate!) || null : null,
-      partialToday: available ? grouped.get(today) || null : null,
-      totals: { events: available && completedDays.length > 0 ? totals.events : null, byStage: available && completedDays.length > 0 ? totals.byStage : [] },
-      cap: { dailyLimit: SHOPPING_DAILY_CAP, daysReached: allDays.filter(day => day.capReached).map(day => day.date) }, cleanup, limitations: shoppingLimitations,
-    };
-    return new Response(JSON.stringify(report), { headers: { ...headers, 'Content-Type': 'application/json' } });
-  } catch { return response(503, 'Shopping-stage reporting is temporarily unavailable.'); }
-}
+export const trafficReport = (req: Request, deps: ReportDependencies) => calendarMetricsReport(req, deps, 'traffic', cleanupTraffic);
+export const shoppingReport = (req: Request, deps: ReportDependencies) => calendarMetricsReport(req, deps, 'shopping', cleanupTraffic);

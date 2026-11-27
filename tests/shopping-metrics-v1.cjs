@@ -13,7 +13,7 @@ require.extensions['.ts'] = (m, f) => m._compile(ts.transpileModule(fs.readFileS
 const traffic = require('../lib/traffic-metrics.ts');
 const shared = require('../lib/shopping-metrics.ts');
 const server = require('../lib/traffic-metrics-server.ts');
-const migration = ['0014_aggregate_traffic.sql', '0015_aggregate_shopping.sql'].map(name => fs.readFileSync(path.join(__dirname, '../drizzle', name), 'utf8')).join('\n');
+const migration = ['0014_aggregate_traffic.sql', '0015_aggregate_shopping.sql', '0045_report_window_aggregates.sql'].map(name => fs.readFileSync(path.join(__dirname, '../drizzle', name), 'utf8')).join('\n');
 const { TRAFFIC_ORIGIN: ORIGIN, TRAFFIC_DAY_MS: DAY } = traffic;
 const { SHOPPING_STAGES: STAGES, SHOPPING_DAILY_CAP: CAP } = shared;
 const now = Date.parse('2026-10-10T12:30:00.000Z');
@@ -29,7 +29,7 @@ function statement(sql, values = []) {
     first: async () => { queries.push({sql,values}); if (fail) throw Error(privateValue); return sqlite.prepare(sql).get(...values) || null; },
     all: async () => { queries.push({sql,values}); if (fail) throw Error(privateValue); return { results: sqlite.prepare(sql).all(...values) }; },
     run: async () => { queries.push({sql,values}); if (fail) throw Error(privateValue); return { meta: sqlite.prepare(sql).run(...values) }; },
-    execute: () => { queries.push({sql,values}); if (fail) throw Error(privateValue); return sqlite.prepare(sql).run(...values); },
+    execute: () => { queries.push({sql,values}); if (fail) throw Error(privateValue); return { meta: sqlite.prepare(sql).run(...values) }; },
   };
 }
 const db = { prepare: sql => statement(sql), batch: async statements => {

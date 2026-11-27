@@ -1,5 +1,5 @@
 // Fixed aggregate stages only. No catalog, customer, storage or server imports.
-import { trafficConfiguration, type TrafficConfiguration, type TrafficCleanupHealth } from './traffic-metrics';
+import { trafficConfiguration, type TrafficConfiguration, type TrafficCleanupHealth, type MetricsReportWindow } from './traffic-metrics';
 
 export const SHOPPING_STAGES = [
   'cart_add_confirmed', 'cart_view', 'checkout_signin_view', 'checkout_form_view',
@@ -14,7 +14,7 @@ export type ShoppingStageCount = { stage: ShoppingStage; events: number };
 export type ShoppingDay = { date: string; events: number; capReached: boolean; byStage: ShoppingStageCount[] };
 export type ShoppingReport = {
   asOf: string; status: 'available' | 'unavailable'; configuration: TrafficConfiguration;
-  window: { requestedDays: 7 | 30 | 90; timeZone: 'UTC'; start: string; endExclusive: string; retainedFrom: string };
+  window: MetricsReportWindow;
   completedDays: ShoppingDay[]; activationDayPartial: ShoppingDay | null; partialToday: ShoppingDay | null;
   totals: { events: number | null; byStage: ShoppingStageCount[] };
   cap: { dailyLimit: number; daysReached: string[] }; cleanup: TrafficCleanupHealth; limitations: string[];

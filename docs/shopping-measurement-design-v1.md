@@ -1,5 +1,7 @@
 # Shopping-stage measurement v1
 
+Reporting and storage amendment: [calendar report windows, November 27, 2026](report-calendar-windows-v1.md). The original design below remains historical; the amendment documents minute aggregates and retained UTC history.
+
 October 10, 2026. Author: Codex. Base: `664b103`. Scope: TryBiomod only. This source increment extends aggregate page views with shopping stages; it does not establish traffic, sales, rankings or a visitor conversion rate. Production migration, release, activation and live observation are separate release steps, recorded by the release owner.
 
 ## Exact recording contract

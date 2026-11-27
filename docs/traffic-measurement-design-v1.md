@@ -1,5 +1,7 @@
 # TryBiomod aggregate traffic measurement: technical handoff v1
 
+Reporting and storage amendment: [calendar report windows, November 27, 2026](report-calendar-windows-v1.md). The original design below remains historical; the amendment documents minute aggregates and retained UTC history.
+
 Status: **Planned / not implemented.** Reviewed October 9, 2026. This document does not install measurement, change production, or establish a traffic baseline. Scope is TryBiomod only; BiomodPro remains deferred.
 
 ## Purpose and boundaries

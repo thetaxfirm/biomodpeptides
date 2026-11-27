@@ -22,9 +22,14 @@ export type TrafficCleanupHealth = {
   lastAttemptAt: string | null; lastSuccessAt: string | null; lastFailureAt: string | null;
   status: 'ok' | 'failed' | 'never'; retentionDays: number;
 };
+export type MetricsReportWindow = {
+  requestedDays: number; timeZone: string; start: string; endExclusive: string; retainedFrom: string;
+  requestedFrom: string; requestedTo: string; startInstant: number; endInstant: number;
+  aggregation: 'utc_daily' | 'minute'; preciseFrom: string | null;
+};
 export type TrafficReport = {
   asOf: string; status: 'available' | 'unavailable'; configuration: TrafficConfiguration;
-  window: { requestedDays: 7 | 30 | 90; timeZone: 'UTC'; start: string; endExclusive: string; retainedFrom: string };
+  window: MetricsReportWindow;
   completedDays: TrafficDay[]; activationDayPartial: TrafficDay | null; partialToday: TrafficDay | null;
   totals: { events: number | null; byPageGroup: TrafficPageCount[]; bySourceGroup: TrafficSourceCount[] };
   cap: { dailyLimit: number; daysReached: string[] }; cleanup: TrafficCleanupHealth; limitations: string[];
