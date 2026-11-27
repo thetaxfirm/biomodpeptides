@@ -29,7 +29,7 @@ const alerts=h=>nodes(h.tree).filter(n=>n.props.role==='alert').map(text).join('
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return{promise,resolve,reject};};
 const flush=async h=>{for(let i=0;i<16;i++)await Promise.resolve();h?.render();};
 const noop=()=>null;
-function AdminOverview(){}function PresaleProductPicker(){}function Field(){}function Check(){}function Choice(){}function Blank(){}function AuthPage(){}function ShippingLabel(){}function OrdersAdmin(){}function Dialog(){}function Tabs(){}function TabsTrigger(){}function TabsContent(){}function CoaAutomation(){}function ChangeHistory(){}function AdminProducts(){}function AdminShippingSettings(){}function AdminOrderAlerts(){}function RestaurantPartners(){}
+function AdminOverview(){}function AdminPresales(){}function PresaleProductPicker(){}function Field(){}function Check(){}function Choice(){}function Blank(){}function AuthPage(){}function ShippingLabel(){}function OrdersAdmin(){}function Dialog(){}function Tabs(){}function TabsTrigger(){}function TabsContent(){}function CoaAutomation(){}function ChangeHistory(){}function AdminProducts(){}function AdminShippingSettings(){}function AdminOrderAlerts(){}function RestaurantPartners(){}
 const ownerA={id:'fixture-admin-a',name:'Fixture A',email:'a@example.invalid'};
 const ownerB={id:'fixture-admin-b',name:'Fixture B',email:'b@example.invalid'};
 const fixture=(label='Snapshot A')=>({settingsVersion:'fixture-version',config:{presalesEnabled:false,rewardsEnabled:false,affiliateEnabled:false,packDiscounts:{},shippingCents:null,freeShippingAt:20000},products:[{id:900001,name:label,price:10000,stockQuantity:1,inStock:true,purchasable:true}],campaigns:[{id:'fixture-campaign',title:'Simulated campaign',active:false,starts:'2099-01-01',ends:'2099-02-01'}],orders:[{id:'fixture-order',status:'pending',total:10000,created:0,data:{items:[]}}],requests:[{id:'fixture-request',kind:'fixture',status:'new',created:0,data:{}}],searchPublishing:{}});
@@ -54,6 +54,7 @@ mod.require=id=>{
  if(id==='./coa-automation')return{CoaAutomation};
  if(id==='./admin-overview')return{AdminOverview};if(id==='./presale-product-picker')return{PresaleProductPicker};
  if(id==='./change-history')return{ChangeHistory};
+ if(id==='./admin-presales')return{AdminPresales};
  if(id==='./admin-products')return{AdminProducts};
  if(id==='./admin-shipping-settings'){
   const file=path.join(root,'components/store/admin-shipping-settings.tsx'),child=new Module(file,module);child.filename=file;child.paths=Module._nodeModulePaths(root);
@@ -235,13 +236,14 @@ const productNames=h=>String(Boolean(productPanel(h).props.edited));
  // Input changes, controlled settings flags, editor and all admin forms protect drafts.
  reset();apiImpl=async()=>({...fixture(),orders:updated.orders});h=mount();await flush(h);
  const cleanRefresh=button(h,'Refresh administration').props.onClick;
- for(const formTitle of ['Mix-and-match discounts','Create a presale']){
+ for(const formTitle of ['Mix-and-match discounts']){
   const form=nodes(h.tree).find(n=>n.type==='form'&&(formTitle==='Tracking number / carrier'?nodes(n).some(f=>f.type===Field&&f.props.label===formTitle):text(n).includes(formTitle)));assert(form);
   const key=form.key;form.props.onChangeCapture();h.render();const before=reads();cleanRefresh();button(h,'Refresh administration').props.onClick();
   assert.equal(reads(),before);assert(button(h,'Refresh administration').props.disabled);assert(text(h.tree).includes('Save or discard unsaved edits'));
   find(h,n=>n.type===Tabs).props.onValueChange('products');h.render();assert.equal(find(h,n=>n.type===Tabs).props.value,'overview');
   button(h,'Discard unsaved edits').props.onClick();h.render();assert.equal(button(h,'Refresh administration').props.disabled,false);assert.notEqual(settingsForm(h).key,key);
  }
+ {const panel=find(h,n=>n.type===AdminPresales);const revision=panel.props.onDraft();h.render();assert(button(h,'Refresh administration').props.disabled);panel.props.onDiscard(revision);h.render();assert(!button(h,'Refresh administration').props.disabled);}
  {const generation=queue(h).formGeneration;queue(h).markDraft('order:order001-new');h.render();const before=reads();cleanRefresh();button(h,'Refresh administration').props.onClick();
   assert.equal(reads(),before);assert(button(h,'Refresh administration').props.disabled);assert(text(h.tree).includes('Save or discard unsaved edits'));
   find(h,n=>n.type===Tabs).props.onValueChange('products');h.render();assert.equal(find(h,n=>n.type===Tabs).props.value,'overview');
@@ -418,7 +420,7 @@ const productNames=h=>String(Boolean(productPanel(h).props.edited));
  for(const action of ['campaign','request','reconcile']){
   reset();h=mount();await flush(h);allowedMutation='admin-'+action;
   apiImpl=async method=>{if(method===allowedMutation)return{message:'Simulated action confirmed'};throw Error('Simulated inline refresh failure');};
-  if(action==='campaign')await button(h,'Enable').props.onClick();
+  if(action==='campaign'){const view=find(h,n=>n.type===AdminPresales);await view.props.onChange(view.props.campaigns[0],{active:true});}
   if(action==='request'){const inbox=find(h,n=>n.type===RequestInbox);await inbox.props.onStatus(inbox.props.requests[0],'resolved');}
   if(action==='reconcile')await queue(h).change('reconcile',{id:'fixture-order'},d=>infos.push(d.message||d.status));
   h.render();assert.equal(mutations(),1);assert.match(alerts(h),/could not refresh/);assert(text(h.tree).includes('Snapshot A'));
@@ -440,7 +442,8 @@ const productNames=h=>String(Boolean(productPanel(h).props.edited));
 
  reset();h=mount();await flush(h);editFirst(h);productPanel(h).props.onQuery('Snapshot');h.render();assert.equal(productNames(h),'true');
  const staleRefresh=button(h,'Refresh administration').props.onClick;
- const staleForm=settingsForm(h).props.onSubmit,staleCampaign=button(h,'Enable').props.onClick,staleRequest=find(h,n=>n.type===RequestInbox).props.onStatus,staleShipping=shippingDone(h);
+ const priorCampaign=find(h,n=>n.type===AdminPresales).props.onChange;
+ const staleForm=settingsForm(h).props.onSubmit,staleCampaign=()=>priorCampaign(fixture().campaigns[0],{active:true}),staleRequest=find(h,n=>n.type===RequestInbox).props.onStatus,staleShipping=shippingDone(h);
  const oldOwnerRead=deferred();apiImpl=()=>oldOwnerRead.promise;staleShipping();const newerOwnerRead=deferred();apiImpl=()=>newerOwnerRead.promise;state.store.customer=ownerB;h.render();assert(!text(h.beforeEffects).includes('Snapshot A'));assert(!text(h.tree).includes('Snapshot A'));const count=calls.length;
  staleRefresh();await staleForm(event());await staleCampaign();await staleRequest(fixture().requests[0],'resolved');await staleShipping();assert.equal(calls.length,count);
  oldOwnerRead.resolve(fixture('Old owner leaked'));await flush(h);assert(!text(h.tree).includes('Old owner leaked'));newerOwnerRead.resolve(fixture('Snapshot B'));await flush(h);assert(text(h.tree).includes('Snapshot B'));assert.equal(productNames(h),'false');assert.equal(productPanel(h).props.query,'');

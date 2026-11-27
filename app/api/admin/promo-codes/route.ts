@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
         const managed = (await promoOwners(env.DB))[code];
         if (managed) return j({ error: code + ' belongs to ' + managed.label + '. Change it through ' + (managed.kind === 'business' ? 'Businesses' : 'the affiliate offer') + ' so its terms and discount stay together.', managed }, 409);
         const expiresAt = body.expiresAt === undefined ? undefined : body.expiresAt === null ? null : Number(body.expiresAt);
-        if (expiresAt !== undefined && expiresAt !== null && (!Number.isSafeInteger(expiresAt) || expiresAt <= Date.now())) return j({ error: 'Choose a future expiry date or leave it blank.' }, 400);
+        if (expiresAt !== undefined && expiresAt !== null && (!Number.isSafeInteger(expiresAt) || expiresAt <= 0)) return j({ error: 'Choose a valid expiry date or leave it blank.' }, 400);
         const reason = typeof body.reason === 'string' ? body.reason.trim().slice(0, 500) : '';
         if (builtInCodes().includes(code)) {
             if (actor.role !== 'owner') return j({ error: code + ' is a built-in code. Only an owner can change its terms.' }, 409);

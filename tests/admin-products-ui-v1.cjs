@@ -9,7 +9,7 @@ const projectRequire = Module.createRequire(path.join(root, 'package.json'));
 const ts = projectRequire('typescript');
 const React = projectRequire('react');
 let active;
-const hooks = { ...React, useState(initial) {
+const hooks = { ...React, useEffect(fn,deps) { const h=active,i=h.cursor++;if(!h.slots[i]||deps.some((v,n)=>v!==h.slots[i][n])){h.slots[i]=deps;fn();} }, useState(initial) {
  const host = active, index = host.cursor++;
  if (!(index in host.slots)) host.slots[index] = typeof initial === 'function' ? initial() : initial;
  return [host.slots[index], value => { host.slots[index] = typeof value === 'function' ? value(host.slots[index]) : value; }];
@@ -23,6 +23,7 @@ function load(file) {
  cache.set(file, mod.exports);
  mod.require = id => {
   if (id === 'react') return hooks;
+  if (id === './admin-price-preview') return {AdminPricePreview:()=>null};
   if (id === 'react/jsx-runtime') return projectRequire(id);
   if (id.endsWith('.module.css')) return new Proxy({}, { get: (_, key) => key === '__esModule' ? false : String(key) });
   if (id.startsWith('@/lib/') || id.startsWith('./')) {
@@ -92,6 +93,7 @@ const edit = (h, name) => { find(h, n => n.type === 'button' && n.props['aria-la
 const status = (h, value) => { find(h, n => n.type === 'input' && n.props.type === 'radio' && n.props.value === value).props.onChange(); h.render(); };
 const submit = h => { find(h, n => n.type === 'form').props.onSubmit({ preventDefault() {}, currentTarget: { fixture: true } }); h.render(); };
 try {
+ let check = mount();check.props.onQuery('missing');check.props.viewRequest={id:'out_of_stock',token:1};check.render();check.render();assert.equal(check.props.query,'');assert(text(check.tree).includes('Synthetic supply'));assert(!text(check.tree).includes('Synthetic vial'));
  let h = mount();
  assert.deepEqual(nodes(h.tree).filter(n => n.type === 'h3').map(text), ['Lyophilized', 'Sprays', 'Softgels', 'Other products']);
  assert.equal(new Set(nodes(h.tree).filter(n => n.type === 'section' && n.props['aria-labelledby']?.startsWith('product-group-')).map(n => n.props.className)).size, 4, 'Formats have separate visual treatments');

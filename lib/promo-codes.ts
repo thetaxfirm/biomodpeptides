@@ -1,9 +1,8 @@
 // Promo codes the owner adds from administration, stored in one settings row so a new code is live
 // the moment it is saved instead of waiting on a deployment (owner, Oct 24 2026).
 //
-// The built-in table in ./promotions stays authoritative. A stored row can never reprice or shadow
-// a built-in code: if the two ever name the same code, the built-in wins and the stored row is
-// ignored everywhere, including here, in pricing and in the report.
+// Ordinary stored rows cannot shadow source defaults. Separately validated owner overrides are
+// the only way to reprice, expire or retire a built-in, with a reason retained in the audited row.
 //
 // Deliberately depends on nothing but that table: this module is read on the checkout pricing path,
 // and the caller always hands in the database it is already using.

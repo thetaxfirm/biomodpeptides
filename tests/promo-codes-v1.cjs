@@ -204,6 +204,9 @@ assert.equal(KEY,'promo_codes_v1');
   assert.equal(res.status,200);
 
   const retired=await codes.storedPromotions(db); assert.throws(()=>promos.promotion('BM10',retired),/not valid/);
+  res=await routeFor(db,{role:'owner'}).POST(request({code:'BM10',active:true,expiresAt:Date.now()-1000,reason:'Expiry behavior regression'}));
+  assert.equal(res.status,200);const expired=await codes.storedPromotions(db);assert.throws(()=>promos.promotion('BM10',expired),/not valid/);
+  assert.equal((await routeFor({prepare(){throw Error('read unavailable');}}).GET()).status,503,'settings outage must not masquerade as denied access');
   db.raw.prepare('DELETE FROM settings WHERE key=?').run(codes.BUILTIN_PROMO_OVERRIDES_KEY);
 
   // Finally: deleting really removes it from pricing.

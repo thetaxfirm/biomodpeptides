@@ -20,12 +20,12 @@ const address = { name: 'Synthetic Fixture', line1: 'Isolated Address', city: 'F
 const settingsSql = 'INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value';
 const shipping = { standardEnabled: false, expeditedEnabled: true, overnightEnabled: true, freeStandardEnabled: false, standardHandlingCents: 225, expeditedHandlingCents: 450, overnightHandlingCents: 1750, carriers: ['FedEx'] };
 const existing = { packDiscounts: { 1: 0, 3: 10, 5: 15, 10: 20 }, shippingCents: 799, freeShippingAt: 25000, presalesEnabled: true, rewardsEnabled: false, affiliateEnabled: true, shippingOptions: shipping, retainedSetting: { version: 2, label: 'Synthetic newer runtime setting' } };
-const payload = () => ({ packDiscounts: { 3: 12 }, shippingCents: null, freeShippingAt: 20000, presalesEnabled: false, rewardsEnabled: true, affiliateEnabled: true });
+const payload = () => ({ expectedVersion: require('node:crypto').createHash('sha256').update('value:'+JSON.stringify(existing)).digest('hex'), packDiscounts: { 3: 12 }, shippingCents: null, freeShippingAt: 20000, presalesEnabled: false, rewardsEnabled: true, affiliateEnabled: true });
 let role, signedIn, customerAuthorized, staffAuthorized, calls, forbiddenCalls = 0, staffGate;
 const record = (name, value) => calls.push({ name, value });
 const called = name => calls.filter(c => c.name === name);
 const forbidden = name => () => { forbiddenCalls++; throw Error('Forbidden dependency ' + name); };
-const db = {};
+const db = {prepare(query){return {bind(...args){return {first:async()=>sql.prepare(query).get(...args)||null};}};}};
 const readSettings = () => JSON.parse(sql.prepare("SELECT value FROM settings WHERE key='store'").get().value);
 class FixtureResponse extends Response {
  static json(value, options = {}) { return new FixtureResponse(JSON.stringify(value), { ...options, headers: { 'Content-Type': 'application/json', ...options.headers } }); }
@@ -61,8 +61,9 @@ const dependencies = {
  '@/lib/promo-codes': { storedPromotions: async received => { assert(customerAuthorized || staffAuthorized, 'Authorization precedes the stored promo read'); assert.equal(received, db); record('stored-promos'); return []; } },
  '@/lib/guest-checkout': { readGuest: async () => null, readGuestRecord: async () => null, saveGuest: forbidden('saveGuest'), guestOrderRecord: () => ({}), transferGuestOrders: async () => 0 },
  '@/lib/checkout': { AddressCheckError, issueQuote: async (...args) => { assert(customerAuthorized); record('issue-quote', args); if (quoteFailure) throw quoteFailure; return { quoteId, shippingOptionId: args[4]?.shippingOptionId || 'flat_standard', shipping: 1000 }; } },
- '@/lib/change-history': { auditRun: async (received, actor, query, ...values) => { assert(staffAuthorized); assert.equal(received, db); assert.equal(actor.actor, user.email); assert.equal(actor.action, 'admin-config'); assert.equal(query, settingsSql); assert.equal(values[0], 'store'); record('settings-write', JSON.parse(values[1])); return { meta: sql.prepare(query).run(...values) }; } },
+ '@/lib/change-history': { auditRun: async (received, actor, query, ...values) => { assert(staffAuthorized); assert.equal(received, db); assert.equal(actor.actor, user.email); assert.equal(actor.action, 'admin-config'); assert.equal(query, 'UPDATE settings SET value=? WHERE key=? AND value=?'); assert.equal(values[1], 'store'); record('settings-write', JSON.parse(values[0])); return { meta: sql.prepare(query).run(...values) }; } },
 };
+const helperFile=path.join(root,'lib/settings-version.ts'), helper=new Module(helperFile,module);helper.require=id=>{assert.equal(id,'./change-history');return dependencies['@/lib/change-history'];};helper._compile(ts.transpileModule(fs.readFileSync(helperFile,'utf8'),{compilerOptions:{target:9,module:1}}).outputText,helperFile);dependencies['@/lib/settings-version']=helper.exports;
 const mod = new Module(filename, module); mod.filename = filename; mod.paths = Module._nodeModulePaths(path.dirname(filename));
 mod.require = name => Object.hasOwn(dependencies, name) ? dependencies[name] : name.startsWith('@/') ? new Proxy({}, { get: (_, key) => key === '__esModule' ? true : forbidden(name + ':' + String(key)) }) : localRequire(name);
 mod._compile(ts.transpileModule(fs.readFileSync(filename, 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText, filename);

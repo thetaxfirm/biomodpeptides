@@ -56,6 +56,7 @@ Module._load = function(request, parent, isMain) {
 };
 const { products } = require('../lib/catalog.ts');
 const { quote, validateLines } = require('../lib/commerce.ts');
+const { customerPricePreview } = require('../lib/customer-price-preview.ts');
 const { deliveryQuote, issueQuote, checkout } = require('../lib/checkout.ts');
 const bpc = products.find(product => product.slug === 'bpc-157-10mg');
 const mots = products.find(product => product.slug === 'mots-c-10mg');
@@ -213,6 +214,7 @@ async function apiCookieIntegration() {
   const mixed = [bpc, mots, semax].map(product => ({ id: product.id, quantity: 1, packId: 'mixed-promo-test', packSize: 3, packKind: 'mixed' }));
   const mixedQuote = await quote(mixed, 'BIOMOD15'); reconcile(mixedQuote);
   assert.equal(mixedQuote.subtotal, 16004); assert.equal(mixedQuote.packDiscount, 1600); assert.equal(mixedQuote.promoDiscount, 2161); assert.equal(mixedQuote.total, 12243, 'Mixed pack promo rounds once across net merchandise');
+  for (const lines of [one, fixed, mixed]) { const actual = await quote(lines, 'BIOMOD15'), preview = await customerPricePreview(db, lines, 'BIOMOD15'); assert.equal(preview.total, actual.total); assert.equal(preview.packDiscount,actual.packDiscount); assert.equal(preview.items.reduce((sum,item)=>sum+item.total,0),actual.total); assert.equal(preview.attribution.kind,'built-in'); }
   const reversed = await quote([...mixed].reverse(), 'BIOMOD15'); reconcile(reversed); assert.equal(reversed.total, mixedQuote.total, 'Line order cannot change the total');
   const freePack = [{ ...fixed[0], id: semax.id, packId: 'free-mixed-fixture', packKind: 'mixed' }];
   storeConfig({ packDiscounts: { '3': 100 } });
@@ -223,6 +225,9 @@ async function apiCookieIntegration() {
   productOverride(bpc, 10000, { packPrices: { '3': 27000 }, sale: activeSale });
   const saleQuote = await quote(fixed, 'BMOD20'); reconcile(saleQuote);
   assert.equal(saleQuote.subtotal, 24000); assert.equal(saleQuote.packDiscount, 2400); assert.equal(saleQuote.promoDiscount, 4320); assert.equal(saleQuote.total, 17280, 'Promo stacks after the current sale and pack price');
+  const salePreview=await customerPricePreview(db,fixed,'BMOD20');assert.equal(salePreview.total,saleQuote.total);assert.equal(salePreview.items[0].baseUnit,10000);assert.equal(salePreview.items[0].offer,'Sale');
+  productOverride(bpc,10000,{packPrices:{'3':27000},preorder:{enabled:true,percentOff:15,ships:'Future fixture delivery'}});
+  const preorderPreview=await customerPricePreview(db,fixed,'BM10');assert.equal(preorderPreview.items[0].offer,'Preorder');assert.equal(preorderPreview.total,(await quote(fixed,'BM10')).total);
   productOverride(bpc, 10000, { packPrices: { '3': 27000 } });
   sql.prepare('INSERT INTO campaigns(id,data,active) VALUES(?,?,1)').run('promo-presale', JSON.stringify({ starts: new Date(clock - 86400000).toISOString(), ends: new Date(clock + 86400000).toISOString(), maxPerCustomer: 10, productIds: [bpc.id] }));
   const presale = await quote([{ ...one[0], presaleId: 'promo-presale' }], 'BM10'); reconcile(presale); assert.equal(presale.total, 9000, 'Presale merchandise is not silently excluded');

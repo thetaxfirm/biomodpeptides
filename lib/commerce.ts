@@ -80,7 +80,7 @@ export async function quote(lines: CartLine[], promoCode?: unknown) {
             active: number;
         }>('SELECT data,active FROM campaigns WHERE id=?', lines[0].presaleId);
         const c = parse<Record<string, any>>(row?.data, {});
-        if (!cfg.presalesEnabled || !row?.active || !Number.isFinite(Date.parse(c.starts)) || !Number.isFinite(Date.parse(c.ends)) || Date.now() < Date.parse(c.starts) || Date.now() > Date.parse(c.ends))
+        if (!cfg.presalesEnabled || !row?.active || !Number.isFinite(Date.parse(c.starts)) || !Number.isFinite(Date.parse(c.ends)) || Date.now() < Date.parse(c.starts) || Date.now() >= Date.parse(c.ends))
             throw new Error('This presale is not open.');
         if (lines.reduce((s, l) => s + l.quantity, 0) > (c.maxPerCustomer || 1))
             throw new Error('This presale exceeds the customer quantity limit.');

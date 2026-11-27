@@ -1,4 +1,5 @@
 'use client';
+import { AdminPricePreview } from './admin-price-preview';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import type { PromoOwner } from '@/lib/promo-ownership';
@@ -74,5 +75,5 @@ export function AdminPromoCodes() {
                 {owner ? <a href={owner.href}>Manage {owner.kind === 'business' ? 'business' : 'affiliate terms'}</a> : canEdit ? <button type="button" className="text-button" disabled={working || Boolean(editing)} onClick={() => edit(row)}>Edit</button> : <span>Owner-managed</span>}
             </li>;
         })}</ul>}
-    </section>;
+    <AdminPricePreview/></section>;
 }

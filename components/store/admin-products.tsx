@@ -1,5 +1,6 @@
 'use client';
 import { currentDispatchEstimate } from '@/lib/sales';
+import { AdminPricePreview } from './admin-price-preview';
 import { hasCoa } from '@/lib/coa-shipping';
 
 import { useEffect, useState, type FormEvent } from 'react';
@@ -110,6 +111,7 @@ export function AdminProducts(props: Props) {
             </table></div>
         </section>)}
         {!shownGroups.length && <p className={styles.empty} role="status">{issue ? 'No products match this view. Choose the view again to clear it.' : 'No products match this search and format. Try another name or choose All products.'}</p>}
+        <AdminPricePreview products={products}/>
         <p className={styles.footnote}>Base prices are before preorder, sale, pack and promo discounts. Existing orders keep their saved prices and fulfillment terms.</p>
     </section>;
 }

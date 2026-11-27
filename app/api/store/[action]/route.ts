@@ -1,3 +1,4 @@
+import { listPresaleCampaigns, savePresaleCampaign } from '@/lib/presale-campaigns';
 import { settingsSnapshot, saveSettingsSnapshot, SettingsConflict } from '@/lib/settings-version';
 import { queryOrderPage } from '@/lib/order-queue-db';
 import { fulfillmentBlock, fulfillmentEligibleSql } from '@/lib/fulfillment-eligibility';
@@ -305,7 +306,7 @@ export async function GET(req: NextRequest, { params }: {
                     snapshot.requests=[];snapshot.requestReplies={};
                     if(allowed('store:write')) {snapshot.coaAutomation=await coaAutomationStatus(runtime(),[]);snapshot.checkoutRecovery=await recoveryAdminStatus(runtime());}
                 }
-                if(section==='presales') snapshot.campaigns=(await all<{data:string}>('SELECT * FROM campaigns')).map<Record<string,any>>(o=>{const {data,...row}=o;return {...row,...parse<Record<string,any>>(data,{})};}).filter(c=>currentSelection(c.productIds)).map(c=>presentationData(c));
+                if(section==='presales') snapshot.campaigns=(await listPresaleCampaigns(database())).map(c=>presentationData(c));
                 if(section==='search') snapshot.searchPublishing=searchReport(seoConfig(runtime()));
                 if(section==='team') snapshot.team={...await staffDirectory(runtime()),siteUpdateAccess:await siteUpdateAccessList(database())};
                 return j(snapshot);
@@ -315,9 +316,7 @@ export async function GET(req: NextRequest, { params }: {
             const adminProducts = await catalog(false, allowed('catalog:write'));
             return j({ role, settingsVersion: settings.version, permissions: [...permissionsFor(role), ...(siteRequests ? ['site:request'] : [])], batchRecords: allowed('catalog:write') ? await adminBatchRecords(database(), adminProducts) : [], checkoutRecovery: allowed('orders:read') ? await recoveryAdminStatus(runtime()) : null, searchPublishing: allowed('reports:read') ? searchReport(seoConfig(runtime())) : null, config: await config(), products: adminProducts, orders: allowed('orders:read') ? (await all<{
                     data: string;
-                }>('SELECT id,owner,status,total,data,created FROM orders ORDER BY created DESC LIMIT 200')).map(o => ({ ...o, data: adminOrderView(parse(o.data, {})) })) : [], requests: requests.map(o => ({ ...o, data: parse(o.data, {}) })), requestReplies: allowed('requests:write') ? await summarizeRequestReplies(runtime(), requests.map(r => r.id)) : {}, coaAutomation: allowed('requests:write') ? await coaAutomationStatus(runtime(), requests.map(r => r.id)) : null, campaigns: allowed('store:write') ? (await all<{
-                    data: string;
-                }>('SELECT * FROM campaigns')).map<Record<string, any>>(o => { const {data, ...row}=o; return { ...row, ...parse<Record<string, any>>(data, {}) }; }).filter(c=>currentSelection(c.productIds)).map(c=>presentationData(c)) : [], team: allowed('team:manage') ? { ...await staffDirectory(runtime()), siteUpdateAccess: await siteUpdateAccessList(database()) } : null });
+                }>('SELECT id,owner,status,total,data,created FROM orders ORDER BY created DESC LIMIT 200')).map(o => ({ ...o, data: adminOrderView(parse(o.data, {})) })) : [], requests: requests.map(o => ({ ...o, data: parse(o.data, {}) })), requestReplies: allowed('requests:write') ? await summarizeRequestReplies(runtime(), requests.map(r => r.id)) : {}, coaAutomation: allowed('requests:write') ? await coaAutomationStatus(runtime(), requests.map(r => r.id)) : null, campaigns: allowed('store:write') ? (await listPresaleCampaigns(database())).map(c=>presentationData(c)) : [], team: allowed('team:manage') ? { ...await staffDirectory(runtime()), siteUpdateAccess: await siteUpdateAccessList(database()) } : null });
         }
         return j({ error: 'Not found.' }, 404);
     }
@@ -851,15 +850,7 @@ export async function POST(req: NextRequest, { params }: {
                 ]); } catch { throw new Error(lotChanged ? 'The lot cannot change while stock is reserved or paid orders await fulfillment. Complete those orders first, then refresh. No changes were saved.' : 'The product or reserved stock changed. Refresh administration and review the latest values. No changes were saved.'); }
                 return j({ message: 'Product updated.' });
             }
-            if (action === 'admin-campaign') {
-                const data = z.object({ title: z.string().min(2).max(100), starts: z.string().datetime(), ends: z.string().datetime(), ships: z.string().min(2).max(100), productIds: z.array(z.number().int()).min(1), maxPerCustomer: z.number().int().min(1).max(100) }).parse(b);
-                if (!currentSelection(data.productIds)) throw new Error('Choose products from the current catalog.');
-                if (Date.parse(data.ends) <= Date.parse(data.starts))
-                    throw new Error('Closing date must follow opening date.');
-                const id = typeof b.id === 'string' ? b.id : uid();
-                await run('INSERT INTO campaigns(id,data,active) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data,active=excluded.active', id, JSON.stringify(data), b.active ? 1 : 0);
-                return j({ message: 'Presale saved.' });
-            }
+            if (action === 'admin-campaign') return j(await savePresaleCampaign(withAuditDb(database(), auditActor), b, (await catalog(false)).map(p => p.id)));
             if (action === 'admin-request') {
                 const id = z.string().uuid().parse(b.id);
                 const status = z.enum(['new', 'in_progress', 'resolved', 'spam', 'reviewed', 'deleted']).parse(b.status);
@@ -943,6 +934,6 @@ export async function POST(req: NextRequest, { params }: {
     }
     catch (e) {
         const message = e instanceof z.ZodError ? 'Please check the required fields and their formats.' : (e as Error).message;
-        return j({ error: message }, e instanceof SettingsConflict ? 409 : 400);
+        return j({ error: message }, e instanceof Error && 'status' in e && e.status === 409 ? 409 : 400);
     }
 }
