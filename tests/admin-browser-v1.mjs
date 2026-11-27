@@ -24,13 +24,14 @@ const origin = 'https://trybiomod.com';
 const owner = '10000000-0000-4000-8000-000000000001', session = '10000000-0000-4000-8000-000000000002';
 const buyer = '10000000-0000-4000-8000-000000000003', order = '10000000-0000-4000-8000-000000000004', request = '10000000-0000-4000-8000-000000000005';
 const preorder = '20000000-0000-4000-8000-000000000006';
+const reportDates = { from: '2026-11-01', to: '2026-11-01', timeZone: 'America/New_York', start: Date.parse('2026-11-01T04:00:00Z'), end: Date.parse('2026-11-02T05:00:00Z') };
 const email = 'admin-browser-fixture@example.invalid';
 const providerCalls = [], browserBlocked = [], pageErrors = [], consoleErrors = [], consoleWarnings = [], apiFailures = [], results = [];
 const mf = new Miniflare({ name: 'isolated-admin-browser', cf: false,
     modules: [config.main, ...files.filter(n => n !== config.main)].map(n => ({ type: 'ESModule', path: path.join(built, n) })), modulesRoot: built,
     compatibilityDate: config.compatibility_date, compatibilityFlags: config.compatibility_flags,
     assets: { directory: path.join(root, 'dist/client'), binding: 'ASSETS', routerConfig: { has_user_worker: true, invoke_user_worker_ahead_of_assets: false } },
-    bindings: { SUPABASE_URL: 'https://auth.example.invalid', SUPABASE_ANON_KEY: 'fixture-only', STORE_ADMIN_EMAILS: email },
+    bindings: { SUPABASE_URL: 'https://auth.example.invalid', SUPABASE_ANON_KEY: 'fixture-only', STORE_ADMIN_EMAILS: email, TRAFFIC_MEASUREMENT_ENABLED: 'false', TRAFFIC_MEASUREMENT_STARTED_AT: '2026-10-01T00:00:00Z', SHOPPING_MEASUREMENT_ENABLED: 'false', SHOPPING_MEASUREMENT_STARTED_AT: '2026-10-01T00:00:00Z' },
     d1Databases: { DB: 'isolated-browser' }, d1Persist: path.join(temporary, 'd1'),
     outboundService: async req => {
         providerCalls.push({ url: req.url, method: req.method });
@@ -53,6 +54,20 @@ try {
     await db.prepare('INSERT INTO orders(id,owner,request_key,status,total,data,created,updated) VALUES(?,?,?,?,?,?,?,?)').bind(order, buyer, 'browser-fixture-order', 'paid', 10000, JSON.stringify(orderData), Date.now(), Date.now()).run();
     const preorderData = { ...orderData, items: [{ ...orderData.items[0], product: { ...orderData.items[0].product, activePreorder: { percentOff: 15, ships: 'early November 2026', basePrice: 10000 } } }] };
     await db.prepare('INSERT INTO orders(id,owner,request_key,status,total,data,created,updated) VALUES(?,?,?,?,?,?,?,?)').bind(preorder, buyer, 'browser-fixture-preorder', 'paid', 10000, JSON.stringify(preorderData), Date.now(), Date.now()).run();
+    // Four synthetic orders prove inclusive start and exclusive end on New York's 25-hour fall-back date.
+    for (const [index, created] of [reportDates.start - 1, reportDates.start, reportDates.end - 1, reportDates.end].entries()) {
+        const id = '30000000-0000-4000-8000-' + String(index + 1).padStart(12, '0'), total = (index + 1) * 11000;
+        const data = { ...orderData, total, subtotal: total, tax: 0, shipping: 0, paidAt: created, promo: { code: 'BM10', savings: 1000 }, paymentVerified: { state: 'settled', settledAt: created } };
+        await db.prepare('INSERT INTO orders(id,owner,request_key,status,total,payment_ref,notification_id,data,created,updated) VALUES(?,?,?,?,?,?,?,?,?,?)').bind(id, buyer, 'browser-report-' + index, 'paid', total, 'fixture-payment-' + index, 'fixture-verification-' + index, JSON.stringify(data), created, created).run();
+    }
+    for (const kind of ['traffic','shopping']) await db.prepare('INSERT INTO metrics_time_coverage(kind,started_at) VALUES(?,?)').bind(kind, reportDates.start - 86400000).run();
+    for (const [at, count] of [[reportDates.start, 3], [reportDates.end - 60000, 5], [reportDates.end, 7]]) {
+        const date = new Date(at).toISOString().slice(0,10);
+        await db.prepare("INSERT INTO traffic_daily VALUES(?,'home','search',?) ON CONFLICT(day,page_group,source_group) DO UPDATE SET event_count=event_count+excluded.event_count").bind(date,count).run();
+        await db.prepare("INSERT INTO shopping_daily VALUES(?,'cart_view',?) ON CONFLICT(day,stage) DO UPDATE SET event_count=event_count+excluded.event_count").bind(date,count).run();
+        await db.prepare("INSERT INTO traffic_minute VALUES(?,'home','search',?)").bind(at,count).run();
+        await db.prepare("INSERT INTO shopping_minute VALUES(?,'cart_view',?)").bind(at,count).run();
+    }
     await db.prepare('INSERT INTO requests(id,owner,kind,status,data,created) VALUES(?,?,?,?,?,?)').bind(request, buyer, 'contact', 'new', JSON.stringify({ name: 'Synthetic Browser Customer', email: 'buyer-browser-fixture@example.invalid', message: 'Isolated browser test: please help with the shipping estimate.' }), Date.now()).run();
     const store = { packDiscounts: { 1: 0, 3: 10, 5: 15, 10: 20 }, shippingCents: 700, freeShippingAt: 20000, presalesEnabled: false, rewardsEnabled: false, affiliateEnabled: false, shippingOptions: { standardEnabled: true, expeditedEnabled: true, overnightEnabled: false, freeStandardEnabled: true, standardHandlingCents: 0, expeditedHandlingCents: 0, overnightHandlingCents: 1000, carriers: ['USPS','UPS'] } };
     await db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').bind('store', JSON.stringify(store)).run();
@@ -91,6 +106,51 @@ try {
         await page.getByRole('heading', { name: 'TryBiomod Administration', exact: true }).waitFor();
         if (marker) await page.getByRole('heading', { name: marker, exact: true }).waitFor();
         await page.getByRole('button', { name: 'Refresh administration', exact: true }).waitFor();
+    }
+    const reportSection = title => page.getByRole('region', { name: title, exact: true });
+    const responseFor = (pathname, custom = false) => page.waitForResponse(response => {
+        const url = new URL(response.url());
+        return url.pathname === pathname && url.searchParams.get('timeZone') === reportDates.timeZone
+            && (!custom || url.searchParams.get('from') === reportDates.from && url.searchParams.get('to') === reportDates.to && !url.searchParams.has('days'));
+    });
+    async function customDraft(section, label = 'Reporting period') {
+        await section.getByLabel(label, { exact: true }).selectOption('custom');
+        await section.getByLabel('First date', { exact: true }).fill(reportDates.from);
+        await section.getByLabel('Last date (inclusive)', { exact: true }).fill(reportDates.to);
+        await section.getByLabel('Reporting time zone', { exact: true }).fill(reportDates.timeZone);
+    }
+    async function customSales() {
+        await admin('diagnostics', 'Sales diagnostics');
+        const section = reportSection('Sales diagnostics'); await customDraft(section);
+        const sales = responseFor('/api/store/admin-diagnostics', true), finance = responseFor('/api/admin/finance', true);
+        await section.getByRole('button', { name: 'Apply dates and time zone', exact: true }).click();
+        const [a,b] = await Promise.all([sales,finance]); assert.equal(a.status(),200); assert.equal(b.status(),200);
+        await section.getByText(/Reporting dates: 2026-11-01 through 2026-11-01 \(America\/New_York\)/).waitFor();
+        await section.getByRole('button', { name: 'Download financial CSV', exact: true }).waitFor();
+        return { section, sales: await a.json(), finance: await b.json() };
+    }
+    async function downloadedCsv(button) {
+        const pending = page.waitForEvent('download'); await button.click(); const download = await pending;
+        assert.equal(await download.failure(),null); const stream = await download.createReadStream(); assert(stream);
+        let csv = ''; for await (const chunk of stream) csv += chunk.toString('utf8');
+        const rows = csv.replace(/^\uFEFF/,'').trim().split(/\r?\n/).map(line => [...line.matchAll(/"((?:[^"]|"")*)"/g)].map(match => match[1].replaceAll('""','"')));
+        return { csv, rows, filename: download.suggestedFilename() };
+    }
+    async function reportControlsFit(section) {
+        await section.evaluate(async el => { await new Promise(requestAnimationFrame); await Promise.all(el.getAnimations({subtree:true}).filter(animation=>animation.effect?.getComputedTiming().iterations!==Infinity).map(animation=>animation.finished.catch(()=>{}))); });
+        const dimensions = await section.evaluate(el => ({ body: document.body.scrollWidth, viewport: innerWidth,
+            controls: [...el.querySelectorAll('input,select,button')].filter(control => control.getBoundingClientRect().height && getComputedStyle(control).visibility !== 'hidden').map(control => {
+                const r=control.getBoundingClientRect(),style=getComputedStyle(control);
+                let background=style.backgroundColor,ancestor=control;
+                while((background==='transparent'||background==='rgba(0, 0, 0, 0)')&&ancestor.parentElement){ancestor=ancestor.parentElement;background=getComputedStyle(ancestor).backgroundColor;}
+                const luminance=color=>{const rgb=color.match(/[\d.]+/g)?.slice(0,3).map(Number);if(!rgb||rgb.length<3)return null;const linear=rgb.map(value=>{const s=value/255;return s<=0.04045?s/12.92:Math.pow((s+0.055)/1.055,2.4)});return linear[0]*0.2126+linear[1]*0.7152+linear[2]*0.0722;};
+                const ink=luminance(style.color),surface=luminance(background),contrast=ink===null||surface===null?null:(Math.max(ink,surface)+0.05)/(Math.min(ink,surface)+0.05);
+                return { tag:control.tagName, text:control.labels?.[0]?.textContent || control.textContent, left:r.left,right:r.right,width:r.width,height:r.height,color:style.color,background,contrast };
+            }) }));
+        assert(dimensions.body <= dimensions.viewport + 1, 'Report must not widen the page: ' + JSON.stringify(dimensions));
+        assert(dimensions.controls.every(control => control.left >= -1 && control.right <= dimensions.viewport + 1), 'Native report controls must fit without clipping: ' + JSON.stringify(dimensions));
+        assert(dimensions.controls.filter(control => control.tag === 'INPUT' || control.tag === 'SELECT').every(control => control.height >= 40), 'Report inputs remain touchable');
+        assert(dimensions.controls.filter(control=>control.tag==='INPUT'||control.tag==='SELECT').every(control=>control.contrast!==null&&control.contrast>=4.5), 'Report input text needs readable contrast: '+JSON.stringify(dimensions));
     }
     const sections = [['overview','Today'],['orders','Orders'],['requests','Customer requests'],['products','Products'],['affiliates',null],['restaurants',null],['contacts',null],['promos','Promo codes'],['presales','Presale campaigns'],['rewards','Reward ledger'],['settings','Mix-and-match discounts'],['team',null],['updates',null],['diagnostics',null],['traffic',null],['search',null],['changes',null]];
     for (const [tab, marker] of sections) await step('desktop section ' + tab, async () => {
@@ -205,6 +265,48 @@ try {
         await page.goto(origin+'/cart?measurement=off',{waitUntil:'networkidle'}); await page.getByRole('heading',{name:'Your Cart',exact:true}).waitFor(); await shot('public-cart');
         await page.goto(origin+'/checkout?measurement=off',{waitUntil:'networkidle'}); await page.getByRole('heading',{name:/^Checkout/}).waitFor(); await shot('public-checkout');
     });
+    await step('report custom New York dates match Sales Finance and CSV', async () => {
+        const { section, sales, finance } = await customSales();
+        assert.deepEqual(sales.window, finance.window); assert.equal(sales.window.start, reportDates.start); assert.equal(sales.window.end, reportDates.end); assert.equal(sales.window.end-sales.window.start,25*3600000);
+        assert.equal(sales.orders.reduce((n,row)=>n+row.orders,0),2); assert.equal(finance.liveOrders,2); assert.equal(finance.recordedPaymentOrders,2); assert.equal(finance.amounts.gross.cents,55000);
+        assert(sales.orders.every(row=>row.day===reportDates.from&&!row.dayUtc));
+        const salesFile=await downloadedCsv(section.getByRole('button',{name:'Download CSV',exact:true}));
+        const financeFile=await downloadedCsv(section.getByRole('button',{name:'Download financial CSV',exact:true}));
+        for(const file of [salesFile,financeFile])for(const value of ['America/New_York','2026-11-01','2026-11-01T04:00:00.000Z','2026-11-02T05:00:00.000Z'])assert(file.csv.includes(value),'CSV must identify '+value);
+        const fields=salesFile.rows[0],orderRows=salesFile.rows.slice(1).filter(row=>row[0]==='orders');
+        assert.equal(orderRows.length,1);assert.equal(orderRows[0][fields.indexOf('day_utc')],'');assert.equal(orderRows[0][fields.indexOf('day_in_report_timezone')],reportDates.from);assert.equal(orderRows[0][fields.indexOf('gross_cents')],'55000');
+        assert.equal(financeFile.filename,'financial-records-2026-11-01-to-2026-11-01.csv');await shot('report-sales-custom');
+    });
+    await step('report invalid custom range preserves applied totals', async () => {
+        const { section }=await customSales();let requests=0;
+        const countRequests=req=>{if(['/api/store/admin-diagnostics','/api/admin/finance'].includes(new URL(req.url()).pathname))requests++;};page.on('request',countRequests);
+        try{
+            await section.getByLabel('First date',{exact:true}).fill('2026-11-03');await section.getByLabel('Last date (inclusive)',{exact:true}).fill('2026-11-01');
+            await section.getByRole('button',{name:'Apply dates and time zone',exact:true}).click();await section.getByRole('alert').filter({hasText:/ordered date range/}).waitFor();
+            await page.waitForLoadState('networkidle');assert.equal(requests,0,'Invalid draft cannot request another report');
+            await section.getByText(/Reporting dates: 2026-11-01 through 2026-11-01 \(America\/New_York\)/).waitFor();assert(!(await section.getByRole('button',{name:'Download CSV',exact:true}).isDisabled()));
+            const csv=await downloadedCsv(section.getByRole('button',{name:'Download CSV',exact:true}));assert(csv.csv.includes('2026-11-01T04:00:00.000Z'));await shot('report-invalid-draft');
+        }finally{page.off('request',countRequests);}
+    });
+    await step('report time zone persists across Today Promos Traffic and Shopping', async () => {
+        await customSales();assert.equal(await page.evaluate(()=>localStorage.getItem('biomod-report-time-zone')),'America/New_York');
+        for(const [tab,title,label,pathname] of [['overview','Today','Sales comparison period','/api/store/admin-overview'],['promos','Affiliate & promo code totals','Reporting period','/api/store/admin-promos']]){
+            const response=responseFor(pathname);await admin(tab);assert.equal((await response).status(),200);
+            const section=reportSection(title);assert.equal(await section.getByLabel('Reporting time zone',{exact:true}).inputValue(),'America/New_York');
+            await customDraft(section,label);const custom=responseFor(pathname,true);await section.getByRole('button',{name:'Apply dates and time zone',exact:true}).click();assert.equal((await custom).status(),200);await page.waitForLoadState('networkidle');
+        }
+        const traffic=responseFor('/api/metrics/report'),shopping=responseFor('/api/metrics/shopping-report');await admin('traffic','Traffic diagnostics');
+        for(const response of await Promise.all([traffic,shopping])){assert.equal(response.status(),200);const value=await response.json();assert.equal(value.window.timeZone,'America/New_York');assert.equal(value.window.aggregation,'minute');}
+        assert.equal(await reportSection('Traffic diagnostics').getByLabel('Reporting time zone',{exact:true}).inputValue(),'America/New_York');assert.equal(await reportSection('Shopping stages').getByLabel('Reporting time zone',{exact:true}).inputValue(),'America/New_York');await shot('report-zone-persistence');
+    });
+    await step('report Traffic and Shopping custom dates use covered local buckets', async () => {
+        await admin('traffic','Traffic diagnostics');
+        for(const [title,label,pathname] of [['Traffic diagnostics','Traffic reporting period','/api/metrics/report'],['Shopping stages','Shopping reporting period','/api/metrics/shopping-report']]){
+            const section=reportSection(title);await customDraft(section,label);const pending=responseFor(pathname,true);await section.getByRole('button',{name:'Apply dates and time zone',exact:true}).click();const response=await pending;assert.equal(response.status(),200);const value=await response.json();
+            assert.equal(value.totals.events,8);assert.equal(value.completedDays.length,1);assert.equal(value.completedDays[0].date,'2026-11-01');assert.equal(value.partialToday,null);assert.equal(value.window.startInstant,reportDates.start);assert.equal(value.window.endInstant,reportDates.end);
+            await section.getByRole('heading',{name:'Complete America/New_York days',exact:true}).waitFor();await section.getByText(/Earlier local dates are unavailable, not zero activity/).waitFor();
+        }await shot('report-traffic-custom');
+    });
     await page.setViewportSize({width:390,height:844});
     for(const tab of ['overview','products','requests','settings','promos']) await step('mobile layout '+tab, async()=>{
         await admin(tab); await page.waitForLoadState('networkidle');
@@ -229,6 +331,17 @@ try {
         await admin('settings','Mix-and-match discounts');await page.getByRole('switch',{name:'Night mode',exact:true}).click();assert.equal(await page.locator('html').getAttribute('data-theme'),'dark');
         await page.getByRole('tab',{name:'Settings',exact:true}).evaluate(async el=>{await new Promise(requestAnimationFrame);await Promise.all(el.getAnimations({subtree:true}).map(animation=>animation.finished.catch(()=>{})));});
         assert(await page.evaluate(()=>document.body.scrollWidth<=innerWidth+1));await shot('mobile-night-settings');await page.getByRole('switch',{name:'Night mode',exact:true}).click();await admin('promos','Promo codes');
+    });
+    await step('mobile custom report forms fit in daylight and night mode',async()=>{
+        await customSales();let section=reportSection('Sales diagnostics');await reportControlsFit(section);await shot('mobile-report-sales');
+        await page.getByRole('switch',{name:'Night mode',exact:true}).click();assert.equal(await page.locator('html').getAttribute('data-theme'),'dark');
+        try{
+            await reportControlsFit(section);await shot('mobile-night-report-sales');
+            for(const [tab,title,label] of [['overview','Today','Sales comparison period'],['promos','Affiliate & promo code totals','Reporting period'],['traffic','Traffic diagnostics','Traffic reporting period']]){
+                await admin(tab);section=reportSection(title);await customDraft(section,label);await reportControlsFit(section);await shot('mobile-night-report-'+tab);
+            }
+            section=reportSection('Shopping stages');await customDraft(section,'Shopping reporting period');await reportControlsFit(section);await shot('mobile-night-report-shopping');
+        }finally{if(await page.locator('html').getAttribute('data-theme')==='dark')await page.getByRole('switch',{name:'Night mode',exact:true}).click();}
     });
     await step('mobile keyboard navigation',async()=>{await admin('promos','Promo codes');await page.getByRole('tab',{name:'Promo codes',exact:true}).focus();await page.keyboard.press('Tab');assert(await page.evaluate(()=>document.activeElement?.tagName!=='BODY'),'Keyboard focus reaches a real control');});
     assert(providerCalls.every(c=>c.method==='GET'&&c.url==='https://auth.example.invalid/auth/v1/user'),'Only the isolated auth provider was called');
