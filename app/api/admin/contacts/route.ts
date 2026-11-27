@@ -6,6 +6,7 @@ import { csv } from '@/lib/affiliate-onboarding';
 import { contactsForAdmin } from '@/lib/crm-capture';
 import { siteLabels } from '@/lib/shared-crm';
 import { textSignups } from '@/lib/text-offer';
+import { emailSignups } from '@/lib/email-offer';
 export const dynamic = 'force-dynamic';
 const headers = { 'Cache-Control': 'no-store, private' };
 /** The contact list for staff who read reports. CSV for import into a mailing or texting tool. */
@@ -18,6 +19,11 @@ export async function GET(req: NextRequest) {
    return new NextResponse(csv([['Phone', 'Signed up', 'Code delivery', 'Texts sent'], ...(await textSignups(database())).map(t => [t.phone, new Date(t.signedUp).toISOString().slice(0, 10), t.delivery, t.sends])]),
     { headers: { ...headers, 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="Biomod text sign-ups ${day} v1.csv"` } });
   }
+  if (req.nextUrl.searchParams.get('format') === 'email-csv') {
+   const day = new Date().toISOString().slice(0, 10);
+   return new NextResponse(csv([['Email', 'Signed up', 'Page', 'Subscribed'], ...(await emailSignups(database())).map(e => [e.email, new Date(e.signedUp).toISOString().slice(0, 10), e.page, e.unsubscribed ? 'No (unsubscribed ' + new Date(e.unsubscribed).toISOString().slice(0, 10) + ')' : 'Yes'])]),
+    { headers: { ...headers, 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="Biomod email sign-ups ${day} v1.csv"` } });
+  }
   const { contacts, shared } = await contactsForAdmin(await contactList(database()));
   if (req.nextUrl.searchParams.get('format') === 'csv') {
    const day = new Date().toISOString().slice(0, 10);
@@ -25,6 +31,7 @@ export async function GET(req: NextRequest) {
     { headers: { ...headers, 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="Biomod contacts ${day} v1.csv"` } });
   }
   const texts = await textSignups(database()).catch(() => []);
-  return NextResponse.json({ contacts, shared, total: contacts.length, withPhone: contacts.filter(c => c.phones.length).length, textSignups: texts }, { headers });
+  const emails = await emailSignups(database()).catch(() => []);
+  return NextResponse.json({ contacts, shared, total: contacts.length, withPhone: contacts.filter(c => c.phones.length).length, textSignups: texts, emailSignups: emails }, { headers });
  } catch { return NextResponse.json({ error: 'Contacts could not be loaded.' }, { status: 500, headers }); }
 }

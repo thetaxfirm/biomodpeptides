@@ -1,0 +1,59 @@
+/* Email sign-up panel. Same type, plum ink, cream-on-plum action and 4–6px corners as the header. */
+.panel {
+  width: min(400px, calc(100vw - 32px)); max-width: none; margin: auto; padding: 0;
+  border: 1px solid var(--bm-line, #dedede); border-radius: 8px; background: #fff; color: var(--bm-ink, #2b1030);
+  box-shadow: 0 1px 2px rgba(43, 16, 48, 0.06), 0 18px 40px -18px rgba(43, 16, 48, 0.35);
+  font-family: "Helvetica Neue", Arial, sans-serif;
+  animation: rise 220ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.panel::backdrop { background: rgba(43, 16, 48, 0.22); }
+.inner { position: relative; padding: 28px 28px 22px; }
+.close {
+  position: absolute; top: 6px; right: 6px; display: grid; place-items: center; width: 44px; height: 44px;
+  border: 0; border-radius: 6px; background: transparent; color: var(--bm-secondary, #5c5c5c); cursor: pointer;
+}
+.close:hover { color: var(--bm-ink, #2b1030); background: var(--bm-surface, #fafafa); }
+.close:focus-visible, .action:focus-visible, .form input:focus-visible { outline: 2px solid var(--bm-ink, #2b1030); outline-offset: 2px; }
+.title { margin: 0 36px 6px 0; font-size: 22px; line-height: 1.25; font-weight: 700; letter-spacing: -0.01em; }
+.lead { margin: 0 0 18px; font-size: 15px; line-height: 1.5; color: var(--bm-secondary, #5c5c5c); }
+.form { display: flex; gap: 8px; }
+.form input[type=email] {
+  flex: 1; min-width: 0; height: 44px; padding: 0 12px; border: 1px solid var(--bm-line, #dedede); border-radius: 4px;
+  background: var(--bm-surface, #fafafa); color: #141414; font: 16px "Helvetica Neue", Arial, sans-serif;
+}
+.form input[type=email]:focus { border-color: var(--bm-ink, #2b1030); background: #fff; }
+.action {
+  flex-shrink: 0; height: 44px; padding: 0 18px; border: 0; border-radius: 6px; background: var(--bm-action, #2b1030);
+  color: #fbf1ea; font: 650 14px "Helvetica Neue", Arial, sans-serif; cursor: pointer; transition: background-color 120ms ease;
+}
+.action:hover:not(:disabled) { background: var(--bm-hover, #220c2a); }
+.action:disabled { opacity: 0.7; cursor: progress; }
+.error { margin: 8px 0 0; font-size: 13px; color: #963725; }
+.terms { margin: 12px 0 0; font-size: 11.5px; line-height: 1.45; color: #8a8290; }
+.code { color: #b8561a; font-weight: 700; letter-spacing: 0.04em; }
+.note { margin: -8px 0 18px; font-size: 14px; line-height: 1.5; color: var(--bm-secondary, #5c5c5c); }
+.hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.trap { position: absolute; left: -10000px; width: 1px; height: 1px; opacity: 0; }
+
+/* Phones: a sheet along the bottom edge that leaves the page usable above it. */
+@media (max-width: 640px) {
+  .panel {
+    position: fixed; inset: auto 0 0 0; width: 100%; margin: 0; z-index: 60;
+    border-width: 1px 0 0; border-radius: 12px 12px 0 0;
+    box-shadow: 0 -8px 24px -16px rgba(43, 16, 48, 0.35);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .inner { padding: 22px 16px 18px; }
+  .title { font-size: 20px; }
+  .lead { margin-bottom: 14px; }
+}
+@media (max-width: 360px) { .form { flex-wrap: wrap; } .action { width: 100%; } }
+@keyframes rise { from { transform: translateY(10px); } to { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .panel { animation: none; } }
+
+:global(html[data-theme='dark']) .panel { background: #1d1420; border-color: #3a2c3f; color: #fff; }
+:global(html[data-theme='dark']) .lead, :global(html[data-theme='dark']) .note { color: #c9c2cc; }
+:global(html[data-theme='dark']) .terms { color: #9d94a1; }
+:global(html[data-theme='dark']) .form input[type=email] { background: #261b2a; border-color: #3a2c3f; color: #fff; }
+:global(html[data-theme='dark']) .close:hover { background: #261b2a; color: #fff; }
+:global(html[data-theme='dark']) .code { color: #e08a4f; }

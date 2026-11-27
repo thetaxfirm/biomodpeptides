@@ -17,6 +17,7 @@ import { coaAutomationStatus, enqueueCoaRequest, enqueueRequestAlert, processCoa
 import { promoAnalytics } from '@/lib/promo-analytics';
 import { PROMO_COOKIE, promotion, type PromoRecord } from '@/lib/promotions';
 import { textOfferSignup } from '@/lib/text-offer';
+import { emailOfferSignup } from '@/lib/email-offer';
 import { storedPromotions } from '@/lib/promo-codes';
 import inventorySql from '@/lib/inventory-statements.json';
 import { AUTH_RETURN_COOKIE, AUTH_RETURN_MAX_AGE, safeAuthReturn, clearAuthSessionCookies, ANONYMOUS_SESSION_COOKIE, needsAnonymousSession, needsAccountSession } from '@/lib/auth-return';
@@ -507,6 +508,14 @@ export async function POST(req: NextRequest, { params }: {
             }
         }
         // Text sign-up offer (owner, Nov 14 2026): a phone number and one button. Five tries per visitor per ten minutes.
+        // Email sign-up panel (owner, Nov 27 2026): the code is shown and applied unless the cart already carries one.
+        if (action === 'email-offer') {
+            await rateLimit('email-offer:' + (req.headers.get('cf-connecting-ip') || s.id), 5);
+            const result = await emailOfferSignup(database(), { email: b.email, consent: b.consent, path: b.path, trap: b.company }, timestamp(), crypto.randomUUID());
+            const applied = !await currentPromoCode();
+            if (applied) (await cookies()).set(PROMO_COOKIE, result.code, { httpOnly: true, secure, sameSite: 'lax', path: '/', maxAge: 2592000 });
+            return j({ code: result.code, percentOff: result.percentOff, applied });
+        }
         if (action === 'text-offer') {
             await rateLimit('text-offer-strict:' + (req.headers.get('cf-connecting-ip') || s.id), 5);
             const result = await textOfferSignup(database(), runtime() as unknown as Record<string, string | undefined>, { phone: b.phone, consent: b.consent }, req.nextUrl.origin, timestamp(), uid());
