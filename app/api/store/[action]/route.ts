@@ -49,6 +49,7 @@ import { assignableRoles, can, permissionsFor, tabPermission, type StaffPermissi
 import { saveStaffMember, staffDirectory } from '@/lib/staff-store';
 import { hasSiteUpdateAccess, setSiteUpdateAccess, siteUpdateAccessList, SiteUpdateError } from '@/lib/site-updates';
 import { coaBlockedItems, coaBlockMessage, noCoaProducts } from '@/lib/coa-shipping';
+import { readAdminOverviewOrderSummary } from '@/lib/admin-overview-db';
 import { adminOverview } from '@/lib/admin-overview';
 export const dynamic = 'force-dynamic';
 // What each admin write needs. An admin action missing here requires the owner.
@@ -266,9 +267,9 @@ export async function GET(req: NextRequest, { params }: {
             // "Today" home: work waiting now, sales and setup gaps. Each section is limited to what the role may see.
             const { role } = await requireStaff('orders:read');
             const allowed = (permission: StaffPermission) => can(role, permission);
-            const rows = (await all<{ id: string; status: string; total: number; data: string; created: number; payment_ref: string | null; notification_id: string | null }>('SELECT id,status,total,data,created,payment_ref,notification_id FROM orders ORDER BY created DESC LIMIT ?', scanLimit)).map(o => ({ ...o, data: parse<Record<string, any>>(o.data, {}) }));
-            const store = await config();
-            return j(await adminOverview(runtime() as any, { orders: rows, products: await catalog(false, true), shipping: store.shippingOptions, environment: paymentEnvironment(runtime()),
+            const now=Date.now(), products=await catalog(false,true), store=await config();
+            const orderSummary=await readAdminOverviewOrderSummary(database(),products,now);
+            return j(await adminOverview(runtime() as any, { orders: [], orderSummary, now, products, shipping: store.shippingOptions, environment: paymentEnvironment(runtime()),
                 access: { orders: true, requests: allowed('requests:write'), reports: allowed('reports:read'), store: allowed('store:write') } }));
         }
         if (action === 'admin-orders') {
