@@ -376,10 +376,12 @@ const productNames=h=>String(Boolean(productPanel(h).props.edited));
   const item=nodes(panel).find(n=>n.type===RequestInbox);assert(item);
   const key=item.key;
   if(child&&childKey!==key){child.unmount();child=null;}
-  if(!child){child=mount(item.props,RequestInbox);childKey=key;}else{child.props=item.props;child.render();}
+  // This composer-lifetime fixture uses the supplied snapshot; paged reads are exercised in request-desk-v1.
+  const inboxProps={...item.props,onLoadQueue:undefined};
+  if(!child){child=mount(inboxProps,RequestInbox);childKey=key;}else{child.props=inboxProps;child.render();}
   return panel;
  };
- let panel=reconcileInbox();assert.equal(panel.props.forceMount,true);assert.equal(panel.props.hidden,false);assert.equal(child.props.activeTab,true);
+ let panel=reconcileInbox();await flush(child);assert.equal(panel.props.forceMount,true);assert.equal(panel.props.hidden,false);assert.equal(child.props.activeTab,true);
  find(child,n=>n.type==='button'&&n.props['aria-controls']==='request-reply-reply-roundtrip').props.onClick();child.render();
  const replyField=name=>find(child,n=>n.type==='textarea'&&n.props.name===name);
  replyField('replyBody').props.onChange({target:{value:'Synthetic unsaved reply'}});child.render();
@@ -453,6 +455,11 @@ const productNames=h=>String(Boolean(productPanel(h).props.edited));
  reset();const a1=deferred(),b=deferred(),a2=deferred();apiImpl=()=>a1.promise;h=mount();apiImpl=()=>b.promise;state.store.customer=ownerB;h.render();apiImpl=()=>a2.promise;state.store.customer=ownerA;h.render();a1.resolve(fixture('Old A'));await flush(h);assert(!text(h.tree).includes('Old A'));a2.resolve(fixture('Current A'));await flush(h);b.reject(Error('Stale B'));await flush(h);assert(text(h.tree).includes('Current A'));assert.equal(alerts(h),'');
 
  // Sign-out, lost role/readiness, unmount and effect replay discard late responses.
+ // Same customer identity with a changed staff role is a new authorization scope.
+ reset();h=mount();await flush(h);const beforeRoleReads=reads();const roleRead=deferred();apiImpl=()=>roleRead.promise;
+ state.store.staffRole='catalog';state.store.permissions=['catalog:write'];h.render();assert(!nodes(h.tree).some(n=>n.type===RequestInbox),'old privileged section unmounts immediately');
+ roleRead.resolve({...fixture('Catalog snapshot'),role:'catalog',permissions:['catalog:write']});await flush(h);assert.equal(reads(),beforeRoleReads+1);assert(!nodes(h.tree).some(n=>n.type===RequestInbox));
+ reset();h=mount();await flush(h);apiImpl=async()=>{throw Object.assign(Error('Access changed'),{status:403});};await button(h,'Refresh administration').props.onClick();await flush(h);assert(!nodes(h.tree).some(n=>n.type===RequestInbox));assert(text(h.tree).includes('access changed'));assert(refreshCalls>0);
  for(const transition of ['signout','role','readiness']){reset();const pending=deferred();apiImpl=()=>pending.promise;h=mount();if(transition==='signout')state.store.customer=null;else if(transition==='role')state.store.admin=false;else state.ready=false;h.render();pending.resolve(fixture('Stale private snapshot'));await flush(h);assert(!text(h.tree).includes('Stale private snapshot'));assert.equal(reads(),1);}
  for(const reject of [false,true]){reset();const pending=deferred();apiImpl=()=>pending.promise;h=mount();h.unmount();const writes=h.writes;if(reject)pending.reject(Error('Unmounted read'));else pending.resolve(fixture());await flush();assert.equal(h.writes,writes);assert.equal(reports.length,0);}
  reset();const beforeReplay=deferred(),afterReplay=deferred();apiImpl=()=>beforeReplay.promise;h=mount();apiImpl=()=>afterReplay.promise;h.replay();beforeReplay.resolve(fixture('Discarded replay'));await flush(h);assert(!text(h.tree).includes('Discarded replay'));afterReplay.resolve(fixture('Replay current'));await flush(h);assert(text(h.tree).includes('Replay current'));

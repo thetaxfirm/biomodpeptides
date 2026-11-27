@@ -280,7 +280,8 @@ export async function GET(req: NextRequest, { params }: {
         }
         if (action === 'admin') {
             // Each section is sent only to roles that hold it. Catalog staff get products and lot reports, never orders.
-            const { role, email: actorEmail } = await requireStaffAny(['orders:read', 'catalog:write']);
+            let access;try {access=await requireStaffAny(['orders:read','catalog:write']);}catch{return j({error:'Administrator access required.'},403);}
+            const {role,email:actorEmail}=access;
             // Website updates is granted per person, not per role, so it is added to the role's list here.
             const siteRequests = await hasSiteUpdateAccess(database(), { email: actorEmail, role });
             const allowed = (permission: StaffPermission) => can(role, permission);
