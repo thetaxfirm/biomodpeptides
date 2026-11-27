@@ -8,10 +8,11 @@ export type FinancialReport = {
   amounts: Record<'gross' | 'subtotal' | 'discount' | 'tax' | 'customerShipping' | 'carrierCost', FinancialAmount>;
   carrierCoverage: { labelsRecorded: number; withoutLabel: number };
   paymentDates: { knownOrders: number; unknownOrders: number; recordedDuringWindow: number; recordedOutsideWindow: number };
+  providerSettlementDates: { knownOrders: number; unknownOrders: number; settledDuringWindow: number; settledOutsideWindow: number };
   refunds: { settled: RefundTotal; pending: RefundTotal; unidentifiedAttempts: number; otherStatuses: number; ordersWithoutCheck: number; ordersAtHistoryLimit: number };
   commissions: Record<'eligible' | 'held' | 'excluded', { orders: number; cents: number }>;
 };
-type MoneyRow = { id: string; created: number; status: string; total: number; payment_ref: string | null; notification_id: string | null; subtotal: unknown; discount: unknown; tax: unknown; shipping: unknown; shipment_id: unknown; carrier_cost: unknown; paid_at: unknown; recorded_at: number | null; attempts: string | null; checked_at: unknown };
+type MoneyRow = { id: string; created: number; status: string; total: number; payment_ref: string | null; notification_id: string | null; subtotal: unknown; discount: unknown; tax: unknown; shipping: unknown; shipment_id: unknown; carrier_cost: unknown; paid_at: unknown; recorded_at: number | null; attempts: string | null; checked_at: unknown; verified_state: unknown; settled_at: unknown };
 const amount = (): FinancialAmount => ({ cents: 0, knownOrders: 0, missingOrders: 0 });
 const validCents = (n: unknown): n is number => Number.isSafeInteger(n) && Number(n) >= 0;
 const collect = (total: FinancialAmount, n: unknown) => { if (validCents(n)) { total.cents += n; total.knownOrders++; } else total.missingOrders++; };
@@ -19,13 +20,14 @@ const paid = (r: MoneyRow) => ['paid','labeling','shipped','delivered'].includes
 const safeData = "CASE WHEN json_valid(o.data) THEN o.data ELSE '{}' END";
 const live = `json_extract(${safeData},'$.environment') IN ('live','authorizenet:live') AND COALESCE(json_extract(${safeData},'$.internalTest'),0)!=1`;
 const field = (path: string) => `json_extract(${safeData},'$.${path}')`;
-const financialFields = `o.id,o.created,o.status,o.total,o.payment_ref,o.notification_id,${field('subtotal')} subtotal,${field('discount')} discount,${field('tax')} tax,${field('shipping')} shipping,${field('shipment.shipmentId')} shipment_id,${field('shipment.costCents')} carrier_cost,${field('paidAt')} paid_at,p.recorded_at,${field('paymentCheck.attempts')} attempts,${field('paymentCheck.at')} checked_at`;
+const financialFields = `o.id,o.created,o.status,o.total,o.payment_ref,o.notification_id,${field('subtotal')} subtotal,${field('discount')} discount,${field('tax')} tax,${field('shipping')} shipping,${field('shipment.shipmentId')} shipment_id,${field('shipment.costCents')} carrier_cost,${field('paidAt')} paid_at,p.recorded_at,${field('paymentCheck.attempts')} attempts,${field('paymentCheck.at')} checked_at,${field('paymentVerified.state')} verified_state,${field('paymentVerified.settledAt')} settled_at`;
 /** All cohorts are scanned in bounded pages. No record identifiers or provider references leave this module. */
 export async function financialReport(db: D1Database, days: string | null, now = Date.now(), options: ReportOptionsInput = {}): Promise<FinancialReport> {
   const window = diagnosticWindow(days, now, options);
   const result: FinancialReport = { asOf: now, window, liveOrders: 0, recordedPaymentOrders: 0, missingPaymentReferences: 0,
     amounts: { gross: amount(), subtotal: amount(), discount: amount(), tax: amount(), customerShipping: amount(), carrierCost: amount() },
     carrierCoverage: { labelsRecorded: 0, withoutLabel: 0 }, paymentDates: { knownOrders: 0, unknownOrders: 0, recordedDuringWindow: 0, recordedOutsideWindow: 0 },
+    providerSettlementDates: { knownOrders: 0, unknownOrders: 0, settledDuringWindow: 0, settledOutsideWindow: 0 },
     refunds: { settled: {transactions:0,cents:0,missingAmounts:0,conflictingAmounts:0}, pending: {transactions:0,cents:0,missingAmounts:0,conflictingAmounts:0}, unidentifiedAttempts:0,otherStatuses:0,ordersWithoutCheck:0,ordersAtHistoryLimit:0 },
     commissions: { eligible: {orders:0,cents:0}, held: {orders:0,cents:0}, excluded: {orders:0,cents:0} } };
   const refunds = new Map<string, { settled?: Set<number>; pending?: Set<number> }>();
@@ -43,6 +45,12 @@ export async function financialReport(db: D1Database, days: string | null, now =
           const stamps=[row.recorded_at,row.paid_at].filter((v):v is number=>Number.isSafeInteger(v)&&Number(v)>=row.created&&Number(v)<=now);
           if (!stamps.length) result.paymentDates.unknownOrders++;
           else { const at=Math.min(...stamps);result.paymentDates.knownOrders++;if(at>=window.start&&at<window.end)result.paymentDates.recordedDuringWindow++;else result.paymentDates.recordedOutsideWindow++; }
+          // Provider batch settlement is a separate event; never use it to backfill the store's observation date.
+          if (row.verified_state==='settled' && Number.isSafeInteger(row.settled_at) && Number(row.settled_at)>=row.created && Number(row.settled_at)<=now) {
+            result.providerSettlementDates.knownOrders++;
+            if(Number(row.settled_at)>=window.start&&Number(row.settled_at)<window.end)result.providerSettlementDates.settledDuringWindow++;
+            else result.providerSettlementDates.settledOutsideWindow++;
+          } else result.providerSettlementDates.unknownOrders++;
         }
       }
       if (typeof row.shipment_id==='string' && row.shipment_id) { result.carrierCoverage.labelsRecorded++;collect(result.amounts.carrierCost,row.carrier_cost); }

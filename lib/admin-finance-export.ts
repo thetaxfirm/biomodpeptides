@@ -15,6 +15,7 @@ export function financialCsv(report: FinancialReport) {
   for (const key of ['settled','pending'] as const) {const r=report.refunds[key];rows.push(['refund',key,r.transactions,r.cents,r.missingAmounts,'Saved provider attempts, transaction IDs deduplicated; not complete ledger']);}
   for (const key of ['eligible','held','excluded'] as const) {const r=report.commissions[key];rows.push(['commission',key,r.orders,r.cents,'','Current eligibility for cohort; not payout balance']);}
   for (const [key,value] of Object.entries(report.paymentDates)) rows.push(['payment_date_coverage',key,value,'','','Explicit recording dates only; missing historical dates remain unknown']);
+  for (const [key,value] of Object.entries(report.providerSettlementDates)) rows.push(['provider_settlement_date_coverage',key,value,'','','Provider-reported settled batch dates; distinct from original store payment observations']);
   for (const key of ['unidentifiedAttempts','otherStatuses','ordersWithoutCheck','ordersAtHistoryLimit'] as const) rows.push(['refund_coverage',key,report.refunds[key],'','','Checks retain at most 10 attempts per order']);
   const cell=(v:string|number)=>'"'+String(v).replaceAll('"','""')+'"';
   return {filename:`financial-records-${start}-to-${end}.csv`,csv:rows.map(row=>row.map(cell).join(',')).join('\r\n')+'\r\n'};
