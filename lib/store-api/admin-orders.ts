@@ -70,6 +70,8 @@ export async function adminOrders(context: AdminPostContext) {
         return j({ message: number + ' marked dropped off. It moves to Shipped when the carrier scans it.' });
     }
     if (action === 'admin-reconcile') {
+        // Explicit evidence-only reads must never fall through to unpaid checkout recovery.
+        if (b.readOnly === true) return j(await recheckPaidOrder(auditEnv(), str(b.id, 50)));
         const o = await one<{ owner: string; status: string }>('SELECT owner,status FROM orders WHERE id=?', str(b.id, 50));
         if (!o)
             throw new Error('Order not found.');

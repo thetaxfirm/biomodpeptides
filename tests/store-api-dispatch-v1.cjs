@@ -1,13 +1,14 @@
 // Real transport + domain modules. Every outside service is isolated and unexpected calls fail.
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),Module=require('node:module'),ts=require('typescript');
 const root=path.resolve(__dirname,'..'),calls=[];let authorized=false, budgetCheck=null;
-const database={fixture:'database'},audited={fixture:'audited-database'};
+const database={fixture:'database'},audited={fixture:'audited-database'};let recheckAllowed=true;
 class Reply extends Response{static json(value,init={}){return new Reply(JSON.stringify(value),{...init,headers:{'content-type':'application/json',...init.headers}});}}
 const deps={
  'next/server':{NextResponse:Reply},'next/headers':{cookies:async()=>({get:()=>undefined})},zod:require('zod'),
  '@/lib/auth':{customer:async()=>{calls.push(['customer']);return null;},session:async()=>{calls.push(['session']);return{id:'fixture-session'};},rateLimit:async(...args)=>{calls.push(['rateLimit',...args]);if(budgetCheck)await budgetCheck(...args);},requireStaff:async permission=>{calls.push(['staff',permission]);if(!authorized)throw Error('Fixture access denied');return{email:'fixture@example.invalid',role:'owner'};}},
  '@/lib/runtime':{runtime:()=>({DB:database}),database:()=>database},
  '@/lib/change-history':{withAuditDb:(db,actor)=>{assert.equal(db,database);calls.push(['audit',actor]);return audited;}},
+ '@/lib/payment-verify':{recheckPaidOrder:async(env,id)=>{assert.equal(env.DB,audited);calls.push(['evidenceOnly',id]);if(!recheckAllowed)throw Error('Choose an order with a recorded payment.');return{status:'delivered',verification:{state:'settled'}};}},
  '@/lib/preorder-plan-save':{savePreorderPlan:async(db,input,actor)=>{assert.equal(db,audited);calls.push(['plan',input,actor]);return{message:'Fixture plan saved'};}},
  '@/lib/request-reply-route':{replyBridgeRoute:async()=>{calls.push(['bridge']);return Reply.json({error:'Fixture bridge requires its own signature'},{status:403});}},
 };
@@ -34,6 +35,8 @@ async function post(action,body='{}',headers={}){calls.length=0;const response=a
  authorized=true;
  const payload={orderId:'00000001-0000-4000-8000-000000000001',dispatchDate:null,expectedVersion:'a'.repeat(64),note:'Fixture current estimate unknown.'};
  let response=await post('admin-preorder-plan',JSON.stringify(payload));assert.equal(response.status,200);assert.deepEqual(calls.slice(2),[['staff','orders:fulfill'],['audit',{source:'admin',actor:'fixture@example.invalid',actorType:'staff',action:'admin-preorder-plan'}],['plan',payload,'fixture@example.invalid']]);
+ response=await post('admin-reconcile',JSON.stringify({id:'fixture-old-order',readOnly:true}));assert.equal(response.status,200);assert.deepEqual(calls.at(-1),['evidenceOnly','fixture-old-order']);
+ recheckAllowed=false;response=await post('admin-reconcile',JSON.stringify({id:'fixture-unpaid-order',readOnly:true}));assert.equal(response.status,400);assert.match((await response.json()).error,/recorded payment/);recheckAllowed=true;
  response=await post('admin-reward');assert.equal(response.status,409,'legacy reward endpoint continues to redirect staff to the reviewed ledger');
  response=await post('unknown');assert.equal(response.status,404);assert.equal(calls.length,2);
  const getReq={nextUrl:new URL('https://fixture.invalid/api/store/unknown')};calls.length=0;response=await m.exports.GET(getReq,{params:Promise.resolve({action:'unknown'})});assert.equal(response.status,404);assert.deepEqual(calls,[['customer']]);
