@@ -4,7 +4,7 @@ import {randomUUID} from 'node:crypto';
 import {shippingWorkerFixture} from './shipping-worker-fixture-v1.mjs';
 const f=await shippingWorkerFixture();
 const origin='https://trybiomod.com',headers={origin,'content-type':'application/json',cookie:`bm_access=fixture-only; bm_session=${f.sessionId}`};
-const post=async(action,payload,custom=headers)=>{const r=await f.mf.dispatchFetch(origin+'/api/store/'+action,{method:'POST',headers:custom,body:JSON.stringify(payload)});assert.equal(r.headers.get('cache-control'),'no-store');return {status:r.status,body:await r.json()};};
+const post=async(action,payload,custom=headers)=>{if(action==='admin-config'){const current=await(await f.mf.dispatchFetch(origin+'/api/store/admin',{headers})).json();payload={...payload,expectedVersion:current.settingsVersion};}const r=await f.mf.dispatchFetch(origin+'/api/store/'+action,{method:'POST',headers:custom,body:JSON.stringify(payload)});assert.equal(r.headers.get('cache-control'),'no-store');return {status:r.status,body:await r.json()};};
 try{
  let r=await post('delivery',{address:f.address},{...headers,cookie:`bm_session=${f.sessionId}`});assert.equal(r.status,400);assert.equal(f.calls.rates,0);
  r=await post('delivery',{address:f.address});assert.equal(r.status,200,JSON.stringify(r.body));const q=r.body;assert.equal(q.shipping,0);assert.equal(q.shippingOptions.length,3);assert.equal(q.shippingOptions.find(o=>o.tier==='overnight').shipping,3500);assert.equal(f.calls.rates,1);

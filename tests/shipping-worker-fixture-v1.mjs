@@ -21,6 +21,7 @@ export async function shippingWorkerFixture({preview=false,port=3067,extraBindin
   if(extraOutbound){const answered=await extraOutbound(req);if(answered)return answered;}
   if(req.url==='https://auth.example.invalid/auth/v1/user'&&req.method==='GET')return Response.json(user);
   if(preview&&req.url.startsWith('https://auth.example.invalid/auth/v1/token?')&&req.method==='POST')return Response.json({user,access_token:'isolated-preview-only',refresh_token:'isolated-refresh-only',expires_in:3600});
+  if(req.url==='https://api.easypost.com/v2/addresses'&&req.method==='POST'){const body=await req.json();return Response.json({id:'adr_fixture',...body.address,verifications:{delivery:{success:true,errors:[]}}});}
   if(req.url==='https://api.easypost.com/v2/shipments'&&req.method==='POST'){calls.rates++;return Response.json({id:'shp_fixture',mode:'production',rates});}
   if(req.url==='https://api.easypost.com/v2/shipments/shp_fixture/buy'&&req.method==='POST'){calls.buys.push(await req.json());return Response.json({id:'shp_fixture',mode:'production',tracking_code:'SYNTHETIC_ONLY',postage_label:{label_url:'https://example.invalid/label'},tracker:{public_url:'https://example.invalid/tracking'}});}
   if(req.url==='https://api.authorize.net/xml/v1/request.api'&&req.method==='POST'){

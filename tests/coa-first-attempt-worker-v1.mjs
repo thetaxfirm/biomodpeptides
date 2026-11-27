@@ -154,7 +154,8 @@ try {
   assert.equal(forbiddenOutbound, 0); assert.deepEqual(outboundErrors, []);
   for (const table of ['orders','profiles','addresses','customer_carts']) assert.equal((await DB.prepare(`SELECT COUNT(*) n FROM ${table}`).first()).n, 0, 'Full schema contains no commerce/customer records');
   const history = (await DB.prepare('SELECT * FROM change_events').all()).results;
-  const updates = history.filter(event => event.action === 'email_job.update'); assert(updates.length >= 10);
+  const updates = history.filter(event => event.action === 'email_job.update');
+  for(const status of ['sending','accepted']){const transitions=updates.filter(event=>JSON.parse(event.changes).some(change=>change.field==='Status'&&change.after===status));assert.equal(transitions.length,status==='sending'?4:3,'Every attempted and accepted staff alert has an attributed audit transition');}
   for (const event of updates) { assert.equal(event.actor, 'Inquiry delivery automation'); assert.equal(event.source, 'system'); }
   for (const privateValue of ['PRIVATE_FIXTURE_MESSAGE', 'first-fixture@example.invalid', account.email, settings.replyTo, settings.notifyTo, registry.reports[0].base64]) assert(!JSON.stringify(history).includes(privateValue), 'History does not copy customer identity or mail contents');
   console.log('PASS: actual built contact POST after()/waitUntil starts only saved-request staff alerts and the retired affiliate endpoint stays closed, response precedes held provider, no customer COA sends, dedupe/manual-review/disabled/failure safety, no historical drain or GET processing. All auth/email services synthetic and intercepted.');

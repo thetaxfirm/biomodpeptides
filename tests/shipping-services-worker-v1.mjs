@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import {shippingWorkerFixture} from './shipping-worker-fixture-v1.mjs';
 const f=await shippingWorkerFixture();
 const origin='https://trybiomod.com',headers={origin,'content-type':'application/json',cookie:`bm_access=fixture-only; bm_session=${f.sessionId}`};
-const call=async(url,init={})=>{const r=await f.mf.dispatchFetch(origin+url,{headers,...init});return {status:r.status,body:await r.json()};};
-const save=settings=>call('/api/admin/shipping-services',{method:'POST',body:JSON.stringify({action:'save',destination:'ny',sample:'v3',settings})});
+const call=async(url,init={})=>{if(url==='/api/store/admin-config'&&init.method==='POST'){const current=await(await f.mf.dispatchFetch(origin+'/api/store/admin',{headers})).json();init={...init,body:JSON.stringify({...JSON.parse(init.body),expectedVersion:current.settingsVersion})};}const r=await f.mf.dispatchFetch(origin+url,{headers,...init});return {status:r.status,body:await r.json()};};
+const save=async settings=>{const current=await call('/api/admin/shipping-services');return call('/api/admin/shipping-services',{method:'POST',body:JSON.stringify({action:'save',destination:'ny',sample:'v3',settings,expectedVersion:current.body.version})});};
 const services=[{key:'USPS:GROUNDADVANTAGE',enabled:true,markupCents:500,label:'Standard',note:'Tracked'},{key:'UPS:NEXTDAYAIR',enabled:true,markupCents:2000,label:'Overnight',note:'Next business day'},{key:'UPS:2NDDAYAIR',enabled:false,markupCents:0,label:'UPS 2nd Day Air',note:''},{key:'FedEx:PRIORITYOVERNIGHT',enabled:true,markupCents:100,label:'FedEx AM',note:''}];
 try{
  let r=await call('/api/admin/shipping-services');assert.equal(r.status,200);assert.equal(r.body.catalog.length,20);assert.equal(r.body.connected,true);assert.equal(r.body.settings.services,undefined,'Legacy until first save');
