@@ -154,7 +154,8 @@ export function OrdersAdmin({ reloadToken, viewRequest, checkoutRecovery, allowe
     const sequence = useRef(0);
     const viewKey = JSON.stringify([tab, input.trim(), reloadToken]);
     const activeView = useRef(viewKey);
-    const [releaseNote, setReleaseNote] = useState('');
+    const [releaseNotes, setReleaseNotes] = useState<Record<string, string>>({});
+    useEffect(() => setReleaseNotes({}), [formGeneration]);
     activeView.current = viewKey;
     // A changed tab/search must never relabel the previous view's actionable rows.
     const viewReady = Boolean(result && loadedKey === viewKey && input.trim() === q);
@@ -382,9 +383,9 @@ export function OrdersAdmin({ reloadToken, viewRequest, checkoutRecovery, allowe
                     {recoveryJobs(selected.id).map((j: any) => <p key={j.order_id}>Recovery email: {j.status === 'accepted' ? 'Accepted by mail provider' : j.status === 'review' ? 'Needs manual review' : j.status}. {String(j.reason || '').replaceAll('_', ' ')}{j.accepted_at ? ' · ' + new Date(j.accepted_at).toLocaleString() : ''}</p>)}
                     <div className={styles.actions}>
                         <h3>Actions</h3>
-                        {allowed('orders:fulfill') && preorderAwaitingRelease(selected.data) && !selected.data?.hold && !paymentVerificationFailed(selected) && ['paid', 'shipped'].includes(selected.status) && <form onSubmit={event => { event.preventDefault(); const order = selected; if (!window.confirm('Confirm the ordered preorder stock is physically available and ready to pack? This releases automatic label purchase after the configured delay. No message is sent.')) return; void change('preorder-release', { orderId: order.id, expectedVersion: order.version, note: releaseNote }, result => { setReleaseNote(''); toast.success(result.message); }); }}>
-                            <label>Confirm preorder stock is ready<input value={releaseNote} onChange={event => setReleaseNote(event.target.value)} minLength={10} maxLength={500} required placeholder="Record the stock/lot check and who confirmed it"/></label>
-                            <button className="button button-dark" disabled={busy || releaseNote.trim().length < 10}>Release preorder for packing</button>
+                        {allowed('orders:fulfill') && preorderAwaitingRelease(selected.data) && !selected.data?.hold && !paymentVerificationFailed(selected) && ['paid', 'shipped'].includes(selected.status) && <form onSubmit={event => { event.preventDefault(); const order = selected; if (!window.confirm('Confirm the ordered preorder stock is physically available and ready to pack? This releases automatic label purchase after the configured delay. No message is sent.')) return; void submit(event, 'preorder-release', () => ({ orderId: order.id, expectedVersion: order.version, note: releaseNotes[order.id] || '' }), 'preorder-release:' + order.id); }}>
+                            <label>Confirm preorder stock is ready<input name="preorderReadyNote" value={releaseNotes[selected.id] || ''} disabled={busy} onChange={event => { const note = event.target.value; setReleaseNotes(previous => ({ ...previous, [selected.id]: note })); markDraft('preorder-release:' + selected.id); }} minLength={10} maxLength={500} required placeholder="Record the stock/lot check and who confirmed it"/></label>
+                            <button className="button button-dark" disabled={busy || (releaseNotes[selected.id] || '').trim().length < 10}>Release preorder for packing</button>
                         </form>}
                         {paymentVerificationFailed(selected) && <p className={styles.coaHold}>Resolve the payment verification issue before buying a label or confirming shipment. Fulfillment controls are unavailable while this payment needs review.</p>}
                         {onWinBack && selected.bucket === 'unpaid' && selected.data?.email && <label className={styles.otherViews}>Prepare a follow-up after checking history

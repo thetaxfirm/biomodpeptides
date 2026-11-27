@@ -110,6 +110,20 @@ for (const verification of ['failed','settled']) {
 }
 console.log('PASS: failed payment verification takes action priority and blocks label, manual fulfillment and handoff controls until resolved.');
 
+// Release notes participate in the parent's save/discard contract and survive opening another order.
+const preorderRow={id:'fixture-preorder-release',status:'paid',created:Date.now(),total:10000,version:'a'.repeat(64),data:{items:[{product:{activePreorder:{percentOff:15,ships:'November 2026',basePrice:10000}}}]}};
+const preorderPage=queue.queryOrders([preorderRow],{tab:'all'});preorderPage.orders[0].version=preorderRow.version;
+const draftsMarked=[],releaseSubmits=[];
+const releaseScreen=mount(OrdersAdmin,{reloadToken:0,allowed:may,busy:false,formGeneration:0,change,submit:async(_event,action,transform,key)=>releaseSubmits.push({action,body:transform({}),key}),markDraft:key=>draftsMarked.push(key),reload:()=>{}},[{issue:'out_of_stock',note:''},'all','','',preorderPage,preorderPage.orders,false,null,preorderPage.orders[0],JSON.stringify(['all','',0])]);
+function findRelease(node,predicate){if(!node||typeof node!=='object')return null;if(Array.isArray(node)){for(const child of node){const found=findRelease(child,predicate);if(found)return found;}return null;}if(predicate(node))return node;return findRelease(node.props?.children,predicate);}
+findRelease(releaseScreen.tree,n=>n.type==='input'&&n.props.name==='preorderReadyNote').props.onChange({target:{value:'Warehouse confirmed the ordered lot.'}});
+assert.deepEqual(draftsMarked,['preorder-release:'+preorderRow.id]);releaseScreen.s[8]=null;releaseScreen.render();releaseScreen.s[8]=preorderPage.orders[0];releaseScreen.render();
+assert.equal(findRelease(releaseScreen.tree,n=>n.type==='input'&&n.props.name==='preorderReadyNote').props.value,'Warehouse confirmed the ordered lot.');
+const releaseForm=findRelease(releaseScreen.tree,n=>n.type==='form'&&Boolean(findRelease(n.props.children,x=>x.type==='input'&&x.props.name==='preorderReadyNote')));
+global.window={confirm:()=>false};releaseForm.props.onSubmit({preventDefault(){}});assert.equal(releaseSubmits.length,0);
+global.window={confirm:()=>true};releaseForm.props.onSubmit({preventDefault(){}});assert.deepEqual(releaseSubmits,[{action:'preorder-release',body:{orderId:preorderRow.id,expectedVersion:preorderRow.version,note:'Warehouse confirmed the ordered lot.'},key:'preorder-release:'+preorderRow.id}]);
+console.log('PASS: preorder release notes survive closing/reopening the order and use the existing guarded draft submission contract.');
+
 // A delayed old response cannot populate the new tab; debounced search hides old actions at once.
 (async()=>{
   const pending=[];adminApi=(action,params)=>new Promise((resolve,reject)=>pending.push({action,params,resolve,reject}));
