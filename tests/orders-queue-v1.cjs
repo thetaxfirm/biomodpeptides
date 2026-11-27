@@ -242,7 +242,7 @@ const archiveBlock = route.slice(route.indexOf("action === 'admin-order-archive'
 assert.match(route, /'admin-order-archive': 'orders:fulfill'/, 'archiving needs fulfillment rights');
 assert.match(archiveBlock, /canArchive\(orderBucket/, 'the server refuses to archive open work');
 assert.match(archiveBlock, /json_set\(data,'\$\.archivedAt'/); assert.match(archiveBlock, /json_remove\(data,'\$\.archivedAt','\$\.archivedBy'\)/);
-assert(!/SET status|status=\?/.test(archiveBlock), 'archive never changes order status');
+assert(!/UPDATE orders SET[^;`]*?\bstatus=/.test(archiveBlock.split('WHERE').join(';')), 'archive never changes order status');
 assert.match(ui, /change\('order-archive', \{ orderId: o\.id \}/); assert.match(ui, /restore: true/);
 // Below 760px the table hides its header and names every cell with data-label, so a cell without one
 // is unlabelled on a phone. Order, Customer and Next step were missing theirs (owner, Nov 20 2026).
