@@ -12,7 +12,7 @@ export type FinancialReport = {
   refunds: { settled: RefundTotal; pending: RefundTotal; unidentifiedAttempts: number; otherStatuses: number; ordersWithoutCheck: number; ordersAtHistoryLimit: number };
   commissions: Record<'eligible' | 'held' | 'excluded', { orders: number; cents: number }>;
 };
-type MoneyRow = { id: string; created: number; status: string; total: number; payment_ref: string | null; notification_id: string | null; subtotal: unknown; discount: unknown; tax: unknown; shipping: unknown; shipment_id: unknown; carrier_cost: unknown; paid_at: unknown; recorded_at: number | null; attempts: string | null; checked_at: unknown; verified_state: unknown; settled_at: unknown };
+type MoneyRow = { id: string; created: number; status: string; total: number; payment_ref: string | null; notification_id: string | null; subtotal: unknown; discount: unknown; tax: unknown; shipping: unknown; shipment_id: unknown; carrier_cost: unknown; paid_at: unknown; recorded_at: number | null; attempts: string | null; checked_at: unknown; verified_state: unknown; verified_at: unknown; settled_at: unknown };
 const amount = (): FinancialAmount => ({ cents: 0, knownOrders: 0, missingOrders: 0 });
 const validCents = (n: unknown): n is number => Number.isSafeInteger(n) && Number(n) >= 0;
 const collect = (total: FinancialAmount, n: unknown) => { if (validCents(n)) { total.cents += n; total.knownOrders++; } else total.missingOrders++; };
@@ -20,7 +20,7 @@ const paid = (r: MoneyRow) => ['paid','labeling','shipped','delivered'].includes
 const safeData = "CASE WHEN json_valid(o.data) THEN o.data ELSE '{}' END";
 const live = `json_extract(${safeData},'$.environment') IN ('live','authorizenet:live') AND COALESCE(json_extract(${safeData},'$.internalTest'),0)!=1`;
 const field = (path: string) => `json_extract(${safeData},'$.${path}')`;
-const financialFields = `o.id,o.created,o.status,o.total,o.payment_ref,o.notification_id,${field('subtotal')} subtotal,${field('discount')} discount,${field('tax')} tax,${field('shipping')} shipping,${field('shipment.shipmentId')} shipment_id,${field('shipment.costCents')} carrier_cost,${field('paidAt')} paid_at,p.recorded_at,${field('paymentCheck.attempts')} attempts,${field('paymentCheck.at')} checked_at,${field('paymentVerified.state')} verified_state,${field('paymentVerified.settledAt')} settled_at`;
+const financialFields = `o.id,o.created,o.status,o.total,o.payment_ref,o.notification_id,${field('subtotal')} subtotal,${field('discount')} discount,${field('tax')} tax,${field('shipping')} shipping,${field('shipment.shipmentId')} shipment_id,${field('shipment.costCents')} carrier_cost,${field('paidAt')} paid_at,p.recorded_at,${field('paymentCheck.attempts')} attempts,${field('paymentCheck.at')} checked_at,${field('paymentVerified.state')} verified_state,${field('paymentVerified.at')} verified_at,${field('paymentVerified.settledAt')} settled_at`;
 /** All cohorts are scanned in bounded pages. No record identifiers or provider references leave this module. */
 export async function financialReport(db: D1Database, days: string | null, now = Date.now(), options: ReportOptionsInput = {}): Promise<FinancialReport> {
   const window = diagnosticWindow(days, now, options);
@@ -46,7 +46,7 @@ export async function financialReport(db: D1Database, days: string | null, now =
           if (!stamps.length) result.paymentDates.unknownOrders++;
           else { const at=Math.min(...stamps);result.paymentDates.knownOrders++;if(at>=window.start&&at<window.end)result.paymentDates.recordedDuringWindow++;else result.paymentDates.recordedOutsideWindow++; }
           // Provider batch settlement is a separate event; never use it to backfill the store's observation date.
-          if (row.verified_state==='settled' && Number.isSafeInteger(row.settled_at) && Number(row.settled_at)>=row.created && Number(row.settled_at)<=now) {
+          if (row.verified_state==='settled' && Number.isSafeInteger(row.verified_at) && Number(row.verified_at)<=now && Number.isSafeInteger(row.settled_at) && Number(row.settled_at)>=row.created && Number(row.settled_at)<=Number(row.verified_at)) {
             result.providerSettlementDates.knownOrders++;
             if(Number(row.settled_at)>=window.start&&Number(row.settled_at)<window.end)result.providerSettlementDates.settledDuringWindow++;
             else result.providerSettlementDates.settledOutsideWindow++;
