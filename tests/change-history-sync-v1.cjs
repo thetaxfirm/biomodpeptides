@@ -10,7 +10,7 @@ const DB={prepare(sql){const statement=(values=[])=>({bind:(...args)=>statement(
 (async()=>{
   const now=Date.parse('2026-11-27T00:00:00Z'),sha='a'.repeat(40),env={DB,CF_VERSION_METADATA:{id:'11111111-1111-4111-8111-111111111111'}};
   let calls=0;
-  const request=async(url,options)=>{calls++;assert.equal(options.redirect,'error');assert(!options.headers.Authorization);assert(url.startsWith('https://api.github.com/repos/thetaxfirm/biomodpeptides/commits?'));return Response.json([{sha,commit:{committer:{date:new Date(now-1000).toISOString()},message:'PRIVATE_NOT_COPIED',author:{email:'PRIVATE_NOT_COPIED'}}}]);};
+  const request=async(url,options)=>{calls++;assert.equal(options.redirect,'manual');assert(!options.headers.Authorization);assert(url.startsWith('https://api.github.com/repos/thetaxfirm/biomodpeptides/commits?'));return Response.json([{sha,commit:{committer:{date:new Date(now-1000).toISOString()},message:'PRIVATE_NOT_COPIED',author:{email:'PRIVATE_NOT_COPIED'}}}]);};
   await syncRuntimeHistory(env,now,request);
   await syncRuntimeHistory(env,now+300000,request);
   assert.equal(calls,1,'Hourly lease prevents duplicate provider polling');
@@ -39,7 +39,7 @@ const DB={prepare(sql){const statement=(values=[])=>({bind:(...args)=>statement(
   const release=()=>db.prepare("UPDATE change_history_sync SET synced_at=0 WHERE source='source_poll'").run();
   let fallbackCalls=[];release();
   await syncRuntimeHistory({DB},now+8000000,async(url,options)=>{
-    fallbackCalls.push(url);assert.equal(options.redirect,'error');assert(!options.headers.Authorization);
+    fallbackCalls.push(url);assert.equal(options.redirect,'manual');assert(!options.headers.Authorization);
     return url.startsWith('https://api.github.com/')?new Response('PRIVATE_API_BODY',{status:403,headers:{'x-ratelimit-remaining':'0'}}):new Response(atom([{sha:fallbackSha,date}]),{headers:{'content-type':'application/atom+xml'}});
   });
   assert.equal(fallbackCalls.length,2);assert.equal(health().state,'active');assert.match(health().description,/Atom fallback \(REST API HTTP 403 \(rate limited\)\)/);
@@ -60,6 +60,8 @@ const DB={prepare(sql){const statement=(values=[])=>({bind:(...args)=>statement(
   }
   release();await syncRuntimeHistory({DB},now+10000000,async url=>url.startsWith('https://api.github.com/')?new Response('PRIVATE_FAILURE',{status:429}):new Response('PRIVATE_FAILURE',{status:503}));
   assert.match(health().description,/REST API HTTP 429 \(rate limited\); Atom feed HTTP 503/);assert(!health().description.includes('PRIVATE'));
+  release();const redirectCalls=[];await syncRuntimeHistory({DB},now+10500000,async(url,options)=>{redirectCalls.push(url);assert.equal(options.redirect,'manual');return new Response(null,{status:302,headers:{location:'https://untrusted.example.invalid/PRIVATE_REDIRECT'}});});
+  assert.equal(redirectCalls.length,2);assert(redirectCalls.every(url=>url.startsWith('https://api.github.com/')||url.startsWith('https://github.com/')));assert.match(health().description,/REST API HTTP 302; Atom feed HTTP 302/);assert(!health().description.includes('PRIVATE'));
   release();await syncRuntimeHistory({DB},now+11000000,async()=>{throw Error('PRIVATE_NETWORK_MESSAGE');});
   assert.match(health().description,/REST API network request failed; Atom feed network request failed/);assert(!health().description.includes('PRIVATE'));
   const broken={prepare(sql){if(sql.startsWith('INSERT OR IGNORE INTO change_events'))return{bind(){return{run:async()=>{throw Error('PRIVATE_DATABASE_MESSAGE');}}}};return DB.prepare(sql);}};

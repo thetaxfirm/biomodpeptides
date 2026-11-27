@@ -15,7 +15,9 @@ function revision(sha: unknown, date: unknown, feed: Feed): SourceRevision {
 async function read(request: typeof fetch, url: string, feed: Feed, maxBytes: number): Promise<string> {
   let response: Response;
   try {
-    response = await request(url, { headers: { Accept: feed === 'REST API' ? 'application/vnd.github+json' : 'application/atom+xml', 'User-Agent': 'TryBiomod-history' }, redirect: 'error', signal: AbortSignal.timeout(15000) });
+    // Workerd rejects redirect:'error' before making the request. Manual mode plus the
+    // non-2xx check below refuses redirects without ever following an untrusted target.
+    response = await request(url, { headers: { Accept: feed === 'REST API' ? 'application/vnd.github+json' : 'application/atom+xml', 'User-Agent': 'TryBiomod-history' }, redirect: 'manual', signal: AbortSignal.timeout(15000) });
   } catch { throw new SourceFailure(`${feed} network request failed`); }
   if (!response.ok) {
     await response.body?.cancel().catch(() => undefined);
