@@ -22,6 +22,7 @@ const worker=load('worker.ts',{
  './lib/parcel-alerts':{runParcelAlerts:async copy=>{assert.notEqual(copy,env);assert.notEqual(copy.DB,DB);jobs.push('parcels');return{sent:false,reason:'all_moving'};}},
  './lib/payment-verify':{runPaymentVerification:async copy=>{assert.notEqual(copy,env);assert.notEqual(copy.DB,DB);jobs.push('verify');return{checkedAt:0,due:0,settled:0,captured:0,failed:0,unreachable:0,foreign:0,alerted:0};}},
  // Hourly shared-CRM copy: reads the store database only and records nothing in it.
+ './lib/change-history-sync':{syncRuntimeHistory:async()=>{}},
  './lib/shared-crm':{publishOnSchedule:async(copy,site,list)=>{assert.equal(site,'trybiomod');assert.equal(typeof list,'function');}},
  './lib/contacts':{contactList:async()=>[]},
  './lib/checkout-expiry':{runCheckoutExpiry:async copy=>{assert.notEqual(copy,env);assert.notEqual(copy.DB,DB);jobs.push('expiry');return{status:'completed',checkedAt:0,due:0,released:0,kept:0,failed:0};}},
