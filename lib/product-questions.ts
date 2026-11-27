@@ -32,8 +32,8 @@ export function productQuestions(product: Product): ProductQuestion[] {
       'BPC-157 10 mg lists BPC-157 alone. Wolverine lists BPC-157 + TB-500 as a blend. A blend’s total weight is not the amount of each ingredient, so the two listings are not interchangeable.',
     ] },
   ] : product.slug === 'wolverine-10mg' ? [
-    { id: 'name-variants', question: 'What is the Wolverine peptide blend?', answer: [
-      'BIOMOD Wolverine combines BPC-157 + TB-500 in a lyophilized powder vial. Searches for Wolverine peptide, Wolverine stack or BPC157 TB500 can refer to this combination, but other sellers may use those names for different strengths or separate-vial bundles. Compare the actual listing and batch record.',
+    { id: 'name-variants', question: 'What is the Wolverine blend?', answer: [
+      'BIOMOD Wolverine combines BPC-157 + TB-500 in a lyophilized powder vial. Searches for Wolverine, Wolverine stack or BPC157 TB500 can refer to this combination, but other sellers may use those names for different strengths or separate-vial bundles. Compare the actual listing and batch record.',
     ] },
     { id: 'blend-contents', question: 'Does Wolverine 10 mg contain 10 mg of each ingredient?', answer: [
       'No. The listed 10 mg is the total blend content per vial, not 10 mg of BPC-157 plus 10 mg of TB-500. Use the matching batch record for reported component results; do not infer an equal split from the product name.',
@@ -43,7 +43,7 @@ export function productQuestions(product: Product): ProductQuestion[] {
     ] },
   ] : product.slug === 'kisspeptin-10mg' ? [
     { id: 'name-variants', question: 'Is this Kisspeptin-10 (Kisspeptin 10)?', answer: [
-      'Yes. This listing is BIOMOD Kisspeptin 10 mg, and its listed compound is Kisspeptin-10, also written Kisspeptin 10. The name kisspeptin alone can also refer to longer forms of the peptide, so check the compound, strength and batch record when comparing listings; a similar name does not establish identical contents.',
+      'Yes. This listing is BIOMOD Kisspeptin 10 mg, and its listed compound is Kisspeptin-10, also written Kisspeptin 10. The name kisspeptin alone can also refer to longer forms of the compound, so check the compound, strength and batch record when comparing listings; a similar name does not establish identical contents.',
     ] },
   ] : productNameVariants[product.slug] ? [
     { id: 'name-variants', question: `Are ${[...productNameVariants[product.slug], baseName(product)].join(', ').replace(/, ([^,]+)$/, ' and $1')} the same product name?`, answer: [

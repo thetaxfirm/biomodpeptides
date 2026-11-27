@@ -48,7 +48,7 @@ for (const page of ['faq', 'about', 'quality-standard', 'choosing-a-research-sup
   const html = render(React.createElement(ContentPage, { path: page }));
   assert.deepEqual(productLinks(html).filter(slug => vials.includes(slug)), vials, page + ': links every published vial');
   assert(!productLinks(html).some(slug => /heat/i.test(slug) || productReviewBlocks[slug]), page + ': no held or blocked product');
-  assert.match(html, /<h2 id="research-vial-index-heading">All research peptides and compounds<\/h2>/, page + ': index sits under the page h1 as an h2');
+  assert.match(html, /<h2 id="research-vial-index-heading">All research compounds<\/h2>/, page + ': index sits under the page h1 as an h2');
   assert.match(html, /href="\/product\/bpc-157-10mg">BPC-157 10 mg</, page + ': sized vial label');
   assert.deepEqual(productLinks(html).filter(slug => !vials.includes(slug)), others, page + ': links every published spray, softgel and lab supply, and nothing else');
   assert(html.includes('<h2 id="other-formats-index-heading">' + otherHeading + '</h2>'), page + ': other formats sit under their own h2');

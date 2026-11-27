@@ -68,7 +68,7 @@ const published = slug => publication.productSlugs.includes(slug) && !productRev
     const links = productLinks(html);
     assert(links.every(slug => c.products.includes(slug) && published(slug)), c.slug + ': links only its own published products');
     assert.deepEqual([...links].sort(), publishedProducts(c).sort(), c.slug + ': every published member is shown');
-    assert(!/dos(e|ing)\b|inject|reconstitut/i.test(text(html).replace(disclaimer, '')), c.slug + ': no dosing or handling wording');
+    assert(!/peptide|dos(e|ing)\b|inject|reconstitut/i.test(text(html).replace(disclaimer, '')), c.slug + ': no peptide, dosing or handling wording');
     if (!isPublic) continue;
     // Format collections (sprays) group by container, so they carry no compound reference table.
     assert.equal(html.includes('href="/compounds/'), !c.byFormat, c.slug + ': compound references only on compound collections');
@@ -99,5 +99,5 @@ const published = slug => publication.productSlugs.includes(slug) && !productRev
   assert.deepEqual(collectionsFor('tb500-10mg'), []);
   assert(fs.readFileSync(path.join(root, 'components/store/product-research-details.tsx'), 'utf8').includes("'/collections/' + c.slug"));
   assert(fs.readFileSync(path.join(root, 'components/store/content.tsx'), 'utf8').includes('href="/collections"'));
-  console.log(`PASS: ${live.length} of ${collections.length} collections public (two or more published products), in the sitemap with CollectionPage, ItemList and breadcrumbs; pages render one h1, link only published members and carry no dosing wording`);
+  console.log(`PASS: ${live.length} of ${collections.length} collections public (two or more published products), in the sitemap with CollectionPage, ItemList and breadcrumbs; pages render one h1, link only published members and carry no peptide or dosing wording`);
 })().catch(error => { console.error(error); process.exit(1); });

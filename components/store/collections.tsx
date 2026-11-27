@@ -22,7 +22,7 @@ export function CollectionIndex() {
       <p>{c.intro}</p>
       <ul className={styles.inlineList}>{listed(c, store.products).map(p => <li key={p.id}><a href={'/product/' + p.slug}>{vialName(p)}</a></li>)}</ul>
     </section>)}</div>
-    <a className="editorial-link" href="/shop">Browse all research peptides <ArrowRight size={17}/></a>
+    <a className="editorial-link" href="/shop">Browse all research compounds <ArrowRight size={17}/></a>
     {ruo}
   </div>;
 }
@@ -37,7 +37,7 @@ export function CollectionPage({ slug }: { slug: string }) {
     <nav aria-label="Breadcrumb" className={styles.crumbs}><a href="/shop">Shop</a><span aria-hidden="true">/</span><a href="/collections">Collections</a><span aria-hidden="true">/</span><span>{c.name}</span></nav>
     <div className="page-heading"><h1>{c.title}</h1><p>{c.intro}</p></div>
     {items.length ? <div className="product-grid">{items.map(p => <ProductCard key={p.id} product={p}/>)}</div>
-      : <p>These products are being prepared for release. <a href="/shop">Browse all research peptides</a>.</p>}
+      : <p>These products are being prepared for release. <a href="/shop">Browse all research compounds</a>.</p>}
     {references.length > 0 && <section className={styles.section} aria-labelledby="reference-heading"><h2 id="reference-heading">Reference data</h2>
       <div className={styles.tableWrap}><table className={styles.table}>
         <caption className="sr-only">{c.name} compound identifiers</caption>

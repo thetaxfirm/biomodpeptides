@@ -10,12 +10,12 @@ const { products } = require('../lib/catalog.ts');
 const { pageInfo, descriptionAliases } = require('../lib/seo-policy.ts');
 const describe = slug => pageInfo('/product/' + slug).description;
 
-assert.match(describe('semax'), /^Buy SEMAX 10mg research peptide \(ACTH 4–10 analog\): single vials/);
-assert.match(describe('selank'), /^Buy SELANK 10mg research peptide: single vials/);
-assert.match(describe('tesamorelin-10mg'), /^Buy Tesamorelin 10mg research peptide: single vials/);
+assert.match(describe('semax'), /^Buy SEMAX 10mg \(ACTH 4–10 analog\): single vials/);
+assert.match(describe('selank'), /^Buy SELANK 10mg: single vials/);
+assert.match(describe('tesamorelin-10mg'), /^Buy Tesamorelin 10mg: single vials/);
 // Real aliases and search spellings are kept, in their existing order.
-assert.match(describe('mots-c-10mg'), /^Buy MOTS-c 10mg research peptide \(MOTSc, MOTS c\): /);
-assert.match(describe('mots-c-40mg'), /^Buy MOTS-C 40mg research peptide \(MOTSc, MOTS c\): /);
+assert.match(describe('mots-c-10mg'), /^Buy MOTS-c 10mg \(MOTSc, MOTS c\): /);
+assert.match(describe('mots-c-40mg'), /^Buy MOTS-C 40mg \(MOTSc, MOTS c\): /);
 assert.match(describe('pt-141-10mg'), /^Buy PT-141 10mg \(Bremelanotide, PT141, PT 141\): /);
 assert.match(describe('aod-9604-10mg'), /^Buy AOD 9604 10mg \(Fragment 176-191, AOD-9604, AOD9604\): /);
 assert.match(describe('nad-500mg'), /^Buy NAD\+ 500mg \(Nicotinamide Adenine Dinucleotide\): /);

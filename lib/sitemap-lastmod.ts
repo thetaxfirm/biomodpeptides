@@ -18,7 +18,9 @@ import { pressReleases } from './press-releases';
 // the compound reference product lists (ef23210 and 615b6a1, November 17 and 18), the spray,
 // softgel and lab-supply list on the shop, the guides and every vial page (3a22a06, November 23)
 // and seven spray titles (6662f66, November 24).
-export const siteLastmod = '2026-11-24';
+// November 26, 2026: the owner had "peptide" removed again (credit card processing risk). Titles,
+// descriptions, headings and the "Browse all research compounds" link changed on every page.
+export const siteLastmod = '2026-11-26';
 // October 17: da848db added free USPS Priority Mail at $250 and the 2 p.m. Pacific same-day
 // wording to every product page; 589ae41 moved the product images to WebP.
 // The same day the store was renamed Biomod Research Supply Company, changing every page's title.

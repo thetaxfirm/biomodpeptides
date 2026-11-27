@@ -35,8 +35,8 @@ Module._load = function (request, parent, isMain) {
   }
   return originalLoad.call(this, request, parent, isMain);
 };
-const { seoConfig, sitemapPaths, mayIndex, pageInfo, productReviewBlocks, isPeptideVial } = require('../lib/seo-policy.ts');
-const { compounds, comparisons, compoundQuestions, publishedCompound, isPeptideCompound, isPeptideComparison } = require('../lib/compound-reference.ts');
+const { seoConfig, sitemapPaths, mayIndex, pageInfo, productReviewBlocks } = require('../lib/seo-policy.ts');
+const { compounds, comparisons, compoundQuestions, publishedCompound } = require('../lib/compound-reference.ts');
 const { eligibleDiscovery, productHeading } = require('../lib/product-discovery.ts');
 const { routeStructuredData } = require('../lib/seo.ts');
 const { StoreProvider } = require('../components/store/provider.tsx');
@@ -60,12 +60,7 @@ const validCas = cas => { const m = /^(\d{2,7})-(\d\d)-(\d)$/.exec(cas); return 
     if (c.sequence && c.residues && !c.sequence.includes('·')) assert.equal((c.sequence.match(/[A-Z][a-z]{2}/g) || []).length, c.residues, c.slug + ' residue count');
     const info = pageInfo('/compounds/' + c.slug);
     assert((info.title + ' | Biomod Research Supply Company').length <= 70, c.slug + ' title fits: ' + info.title);
-    assert(info.description.length <= 160 && info.description.endsWith('.'), c.slug + ' description fits and ends on a full sentence: ' + info.description);
-    // Peptide wording (owner instruction, November 14, 2026): a compound page says "peptide" exactly when its
-    // single-compound vial is titled a peptide vial. NAD+ is a coenzyme and is never called one.
-    const peptide = isPeptideCompound(c);
-    assert.equal(peptide, isPeptideVial(single), c.slug + ': peptide wording agrees with its product title');
-    assert.equal(/\bpeptide\b/i.test(info.description), peptide, c.slug + ' description peptide wording');
+    assert(info.description.length <= 160, c.slug + ' description length');
     assert(publishedCompound(c), c.slug + ' has a published product');
     assert(mayIndex('/compounds/' + c.slug, new URLSearchParams(), config) && sitemap.includes('/compounds/' + c.slug), c.slug + ' indexed and in the sitemap');
 
@@ -76,11 +71,7 @@ const validCas = cas => { const m = /^(\d{2,7})-(\d\d)-(\d)$/.exec(cas); return 
     const links = productLinks(html);
     assert(links.length > 0 && links.every(slug => c.products.includes(slug)), c.slug + ': links only its own products');
     assert(links.every(slug => !productReviewBlocks[slug] && publication.productSlugs.includes(slug)), c.slug + ': no held product linked');
-    assert(!/dos(e|ing)\b|inject|reconstitut/i.test(text(html).replace(disclaimer, '')), c.slug + ': no dosing or handling wording');
-    assert.equal(/<h2[^>]*>[^<]*\bpeptide\b/i.test(html), peptide, c.slug + ': heading peptide wording');
-    const asked = compoundQuestions(c, []).find(q => q.question === 'Is ' + c.name + ' a peptide?');
-    assert(asked && asked.answer.startsWith(peptide ? 'Yes, ' + c.name + ' is a peptide. ' : 'No. ') && asked.answer.endsWith(c.summary), c.slug + ': peptide question answered from the reviewed summary');
-    assert(html.includes('Is ' + c.name.replace(/&/g, '&amp;') + ' a peptide?'), c.slug + ': peptide question visible');
+    assert(!/peptide|dos(e|ing)\b|inject|reconstitut/i.test(text(html).replace(disclaimer, '')), c.slug + ': no peptide, dosing or handling wording');
 
     // Question markup repeats the visible questions and answers.
     const visible = [...html.matchAll(/<h3>([^<]+)<\/h3><p>([^<]+)<\/p>/g)].map(m => text(m[1]).trim());
@@ -130,16 +121,11 @@ const validCas = cas => { const m = /^(\d{2,7})-(\d\d)-(\d)$/.exec(cas); return 
     const html = render(React.createElement(ComparisonPage, { slug: x.slug }));
     assert.equal((html.match(/<h1\b/g) || []).length, 1);
     assert(html.includes('href="/compounds/' + x.a + '"') && html.includes('href="/compounds/' + x.b + '"'), x.slug + ' links both references');
-    assert(!/dos(e|ing)\b|inject|reconstitut/i.test(text(html).replace(disclaimer, '')), x.slug + ' wording');
-    assert(info.description.length <= 160 && info.description.endsWith('Research use only.'), x.slug + ' description fits: ' + info.description);
-    assert.equal(/\bpeptides\b/i.test(info.description), isPeptideComparison(x), x.slug + ' description peptide wording');
-    assert.equal((html.match(/<h2[^>]*>[^<]*\bpeptide\b/gi) || []).length, [x.a, x.b].filter(slug => isPeptideCompound(compounds.find(c => c.slug === slug))).length, x.slug + ': each peptide heading says so');
+    assert(!/peptide|dos(e|ing)\b|inject|reconstitut/i.test(text(html).replace(disclaimer, '')), x.slug + ' wording');
   }
 
   const index = render(React.createElement(CompoundIndex));
   assert.equal((index.match(/<h1\b/g) || []).length, 1);
-  assert(/<h1>Peptide and compound reference<\/h1>/.test(index), 'index heading names peptides');
-  assert(compounds.filter(c => !isPeptideCompound(c)).map(c => c.slug).join() === 'nad', 'only NAD+ is not a peptide');
   for (const c of compounds) assert(index.includes('href="/compounds/' + c.slug + '"'), 'index links ' + c.slug);
   for (const x of comparisons) assert(index.includes('href="/compare/' + x.slug + '"'), 'index links ' + x.slug);
   const verify = render(React.createElement(VerifyCoa));

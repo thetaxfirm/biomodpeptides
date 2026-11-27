@@ -32,5 +32,5 @@ export function ResearchVialIndex({ current, products, level = 3 }: { current?: 
   if (!vials.length) return null;
   const others = otherFormatProducts(products, current);
   const Heading = level === 2 ? 'h2' : 'h3';
-  return <nav className="research-vial-index" aria-labelledby="research-vial-index-heading"><Heading id="research-vial-index-heading">All research peptides and compounds</Heading><ul>{vials.map(v => <li key={v.id}><a href={'/product/' + v.slug}>{sizedVial(v) ? vialTitle(v) : v.name}</a></li>)}</ul>{others.length > 0 && <OtherFormatsList others={others} level={level}/>}<a className="editorial-link" href="/shop">Shop research peptides <ArrowRight size={17}/></a></nav>;
+  return <nav className="research-vial-index" aria-labelledby="research-vial-index-heading"><Heading id="research-vial-index-heading">All research compounds</Heading><ul>{vials.map(v => <li key={v.id}><a href={'/product/' + v.slug}>{sizedVial(v) ? vialTitle(v) : v.name}</a></li>)}</ul>{others.length > 0 && <OtherFormatsList others={others} level={level}/>}<a className="editorial-link" href="/shop">Shop research compounds <ArrowRight size={17}/></a></nav>;
 }

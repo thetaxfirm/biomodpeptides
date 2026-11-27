@@ -2,7 +2,7 @@
 import { useState, FormEvent } from 'react';
 import { ArrowRight } from 'lucide-react';
 import type { Product } from '@/lib/catalog';
-import { compounds, compoundAt, comparisonAt, comparisons, comparisonsFor, compoundQuestions, isPeptideCompound, isPeptideComparison, publishedCompound, publishedComparison, pubchemUrl, type Compound } from '@/lib/compound-reference';
+import { compounds, compoundAt, comparisonAt, comparisons, comparisonsFor, compoundQuestions, publishedCompound, publishedComparison, pubchemUrl, type Compound } from '@/lib/compound-reference';
 import { eligibleDiscovery, productHeading } from '@/lib/product-discovery';
 import { batchFor, batchPath, batchRecords, batchRecordsFor, batchStatusLabel, matchingCertificateFor, reportedResult } from '@/lib/testing';
 import { collections, publishedCollection } from '@/lib/collections';
@@ -48,7 +48,7 @@ export function CompoundIndex() {
   const { store } = useStore();
   const shown = compounds.filter(publishedCompound);
   return <div className={styles.page}>
-    <div className="page-heading"><h1>Peptide and compound reference</h1><p>CAS numbers, molecular formulas, molecular weights and sequences for every research peptide and compound Biomod supplies, each linked to its PubChem record and to the lab report for the lot we ship.</p></div>
+    <div className="page-heading"><h1>Compound reference</h1><p>CAS numbers, molecular formulas, molecular weights and sequences for every compound Biomod supplies, each linked to its PubChem record and to the lab report for the lot we ship.</p></div>
     <div className={styles.tableWrap}><table className={styles.table}>
       <caption className="sr-only">Compound identifiers and molecular data</caption>
       <thead><tr><th scope="col">Compound</th><th scope="col">CAS</th><th scope="col">Formula</th><th scope="col">Molecular weight (g/mol)</th><th scope="col">Biomod products</th></tr></thead>
@@ -74,7 +74,7 @@ export function CompoundPage({ slug }: { slug: string }) {
   return <div className={styles.page}>
     <nav aria-label="Breadcrumb" className={styles.crumbs}><a href="/compounds">Compound reference</a><span aria-hidden="true">/</span><span>{c.name}</span></nav>
     <div className="page-heading"><h1>{c.name}</h1><p>{c.summary}</p></div>
-    <section className={styles.section} aria-labelledby="data-heading"><h2 id="data-heading">{c.name}{isPeptideCompound(c) ? ' peptide' : ''} reference data</h2><Facts c={c}/>
+    <section className={styles.section} aria-labelledby="data-heading"><h2 id="data-heading">Reference data</h2><Facts c={c}/>
       <p className={styles.source}>Formula, molecular weight and sequence from PubChem CID {c.cid}. Molecular weight is the computed average mass of the neutral structure; a salt form such as an acetate weighs more.</p></section>
     <section className={styles.section} aria-labelledby="lots-heading"><h2 id="lots-heading">Biomod lots and lab reports</h2><Lots products={products}/></section>
     {related.length > 0 && <section className={styles.section} aria-labelledby="related-heading"><h2 id="related-heading">Compare</h2>
@@ -94,12 +94,12 @@ export function ComparisonPage({ slug }: { slug: string }) {
     <nav aria-label="Breadcrumb" className={styles.crumbs}><a href="/compounds">Compound reference</a><span aria-hidden="true">/</span><span>{pair[0].name} vs {pair[1].name}</span></nav>
     <div className="page-heading"><h1>{pair[0].name} vs {pair[1].name}</h1><p>{x.intro}</p></div>
     <div className={styles.tableWrap}><table className={`${styles.table} ${styles.pair}`}>
-      <caption className="sr-only">{pair[0].name} and {pair[1].name}{isPeptideComparison(x) ? ' peptides' : ''} compared</caption>
+      <caption className="sr-only">{pair[0].name} and {pair[1].name} compared</caption>
       <thead><tr><td/>{pair.map(c => <th key={c.slug} scope="col"><a href={'/compounds/' + c.slug}>{c.name}</a></th>)}</tr></thead>
       <tbody>{rows.map(([label, value]) => <tr key={label}><th scope="row">{label}</th>{pair.map(c => <td key={c.slug} className={label === 'Sequence' ? styles.sequence : undefined}>{value(c)}</td>)}</tr>)}
         <tr><th scope="row">PubChem</th>{pair.map(c => <td key={c.slug}><a href={pubchemUrl(c)} target="_blank" rel="noopener">CID {c.cid}</a></td>)}</tr></tbody>
     </table></div>
-    {pair.map(c => <section key={c.slug} className={styles.section} aria-labelledby={c.slug + '-lots'}><h2 id={c.slug + '-lots'}>{c.name}{isPeptideCompound(c) ? ' peptide' : ''} from Biomod</h2><p>{c.summary}</p><Lots products={listed(c, store.products)}/></section>)}
+    {pair.map(c => <section key={c.slug} className={styles.section} aria-labelledby={c.slug + '-lots'}><h2 id={c.slug + '-lots'}>{c.name} from Biomod</h2><p>{c.summary}</p><Lots products={listed(c, store.products)}/></section>)}
     {ruo}
   </div>;
 }

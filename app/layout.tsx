@@ -26,7 +26,7 @@ import { shoppingConfiguration } from '@/lib/shopping-metrics';
 import { runtime } from '@/lib/runtime';
 import searchPublication from '@/lib/seo-publication-v1.json';
 
-export const metadata: Metadata={title:{default:"Biomod Research Supply Company | TryBiomod",template:"%s | Biomod Research Supply Company"},description:"Biomod Research Supply Company at TryBiomod.com. Research peptide vials, product specifications and available lot-level documentation. For laboratory research only.",icons:{icon:"/favicon.svg"},robots:{index:false,follow:false}};
+export const metadata: Metadata={title:{default:"Biomod Research Supply Company | TryBiomod",template:"%s | Biomod Research Supply Company"},description:"Biomod Research Supply Company at TryBiomod.com. Research compound vials, product specifications and available lot-level documentation. For laboratory research only.",icons:{icon:"/favicon.svg"},robots:{index:false,follow:false}};
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const snapshot = await publicCatalog();
   const env = runtime();

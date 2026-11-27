@@ -8,7 +8,7 @@ export const productNameVariants: Record<string, string[]> = {
   'ss-31-50mg': ['SS31', 'SS 31'],
   'epitalon-50mg': ['Epithalon'],
   'aod-9604-10mg': ['AOD-9604', 'AOD9604'],
-  'dsip-10mg': ['delta sleep-inducing peptide'],
+  'dsip-10mg': ['Emideltide'],
   'kisspeptin-10mg': ['Kisspeptin-10', 'Kisspeptin 10'], // its own question: plain kisspeptin is broader
   'pt-141-10mg': ['PT141', 'PT 141'],
   'thymosin-alpha-1-10mg': ['Thymosin Alpha 1', 'TA1'],
