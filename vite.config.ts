@@ -32,6 +32,7 @@ const localBindingConfig = {
     vars: { SEO_PUBLIC_ORIGIN: searchPublication.origin, SEO_PUBLIC_LAUNCH_APPROVED: "true", SEO_INDEXING_ENABLED: "true", SEO_REVIEWED_PRODUCT_SLUGS: searchPublication.productSlugs.join(",") },
   } : {}),
   main: "./worker.ts",
+  version_metadata: { binding: "CF_VERSION_METADATA" },
   ...(production ? { triggers: { crons: ["0 9 * * *", "*/5 * * * *"] } } : {}),
   compatibility_flags: ["nodejs_compat"],
   d1_databases: d1
