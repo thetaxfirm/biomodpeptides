@@ -1,0 +1,9 @@
+.controls { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; min-width: 0; width: 100%; }
+.controls label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; max-width: 100%; }
+.controls input, .controls select { min-height: 44px; width: 100%; max-width: 100%; border: 1px solid currentColor; border-radius: 4px; background: var(--bm-surface, #fff); color: var(--bm-ink, #2c1534); padding: 8px 10px; font: inherit; }
+.controls input:focus-visible, .controls select:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.help, .error { flex-basis: 100%; margin: 0; font-size: 12px; line-height: 1.5; }
+.error { color: #9e2a25; }
+@media(max-width: 600px) { .controls label { flex: 1 1 180px; } }
+
+:global(html[data-theme='dark']) .error { color: #ffc5bd; }

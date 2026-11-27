@@ -1,3 +1,4 @@
+import { reportOptionsFromParams } from '@/lib/report-window';
 import { listPresaleCampaigns } from '@/lib/presale-campaigns';
 import { settingsSnapshot } from '@/lib/settings-version';
 import { summarizeRequestReplies } from '@/lib/request-replies';
@@ -25,9 +26,10 @@ export async function adminRead(context: StoreGetContext) {
         // "Today" home: work waiting now, sales and setup gaps. Each section is limited to what the role may see.
         const { role } = await requireStaff('orders:read');
         const allowed = (permission: StaffPermission) => can(role, permission);
+        const reportOptions=reportOptionsFromParams(req.nextUrl.searchParams);
         const now=Date.now(), products=await catalog(false,true), store=await config();
-        const orderSummary=await readAdminOverviewOrderSummary(database(),products,now);
-        return j(await adminOverview(runtime() as any, { orders: [], orderSummary, now, products, shipping: store.shippingOptions, environment: paymentEnvironment(runtime()),
+        const orderSummary=await readAdminOverviewOrderSummary(database(),products,now,reportOptions);
+        return j(await adminOverview(runtime() as any, { orders: [], orderSummary, now, products, reportOptions, shipping: store.shippingOptions, environment: paymentEnvironment(runtime()),
             access: { orders: true, requests: allowed('requests:write'), reports: allowed('reports:read'), store: allowed('store:write') } }));
     }
     if (action === 'admin-orders') {

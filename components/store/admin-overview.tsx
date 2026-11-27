@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { ReportPeriodControls, useReportPeriod } from './report-period';
 import { money } from '@/lib/catalog';
 import type { Attention, Overview } from '@/lib/admin-overview';
 import { api } from './provider';
@@ -18,25 +19,30 @@ function Item({ item, onOpen }: { item: Attention; onOpen: (tab: string, orderVi
 
 /** The first screen of administration: what needs doing now, sales, and store setup gaps. */
 export function AdminOverview({ onOpen, reloadToken = 0 }: { onOpen: (tab: string, orderView?: string) => void; reloadToken?: number }) {
-    const [data, setData] = useState<Overview | null>(null);
+    const [response, setData] = useState<Overview | null>(null);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const sequence = useRef(0);
+    const period = useReportPeriod('summary');
+    const [loadedKey, setLoadedKey] = useState('');
+    const key = period.query + ':' + reloadToken;
+    const data = loadedKey === key && !loading && !error ? response : null;
     async function load() {
         const request = ++sequence.current;
         setLoading(true); setError('');
-        try { const next = await api('admin-overview') as Overview; if (request === sequence.current) setData(next); }
-        catch { if (request === sequence.current) setError('Today could not load. Retry, or open Orders directly.'); }
+        try { const next = await api('admin-overview?' + period.query) as Overview; if (request === sequence.current) { setData(next); setLoadedKey(key); } }
+        catch (e) { if (request === sequence.current) setError('Today could not load. ' + (e instanceof Error ? e.message : 'Retry, or open Orders directly.')); }
         finally { if (request === sequence.current) setLoading(false); }
     }
-    useEffect(() => { void load(); }, [reloadToken]); // eslint-disable-line react-hooks/exhaustive-deps
-    const today = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' }).format(data?.generatedAt ?? Date.now());
+    useEffect(() => { void load(); return () => { sequence.current++; }; }, [reloadToken, period.query]); // eslint-disable-line react-hooks/exhaustive-deps
+    const today = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: period.selection.timeZone }).format(data?.generatedAt ?? Date.now());
     const work = data ? [...data.setup, ...data.attention] : [];
     return <section className={styles.overview} aria-labelledby="overview-title" aria-busy={loading}>
         <div className={styles.heading}>
             <div><h2 id="overview-title">Today</h2><p>{today}</p></div>
             <button type="button" className="text-button" disabled={loading} onClick={() => void load()}>{loading ? 'Checking…' : 'Refresh'}</button>
         </div>
+        {(response?.sales || !response) && <ReportPeriodControls control={period} periods={['summary']} label="Sales comparison period"/>}
         {error && <div className="notice error"><p role="alert">{error}</p><button type="button" className="text-button" onClick={() => void load()}>Retry</button></div>}
         {!data && !error && <p className={styles.muted} role="status">Checking orders, requests and products…</p>}
         {data && <>
@@ -51,7 +57,7 @@ export function AdminOverview({ onOpen, reloadToken = 0 }: { onOpen: (tab: strin
                     {w.sandbox.orders > 0 && <small>{w.sandbox.orders} sandbox {w.sandbox.orders === 1 ? 'order' : 'orders'}, excluded</small>}
                     {w.unknown.orders > 0 && <small>{w.unknown.orders} {w.unknown.orders === 1 ? 'order' : 'orders'} with unknown payment environment, excluded</small>}
                 </div>)}</div>
-                <p className={styles.muted}>Gross recorded amounts by order date include shipping and tax; this is not net revenue. Refunded, cancelled and failed orders are excluded; fulfillment holds still count. Orders marked as internal tests are excluded; remaining records are not confirmed customer sales. Today is partial from midnight UTC. The 7- and 30-day totals use complete UTC days, matching Sales, Traffic and Promo reports.</p>
+                <p className={styles.muted}>Gross recorded amounts by order date include shipping and tax; this is not net revenue. Refunded, cancelled and failed orders are excluded; fulfillment holds still count. Orders marked as internal tests are excluded; remaining records are not confirmed customer sales. Today is partial from midnight in {data.timeZone}. The 7- and 30-day totals and custom comparison use complete dates in that time zone. Needs attention always shows current work.</p>
             </>}
         </>}
     </section>;

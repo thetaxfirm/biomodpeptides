@@ -19,10 +19,10 @@ function harness(component) {
 }
 function load(relative,dependencies={}) {
   const filename=path.join(root,relative),mod=new Module(filename,module);mod.filename=filename;mod.paths=Module._nodeModulePaths(root);
-  mod.require=id=>{if(Object.prototype.hasOwnProperty.call(dependencies,id))return dependencies[id];if(id==='react')return hooks;if(id==='react/jsx-runtime')return require('react/jsx-runtime');throw Error('Unexpected import '+id);};
+  mod.require=id=>{if(Object.prototype.hasOwnProperty.call(dependencies,id))return dependencies[id];if(id==='./report-period')return require('./report-period-fixture.cjs')(()=>hooks);if(id==='react')return hooks;if(id==='react/jsx-runtime')return require('react/jsx-runtime');throw Error('Unexpected import '+id);};
   mod._compile(ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,filename);return mod.exports;
 }
-function nodes(tree,out=[]) {if(Array.isArray(tree)){tree.forEach(x=>nodes(x,out));return out;}if(tree&&typeof tree==='object'&&tree.props){out.push(tree);nodes(tree.props.children,out);}return out;}
+function nodes(tree,out=[]) {if(Array.isArray(tree)){tree.forEach(x=>nodes(x,out));return out;}if(tree&&typeof tree==='object'&&tree.props){if(typeof tree.type==='function'&&tree.type.name==='ReportPeriodControls')return nodes(tree.type(tree.props),out);out.push(tree);nodes(tree.props.children,out);}return out;}
 function text(tree) {if(tree==null||typeof tree==='boolean')return '';if(Array.isArray(tree))return tree.map(text).join(' ').replace(/\s+/g,' ').trim();if(typeof tree!=='object')return String(tree);return text(tree.props?.children);}
 const find=(host,predicate)=>{const node=nodes(host.tree).find(predicate);assert(node,'expected node is present');return node;};
 
@@ -38,16 +38,16 @@ let requests=[],response=report;
 const originalFetch=global.fetch;
 (async()=>{
  try{
-  global.fetch=(url,options)=>{assert.equal(url.startsWith('/api/metrics/shopping-report?days='),true);requests.push({url,options});return Promise.resolve({ok:true,json:async()=>response});};
+  global.fetch=(url,options)=>{assert.equal(url.startsWith('/api/metrics/shopping-report?timeZone=UTC&days='),true);requests.push({url,options});return Promise.resolve({ok:true,json:async()=>response});};
   let host=harness(ShoppingDiagnostics);assert(text(host.tree).includes('Loading shopping-stage diagnostics'));await flush();host.render();
-  assert.equal(requests[0].url,'/api/metrics/shopping-report?days=7');assert.equal(requests[0].options.credentials,'same-origin');assert.equal(requests[0].options.method,'GET');
+  assert.equal(requests[0].url,'/api/metrics/shopping-report?timeZone=UTC&days=7');assert.equal(requests[0].options.credentials,'same-origin');assert.equal(requests[0].options.method,'GET');
   assert(text(host.tree).includes('Shopping collection: Enabled'));assert(text(host.tree).includes('2026-10-03 through 2026-10-09'));assert(text(host.tree).includes('Coverage is shorter'));
   for(const name of ['Cart additions confirmed','Cart views','Checkout sign-in screens','Checkout forms shown','Delivery quotes confirmed','Payment handoffs ready'])assert(text(host.tree).includes(name));
   assert(text(host.tree).includes('not payment confirmation'));assert(text(host.tree).includes('not linked to individual shoppers'));assert(text(host.tree).includes('Partial days, excluded from period totals'));
   assert(!text(host.tree).includes('%'));assert(!text(host.tree).includes('sales made'));assert(text(host.tree).includes('not proof of no activity'));
   for(const period of ['30','90']){
     response={...report,window:{...report.window,requestedDays:Number(period)}};find(host,node=>node.type==='select').props.onChange({target:{value:period}});host.render();
-    assert(!text(host.tree).includes('Cart additions confirmed'),'Previous window is cleared before reloading');await flush();host.render();assert.equal(requests.at(-1).url,'/api/metrics/shopping-report?days='+period);
+    assert(!text(host.tree).includes('Cart additions confirmed'),'Previous window is cleared before reloading');await flush();host.render();assert.equal(requests.at(-1).url,'/api/metrics/shopping-report?timeZone=UTC&days='+period);
   }
   host.unmount();assert.equal(requests.at(-1).options.signal.aborted,true);
   response={...report,configuration:{enabled:false,reason:'flag_disabled',startedAt:report.configuration.startedAt}};host=harness(ShoppingDiagnostics);await flush();host.render();assert(text(host.tree).includes('Shopping collection: Disabled'));assert(text(host.tree).includes('Cart additions confirmed'),'Paused collection retains measured history');host.unmount();

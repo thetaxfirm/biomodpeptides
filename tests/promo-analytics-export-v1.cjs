@@ -22,11 +22,13 @@ for(const code of ['=HYPERLINK("https://example.invalid","x")',' +1+1','-2+3','@
 const escaped='a "quote", comma\nand newline';assert.equal(parseCsv(promoAnalyticsExport({...report,codes:[{...report.codes[0],code:escaped}]}).csv).find(r=>r.record_type==='promo_orders').code,escaped);
 
 const React=require('react');const {renderToStaticMarkup}=require('react-dom/server');const originalLoad=Module._load;let hookValues;const nativeTables={Table:'table',TableHeader:'thead',TableBody:'tbody',TableRow:'tr',TableHead:'th',TableCell:'td'};let apiImpl=()=>{throw Error('Unexpected network');};let currentHooks={...React,useState:()=>[hookValues.shift(),()=>{}],useEffect:()=>{}};
-Module._load=function(name,parent,isMain){if(name==='react')return currentHooks;if(name==='@/lib/promo-analytics-export')return{promoAnalyticsExport};if(name==='@/lib/catalog')return{money:value=>'$'+(value/100).toFixed(2)};if(name==='./provider')return{api:(...args)=>apiImpl(...args)};if(name==='@/components/ui/table')return nativeTables;if(name==='./admin-promo-codes')return{AdminPromoCodes:()=>null};if(name.endsWith('.module.css'))return{};return originalLoad.call(this,name,parent,isMain);};
+Module._load=function(name,parent,isMain){if (name === './report-period') return require('./report-period-fixture.cjs')(() => currentHooks);
+  if (name === '@/lib/report-window') return require('../lib/report-window.ts');
+  if(name==='react')return currentHooks;if(name==='@/lib/promo-analytics-export')return{promoAnalyticsExport};if(name==='@/lib/catalog')return{money:value=>'$'+(value/100).toFixed(2)};if(name==='./provider')return{api:(...args)=>apiImpl(...args)};if(name==='@/components/ui/table')return nativeTables;if(name==='./admin-promo-codes')return{AdminPromoCodes:()=>null};if(name.endsWith('.module.css'))return{};return originalLoad.call(this,name,parent,isMain);};
 const {PromoAnalytics}=require('../components/store/promo-analytics.tsx');
-const values=(r=report,environment='live',loading=false,error='')=>['30',environment,0,r,loading,error,''];
+const values=(r=report,environment='live',loading=false,error='')=>['30','timeZone=UTC&days=30:0',environment,0,r,loading,error,''];
 function render(state){hookValues=state;return renderToStaticMarkup(React.createElement(PromoAnalytics));}
-function nodes(tree,out=[]){if(Array.isArray(tree)){tree.forEach(x=>nodes(x,out));return out;}if(tree&&typeof tree==='object'&&tree.props){out.push(tree);nodes(tree.props.children,out);}return out;}
+function nodes(tree,out=[]){if(Array.isArray(tree)){tree.forEach(x=>nodes(x,out));return out;}if(tree&&typeof tree==='object'&&tree.props){if(typeof tree.type==='function'&&tree.type.name==='ReportPeriodControls')return nodes(tree.type(tree.props),out);out.push(tree);nodes(tree.props.children,out);}return out;}
 const find=(tree,pred)=>{const node=nodes(tree).find(pred);assert(node,'node not found');return node;};
 function button(tree,label){return find(tree,n=>n.type==='button'&&n.props.children===label);}
 try{
@@ -35,7 +37,7 @@ try{
  const loading=render(values(report,'live',true));assert(!loading.includes('<table'));assert(!loading.includes('BM10'));
  const failed=render(values(report,'live',false,'Cannot load report'));assert(!failed.includes('<table'));assert(failed.includes('role="alert"'));hookValues=values(report,'live',false,'Cannot load report');assert.equal(button(PromoAnalytics(),'Download CSV').props.disabled,true);
  const missing={...report,codes:[{...report.codes[0],rows:[{...zero('live'),orders:1,paymentRecorded:1,missingAmountRecords:1,missingDiscountRecords:1},zero('sandbox'),zero('unknown')]}]};const incomplete=render(values(missing));assert((incomplete.match(/Not recorded/g)||[]).length===2);assert(!incomplete.includes('$0.00'));
- const allHtml=render(['all','live',0,{...report,window:{...report.window,days:'all',start:0}},false,'','']);assert(allHtml.includes('all available history'));assert(!allHtml.includes('1970-01-01'));
+ const allHtml=render(['all','timeZone=UTC&days=all:0','live',0,{...report,window:{...report.window,days:'all',start:0}},false,'','']);assert(allHtml.includes('All available history'));assert(!allHtml.includes('1970-01-01'));
  const old={document:global.document,setTimeout:global.setTimeout,createObjectURL:URL.createObjectURL,revokeObjectURL:URL.revokeObjectURL};let emitted,clicked=0,removed=0,revoked=0,scheduled;const anchor={href:'',download:'',click(){clicked++;},remove(){removed++;}};
  try{global.document={createElement:tag=>{assert.equal(tag,'a');return anchor;},body:{appendChild:link=>assert.equal(link,anchor)}};global.setTimeout=(fn,delay)=>{assert.equal(delay,1000);scheduled=fn;return 1;};URL.createObjectURL=blob=>{emitted=blob;return'blob:fixture';};URL.revokeObjectURL=url=>{assert.equal(url,'blob:fixture');revoked++;};hookValues=values();button(PromoAnalytics(),'Download CSV').props.onClick();assert.equal(clicked,1);assert.equal(removed,1);assert.equal(anchor.download,file.filename);assert.equal(emitted.type,'text/csv;charset=utf-8');scheduled();assert.equal(revoked,1);}finally{global.document=old.document;global.setTimeout=old.setTimeout;URL.createObjectURL=old.createObjectURL;URL.revokeObjectURL=old.revokeObjectURL;}
 }finally{Module._load=originalLoad;}
@@ -50,10 +52,10 @@ console.log('PASS: aggregate-only CSV with exact cents/window/env/missing-record
  });
  const pending=[];apiImpl=action=>new Promise((resolve,reject)=>pending.push({action,resolve,reject}));
  host={slots:[],cursor:0,effects:[],tree:null,dirty:false,render(){for(let n=0;n<20;n++){this.cursor=0;this.effects=[];this.dirty=false;this.tree=PromoAnalytics();for(const effect of this.effects)effect();if(!this.dirty)return;}throw Error('Render loop');}};
- host.render();assert.equal(pending[0].action,'admin-promos?days=7&complete=true');assert.equal(button(host.tree,'Download CSV').props.disabled,true);
+ host.render();assert.equal(pending[0].action,'admin-promos?timeZone=UTC&days=7&complete=true');assert.equal(button(host.tree,'Download CSV').props.disabled,true);
  pending[0].resolve({...report,window:{...report.window,days:7,includesPartialToday:false}});await new Promise(setImmediate);host.render();assert.equal(button(host.tree,'Download CSV').props.disabled,false);
  button(host.tree,'Refresh totals').props.onClick();host.render();assert.equal(button(host.tree,'Download CSV').props.disabled,true);assert(!nodes(host.tree).some(node=>node.type==='table'));
- find(host.tree,node=>node.type==='select'&&node.props.value==='7').props.onChange({target:{value:'30'}});host.render();assert.equal(pending[2].action,'admin-promos?days=30&complete=true');
+ find(host.tree,node=>node.type==='select'&&node.props.value==='7').props.onChange({target:{value:'30'}});host.render();assert.equal(pending[2].action,'admin-promos?timeZone=UTC&days=30&complete=true');
  pending[1].resolve(report);await new Promise(setImmediate);host.render();assert.equal(button(host.tree,'Download CSV').props.disabled,true,'late old-period report cannot re-enable CSV');assert(!nodes(host.tree).some(node=>node.type==='table'));
  pending[2].reject(Error('offline'));await new Promise(setImmediate);host.render();assert.equal(button(host.tree,'Download CSV').props.disabled,true);assert(nodes(host.tree).some(node=>node.props.role==='alert'));assert(!nodes(host.tree).some(node=>node.type==='table'));
  button(host.tree,'Refresh totals').props.onClick();host.render();pending[3].resolve({...report,window:{...report.window,days:30,includesPartialToday:false}});await new Promise(setImmediate);host.render();assert.equal(button(host.tree,'Download CSV').props.disabled,false);assert(nodes(host.tree).some(node=>node.type==='table'));

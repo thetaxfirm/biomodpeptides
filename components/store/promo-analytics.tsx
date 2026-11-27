@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { ReportPeriodControls, useReportPeriod } from './report-period';
+import { reportDateLabel } from '@/lib/report-window';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import type { PromoAnalyticsReport } from '@/lib/promo-analytics';
 import { promoAnalyticsExport } from '@/lib/promo-analytics-export';
@@ -14,31 +16,34 @@ const environmentNames: Record<Environment, string> = { live: 'Live', sandbox: '
 const utcTime = (value: number) => new Date(value).toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
 
 export function PromoAnalytics() {
-  const [days, setDays] = useState('7');
+  const period = useReportPeriod();
+  const [loadedKey, setLoadedKey] = useState('');
   const [environment, setEnvironment] = useState<Environment>('live');
   const [revision, setRevision] = useState(0);
   const [report, setReport] = useState<PromoAnalyticsReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const key = period.query + ':' + revision;
   const [downloadError, setDownloadError] = useState('');
 
   useEffect(() => {
     let active = true;
-    api('admin-promos?days=' + days + '&complete=true').then((value: PromoAnalyticsReport) => {
-      if (active) { setReport(value); setError(''); }
-    }).catch(() => {
-      if (active) { setReport(null); setError('Promo analytics could not load. Please refresh to try again.'); }
+    setLoading(true); setError(''); setReport(null);
+    api('admin-promos?' + period.query + '&complete=true').then((value: PromoAnalyticsReport) => {
+      if (active) { setReport(value); setError(''); setLoadedKey(key); }
+    }).catch(e => {
+      if (active) { setReport(null); setError('Promo analytics could not load. ' + (e instanceof Error ? e.message : 'Please refresh to try again.')); }
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [days, revision]);
+  }, [period.query, revision]);
 
   function clearReport() { setReport(null); setLoading(true); setError(''); setDownloadError(''); }
   function refreshReport() { clearReport(); setRevision(value => value + 1); }
   function downloadReport() {
-    if (!report || loading || error) return;
+    if (!visible) return;
     setDownloadError('');
     try {
-      const file = promoAnalyticsExport(report);
+      const file = promoAnalyticsExport(visible);
       const url = URL.createObjectURL(new Blob([file.csv], { type: 'text/csv;charset=utf-8' }));
       const link = document.createElement('a');
       link.href = url; link.download = file.filename;
@@ -47,7 +52,7 @@ export function PromoAnalytics() {
     } catch { setDownloadError('The CSV download could not start. Please try again.'); }
   }
 
-  const visible = !loading && !error && report && String(report.window.days) === days ? report : null;
+  const visible = !loading && !error && report && loadedKey === key ? report : null;
   const missingPayments = visible?.codes.reduce((sum, code) => sum + (code.rows.find(row => row.environment === environment)?.missingPaymentRecords ?? 0), 0) ?? 0;
   const missingAmounts = visible?.codes.reduce((sum, code) => sum + (code.rows.find(row => row.environment === environment)?.missingAmountRecords ?? 0), 0) ?? 0;
   const missingDiscounts = visible?.codes.reduce((sum, code) => sum + (code.rows.find(row => row.environment === environment)?.missingDiscountRecords ?? 0), 0) ?? 0;
@@ -58,21 +63,19 @@ export function PromoAnalytics() {
     <h2 id="promo-analytics-title">Affiliate &amp; promo code totals</h2>
     <p>All active codes appear here, including codes with no orders yet. Use the totals below to track orders attributed to each code.</p>
     <div className={styles.toolbar}>
-      <label className={styles.control}>Reporting period<select value={days} onChange={event => { clearReport(); setDays(event.target.value); }}>
-        <option value="7">Last 7 complete days (UTC)</option><option value="30">Last 30 complete days (UTC)</option><option value="90">Last 90 complete days (UTC)</option><option value="all">All history through yesterday (UTC)</option>
-      </select></label>
+      <ReportPeriodControls control={period} periods={['7', '30', '90', 'all']} label="Reporting period"/>
       <label className={styles.control}>Payment environment<select value={environment} onChange={event => setEnvironment(event.target.value as Environment)}>
         {Object.entries(environmentNames).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
       </select></label>
       <button type="button" className="button button-dark" disabled={loading} onClick={refreshReport}>{loading ? 'Loading totals…' : 'Refresh totals'}</button>
       <button type="button" className="text-button" disabled={!visible} onClick={downloadReport}>Download CSV</button>
     </div>
-    <p className={styles.note}>Periods use complete UTC days, matching Sales and Traffic; today is excluded. CSV includes all environments in separate rows.</p>
+    <p className={styles.note}>Periods use complete dates in the applied reporting time zone; today is excluded. CSV includes all environments in separate rows.</p>
     {error && <p className={styles.error} role="alert">{error}</p>}
     {downloadError && <p className={styles.error} role="alert">{downloadError}</p>}
     {loading && <p role="status">Loading promo analytics…</p>}
     {visible && <>
-      <p className={styles.note}>Order-start window: {visible.window.days === 'all' ? 'all available history' : utcTime(visible.window.start)} to {utcTime(visible.window.end)}. Refreshed {utcTime(visible.asOf)}.</p>
+      <p className={styles.note}>Order-start window: {reportDateLabel(visible.window)}. Refreshed {utcTime(visible.asOf)}.</p>
       <h3>{environmentNames[environment]} orders</h3>
       {visible.codes.length ? <Table>
         <TableHeader><TableRow><TableHead>Code</TableHead><TableHead className={styles.number}>Current discount</TableHead><TableHead className={styles.number}>Orders started</TableHead><TableHead className={styles.number}>Payment recorded</TableHead><TableHead className={styles.number}>Promo savings on paid orders</TableHead><TableHead className={styles.number}>Recorded gross</TableHead></TableRow></TableHeader>

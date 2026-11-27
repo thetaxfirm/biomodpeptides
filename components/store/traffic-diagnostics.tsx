@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { ReportPeriodControls, useReportPeriod } from './report-period';
 import { ShoppingDiagnostics } from './shopping-diagnostics';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import type { TrafficReport, TrafficPageGroup, TrafficSourceGroup } from '@/lib/traffic-metrics';
@@ -15,36 +16,36 @@ const requestedStart = (endExclusive: string, days: number) => new Date(Date.par
 const count = (value: number) => value.toLocaleString('en-US');
 
 export function TrafficDiagnostics() {
-  const [days, setDays] = useState('7');
+  const period = useReportPeriod();
+  const [loadedKey, setLoadedKey] = useState('');
   const [revision, setRevision] = useState(0);
   const [report, setReport] = useState<TrafficReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const key = period.query + ':' + revision;
   useEffect(() => {
     let active = true;
-    const controller = new AbortController();
     setLoading(true); setError(''); setReport(null);
-    fetch('/api/metrics/report?days=' + days, { method: 'GET', credentials: 'same-origin', cache: 'no-store', signal: controller.signal })
+    const controller = new AbortController();
+    fetch('/api/metrics/report?' + period.query, { method: 'GET', credentials: 'same-origin', cache: 'no-store', signal: controller.signal })
       .then(async response => {
-        if (!response.ok) throw new Error('Report unavailable');
+        if (!response.ok) { const detail = response.status === 400 ? await response.json() as { error?: string } : null; throw new Error(detail?.error || 'Report unavailable'); }
         return await response.json() as TrafficReport;
       })
-      .then(value => { if (active) setReport(value); })
-      .catch(() => { if (active) setError('Traffic diagnostics could not load. Totals are unavailable. Please refresh to try again.'); })
+      .then(value => { if (active) { setReport(value); setLoadedKey(key); } })
+      .catch(e => { if (active) setError('Traffic diagnostics could not load. Totals are unavailable. ' + (e instanceof Error ? e.message : 'Please refresh to try again.')); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; controller.abort(); };
-  }, [days, revision]);
+  }, [period.query, revision]);
   function refresh() { setLoading(true); setError(''); setReport(null); setRevision(value => value + 1); }
-  const visible = !loading && !error && report && String(report.window.requestedDays) === days ? report : null;
+  const visible = !loading && !error && report && loadedKey === key ? report : null;
   const available = visible?.status === 'available' ? visible : null;
   const hasCompleted = Boolean(available && available.completedDays.length && available.totals.events !== null);
   return <><section className={styles.report} aria-labelledby="traffic-diagnostics-title">
     <h2 id="traffic-diagnostics-title">Traffic diagnostics</h2>
     <p>Accepted public page-view events. These are not unique visitors, verified people, conversions or attributable sales.</p>
     <div className={styles.toolbar}>
-      <label className={styles.period}>Reporting period<select value={days} onChange={event => { setLoading(true); setError(''); setReport(null); setDays(event.target.value); }}>
-        <option value="7">Last 7 complete days (UTC)</option><option value="30">Last 30 complete days (UTC)</option>
-      </select></label>
+      <ReportPeriodControls control={period} periods={['7', '30', '90']} label="Traffic reporting period"/>
       <button type="button" className="button button-dark" disabled={loading} onClick={refresh}>{loading ? 'Loading totals…' : 'Refresh totals'}</button>
     </div>
     {error && <p role="alert">{error}</p>}
@@ -52,14 +53,15 @@ export function TrafficDiagnostics() {
     {visible && <>
       <p><strong>Collection: {visible.configuration.enabled ? 'Enabled' : 'Disabled'}.</strong> Measurement start: {time(visible.configuration.startedAt)}. Refreshed {time(visible.asOf)}.</p>
       {!visible.configuration.enabled && <p className={styles.note}>New events are not being recorded. {visible.configuration.reason === 'flag_disabled' ? 'Collection is switched off.' : visible.configuration.reason === 'start_in_future' ? 'The configured start is in the future.' : 'A valid measurement start has not been configured.'} Any available historical totals are retained separately.</p>}
-      <p>Requested dates: {requestedStart(visible.window.endExclusive, visible.window.requestedDays)} through {previousDate(visible.window.endExclusive)} UTC. Today is excluded from period totals.</p>
+      <p>Requested dates: {visible.window.requestedFrom ?? requestedStart(visible.window.endExclusive, visible.window.requestedDays)} through {visible.window.requestedTo ?? previousDate(visible.window.endExclusive)} ({visible.window.timeZone}). Today is excluded from period totals.</p>
+      {visible.window.aggregation === 'minute' && <p className={styles.note}>Local-day totals use anonymous minute counts. {visible.window.preciseFrom ? <>Precise coverage began {time(visible.window.preciseFrom)}.</> : <>Precise coverage has not started.</>} Earlier local dates are unavailable, not zero activity; historical UTC totals cannot be converted to this time zone.</p>}
       {visible.status === 'unavailable' && <p role="alert">Traffic data is unavailable. No event totals are being reported as zero.</p>}
       {available && <>
         <section aria-labelledby="traffic-complete-title">
-          <h3 id="traffic-complete-title">Complete UTC days</h3>
+          <h3 id="traffic-complete-title">Complete {visible.window.timeZone} days</h3>
           {hasCompleted ? <>
-            <p><strong>{count(available.totals.events!)} accepted page-view events</strong> across {available.completedDays.length} complete {available.completedDays.length === 1 ? 'day' : 'days'}: {available.completedDays[0].date} through {available.completedDays[available.completedDays.length - 1].date} UTC.</p>
-            {available.completedDays.length < available.window.requestedDays && <p className={styles.note}>Coverage is shorter than the requested period. Dates before activation are unavailable; the partial activation day is excluded from these totals.</p>}
+            <p><strong>{count(available.totals.events!)} accepted page-view events</strong> across {available.completedDays.length} complete {available.completedDays.length === 1 ? 'day' : 'days'}: {available.completedDays[0].date} through {available.completedDays[available.completedDays.length - 1].date} ({visible.window.timeZone}).</p>
+            {available.completedDays.length < available.window.requestedDays && <p className={styles.note}>Coverage is shorter than the requested period. Dates before full coverage or retention are unavailable; the first partial coverage day is excluded from these totals.</p>}
             <p>Zero means no accepted events were recorded for that bucket. It does not establish that nobody visited or that collection was uninterrupted.</p>
             <div className={styles.breakdowns}>
               <section aria-labelledby="traffic-source-title"><h4 id="traffic-source-title">Source categories</h4>
@@ -71,13 +73,13 @@ export function TrafficDiagnostics() {
             </div>
             <p>Source categories use recognized referring hosts and, for the AI group, recognized utm_source tags. Tags are client-provided and do not prove an AI citation or acquisition. Missing referrers can include search engines, AI apps or direct navigation. Later navigation within the same document is classified as internal. The expanded AI classification and news-page coverage apply to new events; historical buckets were not reclassified.</p>
             <details className={styles.detail}><summary>Daily accepted event totals</summary>
-              <Table><TableHeader><TableRow><TableHead>Day (UTC)</TableHead><TableHead className={styles.number}>Events</TableHead><TableHead>Daily limit</TableHead></TableRow></TableHeader><TableBody>{available.completedDays.map(day => <TableRow key={day.date}><TableCell>{day.date}</TableCell><TableCell className={styles.number}>{count(day.events)}</TableCell><TableCell>{day.capReached ? 'Reached; additional events excluded' : 'Not reached'}</TableCell></TableRow>)}</TableBody></Table>
+              <Table><TableHeader><TableRow><TableHead>Day ({visible.window.timeZone})</TableHead><TableHead className={styles.number}>Events</TableHead><TableHead>UTC daily limit</TableHead></TableRow></TableHeader><TableBody>{available.completedDays.map(day => <TableRow key={day.date}><TableCell>{day.date}</TableCell><TableCell className={styles.number}>{count(day.events)}</TableCell><TableCell>{day.capReached ? 'Reached; additional events excluded' : 'Not reached'}</TableCell></TableRow>)}</TableBody></Table>
             </details>
-          </> : <p>No complete measured UTC days are available in this period yet. This is unavailable history, not zero traffic.</p>}
+          </> : <p>No complete measured {visible.window.timeZone} days are available in this period yet. This is unavailable history, not zero traffic.</p>}
         </section>
         {(available.activationDayPartial || available.partialToday) && <section aria-labelledby="traffic-partial-title"><h3 id="traffic-partial-title">Partial days, excluded from period totals</h3>
-          <Table><TableHeader><TableRow><TableHead>Day (UTC)</TableHead><TableHead>Coverage</TableHead><TableHead className={styles.number}>Events</TableHead></TableRow></TableHeader><TableBody>
-            {available.activationDayPartial && <TableRow><TableCell>{available.activationDayPartial.date}</TableCell><TableCell>Activation day, since measurement began{available.activationDayPartial.capReached ? '; daily limit reached' : ''}</TableCell><TableCell className={styles.number}>{count(available.activationDayPartial.events)}</TableCell></TableRow>}
+          <Table><TableHeader><TableRow><TableHead>Day ({visible.window.timeZone})</TableHead><TableHead>Coverage</TableHead><TableHead className={styles.number}>Events</TableHead></TableRow></TableHeader><TableBody>
+            {available.activationDayPartial && <TableRow><TableCell>{available.activationDayPartial.date}</TableCell><TableCell>First partial coverage day{available.activationDayPartial.capReached ? '; daily limit reached' : ''}</TableCell><TableCell className={styles.number}>{count(available.activationDayPartial.events)}</TableCell></TableRow>}
             {available.partialToday && <TableRow><TableCell>{available.partialToday.date}</TableCell><TableCell>Today so far{available.partialToday.capReached ? '; daily limit reached' : ''}</TableCell><TableCell className={styles.number}>{count(available.partialToday.events)}</TableCell></TableRow>}
           </TableBody></Table>
         </section>}

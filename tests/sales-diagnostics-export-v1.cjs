@@ -82,6 +82,8 @@ let hookValues, emittedBlob, clicked = 0, removed = 0, revoked = 0, scheduled;
 const anchor = { href: '', download: '', click() { clicked++; }, remove() { removed++; } };
 const originals = { document: global.document, setTimeout: global.setTimeout, createObjectURL: URL.createObjectURL, revokeObjectURL: URL.revokeObjectURL };
 Module._load = function(name, parent, isMain) {
+  if (name === './report-period') return require('./report-period-fixture.cjs')(() => require('react'));
+  if (name === '@/lib/report-window') return require('../lib/report-window.ts');
   if (name === './financial-summary') return {FinancialSummary:()=>null};
   if (name === 'react') return { ...realReact, useState: () => [hookValues.shift(), () => {}], useEffect: () => {} };
   if (name === '@/lib/sales-diagnostics-export') return { salesDiagnosticsExport };
@@ -103,9 +105,9 @@ try {
   URL.createObjectURL = blob => { emittedBlob = blob; return 'blob:fixture'; };
   URL.revokeObjectURL = url => { assert.equal(url, 'blob:fixture'); revoked++; };
   const { SalesDiagnostics } = require('../components/store/sales-diagnostics.tsx');
-  hookValues = ['7', 0, null, true, ''];
+  hookValues = ['7', 'timeZone=UTC&days=7:0', 0, null, true, ''];
   assert.equal(findExportButton(SalesDiagnostics()).props.disabled, true, 'no export while loading or without an authorized report');
-  hookValues = ['7', 0, report, false, ''];
+  hookValues = ['7', 'timeZone=UTC&days=7:0', 0, report, false, ''];
   const button = findExportButton(SalesDiagnostics());
   assert.equal(button.props.disabled, false); button.props.onClick();
   assert.equal(clicked, 1); assert.equal(removed, 1); assert.equal(revoked, 0);

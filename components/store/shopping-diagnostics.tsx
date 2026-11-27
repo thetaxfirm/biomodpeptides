@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { ReportPeriodControls, useReportPeriod } from './report-period';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import type { ShoppingReport, ShoppingStage, ShoppingStageCount } from '@/lib/shopping-metrics';
 import styles from './traffic-diagnostics.module.css';
@@ -21,33 +22,33 @@ function stageTable(rows: ShoppingStageCount[]) {
   return <Table><TableHeader><TableRow><TableHead>Shopping stage</TableHead><TableHead className={styles.number}>Events</TableHead></TableRow></TableHeader><TableBody>{rows.map(row => <TableRow key={row.stage}><TableCell><strong>{labels[row.stage][0]}</strong><div>{labels[row.stage][1]}</div></TableCell><TableCell className={styles.number}>{count(row.events)}</TableCell></TableRow>)}</TableBody></Table>;
 }
 export function ShoppingDiagnostics() {
-  const [days, setDays] = useState('7');
+  const period = useReportPeriod();
+  const [loadedKey, setLoadedKey] = useState('');
   const [revision, setRevision] = useState(0);
   const [report, setReport] = useState<ShoppingReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const key = period.query + ':' + revision;
   useEffect(() => {
     let active = true;
-    const controller = new AbortController();
     setLoading(true); setError(''); setReport(null);
-    fetch('/api/metrics/shopping-report?days=' + days, { method: 'GET', credentials: 'same-origin', cache: 'no-store', signal: controller.signal })
-      .then(async response => { if (!response.ok) throw new Error('Report unavailable'); return await response.json() as ShoppingReport; })
-      .then(value => { if (active) setReport(value); })
-      .catch(() => { if (active) setError('Shopping-stage diagnostics could not load. Totals are unavailable. Please refresh to try again.'); })
+    const controller = new AbortController();
+    fetch('/api/metrics/shopping-report?' + period.query, { method: 'GET', credentials: 'same-origin', cache: 'no-store', signal: controller.signal })
+      .then(async response => { if (!response.ok) { const detail = response.status === 400 ? await response.json() as { error?: string } : null; throw new Error(detail?.error || 'Report unavailable'); } return await response.json() as ShoppingReport; })
+      .then(value => { if (active) { setReport(value); setLoadedKey(key); } })
+      .catch(e => { if (active) setError('Shopping-stage diagnostics could not load. Totals are unavailable. ' + (e instanceof Error ? e.message : 'Please refresh to try again.')); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; controller.abort(); };
-  }, [days, revision]);
+  }, [period.query, revision]);
   function refresh() { setLoading(true); setError(''); setReport(null); setRevision(value => value + 1); }
-  const visible = !loading && !error && report && String(report.window.requestedDays) === days ? report : null;
+  const visible = !loading && !error && report && loadedKey === key ? report : null;
   const available = visible?.status === 'available' ? visible : null;
   const hasCompleted = Boolean(available && available.completedDays.length && available.totals.events !== null);
   return <section className={styles.report} aria-labelledby="shopping-diagnostics-title">
     <h2 id="shopping-diagnostics-title">Shopping stages</h2>
     <p>Accepted events from eligible-product carts in live checkout. These counts are not linked to individual shoppers, page-view sources or orders. They do not establish conversion or abandonment rates.</p>
     <div className={styles.toolbar}>
-      <label className={styles.period}>Shopping reporting period<select value={days} onChange={event => { setLoading(true); setError(''); setReport(null); setDays(event.target.value); }}>
-        <option value="7">Last 7 complete days (UTC)</option><option value="30">Last 30 complete days (UTC)</option><option value="90">Last 90 complete days (UTC)</option>
-      </select></label>
+      <ReportPeriodControls control={period} periods={['7', '30', '90']} label="Shopping reporting period"/>
       <button type="button" className="button button-dark" disabled={loading} onClick={refresh}>{loading ? 'Loading stages…' : 'Refresh shopping stages'}</button>
     </div>
     {error && <p role="alert">{error}</p>}
@@ -55,23 +56,24 @@ export function ShoppingDiagnostics() {
     {visible && <>
       <p><strong>Shopping collection: {visible.configuration.enabled ? 'Enabled' : 'Disabled'}.</strong> Measurement start: {time(visible.configuration.startedAt)}. Refreshed {time(visible.asOf)}.</p>
       {!visible.configuration.enabled && <p className={styles.note}>New shopping events are not being recorded. {visible.configuration.reason === 'flag_disabled' ? 'Collection is switched off.' : visible.configuration.reason === 'start_in_future' ? 'The configured start is in the future.' : 'A valid shopping measurement start has not been configured.'} Available historical counts remain separate.</p>}
-      <p>Requested dates: {requestedStart(visible.window.endExclusive, visible.window.requestedDays)} through {previousDate(visible.window.endExclusive)} UTC. Today is excluded from period totals.</p>
+      <p>Requested dates: {visible.window.requestedFrom ?? requestedStart(visible.window.endExclusive, visible.window.requestedDays)} through {visible.window.requestedTo ?? previousDate(visible.window.endExclusive)} ({visible.window.timeZone}). Today is excluded from period totals.</p>
+      {visible.window.aggregation === 'minute' && <p className={styles.note}>Local-day totals use anonymous minute counts. {visible.window.preciseFrom ? <>Precise coverage began {time(visible.window.preciseFrom)}.</> : <>Precise coverage has not started.</>} Earlier local dates are unavailable, not zero activity; historical UTC totals cannot be converted to this time zone.</p>}
       {visible.status === 'unavailable' && <p role="alert">Shopping-stage data is unavailable. Missing history is not reported as zero.</p>}
       {available && <>
-        <section aria-labelledby="shopping-complete-title"><h3 id="shopping-complete-title">Complete UTC days</h3>
+        <section aria-labelledby="shopping-complete-title"><h3 id="shopping-complete-title">Complete {visible.window.timeZone} days</h3>
           {hasCompleted ? <>
-            <p>{available.completedDays.length} complete {available.completedDays.length === 1 ? 'day' : 'days'}: {available.completedDays[0].date} through {available.completedDays[available.completedDays.length - 1].date} UTC.</p>
-            {available.completedDays.length < available.window.requestedDays && <p className={styles.note}>Coverage is shorter than the requested period because of activation or retention. Partial activation days are excluded; unavailable earlier dates are not zero activity.</p>}
+            <p>{available.completedDays.length} complete {available.completedDays.length === 1 ? 'day' : 'days'}: {available.completedDays[0].date} through {available.completedDays[available.completedDays.length - 1].date} ({visible.window.timeZone}).</p>
+            {available.completedDays.length < available.window.requestedDays && <p className={styles.note}>Coverage is shorter than the requested period because of activation or retention. Partial coverage days are excluded; unavailable earlier dates are not zero activity.</p>}
             {stageTable(available.totals.byStage)}
             <p>Each row counts events independently. One person can appear in several rows or repeat an action. Zero means no accepted events were recorded, not proof of no activity or uninterrupted collection.</p>
             <details className={styles.detail}><summary>Daily accepted shopping-stage totals</summary>
-              <Table><TableHeader><TableRow><TableHead>Day (UTC)</TableHead><TableHead className={styles.number}>All stage events</TableHead><TableHead>Daily limit</TableHead></TableRow></TableHeader><TableBody>{available.completedDays.map(day => <TableRow key={day.date}><TableCell>{day.date}</TableCell><TableCell className={styles.number}>{count(day.events)}</TableCell><TableCell>{day.capReached ? 'Reached; additional events excluded' : 'Not reached'}</TableCell></TableRow>)}</TableBody></Table>
+              <Table><TableHeader><TableRow><TableHead>Day ({visible.window.timeZone})</TableHead><TableHead className={styles.number}>All stage events</TableHead><TableHead>UTC daily limit</TableHead></TableRow></TableHeader><TableBody>{available.completedDays.map(day => <TableRow key={day.date}><TableCell>{day.date}</TableCell><TableCell className={styles.number}>{count(day.events)}</TableCell><TableCell>{day.capReached ? 'Reached; additional events excluded' : 'Not reached'}</TableCell></TableRow>)}</TableBody></Table>
             </details>
-          </> : <p>No complete measured UTC days are available in this period yet. This is unavailable history, not zero shopping activity.</p>}
+          </> : <p>No complete measured {visible.window.timeZone} days are available in this period yet. This is unavailable history, not zero shopping activity.</p>}
         </section>
         {(available.activationDayPartial || available.partialToday) && <section aria-labelledby="shopping-partial-title"><h3 id="shopping-partial-title">Partial days, excluded from period totals</h3>
-          {available.activationDayPartial && <details className={styles.detail}><summary>Activation day: {available.activationDayPartial.date} UTC, since measurement began{available.activationDayPartial.capReached ? ' (daily limit reached)' : ''}</summary>{stageTable(available.activationDayPartial.byStage)}</details>}
-          {available.partialToday && <details className={styles.detail}><summary>Today so far: {available.partialToday.date} UTC{available.partialToday.capReached ? ' (daily limit reached)' : ''}</summary>{stageTable(available.partialToday.byStage)}</details>}
+          {available.activationDayPartial && <details className={styles.detail}><summary>First partial coverage day: {available.activationDayPartial.date} ({visible.window.timeZone}){available.activationDayPartial.capReached ? ' (daily limit reached)' : ''}</summary>{stageTable(available.activationDayPartial.byStage)}</details>}
+          {available.partialToday && <details className={styles.detail}><summary>Today so far: {available.partialToday.date} ({visible.window.timeZone}){available.partialToday.capReached ? ' (daily limit reached)' : ''}</summary>{stageTable(available.partialToday.byStage)}</details>}
         </section>}
       </>}
       <section aria-labelledby="shopping-limits-title"><h3 id="shopping-limits-title">Shopping collection limits</h3>

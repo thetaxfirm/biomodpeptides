@@ -26,8 +26,8 @@ export async function adminEarlyRead(context: StoreGetContext) {
         return j(await changeHistory(database(), req.nextUrl.searchParams));
     }
     if (action === 'admin-diagnostics')
-        return j(await salesDiagnostics({ requireAdmin: () => requireStaff('reports:read'), all }, req.nextUrl.searchParams.get('days')));
+        return j(await salesDiagnostics({ requireAdmin: () => requireStaff('reports:read'), all }, req.nextUrl.searchParams.get('days'), Date.now(), req.nextUrl.searchParams));
     if (action === 'admin-promos')
-        return j(await promoAnalytics({ requireAdmin: () => requireStaff('reports:read'), all, storedPromos: () => storedPromotions(database()) }, req.nextUrl.searchParams.get('days'), Date.now(), req.nextUrl.searchParams.get('complete') === 'true'));
+        return j(await promoAnalytics({ requireAdmin: () => requireStaff('reports:read'), all, storedPromos: () => storedPromotions(database()) }, req.nextUrl.searchParams.get('days'), Date.now(), req.nextUrl.searchParams.get('complete') === 'true', req.nextUrl.searchParams));
 }
 
