@@ -85,6 +85,8 @@
 @media (max-width:760px) {
   .table thead { display:none; }
   .table, .table tbody, .table tr, .table td { display:block; width:100%; }
+  /* Match the desktop column selector's specificity so stacked values use the full row. */
+  .table td:nth-child(n) { width:100%; min-width:0; }
   .table tr { border-bottom:1px solid var(--ord-line); padding:10px 0; }
   .table td { border:0; padding:4px 0; }
   .number { text-align:left; }

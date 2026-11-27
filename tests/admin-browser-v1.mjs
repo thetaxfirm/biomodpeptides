@@ -222,6 +222,8 @@ try {
         await admin('orders&order='+preorder,'Orders');await page.getByLabel('Revised dispatch estimate (UTC)',{exact:true}).waitFor();
         await page.getByLabel('Revised dispatch estimate (UTC)',{exact:true}).scrollIntoViewIfNeeded();
         assert(await page.evaluate(()=>document.body.scrollWidth<=innerWidth+1),'Open preorder editor must fit');await shot('mobile-preorder-estimate');
+        const cellWidths=await page.locator('table:has(td[data-label="Payment"])').evaluate(table=>({table:table.getBoundingClientRect().width,cells:Array.from(table.querySelectorAll('tbody td')).map(cell=>cell.getBoundingClientRect().width)}));
+        assert(cellWidths.cells.every(width=>width>=cellWidths.table-2),'Stacked order cells need the full row '+JSON.stringify(cellWidths));
     });
     await step('mobile night mode toggles without page overflow',async()=>{
         await admin('settings','Mix-and-match discounts');await page.getByRole('switch',{name:'Night mode',exact:true}).click();assert.equal(await page.locator('html').getAttribute('data-theme'),'dark');
