@@ -11,7 +11,7 @@ const hooks={...React,
 };
 const issuesLib=(()=>{const f=path.join(root,'lib/request-issues.ts'),m=new Module(f,module);m.filename=f;m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,f);return m.exports;})();
 const filename=path.join(root,'components/store/request-inbox.tsx'),mod=new Module(filename,module);mod.filename=filename;mod.paths=Module._nodeModulePaths(root);
-mod.require=id=>{if(id==='@/lib/customer-context')return (()=>{const m={exports:{}};new Function('exports',require('typescript').transpileModule(require('node:fs').readFileSync(require('node:path').join(__dirname,'..','lib/customer-context.ts'),'utf8'),{compilerOptions:{module:1,target:9}}).outputText)(m.exports);return m.exports;})();if(id==='@/lib/reply-composer'){const f=path.join(root,'lib/reply-composer.ts'),m=new Module(f,module);m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,f);return m.exports;}if(id==='@/lib/request-issues')return issuesLib;if(id==='./customer-orders')return {CustomerOrders:()=>null};if(id==='react')return hooks;if(id==='react/jsx-runtime')return projectRequire(id);if(id.endsWith('.module.css'))return {__esModule:true,default:new Proxy({},{get:(_,key)=>String(key)})};throw Error('Unexpected dependency: '+id);};
+mod.require=id=>{if(id==='@/lib/customer-context')return (()=>{const m={exports:{}};new Function('exports',require('typescript').transpileModule(require('node:fs').readFileSync(require('node:path').join(__dirname,'..','lib/customer-context.ts'),'utf8'),{compilerOptions:{module:1,target:9}}).outputText)(m.exports);return m.exports;})();if(id==='@/lib/reply-composer'){const f=path.join(root,'lib/reply-composer.ts'),m=new Module(f,module);m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,f);return m.exports;}if(id==='@/lib/request-issues')return issuesLib;if(id==='./request-work-editor')return {RequestWorkEditor:()=>null};if(id==='./customer-orders')return {CustomerOrders:()=>null};if(id==='react')return hooks;if(id==='react/jsx-runtime')return projectRequire(id);if(id.endsWith('.module.css'))return {__esModule:true,default:new Proxy({},{get:(_,key)=>String(key)})};throw Error('Unexpected dependency: '+id);};
 mod._compile(ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,filename);
 const {RequestInbox,replyPurchaseNotice}=mod.exports;
 global.fetch=()=>{throw Error('Live I/O forbidden');};
@@ -280,8 +280,8 @@ async function main(){
  // Reply status at a glance: Mark as replied moves it out of Needs reply with who/how; pitches stay out of Needs reply; selection follows the tab.
  const pitch=request('pitch','new','contact',{subject:'High quality peptides and SARMs',message:'We are a leading manufacturer with competitive price.'});
  const marked=[];host=mount({...props,requests:[request('phone','new'),pitch],requestReplies:{},onMarkReplied:async input=>{marked.push(input);return {at:now,source:'manual',account:'owner@example.invalid',body:input.note||'Replied outside email (phone or text).',preview:false};}});await flush(host);
- assert.deepEqual(rowIds(),['phone'],'A sales pitch is kept out of Needs reply');filter(host,'Sales pitches');assert.deepEqual(rowIds(),['pitch']);
- openRow(host,'pitch');assert(text(host.tree).includes('reads like a supplier or vendor pitch'));
+ assert.deepEqual(rowIds(),['phone','pitch'],'An automated pitch suggestion stays visible until staff classifies it');openRow(host,'pitch');assert(text(host.tree).includes('Possible vendor pitch'));pitch.work={triage:'vendor'};host.render();filter(host,'Sales pitches');assert.deepEqual(rowIds(),['pitch']);
+ if(!nodes(host.tree).some(n=>n.props.id==='request-reply-pitch'))openRow(host,'pitch');assert(text(host.tree).includes('Confirmed vendor pitch'));
  filter(host,'Needs reply');assert(text(host.tree).includes('Pick a request on the left'),'Switching tabs closes a conversation from another tab');
  openRow(host,'phone');assert(text(host.tree).includes('Needs reply'));
  nodes(host.tree).find(n=>n.type==='button'&&text(n)==='Mark as replied').props.onClick();host.render();
@@ -363,6 +363,17 @@ async function main(){
   pulse('document','visibilitychange');pulse('window','focus');await flush(liveHost);assert.equal(readCalls.length,inactiveReads);
   liveHost.props={...liveHost.props,activeTab:true};liveHost.render();await nextTick();await flush(liveHost);assert.equal(readCalls.length,inactiveReads+1);assert.equal(field(liveHost,'replyBody').props.value,'My unsaved customer reply');
   liveHost.unmount();liveHost=null;assert.equal(scheduled.size,0);
+
+  {
+   const queueCalls=[],old=request('old-queue-record'),older=request('other-page');let second=false;
+   const counts={todo:151,waiting:0,followup:0,done:0,pitch:0,spam:0,deleted:0,all:151};
+   const h=mount({...readonlyProps,onLoadQueue:async input=>{queueCalls.push(input);const r=second?older:old;return {requests:[r],pageIds:[r.id],counts,total:151,offset:input.offset,limit:50,hasMore:true};},onRefreshReplies:async list=>{assert(list.length<=51);return {replies:{}};}});
+   await nextTick();await flush(h);assert.deepEqual(ids(h),['old-queue-record']);assert(text(h.tree).includes('1–50 of 151'));
+   openRow(h,old.id);type(h,'replyBody','Preserve this unsaved reply');await nextTick();await flush(h);
+   second=true;button(h.tree,'Next').props.onClick();h.render();await nextTick();await flush(h);assert.equal(queueCalls.at(-1).offset,50);assert.deepEqual(ids(h),['other-page']);
+   query(h,'rare historical word');await nextTick();await flush(h);assert.equal(queueCalls.at(-1).offset,0);assert.equal(queueCalls.at(-1).query,'rare historical word');
+   second=false;query(h,'');await nextTick();await flush(h);if(!nodes(h.tree).some(n=>n.props.id==='request-reply-'+old.id))openRow(h,old.id);assert.equal(field(h,'replyBody').props.value,'Preserve this unsaved reply');h.unmount();assert.equal(scheduled.size,0);
+  }
 
   // Opening a case prepares a draft only after fresh history and PDF checks finish.
   {const autoRequest=request('auto-draft','new','contact',{message:'  Please help.\nExact customer words!  '});const checked=deferred();const calls=[];

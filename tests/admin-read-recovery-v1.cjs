@@ -38,13 +38,13 @@ const provider={useStore:()=>({...state,refresh:()=>{refreshCalls++;return refre
 const issuesLib=(()=>{const f=path.join(root,'lib/request-issues.ts'),m=new Module(f,module);m.filename=f;m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,f);return m.exports;})();
 const inboxFilename=path.join(root,'components/store/request-inbox.tsx'),inboxModule=new Module(inboxFilename,module);
 inboxModule.filename=inboxFilename;inboxModule.paths=Module._nodeModulePaths(root);
-inboxModule.require=id=>id==='@/lib/reply-composer'?(()=>{const f=path.join(root,'lib/reply-composer.ts'),m=new Module(f,module);m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,f);return m.exports;})():id==='@/lib/customer-context'?(()=>{const m={exports:{}};new Function('exports',require('typescript').transpileModule(require('node:fs').readFileSync(require('node:path').join(__dirname,'..','lib/customer-context.ts'),'utf8'),{compilerOptions:{module:1,target:9}}).outputText)(m.exports);return m.exports;})():id==='@/lib/request-issues'?issuesLib:id==='./customer-orders'?{CustomerOrders:()=>null}:id==='react'?hooks:id==='react/jsx-runtime'?projectRequire(id):id.endsWith('.module.css')?{__esModule:true,default:new Proxy({},{get:(_,key)=>String(key)})}:(()=>{throw Error('Unexpected inbox dependency '+id);})();
+inboxModule.require=id=>id==='@/lib/reply-composer'?(()=>{const f=path.join(root,'lib/reply-composer.ts'),m=new Module(f,module);m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,f);return m.exports;})():id==='@/lib/customer-context'?(()=>{const m={exports:{}};new Function('exports',require('typescript').transpileModule(require('node:fs').readFileSync(require('node:path').join(__dirname,'..','lib/customer-context.ts'),'utf8'),{compilerOptions:{module:1,target:9}}).outputText)(m.exports);return m.exports;})():id==='@/lib/request-issues'?issuesLib:id==='./request-work-editor'?{RequestWorkEditor:()=>null}:id==='./customer-orders'?{CustomerOrders:()=>null}:id==='react'?hooks:id==='react/jsx-runtime'?projectRequire(id):id.endsWith('.module.css')?{__esModule:true,default:new Proxy({},{get:(_,key)=>String(key)})}:(()=>{throw Error('Unexpected inbox dependency '+id);})();
 inboxModule._compile(ts.transpileModule(fs.readFileSync(inboxFilename,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,inboxFilename);
 const {RequestInbox}=inboxModule.exports;
 const filename=path.join(root,'components/store/admin.tsx');
 const mod=new Module(filename,module);mod.filename=filename;mod.paths=Module._nodeModulePaths(root);
 mod.require=id=>{
- if(id==='./affiliate-program')return {AffiliateProgram:()=>null}; /* Affiliate behavior has separate tests. */
+ if(id==='./admin-rewards')return{AdminRewards:()=>null};if(id==='./affiliate-program')return {AffiliateProgram:()=>null}; /* Affiliate behavior has separate tests. */
  if(id==='@/lib/fulfillment'){const m={exports:{}};new Function('exports',require('typescript').transpileModule(require('node:fs').readFileSync(require('node:path').join(root,'lib/fulfillment.ts'),'utf8'),{compilerOptions:{module:1,target:9}}).outputText)(m.exports);return m.exports;}
  if(id==='./fulfillment-admin')return {FulfillmentQueue:()=>null,CarrierConnection:()=>null};
  if(id==='react')return hooks;if(id==='react/jsx-runtime')return projectRequire('react/jsx-runtime');if(id==='./provider')return provider;
@@ -180,10 +180,10 @@ const productNames=h=>String(Boolean(productPanel(h).props.edited));
  const parentKey=settingsForm(h).key,parentToken=queue(h).reloadToken;
  settingsForm(h).props.onChangeCapture();h.render();const parentWrites=h.writes;
  assert.deepEqual(await reader([],linkedId),deskResult);
- assert.deepEqual(calls.at(-1),{action:'admin-request-replies',body:{ids:[],refreshRequests:true,focusId:linkedId}});
+ assert.deepEqual(calls.at(-1),{action:'admin-request-replies',body:{ids:[],refreshRequests:false,focusId:linkedId}});
  const knownIds=Array.from({length:205},(_,i)=>'synthetic-request-'+i);
  assert.deepEqual(await reader(knownIds,nextLinkedId),deskResult);
- assert.deepEqual(calls.at(-1).body,{ids:knownIds.slice(0,200),refreshRequests:true,focusId:nextLinkedId});
+ assert.deepEqual(calls.at(-1).body,{ids:knownIds.slice(0,200),refreshRequests:false,focusId:nextLinkedId});
  h.render();assert.equal(h.writes,parentWrites);assert.equal(settingsForm(h).key,parentKey);assert.equal(queue(h).reloadToken,parentToken);assert(button(h,'Refresh administration').props.disabled,'Snapshot reads retain unsaved parent settings');
  assert.equal(reads(),1);assert.deepEqual(calls.map(c=>c.action),['admin','admin-request-replies','admin-request-replies'],'These callbacks only read; they never prepare, send, forward or mark a request');
  assert.equal(find(h,n=>n.type===RequestInbox).props.onRefreshReplies,reader,'The reader stays stable across parent rerenders');
@@ -235,7 +235,7 @@ const productNames=h=>String(Boolean(productPanel(h).props.edited));
  // Input changes, controlled settings flags, editor and all admin forms protect drafts.
  reset();apiImpl=async()=>({...fixture(),orders:updated.orders});h=mount();await flush(h);
  const cleanRefresh=button(h,'Refresh administration').props.onClick;
- for(const formTitle of ['Mix-and-match discounts','Create a presale','Reward ledger']){
+ for(const formTitle of ['Mix-and-match discounts','Create a presale']){
   const form=nodes(h.tree).find(n=>n.type==='form'&&(formTitle==='Tracking number / carrier'?nodes(n).some(f=>f.type===Field&&f.props.label===formTitle):text(n).includes(formTitle)));assert(form);
   const key=form.key;form.props.onChangeCapture();h.render();const before=reads();cleanRefresh();button(h,'Refresh administration').props.onClick();
   assert.equal(reads(),before);assert(button(h,'Refresh administration').props.disabled);assert(text(h.tree).includes('Save or discard unsaved edits'));

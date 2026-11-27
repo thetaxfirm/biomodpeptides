@@ -275,3 +275,13 @@
    uses in daylight: the button's text is dark now, and dark plum under dark text reads as nothing.
    It lifts to a light tint of the same plum, the same move the link text makes. */
 :global(html[data-theme='dark']) .send:hover:not(:disabled) { background: #e8d4f0; }
+
+.queueControls { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; padding: 12px 0; }
+.queueControls label { display: flex; align-items: center; gap: 8px; }
+.queueControls select, .workFields input, .workFields select, .workFields textarea { color: var(--ink); background: var(--panel); padding: 8px; border: 1px solid var(--line); border-radius: 4px; min-width: 0; max-width: 100%; }
+.workDetails { margin: 16px 0; padding: 12px; background: var(--soft); }
+.workDetails summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
+.workFields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 16px 0; }
+.workFields label { display: flex; flex-direction: column; gap: 6px; }
+.workResolution { grid-column: 1 / -1; }
+@media (max-width: 600px) { .workFields { grid-template-columns: 1fr; } .queueControls { gap: 12px; } }

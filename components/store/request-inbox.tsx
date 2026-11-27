@@ -1,7 +1,9 @@
 'use client';
 
 import { vipSignal, type CustomerContext } from '@/lib/customer-context';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import type { RequestQueueResult, RequestWork } from '@/lib/admin-request-queue';
+import { RequestWorkEditor, type RequestWorkInput } from './request-work-editor';
 import { matchedCoaReplyProblem, preparedCoaReply, appendNextPurchaseOffer } from '@/lib/reply-composer';
 import type { CoaAutomationReport } from './coa-automation';
 import { CustomerOrders } from './customer-orders';
@@ -10,7 +12,7 @@ import { issueTypes, resolutionTypes, issueLabel, resolutionLabel, looksLikePitc
 
 export type CustomerRequest = {
   id: string; kind: string; status: string; created: number;
-  data: Record<string, unknown>;
+  data: Record<string, unknown>; work?: RequestWork; queueStage?: string;
 };
 export type ReplySummary = {
   id: string; requestId: string; revision: number;
@@ -33,6 +35,8 @@ export type DeskOptions = { team?: TeamMember[]; links?: { label: string; url: s
 type Props = {
   requests: readonly CustomerRequest[];
   activeTab?: boolean;
+  onLoadQueue?: (input: { queue: string; query: string; offset: number; focusId: string | null; assignee: string; overdue: boolean }) => Promise<RequestQueueResult>;
+  onSaveWork?: (input: RequestWorkInput) => Promise<RequestWork>;
   automation?: CoaAutomationReport | null;
   requestReplies?: Record<string, ReplySummary>;
   busy: boolean;
@@ -132,8 +136,8 @@ function stageOf(request: CustomerRequest, reply: ReplySummary | undefined, exte
   if (request.status === 'spam') return { stage: 'spam', label: 'Spam', since: request.created, when: 'Received ' + shortDate(request.created), late: false };
   if (uncertainSend) return { stage: 'waiting', label: 'Check sent status · do not resend', since: reply!.updated, when: 'Marked sent in Jarvis; receipt needs verification', late: false };
   if (sendPending(reply)) return { stage: 'sending', label: 'Sending…', since: reply!.approvedAt || reply!.updated, when: 'Received ' + shortDate(request.created), late: false };
-  if (issue === 'vendor' || (!issue && looksLikePitch(request))) return { stage: 'pitch', label: issue === 'vendor' ? 'Sales pitch' : 'Looks like a sales pitch', since: request.created, when: 'Received ' + shortDate(request.created), late: false };
   if (issue === 'owner_review' && request.status !== 'resolved') return { stage: 'todo', label: 'Owner review required', since: request.created, when: 'Received ' + shortDate(request.created), late: false };
+  if (request.work?.triage === 'vendor' || (request.work?.triage !== 'customer' && issue === 'vendor')) return { stage: 'pitch', label: 'Sales pitch', since: request.created, when: 'Received ' + shortDate(request.created), late: false };
   if (lastOut && !customerReplied && !conversationReview) return { stage: request.status === 'resolved' ? 'done' : 'waiting', label: (request.status === 'resolved' ? 'Done · ' : 'Waiting on them · ') + replied, since: lastOut, when: replied, late: false };
   if (request.status === 'resolved' && !customerReplied) {
     const closed = [...activity].reverse().find(a => a.text.startsWith('Archived'));
@@ -167,7 +171,7 @@ function speechRecognition(): (new () => Speech) | null {
   return w.SpeechRecognition || w.webkitSpeechRecognition || null;
 }
 
-export function RequestInbox({ requests: initialRequests, activeTab = true, automation, requestReplies = noReplies, busy, dirty, refreshing, canSend = false, onStatus, onPrepareReply, onCheckAttachments, onRefreshReplies, onLoadOptions, onSaveRule, onRetireDrafts, onForward, onSaveIssue, onLoadCases, onLoadTemplates, focusId, onMarkReplied }: Props) {
+export function RequestInbox({ requests: initialRequests, activeTab = true, automation, requestReplies = noReplies, busy, dirty, refreshing, canSend = false, onStatus, onPrepareReply, onCheckAttachments, onRefreshReplies, onLoadOptions, onSaveRule, onRetireDrafts, onForward, onSaveIssue, onLoadCases, onLoadTemplates, focusId, onMarkReplied, onLoadQueue, onSaveWork }: Props) {
   const [snapshot, setSnapshot] = useState<{ base: readonly CustomerRequest[]; requests: readonly CustomerRequest[]; focus: string | null } | null>(null);
   const requests = snapshot?.base === initialRequests ? snapshot.requests : initialRequests;
   const [checkedAt, setCheckedAt] = useState<number | null>(null);
@@ -194,10 +198,14 @@ export function RequestInbox({ requests: initialRequests, activeTab = true, auto
   const [external, setExternal] = useState<Record<string, ExternalReply[]>>({});
   const [replyNote, setReplyNote] = useState<{ id: string; note: string; busy: boolean } | null>(null);
   const [query, setQuery] = useState('');
+  const [offset, setOffset] = useState(0), [assignee, setAssignee] = useState(''), [overdue, setOverdue] = useState(false);
+  const [queuePage, setQueuePage] = useState<RequestQueueResult | null>(null), [queueLoading, setQueueLoading] = useState(Boolean(onLoadQueue));
+  const [workRevision, setWorkRevision] = useState(0);
   const [listening, setListening] = useState<string | null>(null);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [newRule, setNewRule] = useState('');
   const [now, setNow] = useState(() => Date.now());
+  const workDrafts = useRef(new Map<string, RequestWork>());
   const pendingIds = useRef(new Set<string>());
   const aiPendingIds = useRef(new Set<string>());
   const mounted = useRef(true);
@@ -278,6 +286,7 @@ export function RequestInbox({ requests: initialRequests, activeTab = true, auto
   useEffect(() => {
     if (!onRefreshReplies || !activeTab) return;
     let stopped = false, running = false, timer: ReturnType<typeof setTimeout> | undefined;
+    if (onLoadQueue) setQueueLoading(true);
     const tick = async () => {
       if (stopped || running) return;
       if (timer) clearTimeout(timer);
@@ -285,9 +294,11 @@ export function RequestInbox({ requests: initialRequests, activeTab = true, auto
       if (typeof document !== 'undefined' && document.visibilityState !== 'hidden') {
         try {
           const { ids, focus } = polling.current;
-          const fresh = await onRefreshReplies(ids.slice(0, 200), focus);
+          const page = onLoadQueue ? await onLoadQueue({ queue: filter, query, offset, focusId: focus, assignee, overdue }) : null;
+          const fresh = await onRefreshReplies(page ? page.requests.map(r => r.id) : ids.slice(0, 200), focus);
           if (!stopped && mounted.current) {
-            if (fresh.requests) setSnapshot({ base: initialRequests, requests: fresh.requests, focus });
+            if (page) { setQueuePage(page); setQueueLoading(false); setSnapshot({ base: initialRequests, requests: page.requests, focus }); }
+            else if (fresh.requests) setSnapshot({ base: initialRequests, requests: fresh.requests, focus });
             setLiveReplies(fresh.replies || {});
             if (fresh.forwards) setForwards(fresh.forwards);
             if (fresh.activity) setActivity(fresh.activity);
@@ -296,7 +307,7 @@ export function RequestInbox({ requests: initialRequests, activeTab = true, auto
             if (fresh.customerContext) setCustomerEvidence(previous => ({ ...previous, [fresh.customerContext!.requestId]: fresh.customerContext!.context }));
             setCheckedAt(Date.now()); setRefreshError('');
           }
-        } catch { if (!stopped && mounted.current) setRefreshError('Could not refresh requests. Showing the last loaded information; retrying automatically.'); }
+        } catch { if (!stopped && mounted.current) { setQueueLoading(false); setRefreshError('Could not refresh requests. Showing the last loaded information; retrying automatically.'); } }
       }
       running = false;
       if (stopped) return;
@@ -308,7 +319,7 @@ export function RequestInbox({ requests: initialRequests, activeTab = true, auto
     const resume = () => { if (document.visibilityState !== 'hidden') void tick(); };
     if (typeof document !== 'undefined') document.addEventListener?.('visibilitychange', resume);
     if (typeof window !== 'undefined') window.addEventListener?.('focus', resume);
-    timer = setTimeout(tick, selected ? 0 : 2500);
+    timer = setTimeout(tick, onLoadQueue ? 200 : selected ? 0 : 2500);
     (timer as any)?.unref?.();
     return () => {
       stopped = true;
@@ -316,7 +327,7 @@ export function RequestInbox({ requests: initialRequests, activeTab = true, auto
       if (typeof document !== 'undefined') document.removeEventListener?.('visibilitychange', resume);
       if (typeof window !== 'undefined') window.removeEventListener?.('focus', resume);
     };
-  }, [onRefreshReplies, initialRequests, activeTab, focusId, selected]);
+  }, [onRefreshReplies, initialRequests, activeTab, focusId, selected, onLoadQueue, filter, query, offset, assignee, overdue, workRevision]);
   // Exact links also reveal archived, supplier and deleted requests. Consume once so
   // subsequent refreshes never reset the person's chosen filter, search or draft.
   useEffect(() => {
@@ -364,20 +375,22 @@ export function RequestInbox({ requests: initialRequests, activeTab = true, auto
   const family: Record<string, CustomerRequest[]> = {};
   for (const request of requests) (family[emailKey(request)] ||= []).push(request);
   const team = options?.team || [];
+  const workTeam = team.filter(m => ['owner', 'manager', 'support'].includes(m.role));
   const sharedReplies = (_request: CustomerRequest): { at: number; how: string }[] => [];
   const rows = requests.map(request => ({ request, reply: replyOf(request.id), ...stageOf(request, replyOf(request.id), external[request.id], issues[request.id]?.issue || null, activity[request.id], now, sharedReplies(request), team) }));
-  const counts = { todo: 0, waiting: 0, followup: 0, done: 0, spam: 0, deleted: 0, pitch: 0, all: rows.filter(row => row.stage !== 'deleted').length };
+  const localCounts = { todo: 0, waiting: 0, followup: 0, done: 0, spam: 0, deleted: 0, pitch: 0, all: rows.filter(row => row.stage !== 'deleted').length };
   const counted = new Set<string>();
-  for (const row of rows) { const bucket = row.stage === 'sending' || row.stage === 'todo' ? 'todo' : row.stage === 'waiting' ? 'done' : row.stage; const key = bucket + ':' + emailKey(row.request); if (counted.has(key)) continue; counted.add(key); counts[bucket]++; }
-  counts.all = new Set(rows.filter(row => row.stage !== 'deleted').map(row => emailKey(row.request))).size;
+  for (const row of rows) { const bucket = row.stage === 'sending' || row.stage === 'todo' ? 'todo' : row.stage === 'waiting' ? 'done' : row.stage; const key = bucket + ':' + emailKey(row.request); if (counted.has(key)) continue; counted.add(key); localCounts[bucket]++; }
+  localCounts.all = new Set(rows.filter(row => row.stage !== 'deleted').map(row => emailKey(row.request))).size;
+  const counts = onLoadQueue && queuePage ? queuePage.counts : localCounts;
   const inView = (stage: Stage, view: typeof filter) => view === 'all' ? stage !== 'deleted' : view === 'todo' ? stage === 'todo' || stage === 'sending' : view === 'done' ? stage === 'done' || stage === 'waiting' : stage === view;
   // Selection follows the tab: switching tabs never leaves another tab's conversation open.
   function setFilter(view: typeof filter) {
-    setFilterState(view);
+    setFilterState(view); setOffset(0);
     setSelected(current => { const row = current ? rows.find(r => r.request.id === current) : null; return row && inView(row.stage, view) ? current : null; });
   }
   const needle = query.trim().toLowerCase();
-  const shown = rows.filter(row => inView(row.stage, filter)
+  const shown = onLoadQueue && queuePage ? rows.filter(row => queuePage.pageIds.includes(row.request.id)) : rows.filter(row => inView(row.stage, filter)
     && (!needle || [row.request.id, row.request.kind, ...Object.values(row.request.data).filter(value => typeof value === 'string')].join(' ').toLowerCase().includes(needle)))
     // To reply: oldest first, so nothing waits behind newer mail. Everything else: newest first.
     .sort((a, b) => filter === 'todo' ? a.since - b.since : b.since - a.since);
@@ -559,12 +572,19 @@ export function RequestInbox({ requests: initialRequests, activeTab = true, auto
       ? <p className={styles.alarm} role="alert">Jarvis stopped checking in at {when(options!.bridgeSeen!)}. Until it is back, AI drafts, your sends and customers' email replies are on hold. Check that your Mac is awake and Jarvis is running.</p>
       : <p className={styles.warning} role="status">Jarvis last checked in at {when(options!.bridgeSeen!)}. AI drafts and sends wait until your Mac is awake and Jarvis is running.</p>)}
     {onRefreshReplies && <p className={styles.note} role="status">{refreshError || (checkedAt ? 'Updated ' + new Date(checkedAt).toLocaleString() : 'Checking for new requests…')}</p>}
-    {focusId && snapshot?.base === initialRequests && snapshot.focus === focusId.split('|')[0] && !requests.some(request => request.id === snapshot.focus) && <p className={styles.warning} role="status">The linked request could not be found. You can search the loaded requests below.</p>}
+    {focusId && snapshot?.base === initialRequests && snapshot.focus === focusId.split('|')[0] && !requests.some(request => request.id === snapshot.focus) && <p className={styles.warning} role="status">The linked request could not be found. You can search all requests below.</p>}
     {dirty && <p role="status">Save or discard your unsaved admin edits before changing a request.</p>}
     <div className={styles.toolbar}>
       <div className={styles.filters} role="group" aria-label="Filter customer requests">{views.map(([value, label]) => <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)}>{label} <span>{counts[value]}</span></button>)}</div>
-      <label className={styles.search}><span className={styles.hidden}>Find a request</span><input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search name, email or words"/></label>
+      <label className={styles.search}><span className={styles.hidden}>Find a request</span><input type="search" value={query} onChange={event => { setQuery(event.target.value); setOffset(0); }} placeholder="Search name, email or words"/></label>
     </div>
+    {onLoadQueue && <div className={styles.queueControls}>
+      <label>Assignment<select value={assignee} onChange={e => { setAssignee(e.target.value); setOffset(0); }}><option value="">Everyone</option><option value="unassigned">Unassigned</option>{workTeam.map(m => <option key={m.email} value={m.email}>{m.name || m.email}</option>)}</select></label>
+      <label><input type="checkbox" checked={overdue} onChange={e => { setOverdue(e.target.checked); setOffset(0); }}/> Overdue only</label>
+      <span role="status">{queueLoading ? 'Loading requests…' : queuePage ? `${queuePage.total ? queuePage.offset + 1 : 0}–${Math.min(queuePage.offset + queuePage.limit, queuePage.total)} of ${queuePage.total} matching requests` : 'Queue unavailable'}</span>
+      <button type="button" className={styles.link} disabled={queueLoading || offset === 0} onClick={() => setOffset(Math.max(0, offset - 50))}>Previous</button>
+      <button type="button" className={styles.link} disabled={queueLoading || !queuePage?.hasMore} onClick={() => setOffset(offset + 50)}>Next</button>
+    </div>}
     <div className={styles.desk} data-open={active ? 'true' : 'false'}>
       <div className={styles.list} role="list" aria-label="Requests">
         {!grouped.length ? <p className={styles.empty}>{requests.length ? (filter === 'todo' ? 'Nothing waiting for a reply.' : filter === 'done' ? 'Nothing archived yet. Requests move here once a reply is sent or you archive them.' : 'No requests here.') : 'No customer requests yet.'}</p> : grouped.map(row => {
@@ -588,6 +608,7 @@ export function RequestInbox({ requests: initialRequests, activeTab = true, auto
       </div>
       {/* A plain render function (no hooks), so the open conversation is part of this tree. */}
       {active ? conversation({ row: active, draft: drafts[active.request.id], automation, options, attachmentRead: attachmentRead?.key === attachmentKey ? attachmentRead : null, onRetryAttachments: () => setAttachmentRetry(v => v + 1), attachmentCheckingAvailable: Boolean(onCheckAttachments), autoDrafting: Boolean(onRefreshReplies), canSend, disabled, listening: listening === active.request.id, preparing: Boolean(pending[active.request.id]) && pending[active.request.id] !== 'ai', bodyField, now,
+        workEditor: onSaveWork ? <RequestWorkEditor key={active.request.id} id={active.request.id} work={active.request.work} initialDraft={workDrafts.current.get(active.request.id)} onDraft={draft => { if (draft) workDrafts.current.set(active.request.id, draft); else workDrafts.current.delete(active.request.id); }} team={workTeam} suggestedVendor={looksLikePitch(active.request)} disabled={disabled} onSave={async input => { const work = await onSaveWork(input); setSnapshot(previous => ({ base: initialRequests, requests: (previous?.base === initialRequests ? previous.requests : initialRequests).map(r => r.id === input.id ? { ...r, work } : r), focus: previous?.focus || null })); setWorkRevision(v => v + 1); return work; }}/> : undefined,
         onClose: () => setSelected(null),
         onEdit: (field, value) => editDraft(active.request.id, field, value),
         onDraft: patch => setDraft(active.request.id, patch),
@@ -616,6 +637,7 @@ export function RequestInbox({ requests: initialRequests, activeTab = true, auto
 }
 
 type ConversationProps = {
+  workEditor?: ReactNode;
   row: { request: CustomerRequest; reply?: ReplySummary; stage: Stage; label: string; since: number; when: string; late: boolean };
   draft?: Draft; automation?: CoaAutomationReport | null; options: DeskOptions | null; canSend: boolean; disabled: boolean; listening: boolean; preparing: boolean; now: number;
   attachmentRead: AttachmentRead | null; onRetryAttachments: () => void; attachmentCheckingAvailable: boolean; autoDrafting: boolean;
@@ -654,7 +676,7 @@ export function replyPurchaseNotice(request: CustomerRequest, evidence?: Custome
   return 'Order: None found in the store.';
 }
 
-function conversation({ row, draft, automation, options, attachmentRead, onRetryAttachments, attachmentCheckingAvailable, autoDrafting, canSend, disabled, listening, preparing, bodyField, now, onClose, onEdit, onDraft, onInsert, onSubmit, onDictate, onStatus, forwards, team, canForward, panel, onPanel, onForward, activity, siblings, customerEvidence, external, canMarkReplied, markNote, onMarkNote, onMarkReplied, issue, canTag, onIssue, issueNote, onIssueNote }: ConversationProps) {
+function conversation({ workEditor, row, draft, automation, options, attachmentRead, onRetryAttachments, attachmentCheckingAvailable, autoDrafting, canSend, disabled, listening, preparing, bodyField, now, onClose, onEdit, onDraft, onInsert, onSubmit, onDictate, onStatus, forwards, team, canForward, panel, onPanel, onForward, activity, siblings, customerEvidence, external, canMarkReplied, markNote, onMarkNote, onMarkReplied, issue, canTag, onIssue, issueNote, onIssueNote }: ConversationProps) {
   const { request, reply } = row;
   const email = text(request.data.email), canReply = usableEmail(request.data.email);
   const name = text(request.data.name) || email || 'Customer';
@@ -790,7 +812,9 @@ function conversation({ row, draft, automation, options, attachmentRead, onRetry
         </details>}
       </div>
     </header>
-    {row.stage === 'pitch' && <p className={styles.warning}>{row.label === 'Sales pitch' ? 'Tagged as a sales pitch. It stays out of Needs reply.' : 'This reads like a supplier or vendor pitch, so it is kept out of Needs reply.'} <button type="button" className={styles.link} onClick={() => onIssue({ issue: 'other' })}>Not a sales pitch</button>{row.label !== 'Sales pitch' && <> · <button type="button" className={styles.link} onClick={() => onIssue({ issue: 'vendor' })}>Yes, a sales pitch</button></>}</p>}
+    {workEditor}
+    {row.stage === 'pitch' && <p className={styles.warning}>Confirmed vendor pitch. Change Classification to Customer request in Assignment & next action if this needs a customer reply.{!workEditor && <> <button type="button" className={styles.link} onClick={() => onIssue({ issue: 'other' })}>Not a sales pitch</button></>}</p>}
+    {row.stage === 'todo' && looksLikePitch(request) && (!request.work || request.work.triage === 'unreviewed') && <p className={styles.note}>Possible vendor pitch. Review the message before classifying it; it remains in Needs reply.</p>}
     {panel?.kind === 'delete' && <div className={styles.confirm} role="alertdialog" aria-label="Delete this request">
       <p>Delete this request from the inbox? It moves to Deleted, where you can restore it. Nothing is sent to the customer.</p>
       <button type="button" className={styles.danger} disabled={disabled} onClick={() => onStatus('deleted')}>Delete</button>
