@@ -12,6 +12,8 @@ export type PaymentAttempt = {
     kind: 'held' | 'declined' | 'paid' | 'refunded' | 'other';
     words: string;
     submittedAt: number | null;
+    /** Provider batch settlement time, distinct from submission and store recording time. */
+    settledAt?: number | null;
     amountCents: number | null;
     card: string;
     /** Bank answer, e.g. "This transaction has been approved." */
@@ -66,6 +68,11 @@ const obj = (v: unknown): Record<string, unknown> | null => v !== null && typeof
 const text = (v: unknown, max = 200) => typeof v === 'string' ? v.trim().slice(0, max) : typeof v === 'number' ? String(v) : '';
 const cents = (v: unknown) => { const n = Number(v); return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : null; };
 const when = (v: unknown) => { const t = Date.parse(text(v, 40)); return Number.isFinite(t) ? t : null; };
+function settlementTime(value: unknown): number | null {
+    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z?$/.test(value)) return null;
+    const at = Date.parse(value.endsWith('Z') ? value : value + 'Z');
+    return Number.isSafeInteger(at) && new Date(at).toISOString().slice(0, 19) === value.slice(0, 19) ? at : null;
+}
 
 function kindOf(status: string, type: string): PaymentAttempt['kind'] {
     if (type && type !== 'authCaptureTransaction' && /refund/i.test(type + status)) return 'refunded';
@@ -92,6 +99,7 @@ export function paymentAttempt(raw: unknown): PaymentAttempt | null {
         kind: kindOf(status, text(t.transactionType, 60)),
         words: statusWords[status] || (status ? status.replace(/([a-z])([A-Z])/g, '$1 $2') : 'Status not reported'),
         submittedAt: when(t.submitTimeUTC),
+        settledAt: ['settledSuccessfully', 'refundSettledSuccessfully'].includes(status) ? settlementTime(obj(t.batch)?.settlementTimeUTC) : null,
         amountCents: cents(t.settleAmount ?? t.authAmount),
         card: [text(card?.cardType, 30), digits ? 'ending ' + digits : ''].filter(Boolean).join(' '),
         reason: text(t.responseReasonDescription, 200),
@@ -158,6 +166,8 @@ export type PaymentVerification = {
     transId: string;
     amountCents: number | null;
     why: string;
+    /** Provider-reported batch settlement, never an inferred store payment date. */
+    settledAt?: number;
     /** Set once, when the owner was told. A failure never alerts the same order twice. */
     alertedAt?: number;
 };
@@ -173,6 +183,7 @@ export function savedPaymentVerification(value: unknown): PaymentVerification | 
         transId: text(v.transId, 20),
         amountCents: Number.isFinite(v.amountCents) ? v.amountCents as number : null,
         why: text(v.why, 300),
+        ...(state === 'settled' && Number.isSafeInteger(v.settledAt) && Number(v.settledAt) > 0 && Number(v.settledAt) <= Number(v.at) ? { settledAt: v.settledAt as number } : {}),
         ...(Number.isFinite(v.alertedAt) ? { alertedAt: v.alertedAt as number } : {}),
     };
 }

@@ -60,7 +60,7 @@ type DueRow = { id: string; total: number; status: string; data: string; created
 const paymentHints = (row: DueRow) => row.payment_ref && /^\d{1,20}$/.test(row.payment_ref) ? [row.payment_ref] : [];
 
 /** The provider's answer about an order already marked paid, reduced to a verdict. */
-export function verdictFor(result: { state: string; providerReference?: string | null; noPaymentFound?: boolean; underReview?: boolean; message?: string; transactions?: unknown[] }): Omit<PaymentVerification, 'at'> {
+export function verdictFor(result: { state: string; providerReference?: string | null; noPaymentFound?: boolean; underReview?: boolean; message?: string; transactions?: unknown[] }, now = Date.now(), created = 0): Omit<PaymentVerification, 'at'> {
     const transId = String(result.providerReference || '');
     if (result.state === 'paid') {
         const attempts = (result.transactions || []).map(paymentAttempt).filter(Boolean);
@@ -70,6 +70,7 @@ export function verdictFor(result: { state: string; providerReference?: string |
             state: settled ? 'settled' : 'captured',
             transId,
             amountCents: matched?.amountCents ?? null,
+            ...(settled && matched?.transId === transId && Number.isSafeInteger(matched.settledAt) && Number(matched.settledAt) >= created && Number(matched.settledAt) <= now ? { settledAt: matched.settledAt as number } : {}),
             why: settled ? 'Settled at the provider for the order total.' : 'Collected for the order total, settling overnight.',
         };
     }
@@ -133,7 +134,7 @@ export async function runPaymentVerification(env: PaymentVerifyEnvironment, now 
             health.unreachable += 1;
             continue;
         }
-        const verdict = verdictFor(result);
+        const verdict = verdictFor(result, now, row.created);
         const previous = savedPaymentVerification(data.paymentVerified);
         // The owner is told once per order. A payment that keeps failing is the same news each time.
         const alreadyTold = Number.isFinite(previous?.alertedAt);
@@ -170,7 +171,7 @@ export async function recheckPaidOrder(env: PaymentVerifyEnvironment, id: string
     // A provider outage throws before any evidence is changed.
     const result = await createPaymentAdapter(env).verifyPayment({ id, totalCents: row.total, currency: 'USD' }, row.checkout_ref, paymentHints(row), row.created);
     const previous = savedPaymentVerification(data.paymentVerified);
-    const verified = { at: now, ...verdictFor(result), ...(Number.isFinite(previous?.alertedAt) ? { alertedAt: previous!.alertedAt } : {}) };
+    const verified = { at: now, ...verdictFor(result, now, row.created), ...(Number.isFinite(previous?.alertedAt) ? { alertedAt: previous!.alertedAt } : {}) };
     const { paymentCheck } = await import('./payment-check');
     const saved = await env.DB.prepare(`UPDATE orders SET data=json_set(data,'$.paymentVerified',json(?),'$.paymentCheck',json(?)) WHERE id=? AND status=? AND total=? AND data=? AND payment_ref IS ?`)
         .bind(JSON.stringify(verified), JSON.stringify(result.transactions ? paymentCheck(result.transactions, now) : data.paymentCheck || null), id, row.status, row.total, row.data, row.payment_ref).run();

@@ -47,6 +47,16 @@ assert.match(verify.verdictFor({state:'pending',underReview:true}).why,/holding 
 assert.match(verify.verdictFor({state:'failed'}).why,/unsuccessful payment/);
 assert.match(verify.verdictFor({state:'review',message:'Authorize.net returned payment details that require reconciliation.'}).why,/require reconciliation/);
 assert.equal(verify.RECHECK_MS,6*3600000);
+const settlement=Date.parse('2026-10-26T12:00:00Z'), checked=settlement+3600000;
+const dated=paidResult('settledSuccessfully',292.54);dated.transactions[0].batch={settlementTimeUTC:'2026-10-26T12:00:00Z'};
+assert.equal(verify.verdictFor(dated,checked,settlement-86400000).settledAt,settlement);
+assert.equal(verify.verdictFor(dated,settlement-1,0).settledAt,undefined,'future settlement is not evidence');
+assert.equal(verify.verdictFor(dated,checked,settlement+1).settledAt,undefined,'settlement cannot predate the order');
+assert.equal(verify.verdictFor({...dated,providerReference:'601'},checked,0).settledAt,undefined,'only the matched capture supplies a date');
+assert.equal(check.savedPaymentVerification({...verify.verdictFor(dated,checked,0),at:checked}).settledAt,settlement);
+assert.equal(check.savedPaymentVerification({state:'captured',at:checked,settledAt:settlement}).settledAt,undefined);
+dated.transactions[0].batch.settlementTimeUTC='2026-02-30T12:00:00Z';
+assert.equal(verify.verdictFor(dated,checked,0).settledAt,undefined,'calendar rollover is not a provider date');
 
 // End to end with the real classifier, because "the exact order total" is the whole claim and the
 // job itself only ever sees the classifier's answer. A cent out is not a verified payment.
