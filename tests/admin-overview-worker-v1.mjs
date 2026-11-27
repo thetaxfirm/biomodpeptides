@@ -63,9 +63,10 @@ const seedOrder = async ({ status = 'paid', total, created, data = {}, payment =
     .bind(id, randomUUID(), randomUUID(), status, JSON.stringify({ environment: 'authorizenet:live', items: [], ...data }), total, paymentRef, notificationId, created, created).run();
 };
 const sales = body => {
-  assert.deepEqual(body.sales.map(window => window.label), ['Today', 'Last 7 days', 'Last 30 days']);
-  for (const window of body.sales) {
-    assert.deepEqual(window.live, { orders: 7, paymentRecorded: 5, grossCents: 16500, missingPaymentRecords: 2 }, 'Saved live payment evidence survives fulfillment holds and carrier failures; incomplete evidence is counted separately');
+  assert.deepEqual(body.sales.map(window => window.label), ['Today (UTC, partial)', 'Last 7 complete days (UTC)', 'Last 30 complete days (UTC)']);
+  for (const [index, window] of body.sales.entries()) {
+    const longerWindow = index === 2;
+    assert.deepEqual(window.live, { orders: longerWindow ? 8 : 7, paymentRecorded: longerWindow ? 6 : 5, grossCents: longerWindow ? 17734 : 16500, missingPaymentRecords: 2 }, 'Complete UTC windows exclude today; saved live payment evidence survives fulfillment holds and carrier failures; incomplete evidence is counted separately');
     assert.deepEqual(window.sandbox, { orders: 3, paymentRecorded: 2, grossCents: 1100, missingPaymentRecords: 1 }, 'Sandbox payments are disclosed separately and cannot inflate live gross');
     assert.deepEqual(window.unknown, { orders: 2, paymentRecorded: 2, grossCents: 1700, missingPaymentRecords: 0 }, 'Unrecognized and absent saved environments stay outside live gross');
   }
@@ -107,7 +108,11 @@ try {
     { total: 900, data: { environment: null } },
     { status: 'pending', total: 70000 },
     { status: 'failed', total: 60000 },
-  ]) await seedOrder({ ...fixture, created: now });
+  ]) {
+    await seedOrder({ ...fixture, created: now });
+    await seedOrder({ ...fixture, ...(typeof fixture.notification === 'string' ? { notification: '    ' } : {}), created: now - DAY });
+  }
+  await seedOrder({ total: 1234, created: now - 15 * DAY });
   await seedOrder({ total: 50000, created: now + DAY });
   await seedOrder({ total: 40000, created: now - 40 * DAY });
   const before = await db.prepare('SELECT COUNT(*) records,SUM(total) gross FROM orders').first();
