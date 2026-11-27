@@ -3,6 +3,7 @@
  * Financial terms have no defaults: the owner publishes the actual agreement.
  */
 import { z } from 'zod';
+import { commissionEligibility } from './affiliate-commission-policy';
 import agreementDocument from '../content/affiliate-agreement-v1.json';
 import { activePromotions } from './promotions';
 import { storedPromotions } from './promo-codes';
@@ -147,13 +148,7 @@ export async function affiliateEarnings(db:D1Database,owner?:string,now=Date.now
  const rows=(await stmt(db,`SELECT t.order_id,t.owner,t.code,t.commission_bps,t.hold_days,t.basis_cents,t.created,
  o.status,o.updated,o.payment_ref,o.notification_id,p.recorded_at,r.state AS review_state,r.net_cents FROM affiliate_order_terms t JOIN orders o ON o.id=t.order_id LEFT JOIN affiliate_payment_observations p ON p.order_id=t.order_id LEFT JOIN affiliate_commission_reviews r ON r.order_id=t.order_id
  ${owner?'WHERE t.owner=?':''} ORDER BY t.created DESC LIMIT 1000`,...(owner?[owner]:[])).all<{order_id:string;owner:string;code:string;commission_bps:number;hold_days:number;basis_cents:number;created:number;status:string;updated:number;payment_ref:string|null;notification_id:string|null;recorded_at:number|null;review_state:string|null;net_cents:number|null}>()).results;
- return rows.map(row=>{
-  const paymentRecorded=['paid','labeling','shipped','delivered'].includes(row.status)&&Boolean(row.payment_ref?.trim()&&row.notification_id?.trim()&&row.recorded_at!==null);
-  const availableAt=(row.recorded_at??row.updated)+row.hold_days*86400000;
-  return {orderId:row.order_id,...(!owner?{owner:row.owner}:{}),code:row.code,created:row.created,
-   originalBasisCents:row.basis_cents,basisCents:row.net_cents??row.basis_cents,commissionCents:Math.round((row.net_cents??row.basis_cents)*row.commission_bps/10000),
-   state:row.review_state==='excluded'?'excluded':row.review_state==='held'?'held':paymentRecorded?(now>=availableAt?'eligible':'held'):'excluded',availableAt};
- });
+ return rows.map(row=>({orderId:row.order_id,...(!owner?{owner:row.owner}:{}),code:row.code,created:row.created,...commissionEligibility(row,now)}));
 }
 export async function reviewCommission(db:D1Database,actor:string,raw:unknown,now=Date.now()) {
  const input=z.object({orderId:z.string().min(1).max(100),state:z.enum(['held','excluded','released']),netCents:z.number().int().min(0).max(100000000),reason:z.string().trim().min(5).max(1000)}).parse(raw);
