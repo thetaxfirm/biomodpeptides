@@ -91,5 +91,15 @@ const policy=load('lib/fulfillment-eligibility.ts'), f=load('lib/fulfillment.ts'
  assert.deepEqual(overview.sales[2].live,{orders:4,paymentRecorded:3,grossCents:30000,missingPaymentRecords:1});
  assert.equal(overview.sales[1].sandbox.orders,1);assert.equal(overview.sales[1].unknown.orders,1);
  assert.deepEqual(overview.sales.map(w=>w.label),['Today (UTC, partial)','Last 7 complete days (UTC)','Last 30 complete days (UTC)']);
+ // Operational evidence has an atomic, privacy-safe audit event, even when order status stays paid.
+ raw.exec('CREATE TABLE change_context(id INTEGER PRIMARY KEY,actor TEXT,actor_type TEXT,source TEXT,action TEXT,summary TEXT); CREATE TABLE change_events(id TEXT,occurred_at INTEGER,recorded_at INTEGER,source TEXT,actor TEXT,actor_type TEXT,action TEXT,entity_type TEXT,entity_id TEXT,summary TEXT,status TEXT,changes TEXT)');
+ raw.exec(fs.readFileSync(path.join(root,'drizzle/0041_order_operations_audit.sql'),'utf8'));
+ raw.prepare('INSERT INTO change_context VALUES(1,?,?,?,?,NULL)').run('fixture-staff','staff','admin','admin-preorder-release');
+ raw.prepare("UPDATE orders SET data=json_set(data,'$.preorderRelease',json(?)) WHERE id=?").run(JSON.stringify({at:NOW,by:'fixture-staff',note:'PRIVATE-NOTE-NOT-FOR-HISTORY'}),'ancient-work');
+ const audit=raw.prepare('SELECT * FROM change_events').get();assert.equal(audit.actor,'fixture-staff');assert.equal(audit.action,'admin-preorder-release');assert.equal(audit.entity_id,'ancient-work');assert(!JSON.stringify(audit).includes('PRIVATE-NOTE'));assert.deepEqual(JSON.parse(audit.changes),[{field:'Preorder released at',before:null,after:NOW}]);
+ raw.exec("CREATE TRIGGER refuse_audit BEFORE INSERT ON change_events BEGIN SELECT RAISE(ABORT,'fixture audit unavailable'); END");
+ const beforeAuditFailure=raw.prepare('SELECT data FROM orders WHERE id=?').get('ancient-work').data;
+ assert.throws(()=>raw.prepare("UPDATE orders SET data=json_set(data,'$.paymentVerified',json(?)) WHERE id=?").run(JSON.stringify({at:NOW,state:'failed'}),'ancient-work'),/audit unavailable/);
+ assert.equal(raw.prepare('SELECT data FROM orders WHERE id=?').get('ancient-work').data,beforeAuditFailure,'a missing durable audit rolls back operational changes');
  console.log('PASS: failed verification and waiting preorder cannot buy postage; audited-ready metadata preserves purchase snapshots; fresh payment recheck is read-only and race-safe; SQL queues match all work states and find orders/printable labels beyond 5,000 records. No live providers.');
 })().catch(e=>{console.error(e);process.exitCode=1;});
