@@ -45,7 +45,7 @@ import { anetOrderDetails } from '@/lib/order-summary';
 import { packSizes, supportsPacks, standardPackPrices } from '@/lib/packs';
 import { searchReport, seoConfig } from '@/lib/seo-policy';
 import { salesDiagnostics } from '@/lib/sales-diagnostics';
-import { assignableRoles, can, permissionsFor, type StaffPermission } from '@/lib/staff';
+import { assignableRoles, can, permissionsFor, tabPermission, type StaffPermission } from '@/lib/staff';
 import { saveStaffMember, staffDirectory } from '@/lib/staff-store';
 import { hasSiteUpdateAccess, setSiteUpdateAccess, siteUpdateAccessList, SiteUpdateError } from '@/lib/site-updates';
 import { coaBlockedItems, coaBlockMessage, noCoaProducts } from '@/lib/coa-shipping';
@@ -282,6 +282,33 @@ export async function GET(req: NextRequest, { params }: {
             // Website updates is granted per person, not per role, so it is added to the role's list here.
             const siteRequests = await hasSiteUpdateAccess(database(), { email: actorEmail, role });
             const allowed = (permission: StaffPermission) => can(role, permission);
+            const requestedSection = req.nextUrl.searchParams.get('section');
+            if (requestedSection) {
+                if (!Object.hasOwn(tabPermission, requestedSection)) return j({error:'Choose an administration section.'},400);
+                // The initial Today link falls back to Products for a catalog-only colleague.
+                const section = requestedSection === 'overview' && !allowed('orders:read') ? 'products' : requestedSection;
+                if (!(section === 'updates' ? siteRequests : allowed(tabPermission[section])) || (section==='restaurants' && role!=='owner')) return j({error:'This section is not available to your role.'},403);
+                const snapshot:Record<string,unknown> = {role,section,permissions:[...permissionsFor(role),...(siteRequests?['site:request']:[])]};
+                if (['settings','products','presales'].includes(section)) {
+                    snapshot.settingsVersion=(await settingsSnapshot(database(),'store')).version;
+                    snapshot.config=await config();
+                }
+                if (['products','presales'].includes(section)) {
+                    const products=await catalog(false,allowed('catalog:write'));
+                    snapshot.products=products;
+                    if(section==='products') snapshot.batchRecords=await adminBatchRecords(database(),products);
+                }
+                if(section==='orders') snapshot.checkoutRecovery=await recoveryAdminStatus(runtime());
+                if(section==='requests') {
+                    // The inbox owns its paged queue. Loading another section never reads messages.
+                    snapshot.requests=[];snapshot.requestReplies={};
+                    if(allowed('store:write')) {snapshot.coaAutomation=await coaAutomationStatus(runtime(),[]);snapshot.checkoutRecovery=await recoveryAdminStatus(runtime());}
+                }
+                if(section==='presales') snapshot.campaigns=(await all<{data:string}>('SELECT * FROM campaigns')).map<Record<string,any>>(o=>{const {data,...row}=o;return {...row,...parse<Record<string,any>>(data,{})};}).filter(c=>currentSelection(c.productIds)).map(c=>presentationData(c));
+                if(section==='search') snapshot.searchPublishing=searchReport(seoConfig(runtime()));
+                if(section==='team') snapshot.team={...await staffDirectory(runtime()),siteUpdateAccess:await siteUpdateAccessList(database())};
+                return j(snapshot);
+            }
             const requests = allowed('requests:write') ? await all<{ id: string; data: string }>("SELECT * FROM requests WHERE kind IN ('contact','stock','affiliate') ORDER BY created DESC LIMIT 200") : [];
             const settings = await settingsSnapshot(database(), 'store');
             const adminProducts = await catalog(false, allowed('catalog:write'));

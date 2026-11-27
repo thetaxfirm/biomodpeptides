@@ -34,7 +34,7 @@ const ownerA={id:'fixture-admin-a',name:'Fixture A',email:'a@example.invalid'};
 const ownerB={id:'fixture-admin-b',name:'Fixture B',email:'b@example.invalid'};
 const fixture=(label='Snapshot A')=>({settingsVersion:'fixture-version',config:{presalesEnabled:false,rewardsEnabled:false,affiliateEnabled:false,packDiscounts:{},shippingCents:null,freeShippingAt:20000},products:[{id:900001,name:label,price:10000,stockQuantity:1,inStock:true,purchasable:true}],campaigns:[{id:'fixture-campaign',title:'Simulated campaign',active:false,starts:'2099-01-01',ends:'2099-02-01'}],orders:[{id:'fixture-order',status:'pending',total:10000,created:0,data:{items:[]}}],requests:[{id:'fixture-request',kind:'fixture',status:'new',created:0,data:{}}],searchPublishing:{}});
 let state,apiImpl,refreshImpl,calls,reports,successes,infos,refreshCalls,allowedMutation;
-const provider={useStore:()=>({...state,refresh:()=>{refreshCalls++;return refreshImpl();}}),api:async(action,body)=>{assert(action==='admin'||action===allowedMutation,'Only GET admin and explicitly permitted simulated action are allowed');if(action==='admin')assert.equal(body,undefined,'Read retry never has a mutation payload');calls.push({action,body});return apiImpl(action,body);},report:e=>reports.push(e)};
+const provider={useStore:()=>({...state,refresh:()=>{refreshCalls++;return refreshImpl();}}),api:async(action,body)=>{if(action.startsWith('admin?section='))action='admin';assert(action==='admin'||action===allowedMutation,'Only GET admin and explicitly permitted simulated action are allowed');if(action==='admin')assert.equal(body,undefined,'Read retry never has a mutation payload');calls.push({action,body});return apiImpl(action,body);},report:e=>reports.push(e)};
 const issuesLib=(()=>{const f=path.join(root,'lib/request-issues.ts'),m=new Module(f,module);m.filename=f;m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,f);return m.exports;})();
 const inboxFilename=path.join(root,'components/store/request-inbox.tsx'),inboxModule=new Module(inboxFilename,module);
 inboxModule.filename=inboxFilename;inboxModule.paths=Module._nodeModulePaths(root);
@@ -94,7 +94,7 @@ const productNames=h=>String(Boolean(productPanel(h).props.edited));
  // Administration opens on Today; daily work follows in order, reports sit at the end.
  reset();let h=mount();await flush(h);
  assert.equal(find(h,n=>n.type===Tabs).props.value,'overview');
- assert.deepEqual(nodes(h.tree).filter(n=>n.type===TabsTrigger).slice(0,4).map(n=>[n.props.value,text(n)]),[['overview','Today'],['orders','Orders'],['requests','Requests'],['products','Products']]);
+ assert.deepEqual(nodes(h.tree).filter(n=>n.type===TabsTrigger).slice(0,3).map(n=>[n.props.value,text(n)]),[['overview','Today'],['orders','Orders'],['requests','Requests']]);
  // Sections holding several pages open a dropdown: the section is a plain button that opens the
  // page it is showing, and each page inside it is a real destination of its own.
  const pages=nodes(h.tree).filter(n=>n.type===TabsTrigger).map(n=>n.props.value);
@@ -102,7 +102,7 @@ const productNames=h=>String(Boolean(productPanel(h).props.edited));
  const labels=h=>nodes(h.tree).filter(n=>n.props?.className==='sectionLabel').map(text);
  // This fixture carries no role, so it falls back to manager: Restaurants is the owner's page, so
  // Affiliates holds one page here and stays a plain destination rather than a dropdown.
- assert.deepEqual(labels(h),['Reports'],'a section with one page needs no dropdown');
+ assert.deepEqual(labels(h),['Products','Customers','Settings','Reports'],'a section with one page needs no dropdown');
  assert(pages.includes('affiliates')&&!pages.includes('restaurants'));
  // Restaurants is its own page beside the affiliate program, not a fold inside it.
  const affiliatePage=fs.readFileSync(path.join(__dirname,'..','components/store/affiliate-program.tsx'),'utf8');
@@ -200,7 +200,7 @@ const productNames=h=>String(Boolean(productPanel(h).props.edited));
   // This route opens the Change log, so exactly the section holding it reads as where you are.
   const marked=nodes(h.tree).filter(n=>typeof n.props?.className==='string'&&n.props.className.includes('sectionOpen'));
   assert.equal(marked.length,mayRead?1:0,'one section at a time is marked open');
-  if(mayRead)assert.equal(text(nodes(marked[0]).find(n=>n.props?.className==='sectionLabel')),'Reports · Change log','and it names the page it is on');
+  if(mayRead)assert.equal(text(nodes(marked[0]).find(n=>n.props?.className==='sectionLabel')),'Settings · Change log','and it names the page it is on');
   assert.equal(nodes(h.tree).some(n=>n.type===ChangeHistory),mayRead,'History is never mounted without reports permission');
   assert.equal(nodes(h.tree).some(n=>n.type===AdminProducts),mayRead,'Products editor is never mounted without store write permission');
   assert.equal(nodes(h.tree).some(n=>n.type===AdminShippingSettings),mayRead,'Shipping settings are never mounted without store write permission');

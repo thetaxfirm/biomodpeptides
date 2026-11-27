@@ -27,7 +27,7 @@ export function Experience({ path, query }: {
     return <AuthPage mode={path} returnTo={query.returnTo || query.redirect || '/account'}/>; if (path === 'account' || path.startsWith('account/'))
     return <Account section={path.slice(8)}/>; if (path === 'contact')
     return <Contact subject={query.subject||''}/>; if (path === 'admin')
-    return <Admin initialTab={query.tab} initialRequest={query.request}/>; if (['about', 'quality-standard', 'choosing-a-research-supplier', 'research-use-only', 'shipping-policy', 'returns-refunds', 'terms-of-sale', 'privacy-policy', 'international-partners', 'faq'].includes(path))
+    return <Admin initialTab={query.tab} initialRequest={query.request} initialProduct={query.product}/>; if (['about', 'quality-standard', 'choosing-a-research-supplier', 'research-use-only', 'shipping-policy', 'returns-refunds', 'terms-of-sale', 'privacy-policy', 'international-partners', 'faq'].includes(path))
     return <ContentPage path={path}/>; if (path === 'compounds')
     return <CompoundIndex/>; if (path.startsWith('compounds/') && compoundAt(path.slice(10)))
     return <CompoundPage slug={path.slice(10)}/>; if (path.startsWith('compare/') && comparisonAt(path.slice(8)))
