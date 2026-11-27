@@ -3,3 +3,12 @@
 .table th { font-weight: 600; white-space: nowrap; }
 .table td:nth-child(4), .table td:nth-child(5), .table th:nth-child(4), .table th:nth-child(5) { text-align: right; }
 .filters { align-items: end; }
+
+.workspace { margin: 24px 0; padding: 24px; background: color-mix(in srgb, currentColor 4%, transparent); border-radius: 8px; }
+.workspaceHeader, .paging { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.workspaceFacts { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 24px; }
+.workspace h4 { margin: 24px 0 12px; }
+.workspace p { overflow-wrap: anywhere; }
+.tableScroll { overflow-x: auto; }
+.paging { margin: 16px 0; }
+@media(max-width:760px) { .workspace { padding: 16px; } .workspaceFacts { grid-template-columns: 1fr; gap: 0; } }

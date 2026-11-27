@@ -254,7 +254,7 @@ export async function GET(req: NextRequest, { params }: {
                     data: string;
                 }>('SELECT id,status,total,data,created FROM orders WHERE owner=? ORDER BY created DESC LIMIT 100', user.id)).map(o => ({ ...o, data: orderView(parse(o.data, {})) })), requests: (await all<{
                     data: string;
-                }>('SELECT id,kind,data,status,created FROM requests WHERE owner=? AND kind IN (\'contact\',\'stock\',\'affiliate\') ORDER BY created DESC LIMIT 100', user.id)).map(r => ({ ...r, data: presentationData(parse(r.data, {})) })), rewards: presentationData(await all('SELECT points,reason,created FROM rewards WHERE owner=? ORDER BY created DESC LIMIT 100', user.id)) });
+                }>('SELECT id,kind,data,status,created FROM requests WHERE owner=? AND kind IN (\'contact\',\'stock\',\'affiliate\') ORDER BY created DESC LIMIT 100', user.id)).map(r => ({ ...r, data: presentationData(parse(r.data, {})) })), rewardBalance: (await one<{balance:number}>('SELECT COALESCE(SUM(points),0) balance FROM rewards WHERE owner=?', user.id))?.balance ?? 0, rewards: presentationData(await all('SELECT points,reason,created FROM rewards WHERE owner=? ORDER BY created DESC LIMIT 100', user.id)) });
         }
         if (action === 'admin-overview') {
             // "Today" home: work waiting now, sales and setup gaps. Each section is limited to what the role may see.
@@ -900,11 +900,7 @@ export async function POST(req: NextRequest, { params }: {
                 return j({ message: 'Order updated.' });
             }
             if (action === 'admin-reward') {
-                const owner = str(b.owner, 100);
-                if (!await one('SELECT id FROM profiles WHERE id=?', owner))
-                    throw new Error('Customer not found.');
-                await run('INSERT INTO rewards(id,owner,points,reason,created) VALUES(?,?,?,?,?)', uid(), owner, z.number().int().min(-100000).max(100000).parse(b.points), str(b.reason, 200), timestamp());
-                return j({ message: 'Reward entry saved.' });
+                return j({ error: 'Use the reward ledger to review the current balance and record an adjustment.' }, 409);
             }
         }
         return j({ error: 'Not found.' }, 404);
