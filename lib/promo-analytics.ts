@@ -10,7 +10,7 @@ export type PromoAnalyticsRow = {
 };
 export type PromoAnalyticsReport = {
   asOf: number;
-  window: { days: 7 | 30 | 90 | 'all'; start: number; end: number; timeZone: 'UTC'; includesPartialToday: true };
+  window: { days: 7 | 30 | 90 | 'all'; start: number; end: number; timeZone: 'UTC'; includesPartialToday: boolean };
   classification: 'unclassified';
   codes: { code: string; percentOff: number | null; active: boolean; rows: PromoAnalyticsRow[] }[];
 };
@@ -25,10 +25,11 @@ const historicalCodes = ['BIOMOD10', 'BIOMOD20'];
 const unknownCode = 'Unrecognized code';
 const numericFields = ['orders', 'paymentRecorded', 'grossCents', 'discountCents', 'missingPaymentRecords', 'missingDiscountRecords', 'missingAmountRecords'] as const;
 const dayMs = 86400000;
-export function promoWindow(value: string | null, now: number): PromoAnalyticsReport['window'] {
+export function promoWindow(value: string | null, now: number, completeDays = false): PromoAnalyticsReport['window'] {
   if (value !== null && !['7', '30', '90', 'all'].includes(value)) throw new Error('Choose 7, 30, or 90 days, or all time.');
   if (!Number.isSafeInteger(now) || now < 0 || now >= Number.MAX_SAFE_INTEGER) throw new Error('Reporting time is unavailable.');
   const days = value === 'all' ? 'all' : value === '7' ? 7 : value === '90' ? 90 : 30;
+  if (completeDays) { const end=Math.floor(now/dayMs)*dayMs; return {days,start:days==='all'?0:Math.max(0,end-days*dayMs),end,timeZone:'UTC',includesPartialToday:false}; }
   const start = days === 'all' ? 0 : Math.max(0, Math.floor(now / dayMs) * dayMs - (days - 1) * dayMs);
   return { days, start, end: now + 1, timeZone: 'UTC', includesPartialToday: true };
 }
@@ -69,9 +70,9 @@ function aggregateSql(knownCodes: string[]) {
       SUM(CASE WHEN paymentRecorded = 1 AND validTotal = 0 THEN 1 ELSE 0 END) AS missingAmountRecords
     FROM cohort GROUP BY code, environment ORDER BY code, environment`;
 }
-export async function promoAnalytics(deps: Dependencies, days: string | null, now = Date.now()): Promise<PromoAnalyticsReport> {
+export async function promoAnalytics(deps: Dependencies, days: string | null, now = Date.now(), completeDays = false): Promise<PromoAnalyticsReport> {
   await deps.requireAdmin(); // Authorization precedes validation and every database read.
-  const window = promoWindow(days, now);
+  const window = promoWindow(days, now, completeDays);
   try {
     const active = activePromotions(deps.storedPromos ? await deps.storedPromos() : []);
     const knownCodes = [...new Set([...active.map(p => p.code), ...historicalCodes])];

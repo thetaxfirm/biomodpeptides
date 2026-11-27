@@ -14,7 +14,7 @@ const environmentNames: Record<Environment, string> = { live: 'Live', sandbox: '
 const utcTime = (value: number) => new Date(value).toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
 
 export function PromoAnalytics() {
-  const [days, setDays] = useState('30');
+  const [days, setDays] = useState('7');
   const [environment, setEnvironment] = useState<Environment>('live');
   const [revision, setRevision] = useState(0);
   const [report, setReport] = useState<PromoAnalyticsReport | null>(null);
@@ -24,7 +24,7 @@ export function PromoAnalytics() {
 
   useEffect(() => {
     let active = true;
-    api('admin-promos?days=' + days).then((value: PromoAnalyticsReport) => {
+    api('admin-promos?days=' + days + '&complete=true').then((value: PromoAnalyticsReport) => {
       if (active) { setReport(value); setError(''); }
     }).catch(() => {
       if (active) { setReport(null); setError('Promo analytics could not load. Please refresh to try again.'); }
@@ -59,7 +59,7 @@ export function PromoAnalytics() {
     <p>All active codes appear here, including codes with no orders yet. Use the totals below to track orders attributed to each code.</p>
     <div className={styles.toolbar}>
       <label className={styles.control}>Reporting period<select value={days} onChange={event => { clearReport(); setDays(event.target.value); }}>
-        <option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="all">All available history</option>
+        <option value="7">Last 7 complete days (UTC)</option><option value="30">Last 30 complete days (UTC)</option><option value="90">Last 90 complete days (UTC)</option><option value="all">All history through yesterday (UTC)</option>
       </select></label>
       <label className={styles.control}>Payment environment<select value={environment} onChange={event => setEnvironment(event.target.value as Environment)}>
         {Object.entries(environmentNames).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -67,7 +67,7 @@ export function PromoAnalytics() {
       <button type="button" className="button button-dark" disabled={loading} onClick={refreshReport}>{loading ? 'Loading totals…' : 'Refresh totals'}</button>
       <button type="button" className="text-button" disabled={!visible} onClick={downloadReport}>Download CSV</button>
     </div>
-    <p className={styles.note}>Periods use UTC and include today’s partial day. CSV includes all environments in separate rows.</p>
+    <p className={styles.note}>Periods use complete UTC days, matching Sales and Traffic; today is excluded. CSV includes all environments in separate rows.</p>
     {error && <p className={styles.error} role="alert">{error}</p>}
     {downloadError && <p className={styles.error} role="alert">{downloadError}</p>}
     {loading && <p role="status">Loading promo analytics…</p>}

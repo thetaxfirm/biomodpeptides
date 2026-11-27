@@ -12,7 +12,7 @@ function Item({ item, onOpen }: { item: Attention; onOpen: (tab: string, orderVi
     return <li className={styles.item} data-tone={item.tone}>
         <span className={styles.count} aria-hidden="true">{item.count || '!'}</span>
         <div className={styles.text}><strong>{item.title}</strong><span>{item.detail}</span></div>
-        <button type="button" className={styles.open} onClick={() => onOpen(item.tab, item.tab === 'orders' ? item.id : undefined)}>Open {tabNames[item.tab] || item.tab}</button>
+        <button type="button" className={styles.open} onClick={() => onOpen(item.tab, item.id)}>Open {tabNames[item.tab] || item.tab}</button>
     </li>;
 }
 
@@ -30,7 +30,7 @@ export function AdminOverview({ onOpen, reloadToken = 0 }: { onOpen: (tab: strin
         finally { if (request === sequence.current) setLoading(false); }
     }
     useEffect(() => { void load(); }, [reloadToken]); // eslint-disable-line react-hooks/exhaustive-deps
-    const today = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'America/Los_Angeles' }).format(data?.generatedAt ?? Date.now());
+    const today = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' }).format(data?.generatedAt ?? Date.now());
     const work = data ? [...data.setup, ...data.attention] : [];
     return <section className={styles.overview} aria-labelledby="overview-title" aria-busy={loading}>
         <div className={styles.heading}>
@@ -51,7 +51,7 @@ export function AdminOverview({ onOpen, reloadToken = 0 }: { onOpen: (tab: strin
                     {w.sandbox.orders > 0 && <small>{w.sandbox.orders} sandbox {w.sandbox.orders === 1 ? 'order' : 'orders'}, excluded</small>}
                     {w.unknown.orders > 0 && <small>{w.unknown.orders} {w.unknown.orders === 1 ? 'order' : 'orders'} with unknown payment environment, excluded</small>}
                 </div>)}</div>
-                <p className={styles.muted}>Gross recorded amounts by order date include shipping and tax; this is not net revenue. Refunded, cancelled and failed orders are excluded; fulfillment holds still count. Orders marked as internal tests are excluded; remaining records are not confirmed customer sales. Today starts at midnight Pacific; 7- and 30-day windows are rolling.</p>
+                <p className={styles.muted}>Gross recorded amounts by order date include shipping and tax; this is not net revenue. Refunded, cancelled and failed orders are excluded; fulfillment holds still count. Orders marked as internal tests are excluded; remaining records are not confirmed customer sales. Today is partial from midnight UTC. The 7- and 30-day totals use complete UTC days, matching Sales, Traffic and Promo reports.</p>
             </>}
         </>}
     </section>;

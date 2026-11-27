@@ -19,13 +19,6 @@ export type SalesWindow = { label: string; orders: number; revenue: number; live
 export type Overview = { generatedAt: number; attention: Attention[]; sales: SalesWindow[] | null; setup: Attention[] };
 export type OverviewAccess = { orders: boolean; requests: boolean; reports: boolean; store: boolean };
 
-const pacificMidnight = (now: number) => {
-    const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
-    // 08:00 UTC is midnight or 1 am Pacific, before the 2 am DST transition.
-    const probe = Date.parse(day + 'T08:00:00Z');
-    const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', hour12: false }).format(probe)) % 24;
-    return probe - hour * 3600000;
-};
 const ago = (now: number, since: number) => { const d = Math.floor((now - since) / DAY); return d < 1 ? 'today' : d === 1 ? '1 day' : d + ' days'; };
 const plural = (n: number, one: string, many = one + 's') => n + ' ' + (n === 1 ? one : many);
 
@@ -83,10 +76,10 @@ export function salesWindows(orders: OverviewOrder[], now: number): SalesWindow[
     // The saved environment is authoritative; today's configured provider cannot reclassify history.
     const paid = orders.filter(o => PAID.has(o.status) && !o.data?.internalTest && Number.isSafeInteger(o.created) && o.created <= now);
     const empty = (): SalesCohort => ({ orders: 0, paymentRecorded: 0, grossCents: 0, missingPaymentRecords: 0 });
-    const since = (label: string, from: number): SalesWindow => {
+    const since = (label: string, from: number, end = now + 1): SalesWindow => {
         const window: SalesWindow = { label, orders: 0, revenue: 0, live: empty(), sandbox: empty(), unknown: empty() };
         for (const order of paid) {
-            if (order.created < from) continue;
+            if (order.created < from || order.created >= end) continue;
             const environment = order.data?.environment;
             const cohort = window[environment === 'live' || environment === 'authorizenet:live' ? 'live'
                 : environment === 'sandbox' || environment === 'authorizenet:sandbox' ? 'sandbox' : 'unknown'];
@@ -102,7 +95,8 @@ export function salesWindows(orders: OverviewOrder[], now: number): SalesWindow[
         window.revenue = window.live.grossCents;
         return window;
     };
-    return [since('Today', pacificMidnight(now)), since('Last 7 days', now - 7 * DAY), since('Last 30 days', now - 30 * DAY)];
+    const midnight = Math.floor(now / DAY) * DAY;
+    return [since('Today (UTC, partial)', midnight), since('Last 7 complete days (UTC)', midnight - 7 * DAY, midnight), since('Last 30 complete days (UTC)', midnight - 30 * DAY, midnight)];
 }
 
 export function setupAttention(shipping: ShippingOptionsConfig, environment: string | undefined): Attention[] {

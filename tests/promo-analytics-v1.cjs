@@ -42,6 +42,10 @@ const getRow = (report, code, environment = 'live') => report.codes.find(p => p.
   assert.equal(promoWindow('7', start).end, start + 1, 'A midnight report still includes that instant of the current date');
   for (const value of ['', '0', '07', '365', '7 OR 1=1', '30.0']) assert.throws(() => promoWindow(value, now), /Choose/);
   for (const value of [NaN, Infinity, -1, .5, Number.MAX_SAFE_INTEGER]) assert.throws(() => promoWindow('7', value), /time/);
+  const complete=promoWindow('7',now,true);
+  const {diagnosticWindow}=require('../lib/sales-diagnostics.ts');
+  assert.deepEqual({days:complete.days,start:complete.start,end:complete.end,timeZone:complete.timeZone},diagnosticWindow('7',now),'Complete promo periods agree with sales diagnostics');
+  assert.equal(complete.includesPartialToday,false);
   const empty = await promoAnalytics({ requireAdmin: allow, all }, null, now);
   assert.equal(empty.codes.length, 11);
   for (const code of empty.codes) {

@@ -141,7 +141,7 @@ export async function GET(req: NextRequest, { params }: {
         if (action === 'admin-diagnostics')
             return j(await salesDiagnostics({ requireAdmin: () => requireStaff('reports:read'), all }, req.nextUrl.searchParams.get('days')));
         if (action === 'admin-promos')
-            return j(await promoAnalytics({ requireAdmin: () => requireStaff('reports:read'), all, storedPromos: () => storedPromotions(database()) }, req.nextUrl.searchParams.get('days')));
+            return j(await promoAnalytics({ requireAdmin: () => requireStaff('reports:read'), all, storedPromos: () => storedPromotions(database()) }, req.nextUrl.searchParams.get('days'), Date.now(), req.nextUrl.searchParams.get('complete') === 'true'));
         const u = await customer();
         if (action === 'state') {
             const secure = req.nextUrl.protocol === 'https:';

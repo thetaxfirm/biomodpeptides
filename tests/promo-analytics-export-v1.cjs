@@ -50,12 +50,12 @@ console.log('PASS: aggregate-only CSV with exact cents/window/env/missing-record
  });
  const pending=[];apiImpl=action=>new Promise((resolve,reject)=>pending.push({action,resolve,reject}));
  host={slots:[],cursor:0,effects:[],tree:null,dirty:false,render(){for(let n=0;n<20;n++){this.cursor=0;this.effects=[];this.dirty=false;this.tree=PromoAnalytics();for(const effect of this.effects)effect();if(!this.dirty)return;}throw Error('Render loop');}};
- host.render();assert.equal(pending[0].action,'admin-promos?days=30');assert.equal(button(host.tree,'Download CSV').props.disabled,true);
- pending[0].resolve(report);await new Promise(setImmediate);host.render();assert.equal(button(host.tree,'Download CSV').props.disabled,false);
+ host.render();assert.equal(pending[0].action,'admin-promos?days=7&complete=true');assert.equal(button(host.tree,'Download CSV').props.disabled,true);
+ pending[0].resolve({...report,window:{...report.window,days:7,includesPartialToday:false}});await new Promise(setImmediate);host.render();assert.equal(button(host.tree,'Download CSV').props.disabled,false);
  button(host.tree,'Refresh totals').props.onClick();host.render();assert.equal(button(host.tree,'Download CSV').props.disabled,true);assert(!nodes(host.tree).some(node=>node.type==='table'));
- find(host.tree,node=>node.type==='select'&&node.props.value==='30').props.onChange({target:{value:'7'}});host.render();assert.equal(pending[2].action,'admin-promos?days=7');
+ find(host.tree,node=>node.type==='select'&&node.props.value==='7').props.onChange({target:{value:'30'}});host.render();assert.equal(pending[2].action,'admin-promos?days=30&complete=true');
  pending[1].resolve(report);await new Promise(setImmediate);host.render();assert.equal(button(host.tree,'Download CSV').props.disabled,true,'late old-period report cannot re-enable CSV');assert(!nodes(host.tree).some(node=>node.type==='table'));
  pending[2].reject(Error('offline'));await new Promise(setImmediate);host.render();assert.equal(button(host.tree,'Download CSV').props.disabled,true);assert(nodes(host.tree).some(node=>node.props.role==='alert'));assert(!nodes(host.tree).some(node=>node.type==='table'));
- button(host.tree,'Refresh totals').props.onClick();host.render();pending[3].resolve({...report,window:{...report.window,days:7}});await new Promise(setImmediate);host.render();assert.equal(button(host.tree,'Download CSV').props.disabled,false);assert(nodes(host.tree).some(node=>node.type==='table'));
+ button(host.tree,'Refresh totals').props.onClick();host.render();pending[3].resolve({...report,window:{...report.window,days:30,includesPartialToday:false}});await new Promise(setImmediate);host.render();assert.equal(button(host.tree,'Download CSV').props.disabled,false);assert(nodes(host.tree).some(node=>node.type==='table'));
  console.log('PASS: actual request effect clears stale reports on refresh/period changes, ignores late responses, exposes load failures without false zeros, and recovers on retry.');
 })().catch(error=>{console.error(error);process.exitCode=1;});
