@@ -3,7 +3,7 @@ import { requireStaff } from '@/lib/auth';
 import { database } from '@/lib/runtime';
 import { contactList, sourceLabels } from '@/lib/contacts';
 import { csv } from '@/lib/affiliate-onboarding';
-import { contactsForAdmin } from '@/lib/crm-capture';
+import { contactsForAdmin, contactSyncHealth } from '@/lib/crm-capture';
 import { siteLabels } from '@/lib/shared-crm';
 import { textSignups } from '@/lib/text-offer';
 import { emailSignups } from '@/lib/email-offer';
@@ -32,6 +32,6 @@ export async function GET(req: NextRequest) {
   }
   const texts = await textSignups(database()).catch(() => []);
   const emails = await emailSignups(database()).catch(() => []);
-  return NextResponse.json({ contacts, shared, total: contacts.length, withPhone: contacts.filter(c => c.phones.length).length, textSignups: texts, emailSignups: emails }, { headers });
+  return NextResponse.json({ contacts, shared, syncHealth: await contactSyncHealth(), total: contacts.length, withPhone: contacts.filter(c => c.phones.length).length, textSignups: texts, emailSignups: emails }, { headers });
  } catch { return NextResponse.json({ error: 'Contacts could not be loaded.' }, { status: 500, headers }); }
 }

@@ -102,5 +102,19 @@ export async function publishOnSchedule(env: { DB: D1Database; CRM?: D1Database 
     if (last && now - last.at < 3600000) return;
     const result = await publishContacts(env.CRM, site, await contactList(env.DB), now);
     await env.CRM.prepare('INSERT INTO crm_publish_log(site,at,published,unchanged) VALUES(?,?,?,?) ON CONFLICT(site) DO UPDATE SET at=excluded.at,published=excluded.published,unchanged=excluded.unchanged').bind(site, now, result.published, result.unchanged).run();
-  } catch { /* the next run retries */ }
+    await saveSyncHealth(env.DB, { lastAttemptAt: now, lastSuccessAt: now, status: 'ok' });
+  } catch { await saveSyncHealth(env.DB, { lastAttemptAt: now, status: 'failed' }).catch(() => undefined); }
+}
+
+export type CrmSyncHealth = { status: 'not_configured' | 'never' | 'ok' | 'stale' | 'failed'; lastAttemptAt: number | null; lastSuccessAt: number | null };
+async function saveSyncHealth(db: D1Database, value: { lastAttemptAt: number; lastSuccessAt?: number; status: string }) {
+  await db.prepare("INSERT INTO settings(key,value) VALUES('crm_sync_health_v1',?) ON CONFLICT(key) DO UPDATE SET value=json_patch(settings.value,excluded.value)")
+    .bind(JSON.stringify(value)).run();
+}
+export async function crmSyncHealth(db: D1Database, configured: boolean, now = Date.now()): Promise<CrmSyncHealth> {
+  if (!configured) return { status: 'not_configured', lastAttemptAt: null, lastSuccessAt: null };
+  const row = await db.prepare("SELECT value FROM settings WHERE key='crm_sync_health_v1'").first<{value:string}>();
+  let health: Partial<CrmSyncHealth> = {}; try { health = JSON.parse(row?.value || '{}'); } catch { /* never report healthy without evidence */ }
+  const lastSuccessAt = typeof health.lastSuccessAt === 'number' ? health.lastSuccessAt : null;
+  return { status: health.status === 'failed' ? 'failed' : !lastSuccessAt ? 'never' : now-lastSuccessAt > 2*3600000 ? 'stale' : 'ok', lastAttemptAt: typeof health.lastAttemptAt === 'number' ? health.lastAttemptAt : null, lastSuccessAt };
 }
