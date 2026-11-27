@@ -5,7 +5,7 @@ import type { Product } from '@/lib/catalog';
 import { compounds, compoundAt, comparisonAt, comparisons, comparisonsFor, compoundQuestions, publishedCompound, publishedComparison, pubchemUrl, type Compound } from '@/lib/compound-reference';
 import { eligibleDiscovery, productHeading } from '@/lib/product-discovery';
 import { batchFor, batchPath, batchRecords, batchRecordsFor, batchStatusLabel, matchingCertificateFor, reportedResult } from '@/lib/testing';
-import { collections, publishedCollection } from '@/lib/collections';
+import { collections, publishedCollection, collectionsForCompound, relatedCompounds } from '@/lib/collections';
 import { useStore } from './provider';
 import styles from './compound-reference.module.css';
 
@@ -71,6 +71,7 @@ export function CompoundPage({ slug }: { slug: string }) {
   const products = listed(c, store.products);
   const questions = compoundQuestions(c, products.map(productName));
   const related = comparisonsFor(c.slug);
+  const areas = collectionsForCompound(c), siblings = relatedCompounds(c);
   return <div className={styles.page}>
     <nav aria-label="Breadcrumb" className={styles.crumbs}><a href="/compounds">Compound reference</a><span aria-hidden="true">/</span><span>{c.name}</span></nav>
     <div className="page-heading"><h1>{c.name}</h1><p>{c.summary}</p></div>
@@ -79,6 +80,10 @@ export function CompoundPage({ slug }: { slug: string }) {
     <section className={styles.section} aria-labelledby="lots-heading"><h2 id="lots-heading">Biomod lots and lab reports</h2><Lots products={products}/></section>
     {related.length > 0 && <section className={styles.section} aria-labelledby="related-heading"><h2 id="related-heading">Compare</h2>
       <ul className={styles.plainList}>{related.map(x => <li key={x.slug}><a href={'/compare/' + x.slug}>{compoundAt(x.a)!.name} vs {compoundAt(x.b)!.name}</a></li>)}</ul></section>}
+    {areas.length > 0 && <section className={styles.section} aria-labelledby="areas-heading"><h2 id="areas-heading">Where {c.name} is catalogued</h2>
+      <ul className={styles.plainList}>{areas.map(x => <li key={x.slug}><a href={'/collections/' + x.slug}>{x.title}</a></li>)}</ul></section>}
+    {siblings.length > 0 && <section className={styles.section} aria-labelledby="siblings-heading"><h2 id="siblings-heading">Related compound references</h2>
+      <ul className={styles.plainList}>{siblings.map(x => <li key={x.slug}><a href={'/compounds/' + x.slug}>{x.name} reference data</a></li>)}</ul></section>}
     <section className={styles.section} aria-labelledby="questions-heading"><h2 id="questions-heading">Questions</h2>
       <div className={styles.questions}>{questions.map(q => <div key={q.question}><h3>{q.question}</h3><p>{q.answer}</p></div>)}</div></section>
     {ruo}

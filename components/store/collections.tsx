@@ -1,8 +1,8 @@
 'use client';
 import { ArrowRight } from 'lucide-react';
 import type { Product } from '@/lib/catalog';
-import { collections, collectionAt, collectionCompounds, publishedCollection, publishedProducts, type Collection } from '@/lib/collections';
-import { publishedCompound } from '@/lib/compound-reference';
+import { collections, collectionAt, collectionCompounds, collectionComparisons, publishedCollection, publishedProducts, type Collection } from '@/lib/collections';
+import { compoundAt, publishedCompound } from '@/lib/compound-reference';
 import { eligibleDiscovery, vialName } from '@/lib/product-discovery';
 import { ProductCard } from './catalog';
 import { useStore } from './provider';
@@ -32,6 +32,7 @@ export function CollectionPage({ slug }: { slug: string }) {
   const c = collectionAt(slug)!;
   const items = listed(c, store.products);
   const references = c.byFormat ? [] : collectionCompounds(c).filter(publishedCompound); // format collections group by container
+  const pairs = collectionComparisons(c);
   const others = collections.filter(x => x.slug !== c.slug && publishedCollection(x));
   return <div className={styles.page}>
     <nav aria-label="Breadcrumb" className={styles.crumbs}><a href="/shop">Shop</a><span aria-hidden="true">/</span><a href="/collections">Collections</a><span aria-hidden="true">/</span><span>{c.name}</span></nav>
@@ -44,6 +45,8 @@ export function CollectionPage({ slug }: { slug: string }) {
         <thead><tr><th scope="col">Compound</th><th scope="col">CAS</th><th scope="col">Formula</th><th scope="col">Molecular weight (g/mol)</th></tr></thead>
         <tbody>{references.map(r => <tr key={r.slug}><th scope="row"><a href={'/compounds/' + r.slug}>{r.name}</a></th><td>{r.cas}</td><td>{r.formula}</td><td>{r.weight}</td></tr>)}</tbody>
       </table></div></section>}
+    {pairs.length > 0 && <section className={styles.section} aria-labelledby="pairs-heading"><h2 id="pairs-heading">Side-by-side comparisons</h2>
+      <ul className={styles.plainList}>{pairs.map(x => <li key={x.slug}><a href={'/compare/' + x.slug}>{compoundAt(x.a)!.name} vs {compoundAt(x.b)!.name}</a></li>)}</ul></section>}
     {others.length > 0 && <section className={styles.section} aria-labelledby="other-heading"><h2 id="other-heading">Other research areas</h2>
       <ul className={styles.plainList}>{others.map(x => <li key={x.slug}><a href={'/collections/' + x.slug}>{x.title}</a></li>)}</ul></section>}
     {ruo}

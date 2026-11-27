@@ -66,6 +66,27 @@ export const pageLastmod: Record<string, string> = {
   '/choosing-a-research-supplier': '2026-11-26',
   '/news/biomod-online-store-trybiomod': '2026-11-26',
   '/news/guide-to-reading-coa': '2026-11-26',
+  // November 27: each compound reference page lists the collections that hold its products and
+  // the other compound references of the same research area; three research-area collections
+  // link the side-by-side page for two of their compounds. Epitalon, Kisspeptin-10 and Thymosin
+  // Alpha-1 are in no published collection, so their pages did not change.
+  '/compounds/aod-9604': '2026-11-27',
+  '/compounds/bpc-157': '2026-11-27',
+  '/compounds/cjc-1295-no-dac': '2026-11-27',
+  '/compounds/dsip': '2026-11-27',
+  '/compounds/ghk-cu': '2026-11-27',
+  '/compounds/glutathione': '2026-11-27',
+  '/compounds/kpv': '2026-11-27',
+  '/compounds/mots-c': '2026-11-27',
+  '/compounds/nad': '2026-11-27',
+  '/compounds/pt-141': '2026-11-27',
+  '/compounds/selank': '2026-11-27',
+  '/compounds/semax': '2026-11-27',
+  '/compounds/ss-31': '2026-11-27',
+  '/compounds/tesamorelin': '2026-11-27',
+  '/collections/growth-hormone-axis': '2026-11-27',
+  '/collections/mitochondrial-research': '2026-11-27',
+  '/collections/neuroscience-research': '2026-11-27',
 };
 
 const later = (a: string, b: string) => (a > b ? a : b);

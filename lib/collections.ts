@@ -1,6 +1,6 @@
 import publication from './seo-publication-v1.json';
 import specificationReviews from './product-specification-review-v1.json';
-import { compoundForProduct } from './compound-reference';
+import { compoundForProduct, comparisons, publishedCompound, publishedComparison, type Compound } from './compound-reference';
 
 // Shop collections: published products grouped by what the compounds are (their structural
 // origin or the research field they are catalogued under) or by supplied format, never by an outcome. Intros state
@@ -53,3 +53,15 @@ export const publishedCollection = (c?: Collection) => Boolean(c && publishedPro
 export const collectionsFor = (productSlug: string) => published(productSlug) ? collections.filter(c => c.products.includes(productSlug) && publishedCollection(c)) : [];
 // Compound reference pages for the collection's published products, in product order, once each.
 export const collectionCompounds = (c: Collection) => publishedProducts(c).map(compoundForProduct).filter((x, i, all): x is NonNullable<typeof x> => Boolean(x) && all.indexOf(x) === i);
+// Published collections that hold a published product of this compound: research areas first, then format groupings.
+export const collectionsForCompound = (c: Compound) => collections.filter(x => publishedCollection(x) && publishedProducts(x).some(slug => c.products.includes(slug)))
+  .sort((a, b) => Number(Boolean(a.byFormat)) - Number(Boolean(b.byFormat)));
+// Other published compound reference pages catalogued in the same research areas, once each. Format groupings do not relate compounds.
+export const relatedCompounds = (c: Compound) => collectionsForCompound(c).filter(x => !x.byFormat).flatMap(collectionCompounds)
+  .filter((x, i, all) => x.slug !== c.slug && publishedCompound(x) && all.indexOf(x) === i);
+// Published side-by-side pages whose two compounds are both in this research-area collection.
+export const collectionComparisons = (c: Collection) => {
+  if (c.byFormat) return [];
+  const slugs = collectionCompounds(c).map(x => x.slug);
+  return comparisons.filter(x => publishedComparison(x) && slugs.includes(x.a) && slugs.includes(x.b));
+};
