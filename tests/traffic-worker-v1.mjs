@@ -54,6 +54,10 @@ try {
     db.prepare('INSERT INTO traffic_daily VALUES(?,?,?,?)').bind(cutoff, 'home', 'internal', 3),
     db.prepare('INSERT INTO shopping_daily VALUES(?,?,?)').bind(expired, 'cart_view', 4),
     db.prepare('INSERT INTO shopping_daily VALUES(?,?,?)').bind(cutoff, 'cart_view', 5),
+    db.prepare('INSERT INTO traffic_minute VALUES(?,?,?,?)').bind(Date.parse(expired + 'T23:59:00Z'), 'home', 'internal', 2),
+    db.prepare('INSERT INTO traffic_minute VALUES(?,?,?,?)').bind(Date.parse(cutoff + 'T00:00:00Z'), 'home', 'internal', 3),
+    db.prepare('INSERT INTO shopping_minute VALUES(?,?,?)').bind(Date.parse(expired + 'T23:59:00Z'), 'cart_view', 4),
+    db.prepare('INSERT INTO shopping_minute VALUES(?,?,?)').bind(Date.parse(cutoff + 'T00:00:00Z'), 'cart_view', 5),
   ]);
   const scheduled = await mf.dispatchFetch('http://localhost/cdn-cgi/handler/scheduled?cron=0%209%20*%20*%20*');
   assert.equal(scheduled.status, 200, 'Built scheduled handler must complete: ' + (await scheduled.text()).slice(0, 500));
@@ -61,6 +65,11 @@ try {
   assert.equal((await db.prepare('SELECT event_count n FROM traffic_daily WHERE day=?').bind(cutoff).first()).n, 3, 'Exact retention boundary survives');
   assert.equal(await db.prepare('SELECT day FROM shopping_daily WHERE day=?').bind(expired).first(), null);
   assert.equal((await db.prepare('SELECT event_count n FROM shopping_daily WHERE day=?').bind(cutoff).first()).n, 5, 'Shopping retention boundary survives the same scheduled transaction');
+  for (const [table, expected] of [['traffic_minute', 3], ['shopping_minute', 5]]) {
+    const retained = (await db.prepare(`SELECT bucket,event_count FROM ${table}`).all()).results;
+    assert.deepEqual(retained, [{ bucket: Date.parse(cutoff + 'T00:00:00Z'), event_count: expected }], 'Minute retention has the same exact UTC boundary');
+  }
+  assert.equal((await db.prepare('SELECT COUNT(*) n FROM metrics_time_coverage').first()).n, 0, 'Cleanup cannot fabricate historical minute coverage');
   const health = await db.prepare('SELECT last_attempt,last_success,last_failure,last_status FROM traffic_metrics_health WHERE id=1').first();
   assert.equal(health.last_status, 'ok'); assert(health.last_success >= now); assert.equal(health.last_failure, null);
   const total = async () => (await db.prepare('SELECT COALESCE(SUM(event_count),0) n FROM traffic_daily').first()).n;
@@ -70,6 +79,13 @@ try {
   assert.equal(accepted.status, 204); assert.equal(accepted.headers.get('set-cookie'), null); assert.equal(accepted.headers.get('cache-control'), 'no-store');
   assert.equal(await total(), 4, 'Exactly one isolated test event recorded through actual built Worker');
   assert.equal((await db.prepare('SELECT event_count n FROM traffic_daily WHERE day=? AND page_group=? AND source_group=?').bind(day(now), 'product', 'search').first()).n, 1);
+  const minuteTotal = async table => (await db.prepare(`SELECT COALESCE(SUM(event_count),0) n FROM ${table}`).first()).n;
+  const trafficCoverage = await db.prepare('SELECT started_at FROM metrics_time_coverage WHERE kind=?').bind('traffic').first();
+  assert(trafficCoverage.started_at >= now && trafficCoverage.started_at <= Date.now());
+  assert.equal(await minuteTotal('traffic_minute'), 4, 'Actual D1 changes() accepts exactly the corresponding minute event');
+  const bucket = await db.prepare('SELECT bucket,event_count FROM traffic_minute WHERE page_group=? AND source_group=?').bind('product', 'search').first();
+  assert.equal(bucket.event_count, 1); assert.equal(bucket.bucket % 60000, 0);
+  assert(bucket.bucket >= Math.floor(now / 60000) * 60000 && bucket.bucket <= Date.now());
   for (const optOut of [{ 'sec-gpc': '1' }, { dnt: '1' }]) {
     const ignored = await mf.dispatchFetch(origin + '/api/metrics', { method: 'POST', headers: { ...headers, ...optOut }, body: payload });
     assert.equal(ignored.status, 204); assert.equal(ignored.headers.get('set-cookie'), null); assert.equal(await total(), 4);
@@ -79,6 +95,8 @@ try {
   const shoppingAccepted = await mf.dispatchFetch(origin + '/api/metrics', { method: 'POST', headers, body: shoppingPayload });
   assert.equal(shoppingAccepted.status, 204); assert.equal(shoppingAccepted.headers.get('set-cookie'), null);
   assert.equal(await shoppingTotal(), 6); assert.equal(await total(), 4, 'Shopping stage does not increment public page views');
+  assert.equal(await minuteTotal('shopping_minute'), 6);
+  assert.equal((await db.prepare('SELECT COUNT(*) n FROM metrics_time_coverage').first()).n, 2, 'The stages have independent actual coverage');
   for (const optOut of [{ 'sec-gpc': '1' }, { dnt: '1' }]) {
     const ignored = await mf.dispatchFetch(origin + '/api/metrics', { method: 'POST', headers: { ...headers, ...optOut }, body: shoppingPayload });
     assert.equal(ignored.status, 204); assert.equal(await shoppingTotal(), 6);
@@ -92,12 +110,55 @@ try {
   const report = await mf.dispatchFetch(origin + '/api/metrics/report?days=invalid');
   assert.equal(report.status, 403, 'Anonymous authorization failure precedes invalid query validation in actual route');
   assert.equal(report.headers.get('set-cookie'), null); assert.equal(await total(), 4);
+
+  // Real D1 transaction failures must roll back daily acceptance and must not alter coverage.
+  const firstCoverage = (await db.prepare('SELECT * FROM metrics_time_coverage ORDER BY kind').all()).results;
+  for (const table of ['traffic_minute', 'metrics_time_coverage']) {
+    await db.prepare(`CREATE TRIGGER fixture_ingestion_failure BEFORE INSERT ON ${table} BEGIN SELECT RAISE(ABORT,'Fixture aggregate write failed'); END`).run();
+    const failed = await mf.dispatchFetch(origin + '/api/metrics', { method: 'POST', headers, body: payload });
+    assert.equal(failed.status, 503); assert.deepEqual(await failed.json(), { error: 'Traffic recording is temporarily unavailable.' });
+    assert.equal(await total(), 4); assert.equal(await minuteTotal('traffic_minute'), 4);
+    assert.deepEqual((await db.prepare('SELECT * FROM metrics_time_coverage ORDER BY kind').all()).results, firstCoverage);
+    await db.prepare('DROP TRIGGER fixture_ingestion_failure').run();
+  }
+  // Saturated UTC counts reject both matching and new-category minute increments, but not shopping.
+  await db.prepare('INSERT INTO traffic_daily VALUES(?,?,?,?)').bind(day(now), 'home', 'internal', 49999).run();
+  for (const body of [payload, JSON.stringify({ event: 'page_view', pageGroup: 'documents', sourceGroup: 'social' })]) {
+    assert.equal((await mf.dispatchFetch(origin + '/api/metrics', { method: 'POST', headers, body })).status, 204);
+  }
+  assert.equal(await total(), 50003); assert.equal(await minuteTotal('traffic_minute'), 4);
+  assert.deepEqual((await db.prepare('SELECT * FROM metrics_time_coverage ORDER BY kind').all()).results, firstCoverage);
+  assert.equal((await mf.dispatchFetch(origin + '/api/metrics', { method: 'POST', headers, body: shoppingPayload })).status, 204);
+  assert.equal(await shoppingTotal(), 7); assert.equal(await minuteTotal('shopping_minute'), 7, 'Traffic cap cannot consume the shopping allowance');
+  await db.prepare('INSERT INTO shopping_daily VALUES(?,?,?)').bind(day(now), 'cart_view', 49998).run();
+  assert.equal((await mf.dispatchFetch(origin + '/api/metrics', { method: 'POST', headers, body: shoppingPayload })).status, 204);
+  assert.equal(await shoppingTotal(), 50005); assert.equal(await minuteTotal('shopping_minute'), 7);
+  await db.prepare('DELETE FROM metrics_time_coverage WHERE kind=?').bind('traffic').run();
+  assert.equal((await mf.dispatchFetch(origin + '/api/metrics', { method: 'POST', headers, body: payload })).status, 204);
+  assert.equal(await db.prepare('SELECT started_at FROM metrics_time_coverage WHERE kind=?').bind('traffic').first(), null, 'A rejected first event cannot establish coverage');
+
+  // Failure in the last retention table preserves earlier daily/minute deletes as one D1 batch.
+  await db.batch([
+    db.prepare('INSERT INTO traffic_daily VALUES(?,?,?,1)').bind(expired, 'home', 'internal'),
+    db.prepare('INSERT INTO shopping_daily VALUES(?,?,1)').bind(expired, 'cart_view'),
+    db.prepare('INSERT INTO traffic_minute VALUES(?,?,?,1)').bind(Date.parse(expired + 'T00:00:00Z'), 'home', 'internal'),
+    db.prepare('INSERT INTO shopping_minute VALUES(?,?,1)').bind(Date.parse(expired + 'T00:00:00Z'), 'cart_view'),
+    db.prepare("CREATE TRIGGER fixture_retention_failure BEFORE DELETE ON shopping_minute BEGIN SELECT RAISE(ABORT,'Fixture retention failed'); END"),
+  ]);
+  const cleanupFailed = await mf.dispatchFetch('http://localhost/cdn-cgi/handler/scheduled?cron=0%209%20*%20*%20*');
+  assert.equal(cleanupFailed.status, 500);
+  for (const table of ['traffic_daily', 'shopping_daily']) assert.equal((await db.prepare(`SELECT event_count FROM ${table} WHERE day=?`).bind(expired).first()).event_count, 1);
+  for (const table of ['traffic_minute', 'shopping_minute']) assert.equal((await db.prepare(`SELECT event_count FROM ${table} WHERE bucket=?`).bind(Date.parse(expired + 'T00:00:00Z')).first()).event_count, 1);
+  assert.equal((await db.prepare('SELECT last_status FROM traffic_metrics_health WHERE id=1').first()).last_status, 'failed');
+  await db.prepare('DROP TRIGGER fixture_retention_failure').run();
+  assert.equal((await mf.dispatchFetch('http://localhost/cdn-cgi/handler/scheduled?cron=0%209%20*%20*%20*')).status, 200);
+  assert.equal((await db.prepare('SELECT last_status FROM traffic_metrics_health WHERE id=1').first()).last_status, 'ok');
   for (const table of ['sessions','rate_limits','orders']) assert.equal((await db.prepare(`SELECT COUNT(*) n FROM ${table}`).first()).n, 0, 'Metrics create no customer sessions, rate-limit identities or commerce records');
   assert.deepEqual((await db.prepare('SELECT * FROM change_events ORDER BY id').all()).results, initialAudit,
     'Routine page/stage events and retention housekeeping must leave audit history unchanged');
   assert.equal((await db.prepare('SELECT COUNT(*) n FROM change_context').first()).n, 0);
   assert.equal(outboundAttempts, 0, 'No external services were contacted');
-  console.log('PASS: actual built Worker scheduled cleanup, local D1 transaction/retention boundary and health, separate isolated page/stage ingestion, GPC/DNT no-write, foreign-origin rejection, no cookies, and report authorization before validation. Production untouched.');
+  console.log('PASS: actual built Worker/D1 daily-minute acceptance, cap propagation, independent stage allowance, first coverage, rollback on ingestion/retention failure, cleanup health, opt-outs, no cookies or business records, and report authorization. Production untouched.');
 } finally {
   await mf.dispose();
   await fs.rm(temporary, { recursive: true, force: true });
