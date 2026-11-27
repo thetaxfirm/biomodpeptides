@@ -1,5 +1,6 @@
 'use client';
 import { fulfillmentBlock } from '@/lib/fulfillment-eligibility';
+import { canPlanPreorder, savedPreorderPlan } from '@/lib/preorder-plan';
 import { preorderAwaitingRelease } from '@/lib/fulfillment';
 // Admin Orders tab: status tabs with counts, one search box, a compact table with one next step
 // per order, and the full order in a side panel. Paging and search run on the server.
@@ -155,7 +156,14 @@ export function OrdersAdmin({ reloadToken, viewRequest, checkoutRecovery, allowe
     const viewKey = JSON.stringify([tab, input.trim(), reloadToken]);
     const activeView = useRef(viewKey);
     const [releaseNotes, setReleaseNotes] = useState<Record<string, string>>({});
-    useEffect(() => setReleaseNotes({}), [formGeneration]);
+    const [preorderPlans, setPreorderPlans] = useState<Record<string, { dispatchDate: string; note: string; expectedVersion: string }>>({});
+    useEffect(() => { setReleaseNotes({}); setPreorderPlans({}); }, [formGeneration]);
+    const selectedPlan = selected ? preorderPlans[selected.id] || { expectedVersion: selected.version || '', dispatchDate: savedPreorderPlan(selected.data?.preorderPlan)?.dispatchDate || '', note: savedPreorderPlan(selected.data?.preorderPlan)?.note || '' } : { dispatchDate: '', note: '', expectedVersion: '' };
+    const editPreorderPlan = (field: 'dispatchDate' | 'note', value: string) => {
+        if (!selected) return;
+        setPreorderPlans(previous => ({ ...previous, [selected.id]: { ...selectedPlan, [field]: value } }));
+        markDraft('preorder-plan:' + selected.id);
+    };
     activeView.current = viewKey;
     // A changed tab/search must never relabel the previous view's actionable rows.
     const viewReady = Boolean(result && loadedKey === viewKey && input.trim() === q);
@@ -383,6 +391,12 @@ export function OrdersAdmin({ reloadToken, viewRequest, checkoutRecovery, allowe
                     {recoveryJobs(selected.id).map((j: any) => <p key={j.order_id}>Recovery email: {j.status === 'accepted' ? 'Accepted by mail provider' : j.status === 'review' ? 'Needs manual review' : j.status}. {String(j.reason || '').replaceAll('_', ' ')}{j.accepted_at ? ' · ' + new Date(j.accepted_at).toLocaleString() : ''}</p>)}
                     <div className={styles.actions}>
                         <h3>Actions</h3>
+                        {allowed('orders:fulfill') && canPlanPreorder(selected) && <form onSubmit={event => submit(event, 'preorder-plan', () => ({ orderId: selected.id, expectedVersion: selectedPlan.expectedVersion, dispatchDate: selectedPlan.dispatchDate || null, note: selectedPlan.note }), 'preorder-plan:' + selected.id)}>
+                            <label>Revised dispatch estimate (UTC)<input type="date" name="preorderDispatchDate" min={new Date().toISOString().slice(0, 10)} value={selectedPlan.dispatchDate} disabled={busy} onChange={event => editPreorderPlan('dispatchDate', event.target.value)}/></label>
+                            <label>Estimate check notes<input name="preorderPlanNote" value={selectedPlan.note} disabled={busy} minLength={10} maxLength={500} required onChange={event => editPreorderPlan('note', event.target.value)}/></label>
+                            <p>Leave the date blank until confirmed. Saving assigns the current estimate to you and records when you checked it. Stock release remains a separate action.</p>
+                            <button className="button button-dark" disabled={busy || selectedPlan.note.trim().length < 10}>Save estimate and take ownership</button>
+                        </form>}
                         {allowed('orders:fulfill') && preorderAwaitingRelease(selected.data) && !selected.data?.hold && !paymentVerificationFailed(selected) && ['paid', 'shipped'].includes(selected.status) && <form onSubmit={event => { event.preventDefault(); const order = selected; if (!window.confirm('Confirm the ordered preorder stock is physically available and ready to pack? This releases automatic label purchase after the configured delay. No message is sent.')) return; void submit(event, 'preorder-release', () => ({ orderId: order.id, expectedVersion: order.version, note: releaseNotes[order.id] || '' }), 'preorder-release:' + order.id); }}>
                             <label>Confirm preorder stock is ready<input name="preorderReadyNote" value={releaseNotes[selected.id] || ''} disabled={busy} onChange={event => { const note = event.target.value; setReleaseNotes(previous => ({ ...previous, [selected.id]: note })); markDraft('preorder-release:' + selected.id); }} minLength={10} maxLength={500} required placeholder="Record the stock/lot check and who confirmed it"/></label>
                             <button className="button button-dark" disabled={busy || (releaseNotes[selected.id] || '').trim().length < 10}>Release preorder for packing</button>

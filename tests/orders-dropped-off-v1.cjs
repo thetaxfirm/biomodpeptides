@@ -19,6 +19,7 @@ function load(file){const name=path.join(root,file),m=new Module(name,module);m.
   if(id==='@/lib/catalog')return{money:n=>'$'+(n/100).toFixed(2)};
   if(id==='@/lib/fulfillment-eligibility')return load('lib/fulfillment-eligibility.ts');
   if(id==='./order-resolution')return{OrderResolution:()=>null};
+  if(id==='@/lib/preorder-plan')return load('lib/preorder-plan.ts');
   if(id==='@/lib/fulfillment')return load('lib/fulfillment.ts');
   if(id==='@/lib/order-queue')return load('lib/order-queue.ts');
   if(id==='@/lib/ship-cutoff')return load('lib/ship-cutoff.ts'); /* Cutoff tracker has its own suite (ship-cutoff-v1). */
@@ -123,6 +124,19 @@ const releaseForm=findRelease(releaseScreen.tree,n=>n.type==='form'&&Boolean(fin
 global.window={confirm:()=>false};releaseForm.props.onSubmit({preventDefault(){}});assert.equal(releaseSubmits.length,0);
 global.window={confirm:()=>true};releaseForm.props.onSubmit({preventDefault(){}});assert.deepEqual(releaseSubmits,[{action:'preorder-release',body:{orderId:preorderRow.id,expectedVersion:preorderRow.version,note:'Warehouse confirmed the ordered lot.'},key:'preorder-release:'+preorderRow.id}]);
 console.log('PASS: preorder release notes survive closing/reopening the order and use the existing guarded draft submission contract.');
+// Current plans use the same guarded drafts without implicitly confirming physical stock.
+findRelease(releaseScreen.tree,n=>n.type==='input'&&n.props.name==='preorderDispatchDate').props.onChange({target:{value:'2099-01-10'}});releaseScreen.render();
+findRelease(releaseScreen.tree,n=>n.type==='input'&&n.props.name==='preorderPlanNote').props.onChange({target:{value:'Supplier confirmed a revised estimate.'}});releaseScreen.render();
+releaseScreen.s[8]=null;releaseScreen.render();releaseScreen.s[8]=preorderPage.orders[0];releaseScreen.render();
+assert.equal(findRelease(releaseScreen.tree,n=>n.type==='input'&&n.props.name==='preorderDispatchDate').props.value,'2099-01-10');
+assert.equal(findRelease(releaseScreen.tree,n=>n.type==='input'&&n.props.name==='preorderPlanNote').props.value,'Supplier confirmed a revised estimate.');
+releaseScreen.s[8]={...preorderPage.orders[0],version:'b'.repeat(64)};releaseScreen.render();
+const planForm=findRelease(releaseScreen.tree,n=>n.type==='form'&&Boolean(findRelease(n.props.children,x=>x.type==='input'&&x.props.name==='preorderPlanNote')));
+planForm.props.onSubmit({preventDefault(){}});
+assert.deepEqual(releaseSubmits[1],{action:'preorder-plan',body:{orderId:preorderRow.id,expectedVersion:preorderRow.version,dispatchDate:'2099-01-10',note:'Supplier confirmed a revised estimate.'},key:'preorder-plan:'+preorderRow.id});
+assert(draftsMarked.includes('preorder-plan:'+preorderRow.id));
+console.log('PASS: revised preorder estimate drafts survive close/reopen and submit their original version through the shared guarded save contract.');
+
 
 // A delayed old response cannot populate the new tab; debounced search hides old actions at once.
 (async()=>{

@@ -39,6 +39,7 @@ export function adminOrderView(data: Record<string, any>) {
     labelApproval: data.labelApproval,
     addressCheck: data.addressCheck,
     preorderRelease: data.preorderRelease,
+    preorderPlan: data.preorderPlan,
     packDiscount: data.packDiscount,
     promoDiscount: data.promoDiscount,
     promo: data.promo ? { code: data.promo.code, savings: data.promo.savings } : null,

@@ -2,6 +2,7 @@ import { listPresaleCampaigns, savePresaleCampaign } from '@/lib/presale-campaig
 import { settingsSnapshot, saveSettingsSnapshot, SettingsConflict } from '@/lib/settings-version';
 import { queryOrderPage } from '@/lib/order-queue-db';
 import { fulfillmentBlock, fulfillmentEligibleSql } from '@/lib/fulfillment-eligibility';
+import { savePreorderPlan } from '@/lib/preorder-plan-save';
 import { releasePreorder } from '@/lib/preorder-release';
 import { recheckPaidOrder } from '@/lib/payment-verify';
 import { replyBridgeRoute } from '@/lib/request-reply-route';
@@ -55,7 +56,7 @@ import { adminOverview } from '@/lib/admin-overview';
 export const dynamic = 'force-dynamic';
 // What each admin write needs. An admin action missing here requires the owner.
 const adminActionPermission: Record<string, StaffPermission> = {
-    'admin-orders': 'orders:read', 'admin-order': 'orders:fulfill', 'admin-order-archive': 'orders:fulfill', 'admin-order-handoff': 'orders:fulfill', 'admin-reconcile': 'orders:reconcile', 'admin-preorder-release': 'orders:fulfill',
+    'admin-orders': 'orders:read', 'admin-order': 'orders:fulfill', 'admin-order-archive': 'orders:fulfill', 'admin-order-handoff': 'orders:fulfill', 'admin-reconcile': 'orders:reconcile', 'admin-preorder-release': 'orders:fulfill', 'admin-preorder-plan': 'orders:fulfill',
     'admin-request': 'requests:write', 'admin-request-reply': 'requests:write', 'admin-reply-attachments': 'requests:write', 'admin-reply-desk': 'requests:write', 'admin-request-replies': 'requests:write', 'admin-reply-rule': 'requests:write', 'admin-retire-reply-drafts': 'requests:write', 'admin-request-forward': 'requests:write', 'admin-order-conversation': 'requests:write', 'admin-order-hold': 'requests:write', 'admin-win-back': 'requests:write', 'admin-mark-replied': 'requests:write', 'admin-win-back-preview': 'requests:write', 'admin-request-issue': 'requests:write', 'admin-case-log': 'requests:write', 'admin-coa-process': 'requests:write',
     'admin-config': 'store:write', 'admin-product': 'catalog:write', 'admin-campaign': 'store:write', 'admin-reward': 'store:write', 'admin-coa-config': 'store:write',
     'admin-staff': 'team:manage', 'admin-staff-site-updates': 'team:manage',
@@ -624,6 +625,10 @@ export async function POST(req: NextRequest, { params }: {
                 const archived = await run("UPDATE orders SET data=json_set(data,'$.archivedAt',?,'$.archivedBy',?),updated=? WHERE id=? AND status=? AND data=?", Date.now(), actor.email, timestamp(), order.id, order.status, order.data);
                 if (!archived.meta.changes) return j({ error: 'This order changed. Refresh before archiving.' }, 409);
                 return j({ message: number + ' archived.' });
+            }
+            if (action === 'admin-preorder-plan') {
+                const input = z.object({ orderId: z.string().uuid(), dispatchDate: z.string().nullable(), note: z.string().trim().min(10).max(500), expectedVersion: z.string().regex(/^[a-f0-9]{64}$/) }).strict().parse(b);
+                return j(await savePreorderPlan(auditEnv().DB, input, actor.email));
             }
             if (action === 'admin-preorder-release') {
                 const input = z.object({ orderId: z.string().uuid(), note: z.string().trim().min(10).max(500), expectedVersion: z.string().regex(/^[a-f0-9]{64}$/) }).parse(b);

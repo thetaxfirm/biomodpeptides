@@ -64,7 +64,18 @@ try{
    assert.equal((await mf.dispatchFetch(origin+'/api/admin/order-reship',{method:'POST',headers,body:JSON.stringify({orderId,tracking:'FIXTURE'})})).status,409);
  }
  assert.equal(calls.filter(c=>!c.url.includes('auth.example.invalid')).length,beforeProviders,'blocked fulfillment never reaches the carrier');
- queueBody=await (await storePost('orders',{id:preorderId})).json();const version=queueBody.orders[0].version;
+ queueBody=await (await storePost('orders',{id:preorderId})).json();let version=queueBody.orders[0].version;
+ const originalVersion=version;
+ const planBody={orderId:preorderId,expectedVersion:version,dispatchDate:'2099-01-10',note:'Supplier confirmed revised dispatch estimate.'};
+ assert.equal((await storePost('preorder-plan',{...planBody,owner:'forged@example.invalid'})).status,400,'ownership cannot be forged');
+ assert.equal((await storePost('preorder-plan',{...planBody,expectedVersion:'0'.repeat(64)})).status,400);
+ const savePlan=await storePost('preorder-plan',planBody);assert.equal(savePlan.status,200,JSON.stringify(await savePlan.clone().json()));
+ const planned=JSON.parse((await db.prepare('SELECT data FROM orders WHERE id=?').bind(preorderId).first()).data);assert.deepEqual(planned.items,preorderItems);assert.equal(planned.preorderPlan.owner,fixtureEmail);assert(!planned.preorderRelease);
+ const planAudit=await db.prepare("SELECT actor,source,changes FROM change_events WHERE action='admin-preorder-plan' AND entity_id=?").bind(preorderId).first();assert.equal(planAudit.actor,fixtureEmail);assert.equal(planAudit.source,'admin');assert(!planAudit.changes.includes(planBody.note));
+ assert.equal((await mf.dispatchFetch(origin+'/api/admin/shipping',{method:'POST',headers,body:JSON.stringify({id:preorderId})})).status,409,'saving an estimate does not release stock');
+ queueBody=await (await storePost('orders',{id:preorderId})).json();version=queueBody.orders[0].version;assert.notEqual(version,originalVersion);assert.equal(queueBody.orders[0].data.preorderPlan.dispatchDate,'2099-01-10');
+ assert.equal((await storePost('preorder-plan',planBody)).status,400);
+ assert.equal((await storePost('preorder-release',{orderId:preorderId,note:'Warehouse confirmed exact lot ready.',expectedVersion:originalVersion})).status,400);
  assert.equal((await storePost('preorder-release',{orderId:preorderId,note:'Warehouse confirmed exact lot ready.',expectedVersion:'0'.repeat(64)})).status,400);
  const release=await storePost('preorder-release',{orderId:preorderId,note:'Warehouse confirmed exact lot ready.',expectedVersion:version});assert.equal(release.status,200,JSON.stringify(await release.clone().json()));
  const released=JSON.parse((await db.prepare('SELECT data FROM orders WHERE id=?').bind(preorderId).first()).data);assert.deepEqual(released.items,preorderItems);assert.equal(released.preorderRelease.by,fixtureEmail);
