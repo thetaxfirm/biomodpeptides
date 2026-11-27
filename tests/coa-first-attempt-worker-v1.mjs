@@ -119,13 +119,11 @@ try {
   await until(async () => (await rows(response.body.id)).find(row => row.purpose === 'request-alert')?.status === 'accepted', 'Unmatched inquiry alert not processed');
   assert.equal((await rows(response.body.id)).find(row => row.purpose === 'coa').status, 'manual_review'); assert.equal(calls.length, 3);
 
-  // Affiliate uses the authenticated account identity and only configured-owner alert.
+  // The retired affiliate form cannot bypass the current program agreement or create mail jobs.
+  const beforeLegacyAffiliate = await requestCount();
   response = await post('affiliate', { website: 'https://partner.example.invalid', message: 'PRIVATE_FIXTURE_MESSAGE', email: 'intruder@example.invalid' }, { cookie: 'bm_access=isolated-access-fixture' });
-  assert.equal(response.status, 200); assert.equal(authCalls, 1);
-  const affiliate = await DB.prepare("SELECT * FROM requests WHERE kind='affiliate'").first();
-  assert.equal(affiliate.owner, account.id); assert.equal(JSON.parse(affiliate.data).email, account.email);
-  await until(async () => (await rows(affiliate.id))[0]?.status === 'accepted', 'Affiliate alert not processed');
-  assert.equal((await rows(affiliate.id)).length, 1); assert.equal(calls.length, 4); assert.equal(calls.at(-1).purpose, 'request-alert');
+  assert.equal(response.status, 409); assert.match(response.body.error, /current agreement/); assert.equal(authCalls, 0);
+  assert.equal(await requestCount(), beforeLegacyAffiliate); assert.equal(calls.length, 3);
 
   // Invalid, foreign-origin, honeypot and signed-out affiliate requests never start mail.
   const beforeRequests = await requestCount();
@@ -133,25 +131,25 @@ try {
     ['contact', { ...payload('invalid'), email: 'not-an-email' }, {}, 400],
     ['contact', payload('blocked@example.invalid'), { origin: 'https://other.example.invalid' }, 403],
     ['contact', { ...payload('trap@example.invalid'), website: 'honeypot' }, {}, 200],
-    ['affiliate', { website: 'https://partner.example.invalid', message: 'Synthetic' }, {}, 400],
+    ['affiliate', { website: 'https://partner.example.invalid', message: 'Synthetic' }, {}, 409],
   ]) { assert.equal((await post(action, data, headers)).status, status); }
-  assert.equal(await requestCount(), beforeRequests); assert.equal(calls.length, 4);
+  assert.equal(await requestCount(), beforeRequests); assert.equal(calls.length, 3);
 
   // Provider outage cannot change a saved response and does not immediately replay.
   providerMode = 'unavailable';
   response = await post('contact', payload('failure-fixture@example.invalid')); assert.equal(response.status, 200); assert.match(response.body.message, /saved/);
   const failedId = response.body.id;
   await until(async () => { const values = await rows(failedId); return values.length === 2 && values.find(row=>row.purpose==='request-alert')?.status === 'queued' && values.find(row=>row.purpose==='request-alert')?.attempts === 1 && values.find(row=>row.purpose==='request-alert')?.next_attempt_at > Date.now() && values.find(row=>row.purpose==='coa')?.attempts === 0; }, 'Failed first attempts did not remain durably queued with backoff');
-  assert.equal(calls.length, 5); assert(!JSON.stringify(response.body).includes('provider'));
-  const admin = await mf.dispatchFetch(origin + '/api/store/admin'); assert.equal(admin.status, 400); await admin.text();
-  assert.equal(calls.length, 5, 'A GET must not start/retry any queued email');
+  assert.equal(calls.length, 4); assert(!JSON.stringify(response.body).includes('provider'));
+  const admin = await mf.dispatchFetch(origin + '/api/store/admin'); assert.equal(admin.status, 403); await admin.text();
+  assert.equal(calls.length, 4, 'A GET must not start/retry any queued email');
 
   // Disabled configuration still saves inquiries but creates no mail jobs.
   await saveCoaConfig(env, { ...settings, enabled: false });
   response = await post('contact', payload('disabled-fixture@example.invalid')); assert.equal(response.status, 200);
-  assert.equal((await rows(response.body.id)).length, 0); assert.equal(calls.length, 5);
+  assert.equal((await rows(response.body.id)).length, 0); assert.equal(calls.length, 4);
   assert.equal((await rows(oldId))[0].attempts, 0);
-  assert.equal((await allRows()).filter(row => row.status === 'accepted').length, 4);
+  assert.equal((await allRows()).filter(row => row.status === 'accepted').length, 3);
   assert((await allRows()).filter(row=>row.purpose==='coa').every(row=>row.attempts===0),'No new or historical customer COA is processed');
   assert.equal(forbiddenOutbound, 0); assert.deepEqual(outboundErrors, []);
   for (const table of ['orders','profiles','addresses','customer_carts']) assert.equal((await DB.prepare(`SELECT COUNT(*) n FROM ${table}`).first()).n, 0, 'Full schema contains no commerce/customer records');
@@ -159,7 +157,7 @@ try {
   const updates = history.filter(event => event.action === 'email_job.update'); assert(updates.length >= 10);
   for (const event of updates) { assert.equal(event.actor, 'Inquiry delivery automation'); assert.equal(event.source, 'system'); }
   for (const privateValue of ['PRIVATE_FIXTURE_MESSAGE', 'first-fixture@example.invalid', account.email, settings.replyTo, settings.notifyTo, registry.reports[0].base64]) assert(!JSON.stringify(history).includes(privateValue), 'History does not copy customer identity or mail contents');
-  console.log('PASS: actual built contact/affiliate POST after()/waitUntil starts only saved-request staff alerts, response precedes held provider, no customer COA sends, dedupe/manual-review/disabled/failure safety, no historical drain or GET processing. All auth/email services synthetic and intercepted.');
+  console.log('PASS: actual built contact POST after()/waitUntil starts only saved-request staff alerts and the retired affiliate endpoint stays closed, response precedes held provider, no customer COA sends, dedupe/manual-review/disabled/failure safety, no historical drain or GET processing. All auth/email services synthetic and intercepted.');
 } finally {
   hold?.resolve(); await mf.dispose(); await fs.rm(temporary, { recursive: true, force: true });
 }
