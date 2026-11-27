@@ -47,3 +47,14 @@ On touch screens it opened 40 seconds into a visit whatever the visitor was doin
   - Sign-up showed "You're on the list" with no code; the cart stayed at full price; checkout started with that email filled in.
   - Checkout: empty and short numbers were refused with the cursor in the number box; a valid contact was saved, folded to one line, and the address opened with the cursor in Full name and no phone box. It survived a reload. Change kept a typed name, and ticking the text box stored its version, wording and time. No sideways scrolling at phone width.
 - Not verified by me: the signed-in admin screen (needs a staff sign-in), and a full guest delivery quote on the local copy (no carrier or tax keys there; the harness test covers that hand-off).
+
+## Live result
+
+- Commit e185ebd. The "Website consistency" GitHub check passed. Worker deployed 2026-11-27T23:10Z. No migration.
+- https://trybiomod.com/shop, signed out, 1280x800: brushing the top edge and returning did not open the panel; leaving opened it with the new wording and no discount, covering about 10% of the screen. No sign-up was submitted.
+- https://trybiomod.com/product/bpc-157-10mg: leaving right after Add to cart did not open the panel.
+- https://trybiomod.com/checkout as a guest with one item, at 1280x800 and 375x812: Contact shows Email address, Mobile number, the sale-email box ticked, the text box unticked with its wording, and Continue to delivery; no address form before the contact is saved; no promo applied; no sideways scrolling. Continue was not pressed, and the item was removed afterwards.
+- Production D1, read-only, after the check: 0 `checkout_contact` records, 2 email sign-ups (both subscribed), 8 cart text sign-ups; stored promos INSIDER10 and TEXT10 both active at 10%.
+- `/api/store/state` returns the new `contact` field (null for a visitor who has given nothing).
+- Measurement note: this check loaded six live pages in a normal browser. `window.doNotTrack` was set to "1" after each load and before any click, so the add-to-cart was not counted; page views and one checkout form view may have been counted before the opt-out took effect.
+- Not verified live: the signed-in admin Contacts screen (needs a staff sign-in) and a saved contact in production (no test record was written).
