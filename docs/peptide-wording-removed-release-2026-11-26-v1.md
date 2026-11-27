@@ -20,4 +20,4 @@ November 26, 2026. Author: Claude. Owner instruction, November 26: "i dont think
 
 - `npm run check:release`: TypeScript and 142 isolated suites passed. Updated expectation: search-buy-intent (KPV title).
 - a470f34 pushed November 27 02:2x UTC; Workers Builds succeeded and deployed Worker 989bbe7f (02:26 UTC). Live scan of all 84 sitemap pages plus llms.txt: no "peptide" in titles, descriptions or structured data, and one visible match, the old domain in the FAQ answer, fixed in the follow-up commit.
-- Follow-up deployment and second live scan: recorded below.
+- 532390e deployed as Worker feb771d6 (02:31 UTC). Second live scan, all 84 sitemap pages plus llms.txt: 0 matches in visible text, titles, descriptions and structured data.
