@@ -17,11 +17,14 @@ const path = require('node:path');
 const ts = require('typescript');
 require.extensions['.ts'] = (m, f) => m._compile(ts.transpileModule(fs.readFileSync(f, 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true, resolveJsonModule: true } }).outputText, f);
 const root = path.join(__dirname, '..');
-// The former domain and the shared mailbox are addresses, not product wording.
+// Links and mailboxes on the former domain are addresses, not wording. Naming the old domain in
+// visible copy is wording (owner, October 23), so public text only drops it inside a URL or email.
 const strip = text => String(text).replace(/biomodpeptides/gi, '');
+const stripAddresses = text => String(text).replace(/https?:\/\/[^\s"'<>)]*biomodpeptides[^\s"'<>)]*/gi, '').replace(/[\w.+-]+@biomodpeptides\.com/gi, '');
 const has = text => /peptide/i.test(strip(text));
+const hasPublic = text => /peptide/i.test(stripAddresses(text));
 const found = [];
-const check = (where, text) => { if (has(text)) found.push(where + ': ' + (strip(text).match(/.{0,50}peptide.{0,50}/i) || [''])[0]); };
+const check = (where, text) => { if (hasPublic(text)) found.push(where + ': ' + (stripAddresses(text).match(/.{0,50}peptide.{0,50}/i) || [''])[0]); };
 
 // 1. Public text.
 const { pageRecords, pageInfo, sitemapPaths, seoConfig } = require('../lib/seo-policy.ts');

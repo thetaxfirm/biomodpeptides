@@ -19,7 +19,7 @@ export const researchFaqGroups = [
       {
         id: 'official-store',
         question: 'Is TryBiomod.com the official Biomod online store?',
-        answer: 'Yes. TryBiomod.com is the online storefront for Biomod Research Supply Company. The former biomodpeptides.com storefront redirects here. Use this site for current product listings, available batch documents and ordering information.',
+        answer: 'Yes. TryBiomod.com is the online storefront for Biomod Research Supply Company. Its former web address redirects here. Use this site for current product listings, available batch documents and ordering information.',
         href: '/about',
         link: 'About Biomod and its online store',
       },
