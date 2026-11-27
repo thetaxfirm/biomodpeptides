@@ -87,6 +87,7 @@ try {
         // Independent full-page scenarios must not exhaust the real per-session rate limiter.
         await db.prepare('DELETE FROM rate_limits').run();
         await page.goto(origin + '/admin?tab=' + tab + '&measurement=off', { waitUntil: 'domcontentloaded' });
+        if(tab.includes('&order=')){await page.getByRole('dialog').waitFor();return;}
         await page.getByRole('heading', { name: 'TryBiomod Administration', exact: true }).waitFor();
         if (marker) await page.getByRole('heading', { name: marker, exact: true }).waitFor();
         await page.getByRole('button', { name: 'Refresh administration', exact: true }).waitFor();
@@ -185,8 +186,7 @@ try {
         await admin('orders&order='+preorder,'Orders');
         await page.getByLabel('Revised dispatch estimate (UTC)',{exact:true}).fill('2099-04-15');
         await page.getByLabel('Estimate check notes',{exact:true}).fill('Synthetic supplier confirmation for browser regression.');
-        await page.getByRole('button',{name:'Save estimate and take ownership',exact:true}).click();
-        await page.waitForLoadState('networkidle');
+        await Promise.all([page.waitForResponse(response=>new URL(response.url()).pathname==='/api/store/admin-preorder-plan'&&response.request().method()==='POST'),page.getByRole('button',{name:'Save estimate and take ownership',exact:true}).click()]);
         const saved=JSON.parse((await db.prepare('SELECT data FROM orders WHERE id=?').bind(preorder).first()).data);
         assert.equal(saved.preorderPlan.dispatchDate,'2099-04-15');
         assert.equal(saved.preorderPlan.owner,email);assert.equal(saved.preorderPlan.confirmedBy,email);assert(saved.preorderPlan.confirmedAt>0);
@@ -215,14 +215,17 @@ try {
         await admin('requests','Customer requests');await page.getByRole('button').filter({hasText:'Synthetic Browser Customer'}).first().click();await page.getByRole('region',{name:'Reply to Synthetic Browser Customer',exact:true}).waitFor();
         assert(await page.evaluate(()=>document.body.scrollWidth<=innerWidth+1),'Open mobile request conversation must fit');await shot('mobile-request-detail');
         await admin('products','Products');await page.getByText('Preview customer pricing',{exact:true}).click();await page.getByLabel(/^Product 1/).selectOption(String(product.id));
-        assert(await page.evaluate(()=>document.body.scrollWidth<=innerWidth+1),'Open mobile price preview must fit');await shot('mobile-price-preview');
+        const previewWidth=await page.evaluate(()=>({body:document.body.scrollWidth,viewport:innerWidth,offenders:Array.from(document.querySelectorAll('details[open] *')).map(el=>({el,rect:el.getBoundingClientRect(),style:getComputedStyle(el)})).filter(({rect})=>rect.width&&rect.height&&rect.right>innerWidth+1).map(({el,rect,style})=>({tag:el.tagName,width:rect.width,right:rect.right,minWidth:style.minWidth,maxWidth:style.maxWidth,display:style.display,text:el.textContent.slice(0,60)}))}));
+        assert(previewWidth.body<=previewWidth.viewport+1,'Open mobile price preview must fit '+JSON.stringify(previewWidth));await page.getByLabel(/^Product 1/).scrollIntoViewIfNeeded();await shot('mobile-price-preview');
     });
     await step('mobile preorder estimate editor fits',async()=>{
         await admin('orders&order='+preorder,'Orders');await page.getByLabel('Revised dispatch estimate (UTC)',{exact:true}).waitFor();
+        await page.getByLabel('Revised dispatch estimate (UTC)',{exact:true}).scrollIntoViewIfNeeded();
         assert(await page.evaluate(()=>document.body.scrollWidth<=innerWidth+1),'Open preorder editor must fit');await shot('mobile-preorder-estimate');
     });
     await step('mobile night mode toggles without page overflow',async()=>{
         await admin('settings','Mix-and-match discounts');await page.getByRole('switch',{name:'Night mode',exact:true}).click();assert.equal(await page.locator('html').getAttribute('data-theme'),'dark');
+        await page.getByRole('tab',{name:'Settings',exact:true}).evaluate(async el=>{await new Promise(requestAnimationFrame);await Promise.all(el.getAnimations({subtree:true}).map(animation=>animation.finished.catch(()=>{})));});
         assert(await page.evaluate(()=>document.body.scrollWidth<=innerWidth+1));await shot('mobile-night-settings');await page.getByRole('switch',{name:'Night mode',exact:true}).click();await admin('promos','Promo codes');
     });
     await step('mobile keyboard navigation',async()=>{await admin('promos','Promo codes');await page.getByRole('tab',{name:'Promo codes',exact:true}).focus();await page.keyboard.press('Tab');assert(await page.evaluate(()=>document.activeElement?.tagName!=='BODY'),'Keyboard focus reaches a real control');});
