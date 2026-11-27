@@ -13,10 +13,11 @@ export function fulfillmentBlock(order: FulfillmentOrder): string | null {
 // Trusted SQL fragments only. Never interpolate user input into these expressions.
 export const numericJson = (path: string) => `json_type(data,'${path}') IN ('integer','real')`;
 export const hasPreorderSql = `EXISTS (SELECT 1 FROM json_each(CASE WHEN json_type(data,'$.items')='array' THEN json_extract(data,'$.items') ELSE '[]' END) item
-    WHERE json_type(item.value,'$.product.activePreorder.percentOff') IN ('integer','real')
-      AND json_extract(item.value,'$.product.activePreorder.percentOff') > 0 AND json_extract(item.value,'$.product.activePreorder.percentOff') < 100
-      AND json_type(item.value,'$.product.activePreorder.ships')='text' AND length(trim(json_extract(item.value,'$.product.activePreorder.ships'))) BETWEEN 1 AND 120
-      AND json_type(item.value,'$.product.activePreorder.basePrice')='integer' AND json_extract(item.value,'$.product.activePreorder.basePrice') BETWEEN 1 AND 9007199254740991)`;
+    WHERE json_type(CASE WHEN item.type='object' THEN item.value ELSE '{}' END,'$.product.activePreorder.percentOff') IN ('integer','real')
+      AND json_extract(CASE WHEN item.type='object' THEN item.value ELSE '{}' END,'$.product.activePreorder.percentOff') > 0 AND json_extract(CASE WHEN item.type='object' THEN item.value ELSE '{}' END,'$.product.activePreorder.percentOff') < 100
+      AND json_type(CASE WHEN item.type='object' THEN item.value ELSE '{}' END,'$.product.activePreorder.ships')='text' AND length(trim(json_extract(CASE WHEN item.type='object' THEN item.value ELSE '{}' END,'$.product.activePreorder.ships'))) BETWEEN 1 AND 120
+      AND length(json_extract(CASE WHEN item.type='object' THEN item.value ELSE '{}' END,'$.product.activePreorder.ships'))<=120
+      AND json_type(CASE WHEN item.type='object' THEN item.value ELSE '{}' END,'$.product.activePreorder.basePrice')='integer' AND json_extract(CASE WHEN item.type='object' THEN item.value ELSE '{}' END,'$.product.activePreorder.basePrice') BETWEEN 1 AND 9007199254740991)`;
 export const preorderReleasedSql = `(${numericJson('$.preorderRelease.at')} AND json_extract(data,'$.preorderRelease.at')>0
     AND json_type(data,'$.preorderRelease.by')='text' AND length(trim(json_extract(data,'$.preorderRelease.by')))>0
     AND json_type(data,'$.preorderRelease.note')='text' AND length(trim(json_extract(data,'$.preorderRelease.note')))>0)`;

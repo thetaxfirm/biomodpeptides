@@ -18,7 +18,7 @@ const approval = `(json_extract(data,'$.labelApproval') IS NOT NULL AND NOT (${s
 const hold = `json_extract(data,'$.hold') IS NOT NULL`;
 export function orderQueueCte(now = Date.now()): string {
     const time = Math.floor(Number.isFinite(now) ? now : Date.now());
-    return `WITH source AS (SELECT id,owner,status,total,created,CASE WHEN json_valid(data) THEN data ELSE '{}' END data FROM orders),
+    return `WITH source AS (SELECT id,owner,status,total,created,CASE WHEN json_valid(data) THEN CASE WHEN json_type(data)='object' THEN data ELSE '{}' END ELSE '{}' END data FROM orders),
     bucketed AS (SELECT *, CASE
       WHEN coalesce(json_extract(data,'$.internalTest'),0)<>0 THEN 'test'
       WHEN status IN ('refunded','cancelled','canceled','failed') THEN 'closed'
@@ -56,7 +56,7 @@ const searchTextSql = `lower(id || ' ' || coalesce(json_extract(data,'$.email'),
     coalesce(json_extract(data,'$.address.city'),'') || ' ' || coalesce(json_extract(data,'$.address.state'),'') || ' ' ||
     coalesce(json_extract(data,'$.address.zip'),'') || ' ' || coalesce(json_extract(data,'$.tracking'),'') || ' ' ||
     coalesce(json_extract(data,'$.shipment.tracking'),'') || ' ' || coalesce(json_extract(data,'$.promo.code'),'') || ' ' ||
-    coalesce((SELECT group_concat(json_extract(item.value,'$.product.name'),' ') FROM json_each(CASE WHEN json_type(data,'$.items')='array' THEN json_extract(data,'$.items') ELSE '[]' END) item),''))`;
+    coalesce((SELECT group_concat(json_extract(CASE WHEN item.type='object' THEN item.value ELSE '{}' END,'$.product.name'),' ') FROM json_each(CASE WHEN json_type(data,'$.items')='array' THEN json_extract(data,'$.items') ELSE '[]' END) item),''))`;
 
 /** Bounded-memory traversal for shared operational consumers, with no history cutoff. */
 export async function* readAllOrderWork(db: D1Database, now = Date.now(), work?: string): AsyncGenerator<QueueRow[]> {

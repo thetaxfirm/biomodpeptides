@@ -58,6 +58,13 @@ const policy=load('lib/fulfillment-eligibility.ts'), f=load('lib/fulfillment.ts'
  for(const row of classified){const o=get(row.id);assert.equal(row.bucket,f.queueBucket(o,NOW),row.id+' bucket');assert.equal(row.work,q.tabForOrder(o,NOW),row.id+' work');}
  const all=raw.prepare('SELECT * FROM orders ORDER BY created DESC,id DESC').all().map(r=>({...r,data:JSON.parse(r.data)}));
  for(const tab of q.queueTabs){const page=await queries.queryOrderPage(db,{tab:tab.id},NOW),expected=q.queryOrders(all,{tab:tab.id},NOW);assert.equal(page.total,expected.total,tab.id);assert.deepEqual(page.counts,expected.counts,tab.id+' counts');}
+ // Corrupt old JSON/line shapes cannot make every order queue unreadable.
+ add('bad-line','paid',{items:['old-import',null,2]});
+ add('bad-json');raw.prepare('UPDATE orders SET data=? WHERE id=?').run('{broken','bad-json');
+ add('null-json');raw.prepare('UPDATE orders SET data=? WHERE id=?').run('null','null-json');
+ assert.equal((await queries.queryOrderPage(db,{id:'bad-json'},NOW)).orders[0].data.items,undefined);
+ assert.equal((await queries.queryOrderPage(db,{id:'null-json'},NOW)).orders[0].data.items,undefined);
+ assert.equal((await queries.queryOrderPage(db,{tab:'all',q:'old-import'},NOW)).total,0);
  // Old work cannot fall off the 5,000-row boundary; newer work cannot be crowded out of print runs.
  raw.exec('DELETE FROM orders');add('old-unresolved','paid',{email:'oldest@example.invalid'},OLD-6000);
  raw.exec('BEGIN');for(let i=0;i<5101;i++)add('history-'+String(i).padStart(6,'0'),'shipped',{shipment:{status:'in_transit',checkedAt:NOW,labelUrl:'https://example.invalid/l.pdf'}},OLD+i);raw.exec('COMMIT');

@@ -49,5 +49,28 @@ try{
  assert(!JSON.stringify(history).includes('FIXTURETRACK'),'Tracking number must not be copied into audit history');
  assert.equal((await db.prepare('SELECT COUNT(*) n FROM change_context').first()).n,0);
  assert(calls.every(c=>c.method==='GET'),'No label purchase, mail or other external mutation');
+ // Actual order routes retain private admin evidence and guard every fulfillment path.
+ const storePost=(action,body)=>mf.dispatchFetch(origin+'/api/store/admin-'+action,{method:'POST',headers,body:JSON.stringify(body)});
+ const paidId='00000002-0000-4000-8000-000000000002',preorderId='00000003-0000-4000-8000-000000000003';
+ const failedData={items:[],email:fixtureEmail,paymentVerified:{at:Date.now(),state:'failed',why:'Fixture missing capture'}};
+ const preorderItems=[{id:1,quantity:1,product:{activePreorder:{percentOff:15,ships:'early November 2026',basePrice:10000}}}];
+ for(const [orderId,data] of [[paidId,failedData],[preorderId,{items:preorderItems,email:fixtureEmail}]]) await db.prepare('INSERT INTO orders(id,owner,request_key,status,total,data,created,updated) VALUES(?,?,?,?,?,?,?,?)').bind(orderId,'fixture-admin','fixture-'+orderId,'paid',10000,JSON.stringify(data),Date.now(),Date.now()).run();
+ let queue=await storePost('orders',{id:paidId});assert.equal(queue.status,200);let queueBody=await queue.json();assert.equal(queueBody.orders[0].data.paymentVerified.state,'failed','admin projection retains failed verification');assert.equal(queueBody.orders[0].version.length,64);
+ const beforeProviders=calls.filter(c=>!c.url.includes('auth.example.invalid')).length;
+ for(const orderId of [paidId,preorderId]){
+   assert.equal((await mf.dispatchFetch(origin+'/api/admin/shipping',{method:'POST',headers,body:JSON.stringify({id:orderId})})).status,409);
+   assert.equal((await storePost('order-handoff',{orderId})).status,409);
+   assert.equal((await storePost('order',{id:orderId,status:'shipped',tracking:'FIXTURE'})).status,400);
+   assert.equal((await mf.dispatchFetch(origin+'/api/admin/order-reship',{method:'POST',headers,body:JSON.stringify({orderId,tracking:'FIXTURE'})})).status,409);
+ }
+ assert.equal(calls.filter(c=>!c.url.includes('auth.example.invalid')).length,beforeProviders,'blocked fulfillment never reaches the carrier');
+ queueBody=await (await storePost('orders',{id:preorderId})).json();const version=queueBody.orders[0].version;
+ assert.equal((await storePost('preorder-release',{orderId:preorderId,note:'Warehouse confirmed exact lot ready.',expectedVersion:'0'.repeat(64)})).status,400);
+ const release=await storePost('preorder-release',{orderId:preorderId,note:'Warehouse confirmed exact lot ready.',expectedVersion:version});assert.equal(release.status,200,JSON.stringify(await release.clone().json()));
+ const released=JSON.parse((await db.prepare('SELECT data FROM orders WHERE id=?').bind(preorderId).first()).data);assert.deepEqual(released.items,preorderItems);assert.equal(released.preorderRelease.by,fixtureEmail);
+ const audit=await db.prepare("SELECT actor,source FROM change_events WHERE action='admin-preorder-release' AND entity_id=?").bind(preorderId).first();assert.equal(audit.actor,fixtureEmail);assert.equal(audit.source,'admin');
+ const ready=await (await storePost('orders',{tab:'to_ship'})).json();assert(ready.orders.some(o=>o.id===preorderId));assert(!ready.orders.some(o=>o.id===paidId));
+ assert.equal((await db.prepare('SELECT COUNT(*) n FROM change_context').first()).n,0);
+ console.log('PASS: built order routes preserve payment evidence, reject failed/preorder label/manual/handoff/reship actions before any provider request, release preorder stock with atomic audit, reject stale releases and preserve purchased line snapshots.');
  console.log('PASS: actual built Worker authenticated carrier health, anonymous denial, isolated D1 tracking refresh and signed delivered transition. Only mocked read-only provider requests.');
 }finally{await mf.dispose();await fs.rm(temporary,{recursive:true,force:true});}
