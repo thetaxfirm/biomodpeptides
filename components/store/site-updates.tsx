@@ -118,7 +118,8 @@ export function SiteUpdates({ reloadToken = 0 }: { reloadToken?: number }) {
             const open = !['done', 'cancelled'].includes(u.status);
             const reply = replies[u.id] || '';
             return <li key={u.id} className={styles.item} data-status={u.status}>
-                <div className={styles.top}><strong>#{u.number} · {kindLabels[u.kind]}{u.productName ? ' · ' + u.productName : ''}{u.lot ? ' · lot ' + u.lot : ''}</strong><span className={styles.status}>{statusLabels[u.status]}</span></div>
+                <div className={styles.top}><strong>#{u.number} · {kindLabels[u.kind]}{u.productName ? ' · ' + u.productName : ''}{u.lot ? ' · lot ' + u.lot : ''}</strong><span className={styles.status}>{u.delivery?.stage || statusLabels[u.status]}</span></div>
+                <p className={styles.meta}>Responsible team: {u.delivery?.owner || 'Website desk'}{u.productId && <> · <a href={'/admin?tab=products&product='+u.productId+(u.lot?'&lot='+encodeURIComponent(u.lot):'')}>Open product{u.lot?' and lot':''}</a></>}{u.delivery?.url && <> · <a href={u.delivery.url} target="_blank" rel="noopener noreferrer">Published page</a></>}{u.delivery?.verifiedAt && <> · Verification recorded {when(u.delivery.verifiedAt)}</>}</p>
                 <p className={styles.meta}>{data.owner ? u.requester + ' · ' : ''}Sent {when(u.created)}{u.updated > u.created ? ' · updated ' + when(u.updated) : ''}{u.ownerOk ? ' · approved by the owner' : ''}</p>
                 <p className={styles.message}>{u.message}</p>
                 {u.files.length > 0 && <ul className={styles.files}>{u.files.map(f => <li key={f.id}><a href={'/api/site-updates/file?id=' + f.id} download={f.filename}>{f.filename}</a> · {sizeLabel(f.size)}</li>)}</ul>}

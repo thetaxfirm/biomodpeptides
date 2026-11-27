@@ -78,3 +78,14 @@ node scripts/site-updates.mjs finish <number> done <note-file> '{"commit":"<sha>
   that was not done and why. For a question, ask one specific thing.
 - A message added to a finished request reopens it. Read the whole thread before acting.
 - If a request is unclear, ask. Do not guess which product, lot or page was meant.
+
+## Publication evidence shown in administration
+
+When finishing a request, supply the optional result JSON with `url` (a public
+trybiomod.com page without query parameters), `commit` (the full source SHA),
+`publishedAt` and `verifiedAt` (ISO timestamps or epoch milliseconds). Record
+`verifiedAt` only after the exact deployed revision and the requested live
+behavior have actually been checked. A published result without verification
+shows “Published · verification pending”. Older completion notes remain intact
+and show that verification was not recorded. The request links to its product
+and named lot; publishing still follows the release rule above.

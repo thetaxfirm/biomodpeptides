@@ -23,7 +23,21 @@ export type UpdateNote = { author: string; authorType: 'staff' | 'owner' | 'clau
 export type SiteUpdate = {
   id: string; number: number; requester: string; kind: UpdateKind; productId: number | null; productName: string; lot: string;
   message: string; status: UpdateStatus; ownerOk: boolean; created: number; updated: number; files: UpdateFile[]; notes: UpdateNote[];
+  delivery?: ReturnType<typeof websiteProgress>;
 };
+/** Legacy completion notes are retained, but do not manufacture publication or verification evidence. */
+export function websiteProgress(status: UpdateStatus, result: unknown) {
+  let value: Record<string, unknown> = {};
+  try { const parsed=typeof result==='string'?JSON.parse(result):result; if(parsed&&typeof parsed==='object'&&!Array.isArray(parsed)) value=parsed; } catch { /* legacy plain text */ }
+  const timestamp=(v:unknown)=>typeof v==='number'&&Number.isSafeInteger(v)&&v>0?v:typeof v==='string'&&Number.isFinite(Date.parse(v))?Date.parse(v):null;
+  let url:string|null=null;
+  try { const u=new URL(String(value.url||'')); if(u.protocol==='https:'&&u.hostname==='trybiomod.com'&&!u.username&&!u.password&&!u.search&&!u.hash) url=u.href; } catch { /* no trusted published URL */ }
+  const commit=typeof value.commit==='string'&&/^[a-f0-9]{40}$/i.test(value.commit)?value.commit:null;
+  const publishedAt=timestamp(value.publishedAt),verifiedAt=timestamp(value.verifiedAt);
+  const published=Boolean(url&&commit&&publishedAt),verified=published&&verifiedAt!==null&&verifiedAt>=publishedAt!;
+  const stage=status==='done'?(verified?'Verified live':published?'Published · verification pending':'Completed · verification not recorded'):status==='new'?'Queued':statusLabels[status];
+  return {stage,owner:status==='needs_owner'?'Website owner':'Website desk',url,commit,publishedAt:published?publishedAt:null,verifiedAt:verified?verifiedAt:null};
+}
 export class SiteUpdateError extends Error { constructor(message: string, readonly status = 400) { super(message); this.name = 'SiteUpdateError'; } }
 const fail = (message: string, status = 400): never => { throw new SiteUpdateError(message, status); };
 
@@ -82,7 +96,7 @@ export async function siteUpdateAccessList(db: D1Database): Promise<string[]> {
   catch { return []; }
 }
 
-type Row = { seq: number; id: string; requester: string; kind: UpdateKind; product_id: number | null; product_name: string; lot: string; message: string; status: UpdateStatus; owner_ok: number; created: number; updated: number };
+type Row = { seq: number; id: string; requester: string; kind: UpdateKind; product_id: number | null; product_name: string; lot: string; message: string; status: UpdateStatus; owner_ok: number; created: number; updated: number; result?: string };
 async function row(db: D1Database, id: unknown): Promise<Row> {
   if (!validId(id)) fail('Request not found.', 404);
   const found = await db.prepare('SELECT seq,id,requester,kind,product_id,product_name,lot,message,status,owner_ok,created,updated FROM site_updates WHERE id=?').bind(id as string).first<Row>();
@@ -182,14 +196,14 @@ export async function decideUpdate(db: D1Database, actor: Actor, updateId: unkno
 /** Owners see every request; a requester sees their own. Drafts abandoned mid-upload stay hidden. */
 export async function listUpdates(db: D1Database, actor: Actor, limit = 100): Promise<SiteUpdate[]> {
   const mine = !isOwner(actor);
-  const rows = (await db.prepare('SELECT seq,id,requester,kind,product_id,product_name,lot,message,status,owner_ok,created,updated FROM site_updates WHERE status<>\'draft\'' + (mine ? ' AND requester=?' : '') + ' ORDER BY seq DESC LIMIT ?')
+  const rows = (await db.prepare('SELECT seq,id,requester,kind,product_id,product_name,lot,message,status,owner_ok,created,updated,result FROM site_updates WHERE status<>\'draft\'' + (mine ? ' AND requester=?' : '') + ' ORDER BY seq DESC LIMIT ?')
     .bind(...(mine ? [email(actor.email), limit] : [limit])).all<Row>()).results;
   if (!rows.length) return [];
   const marks = rows.map(() => '?').join(','), ids = rows.map(r => r.id);
   const files = (await db.prepare('SELECT id,update_id,filename,content_type,size,created FROM site_update_files WHERE update_id IN (' + marks + ') ORDER BY created').bind(...ids).all<{ id: string; update_id: string; filename: string; content_type: string; size: number; created: number }>()).results;
   const notes = (await db.prepare('SELECT update_id,author,author_type,body,created FROM site_update_notes WHERE update_id IN (' + marks + ') ORDER BY created').bind(...ids).all<{ update_id: string; author: string; author_type: UpdateNote['authorType']; body: string; created: number }>()).results;
   return rows.map(r => ({
-    id: r.id, number: r.seq, requester: r.requester, kind: r.kind, productId: r.product_id, productName: r.product_name, lot: r.lot, message: r.message, status: r.status, ownerOk: Boolean(r.owner_ok), created: r.created, updated: r.updated,
+    id: r.id, number: r.seq, requester: r.requester, kind: r.kind, productId: r.product_id, productName: r.product_name, lot: r.lot, message: r.message, status: r.status, ownerOk: Boolean(r.owner_ok), created: r.created, updated: r.updated, delivery: websiteProgress(r.status,r.result),
     files: files.filter(f => f.update_id === r.id).map(f => ({ id: f.id, filename: f.filename, contentType: f.content_type, size: f.size, created: f.created })),
     notes: notes.filter(n => n.update_id === r.id).map(n => ({ author: n.author_type === 'claude' ? 'Website desk' : n.author, authorType: n.author_type, body: n.body, created: n.created })),
   }));

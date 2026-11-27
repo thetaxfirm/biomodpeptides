@@ -19,6 +19,13 @@ const png = new Uint8Array(lib.CHUNK_BYTES * 2 + 5000); png.set([0x89, 0x50, 0x4
 const id = n => '00000000-0000-4000-8000-' + String(n).padStart(12, '0');
 
 (async () => {
+  const proof={url:'https://trybiomod.com/shop',commit:'a'.repeat(40),publishedAt:100,verifiedAt:200};
+  assert.equal(lib.websiteProgress('done',JSON.stringify(proof)).stage,'Verified live');
+  assert.equal(lib.websiteProgress('done',{...proof,verifiedAt:99}).stage,'Published · verification pending');
+  assert.equal(lib.websiteProgress('done','legacy completion note').stage,'Completed · verification not recorded');
+  assert.equal(lib.websiteProgress('done',{...proof,url:'https://trybiomod.com.evil.invalid/shop'}).url,null);
+  assert.equal(lib.websiteProgress('done',{...proof,url:'https://trybiomod.com/shop?token=private'}).url,null);
+  assert.equal(lib.websiteProgress('new','').stage,'Queued');
   // The permission belongs to no role; it is granted per person.
   for (const role of staff.staffRoles) assert(!staff.can(role, 'site:request'), role + ' does not carry it by role');
   assert.equal(staff.tabPermission.updates, 'site:request');
