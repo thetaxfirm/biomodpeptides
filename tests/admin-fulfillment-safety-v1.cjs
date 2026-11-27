@@ -15,7 +15,7 @@ const db={prepare(sql){const make=(values=[])=>({bind:(...v)=>make(v),first:asyn
 const NOW=Date.parse('2026-11-27T20:00:00Z'),OLD=NOW-3600000;
 const preorder={percentOff:15,ships:'early November 2026',basePrice:10000};
 const base={environment:'authorizenet:live',email:'fixture@example.invalid',address:{name:'Fixture',city:'Reno',state:'NV'},items:[{quantity:1,product:{name:'Fixture product'}}]};
-const add=(id,status='paid',extra={},created=OLD)=>raw.prepare('INSERT INTO orders VALUES(?,?,?,?,?,?,?,?)').run(id,'fixture-owner',status,10000,JSON.stringify({...base,...extra}),created,created,'fixture-checkout');
+const add=(id,status='paid',extra={},created=OLD)=>raw.prepare('INSERT INTO orders(id,owner,status,total,data,created,updated,checkout_ref) VALUES(?,?,?,?,?,?,?,?)').run(id,'fixture-owner',status,10000,JSON.stringify({...base,...extra}),created,created,'fixture-checkout');
 const get=id=>{const r=raw.prepare('SELECT * FROM orders WHERE id=?').get(id);return{...r,data:JSON.parse(r.data)};};
 let bought=0,answered={state:'paid',providerReference:'1',transactions:[{transId:'1',transactionStatus:'settledSuccessfully',transactionType:'authCaptureTransaction',settleAmount:'100.00'}]};
 const carrier={verifyShipAddress:async()=>({status:'verified',at:NOW}),readBoughtLabel:async()=>null,sendTrackingEmail:async()=>false,buyLabel:async(_e,_a,_i,_r,_s,_c,attempt)=>{bought++;await attempt?.onShipment?.('shp_fixture');return {carrier:'Fixture',service:'Fixture',tracking:'FIXTURE',labelUrl:'https://example.invalid/fixture.pdf',status:'pre_transit',costCents:100,shipmentId:'shp_fixture'};}};
@@ -73,5 +73,23 @@ const policy=load('lib/fulfillment-eligibility.ts'), f=load('lib/fulfillment.ts'
  page=await queries.queryOrderPage(db,{tab:'all',q:'oldest@example.invalid'},NOW);assert.equal(page.orders[0].id,'old-unresolved');
  page=await queries.queryOrderPage(db,{id:'old-unresolved'},NOW);assert.equal(page.orders[0].id,'old-unresolved');assert.equal(page.orders[0].version.length,64);
  assert.deepEqual((await queries.printableOrders(db,'labels')).orders.map(o=>o.id),['new-packable']);assert.equal((await queries.printableOrders(db,'pick')).total,2);
+ // Dashboard counts and sales use complete DB aggregates, with explicit UTC day boundaries.
+ raw.exec('ALTER TABLE orders ADD COLUMN payment_ref TEXT; ALTER TABLE orders ADD COLUMN notification_id TEXT');
+ const DAY=86400000,midnight=Math.floor(NOW/DAY)*DAY;
+ add('ancient-work','paid',{},NOW-45*DAY);
+ const moving={shipment:{status:'in_transit',checkedAt:NOW}};
+ add('week-edge','shipped',moving,midnight-7*DAY);add('week-outside','shipped',moving,midnight-7*DAY-1);
+ add('month-edge','shipped',moving,midnight-30*DAY);add('month-outside','shipped',moving,midnight-30*DAY-1);
+ add('sandbox-window','shipped',{...moving,environment:'authorizenet:sandbox'},midnight-1);
+ add('unknown-window','shipped',{...moving,environment:null},midnight-1);
+ raw.prepare("UPDATE orders SET payment_ref='fixture-payment',notification_id='fixture-notification'").run();
+ add('missing-payment','shipped',moving,midnight-1);
+ const overview=await load('lib/admin-overview-db.ts').readAdminOverviewOrderSummary(db,[],NOW);
+ assert.equal(overview.toShip.count,3);assert.equal(overview.toShip.oldest,NOW-45*DAY);assert.equal(overview.toShip.labels,1);
+ assert.equal(overview.sales[0].live.orders,5103);assert.equal(overview.sales[0].live.grossCents,51030000);
+ assert.deepEqual(overview.sales[1].live,{orders:2,paymentRecorded:1,grossCents:10000,missingPaymentRecords:1});
+ assert.deepEqual(overview.sales[2].live,{orders:4,paymentRecorded:3,grossCents:30000,missingPaymentRecords:1});
+ assert.equal(overview.sales[1].sandbox.orders,1);assert.equal(overview.sales[1].unknown.orders,1);
+ assert.deepEqual(overview.sales.map(w=>w.label),['Today (UTC, partial)','Last 7 complete days (UTC)','Last 30 complete days (UTC)']);
  console.log('PASS: failed verification and waiting preorder cannot buy postage; audited-ready metadata preserves purchase snapshots; fresh payment recheck is read-only and race-safe; SQL queues match all work states and find orders/printable labels beyond 5,000 records. No live providers.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

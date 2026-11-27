@@ -17,45 +17,30 @@ export type SalesCohort = { orders: number; paymentRecorded: number; grossCents:
 // Retain the original fields for already-open admin bundles during deployment.
 export type SalesWindow = { label: string; orders: number; revenue: number; live: SalesCohort; sandbox: SalesCohort; unknown: SalesCohort };
 export type Overview = { generatedAt: number; attention: Attention[]; sales: SalesWindow[] | null; setup: Attention[] };
+export type OverviewOrderSummary = { toShip: { count: number; oldest: number; labels: number; coaBlocked: number }; review: number; backorder: { count: number; oldest: number }; sales: SalesWindow[]; coaProductIds: number[] };
 export type OverviewAccess = { orders: boolean; requests: boolean; reports: boolean; store: boolean };
 
 const ago = (now: number, since: number) => { const d = Math.floor((now - since) / DAY); return d < 1 ? 'today' : d === 1 ? '1 day' : d + ' days'; };
 const plural = (n: number, one: string, many = one + 's') => n + ' ' + (n === 1 ? one : many);
 
 export function orderAttention(orders: OverviewOrder[], products: Product[], now: number): Attention[] {
-    const out: Attention[] = [];
-    // Only orders the store has been paid for. A checkout that was started and abandoned, or one
-    // whose card the bank declined or held, is not a placed order: there is no money and nothing to
-    // pack (owner, Nov 23 2026: "i want the order to move into the system only after payment").
-    // Filtered here rather than per card, so no card can be built from an unpaid checkout however
-    // the buckets are rearranged later, and against the same PAID set the sales windows use. The
-    // records stay in the Orders queue; this is the home screen, and it shows only paid-for work.
     const bucketed = orders.filter(o => !isArchived(o) && PAID.has(o.status)).map(o => ({ ...o, work: tabForOrder(o, now) }));
-    const toShip = bucketed.filter(o => o.work === 'to_ship');
-    if (toShip.length) {
-        const blocked = !COA_REQUIRED_TO_SHIP ? [] : toShip.filter(o => (Array.isArray(o.data?.items) ? o.data.items : []).some((i: any) => !hasCoa(products.find(p => p.id === Number(i?.id ?? i?.product?.id)))));
-        const oldest = Math.min(...toShip.map(o => o.created));
-        const labels = toShip.filter(o => Boolean(o.data?.shipment)).length;
-        out.push({ id: 'to_ship', tab: 'orders', count: toShip.length, tone: now - oldest > 2 * DAY ? 'urgent' : 'normal', title: plural(toShip.length, 'order') + ' to pack & ship',
-            detail: `Oldest waiting ${ago(now, oldest)}. ${labels} with a label ready; no handoff recorded.` + (blocked.length ? ` ${blocked.length} can't ship until a COA is attached.` : '') });
-    }
-    const review = bucketed.filter(o => o.work === 'review');
-    if (review.length) out.push({ id: 'review', tab: 'orders', count: review.length, tone: 'urgent', title: (review.length === 1 ? '1 order needs' : review.length + ' orders need') + ' attention', detail: 'Check the reason on each order: a payment that did not verify, an order hold, label approval or a delivery issue.' });
-    // Waiting on stock has its own card, or an order held for a batch that never arrives would
-    // leave the dashboard entirely the moment it stopped counting as attention (owner, Oct 30 2026).
-    const backorder = bucketed.filter(o => o.work === 'backorder');
-    if (backorder.length) {
-        const oldest = Math.min(...backorder.map(o => o.created));
-        out.push({ id: 'backorder', tab: 'orders', count: backorder.length, tone: now - oldest > 14 * DAY ? 'urgent' : 'normal', title: plural(backorder.length, 'order') + ' waiting on stock',
-            detail: `Oldest waiting ${ago(now, oldest)}. Held for an item not in stock, or carrying a preorder line. None can be packed until the batch arrives.` });
-    }
-    // No abandoned-cart card. An unfinished checkout is not work and not a sale, and putting it on
-    // the home screen made orders that were never placed look like orders waiting on the owner.
-    // They are still recorded, and still listed under Abandoned carts in the Orders queue.
+    const toShip = bucketed.filter(o => o.work === 'to_ship'), backorder = bucketed.filter(o => o.work === 'backorder');
+    const blocked = !COA_REQUIRED_TO_SHIP ? [] : toShip.filter(o => (Array.isArray(o.data?.items) ? o.data.items : []).some((i: any) => !hasCoa(products.find(p => p.id === Number(i?.id ?? i?.product?.id)))));
+    return summarizedOrderAttention({ toShip: { count: toShip.length, oldest: Math.min(...toShip.map(o => o.created)), labels: toShip.filter(o => Boolean(o.data?.shipment)).length, coaBlocked: blocked.length }, review: bucketed.filter(o => o.work === 'review').length, backorder: { count: backorder.length, oldest: Math.min(...backorder.map(o => o.created)) } }, now);
+}
+
+export function summarizedOrderAttention(summary: Pick<OverviewOrderSummary, 'toShip' | 'review' | 'backorder'>, now: number): Attention[] {
+    const out: Attention[] = [], { toShip, review, backorder } = summary;
+    if (toShip.count) out.push({ id: 'to_ship', tab: 'orders', count: toShip.count, tone: now - toShip.oldest > 2 * DAY ? 'urgent' : 'normal', title: plural(toShip.count, 'order') + ' to pack & ship',
+        detail: `Oldest waiting ${ago(now, toShip.oldest)}. ${toShip.labels} with a label ready; no handoff recorded.` + (toShip.coaBlocked ? ` ${toShip.coaBlocked} can't ship until a COA is attached.` : '') });
+    if (review) out.push({ id: 'review', tab: 'orders', count: review, tone: 'urgent', title: (review === 1 ? '1 order needs' : review + ' orders need') + ' attention', detail: 'Check the reason on each order: a payment that did not verify, an order hold, label approval or a delivery issue.' });
+    if (backorder.count) out.push({ id: 'backorder', tab: 'orders', count: backorder.count, tone: now - backorder.oldest > 14 * DAY ? 'urgent' : 'normal', title: plural(backorder.count, 'order') + ' waiting on stock',
+        detail: `Oldest waiting ${ago(now, backorder.oldest)}. Held for an item not in stock, or carrying a preorder line. None can be packed until the batch arrives.` });
     return out;
 }
 
-export function productAttention(products: Product[], waitingOrders: { items: unknown }[]): Attention[] {
+export function productAttention(products: Product[], waitingOrders: { items: unknown }[], coaProductIds?: number[]): Attention[] {
     const out: Attention[] = [];
     const selling = products.filter(p => productAvailability(p) === 'available');
     const blocked = (COA_REQUIRED_TO_SHIP ? noCoaProducts(selling, waitingOrders) : []).filter(p => p.waitingOrders > 0);
@@ -107,18 +92,18 @@ export function setupAttention(shipping: ShippingOptionsConfig, environment: str
     return out;
 }
 
-export async function adminOverview(env: CoaEnvironment, input: { orders: OverviewOrder[]; products: Product[]; shipping: ShippingOptionsConfig; environment: string | undefined; access: OverviewAccess; now?: number }): Promise<Overview> {
+export async function adminOverview(env: CoaEnvironment, input: { orders: OverviewOrder[]; orderSummary?: OverviewOrderSummary; products: Product[]; shipping: ShippingOptionsConfig; environment: string | undefined; access: OverviewAccess; now?: number }): Promise<Overview> {
     const now = input.now ?? Date.now();
     const attention: Attention[] = [];
-    if (input.access.orders) attention.push(...orderAttention(input.orders, input.products, now));
+    if (input.access.orders) attention.push(...(input.orderSummary ? summarizedOrderAttention(input.orderSummary, now) : orderAttention(input.orders, input.products, now)));
     if (input.access.requests) {
         const waiting = await overdueCustomers(env, now).catch(() => null);
         if (waiting === null) attention.push({ id: 'requests_error', tab: 'requests', count: 0, tone: 'normal', title: 'Customer requests could not be checked', detail: 'Open Customer requests to see who is waiting.' });
         else if (waiting.length) attention.push({ id: 'requests', tab: 'requests', count: waiting.length, tone: 'urgent', title: plural(waiting.length, 'customer') + ' waiting over a day for a reply',
             detail: waiting.slice(0, 3).map(w => `${w.name || w.email} (${ago(now, w.since)})`).join(', ') + (waiting.length > 3 ? ` and ${waiting.length - 3} more` : '') + '.' });
     }
-    if (input.access.store) attention.push(...productAttention(input.products, input.orders.filter(o => !isArchived(o) && tabForOrder(o, now) === 'to_ship').map(o => ({ items: o.data?.items }))));
+    if (input.access.store) attention.push(...productAttention(input.products, input.orders.filter(o => !isArchived(o) && tabForOrder(o, now) === 'to_ship').map(o => ({ items: o.data?.items })), input.orderSummary?.coaProductIds));
     // Urgent first, then the order work happens in.
     attention.sort((a, b) => (a.tone === b.tone ? 0 : a.tone === 'urgent' ? -1 : 1));
-    return { generatedAt: now, attention, sales: input.access.reports ? salesWindows(input.orders, now) : null, setup: input.access.store ? setupAttention(input.shipping, input.environment) : [] };
+    return { generatedAt: now, attention, sales: input.access.reports ? (input.orderSummary?.sales || salesWindows(input.orders, now)) : null, setup: input.access.store ? setupAttention(input.shipping, input.environment) : [] };
 }
