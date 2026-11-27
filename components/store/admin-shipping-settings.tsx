@@ -126,7 +126,9 @@ function Verdict({ check, savedMatches, enabledCount }: { check: Check | null; s
     </div>;
 }
 
-export function AdminShippingSettings({ config, busy = false }: { config: ShippingSettingsConfig; busy?: boolean }) {
+export function AdminShippingSettings({ config, version: initialVersion, busy = false, onDraft, onSaved }: { config: ShippingSettingsConfig; version?: string; busy?: boolean; onDraft?: () => number | undefined; onSaved?: (revision: number | undefined, config: ShippingSettingsConfig, version: string) => void }) {
+    const revision = useRef<number | undefined>(undefined);
+    const [version, setVersion] = useState(initialVersion);
     const [draft, setDraft] = useState<Draft>(() => draftFrom(config));
     const [savedDraft, setSavedDraft] = useState(() => JSON.stringify(draftFrom(config)));
     const [perServiceSaved, setPerServiceSaved] = useState(() => Boolean(normalizeShippingOptions(config.shippingOptions).services));
@@ -160,11 +162,14 @@ export function AdminShippingSettings({ config, busy = false }: { config: Shippi
         let settings;
         try { settings = shippingServicesPayload(draft); }
         catch (e) { setError(e instanceof Error ? e.message : 'Check the shipping settings.'); return; }
+        const submittedRevision = revision.current;
         setWorking('save'); setError('');
         try {
-            const result = await call({ action: 'save', settings, destination, sample });
+            const result = await call({ action: 'save', settings, expectedVersion: version, destination, sample });
             const next = draftFrom({ shippingCents: result.shippingCents, freeShippingAt: result.freeShippingAt, shippingOptions: result.settings, autoLabel: result.autoLabel, automaticSpend: result.automaticSpend });
-            setDraft(next); setSavedDraft(JSON.stringify(next)); setPerServiceSaved(true);
+            setVersion(result.version);
+            if (revision.current === submittedRevision) { setDraft(next); setSavedDraft(JSON.stringify(next)); onSaved?.(submittedRevision, { shippingCents: result.shippingCents, freeShippingAt: result.freeShippingAt, shippingOptions: result.settings, autoLabel: result.autoLabel, automaticSpend: result.automaticSpend, autoLabelHealth: result.autoLabelHealth }, result.version); }
+            setPerServiceSaved(true);
             setSavedMatches(result.savedMatches === true); setCheck(result.check);
             if (result.autoLabelHealth !== undefined) setHealth(result.autoLabelHealth);
             if (result.automaticSpend) setSpend(result.automaticSpend);
@@ -174,7 +179,8 @@ export function AdminShippingSettings({ config, busy = false }: { config: Shippi
     }
     // Load live carrier prices once so every row shows what the customer would pay.
     useEffect(() => { if (!started.current) { started.current = true; void runCheck(); } }, []); // eslint-disable-line react-hooks/exhaustive-deps
-    const update = (key: string, patch: Partial<Row>) => setDraft(d => ({ ...d, rows: d.rows.map(r => r.key === key ? { ...r, ...patch } : r) }));
+    function changeDraft(update: (draft: Draft) => Draft) { revision.current = onDraft?.(); setDraft(update); }
+    const update = (key: string, patch: Partial<Row>) => changeDraft(d => ({ ...d, rows: d.rows.map(r => r.key === key ? { ...r, ...patch } : r) }));
 
     function serviceRow(service: CatalogService) {
         const row = draft.rows.find(r => r.key === service.key)!;
@@ -219,40 +225,40 @@ export function AdminShippingSettings({ config, busy = false }: { config: Shippi
 
         <div className={styles.extras}>
             <div>
-                <label className={styles.check}><input type="checkbox" checked={draft.freeStandardEnabled} disabled={locked} onChange={e => setDraft(d => ({ ...d, freeStandardEnabled: e.target.checked }))}/><span>Free shipping over a minimum</span></label>
-                <label className={styles.field}><span>Minimum order, after discounts ($)</span><input type="number" min="0" max="10000" step="0.01" value={draft.threshold} disabled={locked || !draft.freeStandardEnabled} onChange={e => setDraft(d => ({ ...d, threshold: e.target.value }))}/></label>
+                <label className={styles.check}><input type="checkbox" checked={draft.freeStandardEnabled} disabled={locked} onChange={e => changeDraft(d => ({ ...d, freeStandardEnabled: e.target.checked }))}/><span>Free shipping over a minimum</span></label>
+                <label className={styles.field}><span>Minimum order, after discounts ($)</span><input type="number" min="0" max="10000" step="0.01" value={draft.threshold} disabled={locked || !draft.freeStandardEnabled} onChange={e => changeDraft(d => ({ ...d, threshold: e.target.value }))}/></label>
                 <p className={styles.muted}>The standard service that costs you the least becomes free. With no standard service on, USPS Priority Mail becomes free instead. Faster services keep their price.</p>
             </div>
             <div>
-                <label className={styles.field}><span>Backup standard price if carriers do not answer ($)</span><input type="number" min="0" max="1000" step="0.01" value={draft.fallback} placeholder="None" disabled={locked} onChange={e => setDraft(d => ({ ...d, fallback: e.target.value }))}/></label>
+                <label className={styles.field}><span>Backup standard price if carriers do not answer ($)</span><input type="number" min="0" max="1000" step="0.01" value={draft.fallback} placeholder="None" disabled={locked} onChange={e => changeDraft(d => ({ ...d, fallback: e.target.value }))}/></label>
                 <p className={styles.muted}>Leave empty to stop checkout instead of guessing a price.</p>
                 <label className={styles.field}><span>Never ship slower than</span>
-                    <select value={draft.minimumServiceKey} disabled={locked} onChange={e => setDraft(d => ({ ...d, minimumServiceKey: e.target.value }))}>
+                    <select value={draft.minimumServiceKey} disabled={locked} onChange={e => changeDraft(d => ({ ...d, minimumServiceKey: e.target.value }))}>
                         <option value="none">No minimum — ship exactly what the customer paid for</option>
                         {shippingServiceCatalog.filter(service => service.group !== 'standard').map(service => <option key={service.key} value={service.key}>{service.name}</option>)}
                     </select>
                 </label>
                 <p className={styles.muted}>Upgrades a label when the paid service is slower. You pay the difference; the customer is never charged more. Faster paid services are left alone. Set to USPS Priority Mail unless you change it.</p>
                 <label className={styles.field}><span>Delivery confirmation</span>
-                    <select value={draft.signatureConfirmation} disabled={locked} onChange={e => setDraft(d => ({ ...d, signatureConfirmation: e.target.value }))}>
+                    <select value={draft.signatureConfirmation} disabled={locked} onChange={e => changeDraft(d => ({ ...d, signatureConfirmation: e.target.value }))}>
                         <option value="none">None — leave it on the doorstep</option>
                         {signatureOptions.map(option => <option key={option.key} value={option.key}>{option.name}</option>)}
                     </select>
                 </label>
                 <p className={styles.muted}>Asked for when the label is bought, so checkout prices never change and you pay the fee. Proof of delivery is what defeats a &ldquo;never arrived&rdquo; chargeback; the trade is a missed delivery when nobody is home.</p>
-                <label className={styles.field}><span>Only on orders of at least ($)</span><input type="number" min="0" max="100000" step="1" value={draft.signatureOver ?? ''} placeholder="Every order" disabled={locked || draft.signatureConfirmation === 'none'} onChange={e => setDraft(d => ({ ...d, signatureOver: e.target.value }))}/></label>
+                <label className={styles.field}><span>Only on orders of at least ($)</span><input type="number" min="0" max="100000" step="1" value={draft.signatureOver ?? ''} placeholder="Every order" disabled={locked || draft.signatureConfirmation === 'none'} onChange={e => changeDraft(d => ({ ...d, signatureOver: e.target.value }))}/></label>
                 <p className={styles.muted}>Goods value after discounts, not shipping or tax. Empty asks for it on every order.</p>
-                <label className={styles.field}><span>Insure orders of at least ($)</span><input type="number" min="0" max="100000" step="1" value={draft.insureOver ?? ''} placeholder="No insurance" disabled={locked} onChange={e => setDraft(d => ({ ...d, insureOver: e.target.value }))}/></label>
+                <label className={styles.field}><span>Insure orders of at least ($)</span><input type="number" min="0" max="100000" step="1" value={draft.insureOver ?? ''} placeholder="No insurance" disabled={locked} onChange={e => changeDraft(d => ({ ...d, insureOver: e.target.value }))}/></label>
                 <p className={styles.muted}>Insures the full goods value through EasyPost when the label is bought. You pay the fee. Empty buys no insurance.</p>
             </div>
             <div>
-                <label className={styles.check}><input type="checkbox" checked={draft.autoEnabled} disabled={locked} onChange={e => setDraft(d => ({ ...d, autoEnabled: e.target.checked }))}/><span>Buy labels automatically</span></label>
+                <label className={styles.check}><input type="checkbox" checked={draft.autoEnabled} disabled={locked} onChange={e => changeDraft(d => ({ ...d, autoEnabled: e.target.checked }))}/><span>Buy labels automatically</span></label>
                 <p className={styles.muted}>Paid orders get a label without anyone clicking. Orders on hold, internal tests and orders that already have a label are never bought. Turning this off stops buying immediately; labels already bought are unaffected.</p>
-                <label className={styles.field}><span>Wait after payment (minutes)</span><input type="number" min="0" max="1440" step="1" value={draft.autoDelay} disabled={locked || !draft.autoEnabled} onChange={e => setDraft(d => ({ ...d, autoDelay: e.target.value }))}/></label>
+                <label className={styles.field}><span>Wait after payment (minutes)</span><input type="number" min="0" max="1440" step="1" value={draft.autoDelay} disabled={locked || !draft.autoEnabled} onChange={e => changeDraft(d => ({ ...d, autoDelay: e.target.value }))}/></label>
                 <p className={styles.muted}>Your window to spot a bad address or a problem order before postage is spent. The clock restarts whenever anyone touches the order.</p>
-                <label className={styles.field}><span>Most to spend automatically per day ($)</span><input type="number" min="0" max="100000" step="1" value={draft.autoCap} disabled={locked || !draft.autoEnabled} onChange={e => setDraft(d => ({ ...d, autoCap: e.target.value }))}/></label>
+                <label className={styles.field}><span>Most to spend automatically per day ($)</span><input type="number" min="0" max="100000" step="1" value={draft.autoCap} disabled={locked || !draft.autoEnabled} onChange={e => changeDraft(d => ({ ...d, autoCap: e.target.value }))}/></label>
                 <p className={styles.muted}>Counts only labels bought automatically in the last 24 hours; your own purchases never count against it. At the limit, orders simply wait in To ship for you.{spend ? ' Spent automatically in the last 24 hours: ' + money(spend.cents) + ' across ' + spend.labels + (spend.labels === 1 ? ' label.' : ' labels.') : ''}</p>
-                <label className={styles.field}><span>Most to spend on one label ($)</span><input type="number" min="1" max="1000" step="1" value={draft.autoMax} disabled={locked || !draft.autoEnabled} onChange={e => setDraft(d => ({ ...d, autoMax: e.target.value }))}/></label>
+                <label className={styles.field}><span>Most to spend on one label ($)</span><input type="number" min="1" max="1000" step="1" value={draft.autoMax} disabled={locked || !draft.autoEnabled} onChange={e => changeDraft(d => ({ ...d, autoMax: e.target.value }))}/></label>
                 <p className={styles.muted}>A single label above this is never bought automatically. The order moves to Needs review showing what the label would cost, and waits there until you buy it yourself &mdash; buying it is the approval. It is never retried in the meantime, and nothing is charged. Raise this limit and any order under the new figure goes back to being bought automatically. This is what catches a mistyped address that quotes a freight rate.</p>
                 <p className={styles.muted} aria-live="polite">{autoLabelReport(health)}</p>
             </div>

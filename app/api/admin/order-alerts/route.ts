@@ -1,7 +1,8 @@
+import { settingsSnapshot, saveRawSettingsSnapshots, SettingsConflict } from '@/lib/settings-version';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireStaff } from '@/lib/auth';
 import { runtime, timestamp } from '@/lib/runtime';
-import { auditRun, recordChange } from '@/lib/change-history';
+import { recordChange } from '@/lib/change-history';
 import { cleanRecipients, orderAlertRecipients, orderNotifyRecipients, ORDER_ALERT_KEY } from '@/lib/order-summary';
 import { readTelegramConfig, validBotToken, cleanChatIds, probeTelegram, sendTelegramTest, TELEGRAM_TOKEN_KEY, TELEGRAM_CHATS_KEY } from '@/lib/telegram';
 export const dynamic = 'force-dynamic';
@@ -12,16 +13,22 @@ const j = (value: unknown, status = 200) => NextResponse.json(value, { status, h
  * config on purpose: the cron that sends the digest has no request runtime, so this list has to be
  * readable straight from D1 (owner, Oct 20 2026).
  */
+async function alertSnapshots(db: D1Database, expected?: Record<string, unknown>) {
+    const [email, token, chats] = await Promise.all([settingsSnapshot(db, ORDER_ALERT_KEY, expected?.email), settingsSnapshot(db, TELEGRAM_TOKEN_KEY, expected?.token), settingsSnapshot(db, TELEGRAM_CHATS_KEY, expected?.chats)]);
+    return { email, token, chats };
+}
+const versionsOf = (snapshots: Awaited<ReturnType<typeof alertSnapshots>>) => Object.fromEntries(Object.entries(snapshots).map(([name, snapshot]) => [name, snapshot.version]));
 export async function GET() {
     try {
         await requireStaff('store:write');
         const env = runtime();
+        const snapshots = await alertSnapshots(env.DB);
         const saved = await orderAlertRecipients(env as never);
         const fallback = orderNotifyRecipients(env as never);
         // The bot token is a credential: whether one is set is useful, the token itself is not.
         const telegram = await readTelegramConfig(env as never);
         return j({
-            recipients: saved, usingFallback: saved.length > 0 && saved.join() === fallback.join() && fallback.length > 0, deployed: fallback,
+            versions: versionsOf(snapshots), recipients: saved, usingFallback: saved.length > 0 && saved.join() === fallback.join() && fallback.length > 0, deployed: fallback,
             telegram: { configured: Boolean(telegram.token), chats: telegram.chats },
         });
     }
@@ -37,7 +44,7 @@ export async function POST(req: NextRequest) {
     try {
         const env = runtime();
         const context = { source: 'admin' as const, actor: actor.email, actorType: 'staff' as const };
-        const body = await req.json().catch(() => ({})) as { recipients?: unknown; botToken?: unknown; chatIds?: unknown; clearToken?: unknown; findChats?: unknown; test?: unknown };
+        const body = await req.json().catch(() => ({})) as { recipients?: unknown; botToken?: unknown; chatIds?: unknown; clearToken?: unknown; findChats?: unknown; test?: unknown; expectedVersions?: Record<string, unknown> };
 
         // Looks up the groups the bot can already see, so nobody reads a chat id out of raw JSON.
         // The token may come from the form before it is saved, and is never written to history.
@@ -69,26 +76,31 @@ export async function POST(req: NextRequest) {
 
         // Telegram settings save on their own so the email list is never disturbed by them.
         if (body.botToken !== undefined || body.chatIds !== undefined || body.clearToken === true) {
+            if (!body.expectedVersions?.token || !body.expectedVersions?.chats) throw new SettingsConflict();
+            const snapshots = await alertSnapshots(env.DB, { token: body.expectedVersions.token, chats: body.expectedVersions.chats });
+            const changes: { before: Awaited<ReturnType<typeof settingsSnapshot>>; value: string }[] = [];
             const changed: string[] = [];
             // An empty token box means "leave the token alone", never "delete it". The box is blank
             // on every load because the token is write-only, so treating blank as a clear made every
             // save of a chat id quietly destroy the credential (owner, Oct 20 2026). Removing a token
             // is now its own explicit request.
             if (body.clearToken === true) {
-                await auditRun(env.DB, context, 'INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', TELEGRAM_TOKEN_KEY, '');
+                changes.push({ before: snapshots.token, value: '' });
                 changed.push('bot token removed');
             }
             else if (typeof body.botToken === 'string' && body.botToken.trim()) {
                 const raw = body.botToken.trim();
                 if (!validBotToken(raw)) return j({ error: 'That does not look like a bot token. BotFather gives you digits, a colon, then a long code.' }, 400);
-                await auditRun(env.DB, context, 'INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', TELEGRAM_TOKEN_KEY, validBotToken(raw));
+                changes.push({ before: snapshots.token, value: validBotToken(raw) });
                 changed.push('bot token set');
             }
             if (body.chatIds !== undefined) {
                 const chats = cleanChatIds(body.chatIds);
-                await auditRun(env.DB, context, 'INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', TELEGRAM_CHATS_KEY, chats.join(','));
+                changes.push({ before: snapshots.chats, value: chats.join(',') });
                 changed.push(chats.length + (chats.length === 1 ? ' chat' : ' chats'));
             }
+            await saveRawSettingsSnapshots(env.DB, changes, context);
+            const savedVersions = versionsOf(await alertSnapshots(env.DB));
             try {
                 await recordChange(env.DB, {
                     ...context, action: 'store.order_alerts_chat', entityType: 'setting', entityId: TELEGRAM_CHATS_KEY, status: 'succeeded', changes: [],
@@ -96,15 +108,17 @@ export async function POST(req: NextRequest) {
                 });
             } catch { /* the settings are saved; a missing history row must not suggest otherwise */ }
             const now = await readTelegramConfig(env as never);
-            return j({ telegram: { configured: Boolean(now.token), chats: now.chats }, message: (changed.length ? changed.join(', ').replace(/^./, c => c.toUpperCase()) + '. ' : '') + (now.token ? 'Use Send a test message to prove it reaches the group.' : 'No bot token is saved, so nothing will be posted until you add one.') });
+            return j({ versions: savedVersions, telegram: { configured: Boolean(now.token), chats: now.chats }, message: (changed.length ? changed.join(', ').replace(/^./, c => c.toUpperCase()) + '. ' : '') + (now.token ? 'Use Send a test message to prove it reaches the group.' : 'No bot token is saved, so nothing will be posted until you add one.') });
         }
 
         if (typeof body.recipients !== 'string') return j({ error: 'Send the list as text.' }, 400);
+        if (!body.expectedVersions?.email) throw new SettingsConflict();
+        const before = await settingsSnapshot(env.DB, ORDER_ALERT_KEY, body.expectedVersions.email);
         const recipients = cleanRecipients(body.recipients);
         const dropped = String(body.recipients).split(/[,;\s]+/).map(s => s.trim()).filter(Boolean).length - recipients.length;
         // The addresses themselves are the change, and they are staff contact details rather than a
         // customer's, so the count goes in the history and the list does not.
-        await auditRun(env.DB, context, 'INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', ORDER_ALERT_KEY, recipients.join(','));
+        const [emailVersion] = await saveRawSettingsSnapshots(env.DB, [{ before, value: recipients.join(',') }], context);
         try {
             await recordChange(env.DB, {
                 ...context, action: 'store.order_alerts', entityType: 'setting', entityId: ORDER_ALERT_KEY, status: 'succeeded', changes: [],
@@ -112,13 +126,13 @@ export async function POST(req: NextRequest) {
             });
         } catch { /* the list is saved; a missing history row must not suggest otherwise */ }
         return j({
-            recipients,
+            recipients, versions: { email: emailVersion },
             message: recipients.length
                 ? recipients.length + (recipients.length === 1 ? ' address' : ' addresses') + ' saved.' + (dropped > 0 ? ' ' + dropped + ' entr' + (dropped === 1 ? 'y was' : 'ies were') + ' not a valid address and ' + (dropped === 1 ? 'was' : 'were') + ' dropped.' : '')
                 : 'List cleared. New-order alerts fall back to the addresses set in Cloudflare.' + (dropped > 0 ? ' Nothing you typed looked like an address.' : ''),
         });
     }
     catch (e) {
-        return j({ error: e instanceof Error ? e.message : 'Request failed.' }, 400);
+        return j({ error: e instanceof Error ? e.message : 'Request failed.' }, e instanceof SettingsConflict ? 409 : 400);
     }
 }

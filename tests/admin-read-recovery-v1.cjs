@@ -32,7 +32,7 @@ const noop=()=>null;
 function AdminOverview(){}function PresaleProductPicker(){}function Field(){}function Check(){}function Choice(){}function Blank(){}function AuthPage(){}function ShippingLabel(){}function OrdersAdmin(){}function Dialog(){}function Tabs(){}function TabsTrigger(){}function TabsContent(){}function CoaAutomation(){}function ChangeHistory(){}function AdminProducts(){}function AdminShippingSettings(){}function AdminOrderAlerts(){}function RestaurantPartners(){}
 const ownerA={id:'fixture-admin-a',name:'Fixture A',email:'a@example.invalid'};
 const ownerB={id:'fixture-admin-b',name:'Fixture B',email:'b@example.invalid'};
-const fixture=(label='Snapshot A')=>({config:{presalesEnabled:false,rewardsEnabled:false,affiliateEnabled:false,packDiscounts:{},shippingCents:null,freeShippingAt:20000},products:[{id:900001,name:label,price:10000,stockQuantity:1,inStock:true,purchasable:true}],campaigns:[{id:'fixture-campaign',title:'Simulated campaign',active:false,starts:'2099-01-01',ends:'2099-02-01'}],orders:[{id:'fixture-order',status:'pending',total:10000,created:0,data:{items:[]}}],requests:[{id:'fixture-request',kind:'fixture',status:'new',created:0,data:{}}],searchPublishing:{}});
+const fixture=(label='Snapshot A')=>({settingsVersion:'fixture-version',config:{presalesEnabled:false,rewardsEnabled:false,affiliateEnabled:false,packDiscounts:{},shippingCents:null,freeShippingAt:20000},products:[{id:900001,name:label,price:10000,stockQuantity:1,inStock:true,purchasable:true}],campaigns:[{id:'fixture-campaign',title:'Simulated campaign',active:false,starts:'2099-01-01',ends:'2099-02-01'}],orders:[{id:'fixture-order',status:'pending',total:10000,created:0,data:{items:[]}}],requests:[{id:'fixture-request',kind:'fixture',status:'new',created:0,data:{}}],searchPublishing:{}});
 let state,apiImpl,refreshImpl,calls,reports,successes,infos,refreshCalls,allowedMutation;
 const provider={useStore:()=>({...state,refresh:()=>{refreshCalls++;return refreshImpl();}}),api:async(action,body)=>{assert(action==='admin'||action===allowedMutation,'Only GET admin and explicitly permitted simulated action are allowed');if(action==='admin')assert.equal(body,undefined,'Read retry never has a mutation payload');calls.push({action,body});return apiImpl(action,body);},report:e=>reports.push(e)};
 const issuesLib=(()=>{const f=path.join(root,'lib/request-issues.ts'),m=new Module(f,module);m.filename=f;m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,f);return m.exports;})();
@@ -308,8 +308,20 @@ const productNames=h=>String(Boolean(productPanel(h).props.edited));
  settingsForm(h).props.onChangeCapture();h.render();const shippingSettings=find(h,n=>n.type===AdminShippingSettings);assert.equal(shippingSettings.props.busy,false);assert.deepEqual(shippingSettings.props.config,fixture().config);
  apiImpl=async action=>action==='admin-config'?{message:'Synthetic shipping settings saved'}:fixture();
  await settingsForm(h).props.onSubmit({preventDefault(){},currentTarget:{fields:{pack3:'10',pack5:'15',pack10:'20'}}});h.render();
- assert.deepEqual(calls.find(c=>c.action==='admin-config').body,{presalesEnabled:false,rewardsEnabled:false,affiliateEnabled:false,packDiscounts:{3:10,5:15,10:20}});
+ assert.deepEqual(calls.find(c=>c.action==='admin-config').body,{expectedVersion:'fixture-version',presalesEnabled:false,rewardsEnabled:false,affiliateEnabled:false,packDiscounts:{3:10,5:15,10:20}});
  assert.equal(button(h,'Refresh administration').props.disabled,false);assert.equal(mutations(),1);
+
+ // Independent settings saves clear only their submitted revisions and keep unrelated drafts.
+ reset();h=mount({initialTab:'settings'});await flush(h);
+ let alertsPanel=find(h,n=>n.type===AdminOrderAlerts), shippingPanel=find(h,n=>n.type===AdminShippingSettings);
+ const emailRevision=alertsPanel.props.onDraft('email');h.render();
+ const telegramRevision=alertsPanel.props.onDraft('telegram');h.render();
+ alertsPanel.props.onSaved('email',emailRevision);h.render();assert(button(h,'Refresh administration').props.disabled,'Telegram edits remain protected after saving email recipients');
+ const newerTelegramRevision=alertsPanel.props.onDraft('telegram');h.render();
+ alertsPanel.props.onSaved('telegram',telegramRevision);h.render();assert(button(h,'Refresh administration').props.disabled,'An old save cannot clear newer edits');
+ alertsPanel.props.onSaved('telegram',newerTelegramRevision);h.render();assert(!button(h,'Refresh administration').props.disabled,'Saving the actual last draft unlocks administration');
+ shippingPanel=find(h,n=>n.type===AdminShippingSettings);const shippingRevision=shippingPanel.props.onDraft();h.render();assert(button(h,'Refresh administration').props.disabled,'Shipping changes participate in parent draft protection');
+ shippingPanel.props.onSaved(shippingRevision,{...fixture().config,freeShippingAt:25000},'updated-version');h.render();assert(!button(h,'Refresh administration').props.disabled);assert.equal(find(h,n=>n.type===AdminShippingSettings).props.config.freeShippingAt,25000);assert.equal(find(h,n=>n.type===AdminShippingSettings).props.version,'updated-version','Other settings forms use the accepted save revision');
 
  // COA config/send delegates stay under parent draft, single-flight and owner guards.
  reset();h=mount({initialTab:'requests'});await flush(h);

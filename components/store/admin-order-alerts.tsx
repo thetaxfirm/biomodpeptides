@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import styles from './admin-order-alerts.module.css';
 // Who gets told about a new paid order and about the daily parcel digest. Editable here so adding a
@@ -14,7 +14,11 @@ async function call(body?: Record<string, unknown>) {
     return d;
 }
 type Found = { id: string; title: string; kind: string };
-export function AdminOrderAlerts({ busy, onDraft }: { busy: boolean; onDraft?: () => void }) {
+type Section = 'email' | 'telegram';
+export function AdminOrderAlerts({ busy, onDraft, onSaved }: { busy: boolean; onDraft?: (section: Section) => number | undefined; onSaved?: (section: Section, revision: number | undefined) => void }) {
+    const versions = useRef<Record<string, string>>({});
+    const revisions = useRef<Partial<Record<Section, number>>>({});
+    function changed(section: Section) { revisions.current[section] = onDraft?.(section); }
     const [value, setValue] = useState('');
     const [loaded, setLoaded] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -29,6 +33,7 @@ export function AdminOrderAlerts({ busy, onDraft }: { busy: boolean; onDraft?: (
         let live = true;
         call().then(d => {
             if (!live) return;
+            versions.current = d.versions || {};
             setValue((d.recipients || []).join('\n'));
             setConfigured(Boolean(d.telegram?.configured));
             setChats((d.telegram?.chats || []).join(', '));
@@ -37,21 +42,25 @@ export function AdminOrderAlerts({ busy, onDraft }: { busy: boolean; onDraft?: (
         return () => { live = false; };
     }, []);
     async function chatAction(label: string, body: Record<string, unknown>) {
+        const revision = revisions.current.telegram;
         setChatBusy(label);
         try {
-            const d = await call(body);
+            const d = await call({ ...body, expectedVersions: versions.current });
+            if (d.versions) versions.current = { ...versions.current, ...d.versions };
             if (Array.isArray(d.chats)) setFound(d.chats as Found[]);
-            if (d.telegram) { setConfigured(Boolean(d.telegram.configured)); setChats((d.telegram.chats || []).join(', ')); setToken(''); }
+            if (d.telegram && revisions.current.telegram === revision) { setConfigured(Boolean(d.telegram.configured)); setChats((d.telegram.chats || []).join(', ')); setToken(''); onSaved?.('telegram', revision); }
             toast.success(d.message || 'Done.');
         }
         catch (e) { toast.error(e instanceof Error ? e.message : 'Request failed.'); }
         finally { setChatBusy(''); }
     }
     async function save() {
+        const revision = revisions.current.email;
         setSaving(true);
         try {
-            const d = await call({ recipients: value });
-            setValue((d.recipients || []).join('\n'));
+            const d = await call({ recipients: value, expectedVersions: versions.current });
+            if (d.versions) versions.current = { ...versions.current, ...d.versions };
+            if (revisions.current.email === revision) { setValue((d.recipients || []).join('\n')); onSaved?.('email', revision); }
             toast.success(d.message || 'Saved.');
         }
         catch (e) { toast.error(e instanceof Error ? e.message : 'Request failed.'); }
@@ -64,7 +73,7 @@ export function AdminOrderAlerts({ busy, onDraft }: { busy: boolean; onDraft?: (
             <label className="store-field">Send alerts to
                 <textarea rows={5} value={value} disabled={!loaded || busy || saving} spellCheck={false} autoCapitalize="off" autoCorrect="off"
                     placeholder={loaded ? 'you@example.com\nother-owner@example.com' : 'Loading…'}
-                    onChange={e => { setValue(e.target.value); onDraft?.(); }}/>
+                    onChange={e => { setValue(e.target.value); changed('email'); }}/>
             </label>
             <p className="notice">Leave it empty to fall back to the addresses set in Cloudflare. To get these on your phone as a push alert, add your normal email address here and set a Gmail filter for mail from the store, then turn on notifications for that label in the Gmail app. Carrier text gateways such as <code>@vtext.com</code> and <code>@txt.att.net</code> mostly no longer work, so do not rely on one for an order you have to ship.</p>
             <button type="button" className="button button-dark" disabled={!loaded || busy || saving} onClick={save}>{saving ? 'Saving…' : 'Save alert list'}</button>
@@ -80,16 +89,16 @@ export function AdminOrderAlerts({ busy, onDraft }: { busy: boolean; onDraft?: (
             <label className="store-field">Bot token
                 <input type="password" value={token} disabled={!loaded || busy || Boolean(chatBusy)} autoComplete="off" spellCheck={false}
                     placeholder={configured ? 'A token is saved. Type a new one to replace it.' : '1234567890:AA…'}
-                    onChange={e => { setToken(e.target.value); onDraft?.(); }}/>
+                    onChange={e => { setToken(e.target.value); changed('telegram'); }}/>
             </label>
             <p className={styles.sub}>{configured ? 'A bot token is saved. It is never shown again, and leaving this box empty keeps it as it is — type a new one only to replace it.' : 'No bot token saved yet.'}</p>
             <label className="store-field">Chat IDs
                 <input value={chats} disabled={!loaded || busy || Boolean(chatBusy)} spellCheck={false} autoComplete="off"
-                    placeholder="-1001234567890" onChange={e => { setChats(e.target.value); onDraft?.(); }}/>
+                    placeholder="-1001234567890" onChange={e => { setChats(e.target.value); changed('telegram'); }}/>
             </label>
             {found && (found.length
                 ? <ul className={styles.found}>{found.map(c => <li key={c.id}>
-                    <button type="button" className="text-button" disabled={Boolean(chatBusy)} onClick={() => { setChats(c.id); onDraft?.(); }}>Use this</button>
+                    <button type="button" className="text-button" disabled={Boolean(chatBusy)} onClick={() => { setChats(c.id); changed('telegram'); }}>Use this</button>
                     {' '}<strong>{c.title}</strong> <span className={styles.sub}>{c.kind} · {c.id}</span>
                 </li>)}</ul>
                 : <p className="notice">No chats found yet. Add the bot to the group, then send <code>/start@yourbotname</code> there and look again.</p>)}

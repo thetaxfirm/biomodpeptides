@@ -1,7 +1,8 @@
+import { settingsSnapshot, saveSettingsSnapshot, SettingsConflict } from '@/lib/settings-version';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireStaff } from '@/lib/auth';
-import { auditRun, recordChange, type AuditActor } from '@/lib/change-history';
+import { recordChange, type AuditActor } from '@/lib/change-history';
 import { config } from '@/lib/commerce';
 import { easypostReady, liveShippingCheck, ShippingError, type ShipAddress, type ShipItem } from '@/lib/easypost';
 import { normalizeShippingOptions, shippingServiceCatalog, type ShippingServiceSetting } from '@/lib/shipping-options';
@@ -80,8 +81,9 @@ function describe(before: ShippingServiceSetting[] | undefined, after: ShippingS
 export async function GET() {
     try { await requireStaff('store:write'); }
     catch { return j({ error: 'Administrator sign-in required.' }, 403); }
+    const before = await settingsSnapshot(database(), 'store');
     const current = await config();
-    return j({
+    return j({ version: before.version,
         catalog: shippingServiceCatalog, settings: current.shippingOptions, freeShippingAt: current.freeShippingAt, shippingCents: current.shippingCents,
         autoLabel: autoLabelSettings((current as Record<string, any>).autoLabel), automaticSpend: await automaticSpend(),
         autoLabelHealth: await readAutoLabelHealth(runtime() as never),
@@ -106,6 +108,9 @@ export async function POST(req: NextRequest) {
     const parsed = saveSchema.safeParse(body.settings);
     if (!parsed.success) return j({ error: parsed.error.issues[0]?.message || 'Check the shipping settings and try again.' }, 400);
     const next = parsed.data;
+    try {
+    if (typeof body.expectedVersion !== 'string') throw new SettingsConflict();
+    const before = await settingsSnapshot(database(), 'store', body.expectedVersion);
     const current = await config();
     // 'none' is the explicit opt-out; an absent key takes the store default, so the owner's choice is stored verbatim.
     const shippingOptions = { ...current.shippingOptions, freeStandardEnabled: next.freeStandardEnabled, services: next.services, minimumServiceKey: next.minimumServiceKey || undefined, signatureConfirmation: next.signatureConfirmation || undefined,
@@ -120,7 +125,7 @@ export async function POST(req: NextRequest) {
         : savedAuto;
     const nextConfig = { ...current, freeShippingAt: next.freeShippingAt, shippingCents: next.shippingCents, shippingOptions, autoLabel: nextAuto };
     const auditActor: AuditActor = { source: 'admin', actor: actor.email, actorType: 'staff', action: 'admin-shipping-services' };
-    await auditRun(database(), auditActor, 'INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', 'store', JSON.stringify(nextConfig));
+    const version = await saveSettingsSnapshot(database(), before, nextConfig, auditActor);
     try {
         await recordChange(database(), { source: 'admin', actor: actor.email, actorType: 'staff', action: 'shipping.services', entityType: 'setting', entityId: 'store.shipping', summary: describe(current.shippingOptions.services, next.services).slice(0, 1000), status: 'succeeded', changes: [] });
     } catch { /* The settings write is already audited; the summary is a convenience. */ }
@@ -129,5 +134,6 @@ export async function POST(req: NextRequest) {
     const expected = normalizeShippingOptions(shippingOptions);
     const savedMatches = JSON.stringify(saved.shippingOptions.services) === JSON.stringify(expected.services)
         && saved.freeShippingAt === next.freeShippingAt && saved.shippingCents === next.shippingCents && saved.shippingOptions.freeStandardEnabled === next.freeStandardEnabled;
-    return j({ message: 'Shipping saved.', savedMatches, settings: saved.shippingOptions, freeShippingAt: saved.freeShippingAt, shippingCents: saved.shippingCents, autoLabel: autoLabelSettings((saved as Record<string, any>).autoLabel), automaticSpend: await automaticSpend(), autoLabelHealth: await readAutoLabelHealth(runtime() as never), check: await runCheck(sample.data) });
+    return j({ message: 'Shipping saved.', version, savedMatches, settings: saved.shippingOptions, freeShippingAt: saved.freeShippingAt, shippingCents: saved.shippingCents, autoLabel: autoLabelSettings((saved as Record<string, any>).autoLabel), automaticSpend: await automaticSpend(), autoLabelHealth: await readAutoLabelHealth(runtime() as never), check: await runCheck(sample.data) });
+    } catch (error) { return j({ error: error instanceof Error ? error.message : 'Shipping settings could not save.' }, error instanceof SettingsConflict ? 409 : 500); }
 }

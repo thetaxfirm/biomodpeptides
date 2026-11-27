@@ -73,7 +73,7 @@ assert.equal(KEY,'order_alert_recipients_v1');
   const route=fs.readFileSync(path.join(root,'app/api/admin/order-alerts/route.ts'),'utf8');
   assert.match(route,/requireStaff\('store:write'\)/,'saving needs settings access');
   assert.match(route,/req\.headers\.get\('origin'\) !== req\.nextUrl\.origin/,'same-origin only');
-  assert.match(route,/auditRun\(env\.DB, context,/,'the write is audited');
+  assert.match(route,/saveRawSettingsSnapshots\(env\.DB,/,'the write is audited');
   assert.match(route,/summary: 'Order alert recipients saved: ' \+ recipients\.length/,'history records the count, never the addresses');
   // The Settings tab renders it, and nothing created a new tab for it.
   const admin=fs.readFileSync(path.join(root,'components/store/admin.tsx'),'utf8');

@@ -1,3 +1,4 @@
+import { settingsSnapshot, saveSettingsSnapshot, SettingsConflict } from '@/lib/settings-version';
 import { replyBridgeRoute } from '@/lib/request-reply-route';
 import { recordContact } from '@/lib/contacts';
 import { shareContact } from '@/lib/crm-capture';
@@ -277,8 +278,9 @@ export async function GET(req: NextRequest, { params }: {
             const siteRequests = await hasSiteUpdateAccess(database(), { email: actorEmail, role });
             const allowed = (permission: StaffPermission) => can(role, permission);
             const requests = allowed('requests:write') ? await all<{ id: string; data: string }>("SELECT * FROM requests WHERE kind IN ('contact','stock','affiliate') ORDER BY created DESC LIMIT 200") : [];
+            const settings = await settingsSnapshot(database(), 'store');
             const adminProducts = await catalog(false, allowed('catalog:write'));
-            return j({ role, permissions: [...permissionsFor(role), ...(siteRequests ? ['site:request'] : [])], batchRecords: allowed('catalog:write') ? await adminBatchRecords(database(), adminProducts) : [], checkoutRecovery: allowed('orders:read') ? await recoveryAdminStatus(runtime()) : null, searchPublishing: allowed('reports:read') ? searchReport(seoConfig(runtime())) : null, config: await config(), products: adminProducts, orders: allowed('orders:read') ? (await all<{
+            return j({ role, settingsVersion: settings.version, permissions: [...permissionsFor(role), ...(siteRequests ? ['site:request'] : [])], batchRecords: allowed('catalog:write') ? await adminBatchRecords(database(), adminProducts) : [], checkoutRecovery: allowed('orders:read') ? await recoveryAdminStatus(runtime()) : null, searchPublishing: allowed('reports:read') ? searchReport(seoConfig(runtime())) : null, config: await config(), products: adminProducts, orders: allowed('orders:read') ? (await all<{
                     data: string;
                 }>('SELECT id,owner,status,total,data,created FROM orders ORDER BY created DESC LIMIT 200')).map(o => ({ ...o, data: adminOrderView(parse(o.data, {})) })) : [], requests: requests.map(o => ({ ...o, data: parse(o.data, {}) })), requestReplies: allowed('requests:write') ? await summarizeRequestReplies(runtime(), requests.map(r => r.id)) : {}, coaAutomation: allowed('requests:write') ? await coaAutomationStatus(runtime(), requests.map(r => r.id)) : null, campaigns: allowed('store:write') ? (await all<{
                     data: string;
@@ -735,6 +737,8 @@ export async function POST(req: NextRequest, { params }: {
                 return j({ error: 'Automatic COA sending is disabled. Prepare a reply for Ash to review in Jarvis.' }, 409);
             }
             if (action === 'admin-config') {
+                if (typeof b.expectedVersion !== 'string') throw new SettingsConflict();
+                const before = await settingsSnapshot(database(), 'store', b.expectedVersion);
                 const cfg = z.object({ packDiscounts: z.record(z.number().min(0).max(100).nullable()), shippingCents: z.number().int().min(0).max(100000).nullable().optional(), freeShippingAt: z.number().int().min(0).max(1000000).optional(), presalesEnabled: z.boolean(), rewardsEnabled: z.boolean(), affiliateEnabled: z.boolean(),
                     shippingOptions: z.object({ standardEnabled: z.boolean(), expeditedEnabled: z.boolean(), overnightEnabled: z.boolean(), freeStandardEnabled: z.boolean(), standardHandlingCents: z.number().int().min(0).max(100000), expeditedHandlingCents: z.number().int().min(0).max(100000), overnightHandlingCents: z.number().int().min(0).max(100000), carriers: z.array(z.enum(['USPS', 'UPS', 'FedEx'])).min(1).transform(values => [...new Set(values)]) }).strict().optional(),
                 }).parse(b);
@@ -744,7 +748,7 @@ export async function POST(req: NextRequest, { params }: {
                 // Preserve the current merged runtime values unless explicitly submitted.
                 const currentConfig = await config();
                 const nextConfig = { ...currentConfig, ...cfg, shippingCents: cfg.shippingCents === undefined ? currentConfig.shippingCents : cfg.shippingCents, freeShippingAt: cfg.freeShippingAt ?? currentConfig.freeShippingAt, packDiscounts: { ...currentConfig.packDiscounts, ...cfg.packDiscounts, '1': 0 }, shippingOptions: cfg.shippingOptions ? { ...cfg.shippingOptions, ...(currentConfig.shippingOptions.services ? { services: currentConfig.shippingOptions.services } : {}) } : currentConfig.shippingOptions };
-                await run('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', 'store', JSON.stringify(nextConfig));
+                await saveSettingsSnapshot(database(), before, nextConfig, auditActor);
                 return j({ message: 'Store settings saved.' });
             }
             if (action === 'admin-product') {
@@ -907,6 +911,6 @@ export async function POST(req: NextRequest, { params }: {
     }
     catch (e) {
         const message = e instanceof z.ZodError ? 'Please check the required fields and their formats.' : (e as Error).message;
-        return j({ error: message }, 400);
+        return j({ error: message }, e instanceof SettingsConflict ? 409 : 400);
     }
 }
