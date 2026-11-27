@@ -1,4 +1,5 @@
 'use client';
+import { FinancialSummary } from './financial-summary';
 import { useEffect, useState } from 'react';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import type { DiagnosticEnvironment, SalesDiagnosticsReport } from '@/lib/sales-diagnostics';
@@ -49,6 +50,7 @@ export function SalesDiagnostics() {
       <button type="button" className="button button-dark" disabled={loading} onClick={refreshTotals}>{loading ? 'Loading totals…' : 'Refresh totals'}</button>
       <button type="button" className="text-button" disabled={loading || !report} onClick={downloadReport}>Download CSV</button>
     </div>
+    <FinancialSummary days={days} revision={revision}/>
     {error && <p role="alert">{error}</p>}
     {loading && <p role="status">Loading sales diagnostics…</p>}
     {report && <>

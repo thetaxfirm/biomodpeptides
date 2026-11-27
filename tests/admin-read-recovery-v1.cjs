@@ -47,6 +47,7 @@ mod.require=id=>{
  if(id==='./admin-rewards')return{AdminRewards:()=>null};if(id==='./affiliate-program')return {AffiliateProgram:()=>null}; /* Affiliate behavior has separate tests. */
  if(id==='@/lib/fulfillment'){const m={exports:{}};new Function('exports',require('typescript').transpileModule(require('node:fs').readFileSync(require('node:path').join(root,'lib/fulfillment.ts'),'utf8'),{compilerOptions:{module:1,target:9}}).outputText)(m.exports);return m.exports;}
  if(id==='./fulfillment-admin')return {FulfillmentQueue:()=>null,CarrierConnection:()=>null};
+ if(id==='@/lib/admin-navigation'){const f=path.join(root,'lib/admin-navigation.ts'),m=new Module(f,module);m.filename=f;m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,f);return m.exports;}
  if(id==='react')return hooks;if(id==='react/jsx-runtime')return projectRequire('react/jsx-runtime');if(id==='./provider')return provider;
  if(id==='sonner')return{toast:{success:v=>successes.push(v),info:v=>infos.push(v)}};
  if(id==='@/lib/catalog')return{money:c=>'$'+(c/100).toFixed(2)};if(id==='@/lib/packs')return{supportsPacks:p=>Boolean(p.categories?.some(c=>['research-compounds','spray-products','softgels'].includes(c.slug)))};
@@ -109,7 +110,7 @@ const productNames=h=>String(Boolean(productPanel(h).props.edited));
  const affiliatePage=fs.readFileSync(path.join(__dirname,'..','components/store/affiliate-program.tsx'),'utf8');
  assert(!/RestaurantPartners/.test(affiliatePage),'the affiliate page no longer embeds it');
  // Every page belongs to exactly one section, so none can be stranded with no way to reach it.
- const admin=fs.readFileSync(path.join(__dirname,'..','components/store/admin.tsx'),'utf8');
+ const admin=fs.readFileSync(path.join(__dirname,'..','components/store/admin.tsx'),'utf8')+fs.readFileSync(path.join(root,'lib/admin-navigation.ts'),'utf8');
  const declaredBlock=/const adminTabs = \[([\s\S]*?)\] as const;/.exec(admin);
  assert(declaredBlock,'the page list is still a literal');
  const declared=[...declaredBlock[1].matchAll(/\['([a-z]+)',/g)].map(m=>m[1]);

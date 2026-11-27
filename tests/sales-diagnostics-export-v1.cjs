@@ -82,6 +82,7 @@ let hookValues, emittedBlob, clicked = 0, removed = 0, revoked = 0, scheduled;
 const anchor = { href: '', download: '', click() { clicked++; }, remove() { removed++; } };
 const originals = { document: global.document, setTimeout: global.setTimeout, createObjectURL: URL.createObjectURL, revokeObjectURL: URL.revokeObjectURL };
 Module._load = function(name, parent, isMain) {
+  if (name === './financial-summary') return {FinancialSummary:()=>null};
   if (name === 'react') return { ...realReact, useState: () => [hookValues.shift(), () => {}], useEffect: () => {} };
   if (name === '@/lib/sales-diagnostics-export') return { salesDiagnosticsExport };
   if (name === '@/lib/catalog') return { money: value => String(value) };
