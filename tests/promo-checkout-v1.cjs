@@ -105,7 +105,7 @@ async function apiCookieIntegration() {
   const seedSession = cart => sql.prepare('INSERT INTO sessions(id,cart,updated) VALUES(?,?,?)').run(sessionId, JSON.stringify(cart), clock);
   seedSession(one);
   Module._load = function(request, parent, isMain) {
-    if (parent?.filename.endsWith('/app/api/store/[action]/route.ts')) {
+    if ((parent?.filename.endsWith('/app/api/store/[action]/route.ts') || parent?.filename.includes('/lib/store-api/'))) {
       if (request === 'next/headers') return { cookies: async () => cookieJar };
       if (request === 'next/server') return { NextResponse: { json: (value, options) => new Response(JSON.stringify(value), { ...options, headers: { 'Content-Type': 'application/json', ...options.headers } }) } };
       if (request === '@/lib/runtime') return runtime;

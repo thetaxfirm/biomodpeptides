@@ -42,7 +42,7 @@ mod.require = name => {
   if (name.startsWith('@/') || name === 'next/headers') return new Proxy({}, { get: (_, key) => key === '__esModule' ? true : forbidden(name + ':' + String(key)) });
   return localRequire(name);
 };
-mod._compile(ts.transpileModule(fs.readFileSync(filename, 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText, filename);
+require('./store-api-fixture.cjs').link(mod);mod._compile(ts.transpileModule(fs.readFileSync(filename, 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText, filename);
 const reset = (access = true) => { allow = access; authorized = false; reads = []; batches = []; };
 async function request(body, origin = 'https://store.example.invalid') {
   const req = new Request('https://store.example.invalid/api/store/admin-request-replies', { method: 'POST', headers: { origin, 'content-type': 'application/json' }, body: JSON.stringify(body) });

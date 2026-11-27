@@ -35,7 +35,7 @@ const deps={'@/lib/packs':require('../lib/packs.ts'),
 };
 const filename=path.join(root,'app/api/store/[action]/route.ts'),mod=new Module(filename,module);mod.filename=filename;mod.paths=Module._nodeModulePaths(path.dirname(filename));const localRequire=Module.createRequire(filename);
 mod.require=name=>Object.hasOwn(deps,name)?deps[name]:name.startsWith('@/')||name==='next/headers'?new Proxy({},{get:(_,key)=>key==='__esModule'?true:()=>{throw Error('Unexpected dependency '+name+':'+String(key));}}):localRequire(name);
-mod._compile(ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,esModuleInterop:true}}).outputText,filename);
+require('./store-api-fixture.cjs').link(mod);mod._compile(ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,esModuleInterop:true}}).outputText,filename);
 async function post(payload,origin='https://store.example.invalid'){
  payload={expectedVersion:await require('../lib/coa-delivery.ts').coaHash(sql.prepare('SELECT data FROM product_overrides WHERE id=?').get(payload.id)?.data||''),...payload};
  authorized=false;const req=new Request('https://store.example.invalid/api/store/admin-product',{method:'POST',headers:{origin,'content-type':'application/json'},body:JSON.stringify(payload)});req.nextUrl=new URL(req.url);const response=await mod.exports.POST(req,{params:Promise.resolve({action:'admin-product'})});assert.equal(response.headers.get('cache-control'),'no-store');return {status:response.status,...await response.json()};

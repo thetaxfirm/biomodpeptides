@@ -41,7 +41,7 @@ assert.equal(event.action, 'staff.insert'); assert.equal(event.entity_id, 'bryan
 for (const role of ['owner', 'admin', 'Catalog']) assert.throws(() => db.prepare("INSERT INTO staff VALUES('x-" + role + "@example.invalid','',?,1,1,1,'x')").run(role), /CHECK constraint/, role + ' refused');
 
 // Route and UI wiring.
-const route = fs.readFileSync(path.join(root, 'app/api/store/[action]/route.ts'), 'utf8');
+const route = require('./store-api-fixture.cjs').source();
 assert.match(route, /'admin-product': 'catalog:write'/);
 assert.match(route, /requireStaffAny\(\['orders:read', 'catalog:write'\]\)/, 'Dashboard loads for Catalog staff');
 assert.match(route, /orders: allowed\('orders:read'\) \?/, 'Orders are sent only to roles that read orders');

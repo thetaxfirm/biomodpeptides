@@ -107,7 +107,7 @@ const NOW = 2000000000000;
   assert.equal(await g.enrollGuest(db, 'guest:' + S2, { email: 'grace@example.com' }, 'https://trybiomod.com', async () => { throw new Error('provider down'); }, NOW, 'pw'), false, 'a provider failure is swallowed');
 
   // Wiring: the routes guests may use, and the ones they may not.
-  const route = fs.readFileSync(path.join(__dirname, '../app/api/store/[action]/route.ts'), 'utf8');
+  const route = require('./store-api-fixture.cjs').source();
   const block = name => { const start = route.indexOf("if (action === '" + name + "')"); assert(start > 0, name); return route.slice(start, route.indexOf("if (action === '", start + 20)); };
   for (const name of ['delivery', 'checkout', 'resume', 'reconcile']) assert(block(name).includes('requireShopper(s.id)'), name + ' accepts a guest');
   for (const name of ['notify', 'profile', 'address', 'cart-choice']) assert(block(name).includes('requireCustomer()') && !block(name).includes('requireShopper'), name + ' stays members-only');

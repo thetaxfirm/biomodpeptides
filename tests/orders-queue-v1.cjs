@@ -209,14 +209,14 @@ assert.equal(q.customerOrderStatus(rows.find(o => o.id.startsWith('refund1'))).l
 assert.equal(q.customerOrderStatus(rows.find(o => o.id.startsWith('unpaid1'))).label, 'Awaiting payment');
 
 // Wiring: the route checks order access, and the admin tab uses the queue.
-const route = fs.readFileSync(path.join(root, 'app/api/store/[action]/route.ts'), 'utf8');
+const route = require('./store-api-fixture.cjs').source();
 // The queue is a POST: the search term is a customer's email, phone or street address, and a query
 // string is written to every proxy log and browser history in front of this app. The GET name is kept
 // only to answer old bookmarks with a 405, and must not read a single order row.
-const getBlock = route.slice(route.indexOf("action === 'admin-orders'"), route.indexOf("action === 'admin'"));
+const getBlock = require('./store-api-fixture.cjs').branch('admin-orders','admin-read');
 assert.match(getBlock, /405/);
 assert(!/FROM orders/.test(getBlock), 'the retired GET never reads orders');
-const postBlock = route.slice(route.indexOf("action === 'admin-orders'", route.indexOf("action.startsWith('admin-')")), route.indexOf("action === 'admin-staff'"));
+const postBlock = require('./store-api-fixture.cjs').branch('admin-orders','admin-orders');
 assert.match(route, /'admin-orders': 'orders:read'/, 'the queue is gated on orders:read');
 assert.match(route, /requireStaff\(adminActionPermission\[action\]/, 'every admin POST is gated before it runs');
 assert.match(postBlock, /adminOrderView/);
@@ -238,7 +238,7 @@ assert.equal(q.queryOrders(filed, { tab: 'archived' }).orders.find(o => o.id.sta
 assert.equal(q.queryOrders(filed, { id: filed.find(o => o.id.startsWith('refund1')).id }).orders.length, 1, 'lookup still finds an archived order');
 assert.equal(q.closedReason({ status: 'cancelled', data: { releasedReason: 'unpaid_checkout_expired' } }), 'Never paid · checkout expired');
 assert.equal(q.closedReason({ status: 'refunded', data: {} }), 'Refunded');
-const archiveBlock = route.slice(route.indexOf("action === 'admin-order-archive'"), route.indexOf("action === 'admin-staff'"));
+const archiveBlock = require('./store-api-fixture.cjs').branch('admin-order-archive','admin-orders');
 assert.match(route, /'admin-order-archive': 'orders:fulfill'/, 'archiving needs fulfillment rights');
 assert.match(archiveBlock, /canArchive\(orderBucket/, 'the server refuses to archive open work');
 assert.match(archiveBlock, /json_set\(data,'\$\.archivedAt'/); assert.match(archiveBlock, /json_remove\(data,'\$\.archivedAt','\$\.archivedBy'\)/);

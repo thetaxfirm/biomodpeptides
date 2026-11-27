@@ -54,7 +54,7 @@ console.log('PASS: immutable preorder snapshot, mixed-order shipment notice, quo
  assert.equal(mixesPreorder([{id:1},{id:3}],ps),false,'All-preorder cart is fine');assert.equal(mixesPreorder([{id:2}],ps),false,'All in-stock cart is fine');
  assert.equal(mixesPreorder([{id:1},{id:2}],ps),true,'Mixed cart is refused');assert.equal(mixesPreorder([{id:2},{id:99}],ps),false,'Unknown products do not count');
  assert.match(preorderSeparateMessage,/check out separately/);
- const route=fs.readFileSync(path.join(__dirname,'../app/api/store/[action]/route.ts'),'utf8');assert(/action === 'checkout'[\s\S]{0,600}mixesPreorder\(checkoutLines, await catalog\(\)\)[\s\S]{0,120}preorderSeparateMessage[\s\S]{0,80}409/.test(route),'Checkout refuses a mixed cart on the server');
+ const route=require('./store-api-fixture.cjs').source();assert(/action === 'checkout'[\s\S]{0,600}mixesPreorder\(checkoutLines, await catalog\(\)\)[\s\S]{0,120}preorderSeparateMessage[\s\S]{0,80}409/.test(route),'Checkout refuses a mixed cart on the server');
  const provider=fs.readFileSync(path.join(__dirname,'../components/store/provider.tsx'),'utf8');assert((provider.match(/assertNotMixing\(/g)||[]).length>=5,'Every add path refuses mixing');
  const copy=['components/store/content.tsx','lib/research-faq.ts','components/store/preorder-notice.tsx','lib/preorders.ts','lib/fulfillment.ts'].map(f=>fs.readFileSync(path.join(__dirname,'..',f),'utf8')).join('\n');assert(!/ship together/i.test(copy),'No page still promises mixed orders ship together');
  console.log('PASS: preorders check out separately: mixed carts refused at add and at checkout; copy is consistent.');}

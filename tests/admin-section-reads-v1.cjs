@@ -2,7 +2,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),Module=require('node:module'),ts=require('typescript');
 const root=path.resolve(__dirname,'..');let role='owner',calls=[];
 const fail=name=>()=>{throw Error('Unexpected dependency '+name);};
-const load=(file,deps={})=>{const filename=path.join(root,file),m=new Module(filename,module);m.filename=filename;m.paths=Module._nodeModulePaths(root);m.require=name=>deps[name]||new Proxy({}, {get:(_,key)=>key==='__esModule'?true:/Error|Conflict$/.test(String(key))?class extends Error{}:fail(name+':'+String(key))});m._compile(ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,filename);return m.exports;};
+const load=(file,deps={})=>{const filename=path.join(root,file),m=new Module(filename,module);m.filename=filename;m.paths=Module._nodeModulePaths(root);m.require=name=>deps[name]||new Proxy({}, {get:(_,key)=>key==='__esModule'?true:/Error|Conflict$/.test(String(key))?class extends Error{}:fail(name+':'+String(key))});require('./store-api-fixture.cjs').link(m);m._compile(ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,filename);return m.exports;};
 const staff=load('lib/staff.ts');
 class Reply extends Response {static json(data,init={}){return new Reply(JSON.stringify(data),{...init,headers:{'content-type':'application/json',...init.headers}});}}
 const service=(name,result)=>async()=>{calls.push(name);return result;};

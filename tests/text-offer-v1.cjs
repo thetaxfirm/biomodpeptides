@@ -78,7 +78,7 @@ const count = () => sql.prepare("SELECT COUNT(*) n FROM requests WHERE kind='tex
   assert.equal(count(), 3);
 
   // Wiring: strict limit on the route, the cart form, and the staff list with its CSV.
-  const route = read('app/api/store/[action]/route.ts');
+  const route = require('./store-api-fixture.cjs').source();
   assert.ok(route.includes("await rateLimit('text-offer-strict:' + (req.headers.get('cf-connecting-ip') || s.id), 5);"));
   assert.match(read('components/store/account.tsx'), /\{!q\?\.promo && <TextOffer disabled=\{locked\}\/>\}/);
   const form = read('components/store/text-offer.tsx');

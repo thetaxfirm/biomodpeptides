@@ -168,7 +168,7 @@ mod.require = name => {
   if (name.startsWith('@/')) return new Proxy({}, { get: (_, key) => key === '__esModule' ? true : forbidden(name + ':' + String(key)) });
   return localRequire(name);
 };
-mod._compile(ts.transpileModule(fs.readFileSync(filename, 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText, filename);
+require('./store-api-fixture.cjs').link(mod);mod._compile(ts.transpileModule(fs.readFileSync(filename, 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText, filename);
 const { GET, POST } = mod.exports;
 function reset(options = {}) { assert.equal(afterJobs.length, 0, 'Drain or explicitly inspect scheduled work before resetting'); scenario = { role: 'admin', ...options }; calls = []; saved = new Map(); backgroundErrors = []; draining = false; responseReturned = false; }
 async function request(action, data, headers = {}) {

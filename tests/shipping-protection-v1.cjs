@@ -97,8 +97,8 @@ assert.equal(f.unshippedTooLong({status:'shipped',data:{paidAt:now-90*H},created
 assert.equal(f.unshippedTooLong({status:'awaiting_payment',data:{},created:now-90*H},now),false,'an unpaid order is not this alert');
 
 // --- Route wiring: handoff never changes status or emails; tracked parcels are never delivered by hand. ---
-const route=fs.readFileSync(path.join(root,'app/api/store/[action]/route.ts'),'utf8');
-const handoff=route.slice(route.indexOf("action === 'admin-order-handoff'"),route.indexOf("action === 'admin-staff'"));
+const route=require('./store-api-fixture.cjs').source();
+const handoff=require('./store-api-fixture.cjs').branch('admin-order-handoff','admin-orders');
 assert.match(route,/'admin-order-handoff': 'orders:fulfill'/);
 assert.match(handoff,/json_set\(data,'\$\.handoff',json\(\?\)\)/);
 assert(!/SET status|status=\?|sendTrackingEmail|resend/i.test(handoff),'handoff changes no status and sends nothing');

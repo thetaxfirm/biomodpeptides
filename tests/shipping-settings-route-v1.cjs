@@ -66,7 +66,7 @@ const dependencies = {
 const helperFile=path.join(root,'lib/settings-version.ts'), helper=new Module(helperFile,module);helper.require=id=>{assert.equal(id,'./change-history');return dependencies['@/lib/change-history'];};helper._compile(ts.transpileModule(fs.readFileSync(helperFile,'utf8'),{compilerOptions:{target:9,module:1}}).outputText,helperFile);dependencies['@/lib/settings-version']=helper.exports;
 const mod = new Module(filename, module); mod.filename = filename; mod.paths = Module._nodeModulePaths(path.dirname(filename));
 mod.require = name => Object.hasOwn(dependencies, name) ? dependencies[name] : name.startsWith('@/') ? new Proxy({}, { get: (_, key) => key === '__esModule' ? true : forbidden(name + ':' + String(key)) }) : localRequire(name);
-mod._compile(ts.transpileModule(fs.readFileSync(filename, 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText, filename);
+require('./store-api-fixture.cjs').link(mod);mod._compile(ts.transpileModule(fs.readFileSync(filename, 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText, filename);
 const { POST } = mod.exports;
 const priorFetch = global.fetch; global.fetch = forbidden('network');
 function reset(nextRole = 'owner', authenticated = true) {

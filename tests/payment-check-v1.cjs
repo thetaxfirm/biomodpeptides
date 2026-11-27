@@ -53,7 +53,7 @@ assert.equal(p.paymentAttempt({ ...held, transactionStatus: 'settledSuccessfully
 const read = f => fs.readFileSync(path.join(root, f), 'utf8');
 assert.match(read('lib/checkout.ts'), /json_set\(data,'\$\.paymentCheck',json\(\?\)\)/);
 assert.match(read('app/api/payments/authorizenet/route.ts'), /paymentCheck\(\[details\]\)/);
-const route = read('app/api/store/[action]/route.ts');
+const route = require('./store-api-fixture.cjs').source();
 assert.match(route, /action === 'admin-payment-hold'/);
 assert.ok(!/'admin-payment-hold':/.test(route), 'not in adminActionPermission, so only an owner may approve or decline');
 const anet = read('lib/authorizenet-payments.ts');

@@ -220,11 +220,11 @@ assert.equal(KEY,'promo_codes_v1');
 
   // Resolve the actual store route helper with the real stored-promo reader. In particular, do not
   // stub storedPromotions to throw: its default failure fallback is what used to hide the outage.
-  const storeFile=fs.readFileSync(path.join(root,'app/api/store/[action]/route.ts'),'utf8');
+  const storeFile=require('./store-api-fixture.cjs').source();
   const storeAst=ts.createSourceFile('store-route.ts',storeFile,ts.ScriptTarget.Latest,true);
   const savedHelper=storeAst.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='currentPromoCode');
   assert.ok(savedHelper,'the saved cookie is resolved by the store route');
-  const savedHelperJs=ts.transpileModule(savedHelper.getText(storeAst),{compilerOptions:{module:1,target:9}}).outputText;
+  const savedHelperJs=ts.transpileModule(savedHelper.getText(storeAst).replace(/^export\s+/, ''),{compilerOptions:{module:1,target:9}}).outputText;
   async function savedCode(db,value){
     let deleted=false;
     const jar={get:()=>value?{value}:undefined,delete:()=>{deleted=true;}};
@@ -245,9 +245,9 @@ assert.equal(KEY,'promo_codes_v1');
 
   // --- Wiring: every place a code is resolved reads the stored ones too. ---
   const reads=[['lib/commerce.ts',/applyPromotion\(priced, promoCode, await storedPromotions\(database\(\)\)\)/,'checkout totals'],
-    ['app/api/store/[action]/route.ts',/promotion\(b\.code, await storedPromotions\(database\(\)\)\)/,'applying a code at checkout'],
-    ['app/api/store/[action]/route.ts',/stored = await storedPromotions\(database\(\), \{ throwOnReadError: true \}\)/,'the saved code on a later page load'],
-    ['app/api/store/[action]/route.ts',/if \(stored !== null\) jar\.delete\(PROMO_COOKIE\)/,'a failed read of the stored list must not cost a customer their saved code'],
+    ['lib/store-api/cart-write.ts',/promotion\(b\.code, await storedPromotions\(database\(\)\)\)/,'applying a code at checkout'],
+    ['lib/store-api/shopper.ts',/stored = await storedPromotions\(database\(\), \{ throwOnReadError: true \}\)/,'the saved code on a later page load'],
+    ['lib/store-api/shopper.ts',/if \(stored !== null\) jar\.delete\(PROMO_COOKIE\)/,'a failed read of the stored list must not cost a customer their saved code'],
     ['app/r/[code]/route.ts',/promotion\(code, await storedPromotions\(database\(\)\)\)/,'affiliate referral links'],
     ['lib/promo-analytics.ts',/activePromotions\(deps\.storedPromos \? await deps\.storedPromos\(\) : \[\]\)/,'the promo report'],
     ['lib/affiliate-program.ts',/activePromotions\(await storedPromotions\(db\)\)/,'assigning a code to a partner']];

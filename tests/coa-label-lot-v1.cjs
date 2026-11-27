@@ -57,7 +57,7 @@ assert(desk.indexOf('const wrongLot=') < desk.indexOf('readCoaOriginal(env.DB,re
 const link = read('lib/coa-link.ts');
 assert.match(link, /if \(!lot\) throw new CoaLinkError\('Enter the lot number printed on your vial/);
 assert.match(link, /if \(!report\) return queueLotReview\(/);
-const route = read('app/api/store/[action]/route.ts');
+const route = require('./store-api-fixture.cjs').source();
 assert.match(route, /const labelLot = normalizeLot\(b\.labelLot\);/);
 const form = read('components/store/batch-record.tsx');
 assert.match(form, /Lot on your vial<input id=\{'coa-lot-'/);

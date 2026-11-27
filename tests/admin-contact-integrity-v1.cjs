@@ -20,7 +20,7 @@ function wrap(sql) { const stmt=(query,args=[])=>({query,args,bind:(...a)=>stmt(
  assert.equal((await crm.prepare('SELECT paid_cents FROM crm_store_activity').first()).paid_cents,500100,'incomplete source never overwrites last complete totals');
  const health=await shared.crmSyncHealth(db,true,14_000_001);assert.equal(health.status,'failed');assert.equal(health.lastSuccessAt,10_000_000);
  const capture=fs.readFileSync(path.join(root,'lib/crm-capture.ts'),'utf8');assert.doesNotMatch(capture,/await publishContacts/,'Contacts GET does not publish snapshots');
- const route=fs.readFileSync(path.join(root,'app/api/store/[action]/route.ts'),'utf8');assert.match(route,/checkoutRecovery: allowed\('orders:read'\) \? await recoveryAdminStatus\(runtime\(\)\) : null/);
+ const route=require('./store-api-fixture.cjs').source();assert.match(route,/checkoutRecovery: allowed\('orders:read'\) \? await recoveryAdminStatus\(runtime\(\)\) : null/);
  assert.match(fs.readFileSync(path.join(root,'db/schema.ts'),'utf8'),/staff_role.*'catalog'/,'declared schema includes Catalog');
  console.log('PASS: complete full-history contact snapshots, failed reads preserve shared totals, visible failed sync health, read-only Contacts and Catalog response gate.');
 })().catch(e=>{console.error(e);process.exitCode=1});

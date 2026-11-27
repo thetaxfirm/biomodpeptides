@@ -143,11 +143,12 @@ async function incomplete(fixture) {
     '@/lib/authorizenet-payments': { ...anet, createAnetAdapter: config => anet.createAnetAdapter(config, activeFixture.request) },
   };
   Module._load = function(name, parent, isMain) {
-    if (parent?.filename === path.join(root, 'app/api/store/[action]/route.ts')) {
+    if ((parent?.filename === path.join(root, 'app/api/store/[action]/route.ts') || parent?.filename.startsWith(path.join(root, 'lib/store-api') + path.sep))) {
       if (name === 'next/server') return { NextResponse: TestResponse };
       if (name === 'next/headers') return { cookies: forbidden('cookies') };
       if (Object.hasOwn(dependencies, name)) return dependencies[name];
-      if (name.startsWith('@/')) return new Proxy({}, { get: (_, key) => key === '__esModule' ? true : forbidden(name + ':' + String(key)) });
+      if (name.startsWith('@/lib/store-api/')) return originalLoad.call(this, path.join(root, name.slice(2)), parent, isMain);
+    if (name.startsWith('@/')) return new Proxy({}, { get: (_, key) => key === '__esModule' ? true : forbidden(name + ':' + String(key)) });
     }
     return originalLoad.call(this, name, parent, isMain);
   };

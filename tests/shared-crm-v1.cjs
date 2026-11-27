@@ -62,7 +62,7 @@ const contact = (email, extra = {}) => ({ email, name: '', phones: [], sources: 
   // Wiring: capture, admin list and the one store-specific line.
   const read = f => fs.readFileSync(path.join(root, f), 'utf8');
   assert.match(read('lib/crm-capture.ts'), /export const CRM_SITE: CrmSite = '(biomodpro|trybiomod)';/);
-  assert.match(read('app/api/store/[action]/route.ts'), /await recordContact\(runtime\(\)\.DB, input\); \} catch \{ \/\* ignore \*\/ \} await shareContact\(input\);/);
+  assert.match(require('./store-api-fixture.cjs').source(), /await recordContact\(runtime\(\)\.DB, input\); \} catch \{ \/\* ignore \*\/ \} await shareContact\(input\);/);
   assert.match(read('app/api/admin/contacts/route.ts'), /contactsForAdmin\(await contactList\(database\(\)\)\)/);
   assert.match(read('vite.config.ts'), /binding: "CRM", database_name: "biomod-crm", database_id: SHARED_CRM_DATABASE_ID/);
   console.log('PASS: shared CRM publish, skip-unchanged, cross-store merge, single capture, store guard and wiring');

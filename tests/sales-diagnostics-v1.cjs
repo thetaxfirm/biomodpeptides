@@ -139,6 +139,7 @@ const allow = async () => {};
     if(name==='@/lib/sales-diagnostics') return require('../lib/sales-diagnostics.ts');
     if(name==='@/lib/runtime'||(name==='./runtime'&&parent?.filename.endsWith('/lib/auth.ts'))) return runtimeMock;
     if(name==='@/lib/auth') return require('../lib/auth.ts');
+    if(name.startsWith('@/lib/store-api/')) return originalLoad.call(this,require('node:path').resolve(__dirname,'..',name.slice(2)),parent,isMain);
     if(name.startsWith('@/lib/')) return {};
     return originalLoad.call(this,name,parent,isMain);
   };

@@ -138,7 +138,7 @@ const id = n => '00000000-0000-4000-8000-' + String(n).padStart(12, '0');
   assert.throws(() => sqlite.prepare("INSERT INTO site_update_access VALUES('Mixed@Example.invalid',1,1,'x')").run(), /CHECK constraint/);
 
   // Routes: owner-or-granted only, same-origin writes, no permission detail leaked, files download-only.
-  const route = read('app/api/site-updates/route.ts'), fileRoute = read('app/api/site-updates/file/route.ts'), auth = read('lib/site-updates-auth.ts'), store = read('app/api/store/[action]/route.ts');
+  const route = read('app/api/site-updates/route.ts'), fileRoute = read('app/api/site-updates/file/route.ts'), auth = read('lib/site-updates-auth.ts'), store = require('./store-api-fixture.cjs').source();
   for (const source of [route, fileRoute]) {
     assert.match(source, /requireSiteRequester\(\)/); assert.match(source, /req\.headers\.get\('origin'\) !== req\.nextUrl\.origin/);
     assert.match(source, /Administrator sign-in required\./); assert.doesNotMatch(source, /requireStaff\(/);

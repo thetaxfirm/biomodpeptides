@@ -26,7 +26,7 @@ function load(file) {
     if (name === 'next/headers' || name.startsWith('@/')) return new Proxy({}, {get:(_,key)=>key === '__esModule' ? true : forbidden(name + ':' + String(key))});
     return localRequire(name);
   };
-  mod._compile(ts.transpileModule(fs.readFileSync(filename, 'utf8'), {compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,esModuleInterop:true}}).outputText, filename);
+  require('./store-api-fixture.cjs').link(mod);mod._compile(ts.transpileModule(fs.readFileSync(filename, 'utf8'), {compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,esModuleInterop:true}}).outputText, filename);
   return mod.exports;
 }
 const staff = load('lib/staff.ts');

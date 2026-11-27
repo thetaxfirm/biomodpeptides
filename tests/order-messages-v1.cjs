@@ -47,7 +47,7 @@ const {orderMessageLogs,orderMessageLabel}=require('../lib/order-messages.ts');
  assert.deepEqual((await orderMessageLogs(broken,[c]))[c.id],{count:0,last:null,items:[]});
 
  // Wiring: the orders route attaches the log; the table and detail view render it; automatic labels record their tracking email.
- const route=fs.readFileSync(path.join(root,'app/api/store/[action]/route.ts'),'utf8');
+ const route=require('./store-api-fixture.cjs').source();
  assert.match(route,/orderMessageLogs\(runtime\(\)/);
  const ui=fs.readFileSync(path.join(root,'components/store/orders-admin.tsx'),'utf8');
  assert.match(ui,/<th>Last contact recorded<\/th>/);assert.match(ui,/Contact history recorded/);assert.match(ui,/not confirmed inbox delivery/);assert.match(ui,/No contact recorded/);
