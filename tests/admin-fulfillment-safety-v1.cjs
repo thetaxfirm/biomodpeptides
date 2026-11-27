@@ -9,7 +9,7 @@ function loader(stubs={}) {const cache=new Map(); return function load(file){
  m.require=id=>{if(stubs[id])return stubs[id];if(id.startsWith('@/'))return load(id.slice(2)+(id.endsWith('.json')?'':'.ts'));if(id.startsWith('./')||id.startsWith('../')){const n=path.resolve(path.dirname(name),id);if(n.endsWith('.json'))return JSON.parse(fs.readFileSync(n));return load(n+'.ts');}return require(id);};
  m._compile(ts.transpileModule(fs.readFileSync(name,'utf8'),{compilerOptions:{module:1,target:9,jsx:4,esModuleInterop:true}}).outputText,name);return m.exports;
 };}
-const raw=new DatabaseSync(':memory:');raw.exec('CREATE TABLE orders(id TEXT PRIMARY KEY,owner TEXT,status TEXT,total INTEGER,data TEXT,created INTEGER,updated INTEGER,checkout_ref TEXT);CREATE TABLE settings(key TEXT PRIMARY KEY,value TEXT)');
+const raw=new DatabaseSync(':memory:');raw.exec('CREATE TABLE orders(id TEXT PRIMARY KEY,owner TEXT,status TEXT,total INTEGER,data TEXT,created INTEGER,updated INTEGER,checkout_ref TEXT,payment_ref TEXT);CREATE TABLE settings(key TEXT PRIMARY KEY,value TEXT)');
 let beforeWrite=null;
 const db={prepare(sql){const make=(values=[])=>({bind:(...v)=>make(v),first:async()=>raw.prepare(sql).get(...values)||null,all:async()=>({results:raw.prepare(sql).all(...values)}),run:async()=>{if(beforeWrite){const fn=beforeWrite;beforeWrite=null;fn();}const r=raw.prepare(sql).run(...values);return {meta:{changes:Number(r.changes)}};}});return make();}};
 const NOW=Date.parse('2026-11-27T20:00:00Z'),OLD=NOW-3600000;
@@ -74,7 +74,7 @@ const policy=load('lib/fulfillment-eligibility.ts'), f=load('lib/fulfillment.ts'
  page=await queries.queryOrderPage(db,{id:'old-unresolved'},NOW);assert.equal(page.orders[0].id,'old-unresolved');assert.equal(page.orders[0].version.length,64);
  assert.deepEqual((await queries.printableOrders(db,'labels')).orders.map(o=>o.id),['new-packable']);assert.equal((await queries.printableOrders(db,'pick')).total,2);
  // Dashboard counts and sales use complete DB aggregates, with explicit UTC day boundaries.
- raw.exec('ALTER TABLE orders ADD COLUMN payment_ref TEXT; ALTER TABLE orders ADD COLUMN notification_id TEXT');
+ raw.exec(' ALTER TABLE orders ADD COLUMN notification_id TEXT');
  const DAY=86400000,midnight=Math.floor(NOW/DAY)*DAY;
  add('ancient-work','paid',{},NOW-45*DAY);
  const moving={shipment:{status:'in_transit',checkedAt:NOW}};

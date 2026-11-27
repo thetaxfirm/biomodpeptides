@@ -69,8 +69,8 @@ const NOW=Date.parse('2026-10-27T18:00:00Z');
 const H=3600000;
 function fixture(rows){
   const db=new DatabaseSync(':memory:');
-  db.exec('CREATE TABLE orders(id TEXT PRIMARY KEY,total INTEGER,status TEXT,data TEXT,created INTEGER,checkout_ref TEXT);CREATE TABLE settings(key TEXT PRIMARY KEY,value TEXT)');
-  for(const r of rows) db.prepare('INSERT INTO orders VALUES(?,?,?,?,?,?)').run(r.id,r.total,r.status,JSON.stringify(r.data),r.created??NOW-2*86400000,r.ref??'600');
+  db.exec('CREATE TABLE orders(id TEXT PRIMARY KEY,total INTEGER,status TEXT,data TEXT,created INTEGER,checkout_ref TEXT,payment_ref TEXT);CREATE TABLE settings(key TEXT PRIMARY KEY,value TEXT)');
+  for(const r of rows) db.prepare('INSERT INTO orders VALUES(?,?,?,?,?,?,?)').run(r.id,r.total,r.status,JSON.stringify(r.data),r.created??NOW-2*86400000,r.ref??'600',r.paymentRef??null);
   return {raw:db,prepare(sql){let args=[];const api={bind(...a){args=a;return api;},
     async all(){return{results:db.prepare(sql).all(...args)};},
     async first(){return db.prepare(sql).get(...args)||null;},
@@ -82,8 +82,8 @@ const base={address:{name:'Fixture'},environment:LIVE};
 // The adapter and the chat are the only things stubbed. Everything else is the real module.
 function run(db,{answer,posts=[],now=NOW}={}){
   overrides={
-    '@/lib/payments':{paymentEnvironment:()=>LIVE,createPaymentAdapter:()=>({verifyPayment:async(order,ref,hints,created)=>answer(order,ref,created)})},
-    './payments':{paymentEnvironment:()=>LIVE,createPaymentAdapter:()=>({verifyPayment:async(order,ref,hints,created)=>answer(order,ref,created)})},
+    '@/lib/payments':{paymentEnvironment:()=>LIVE,createPaymentAdapter:()=>({verifyPayment:async(order,ref,hints,created)=>answer(order,ref,created,hints)})},
+    './payments':{paymentEnvironment:()=>LIVE,createPaymentAdapter:()=>({verifyPayment:async(order,ref,hints,created)=>answer(order,ref,created,hints)})},
   };
   let mod; try{ mod=load('lib/payment-verify.ts'); } finally { overrides={}; }
   return mod.runPaymentVerification({DB:db,...telegram},now,{fetch:async(url,init)=>{posts.push({url,body:JSON.parse(init.body)});return new Response('{"ok":true}',{status:200});}});
@@ -111,6 +111,28 @@ const telegram={};
   assert.equal(saved(db,'aaaaaaaa-1').state,'settled');
   health=await run(db,{answer:()=>{throw Error('must not be asked');},now:NOW+100*H});
   assert.equal(health.due,0,'settled money is never questioned again');
+
+  // A known capture older than the provider's recent invoice scan must still be looked up directly.
+  const older=fixture([{id:ORDER.id,total:29254,status:'paid',data:{...base},ref:REF,paymentRef:'600',created:NOW-40*86400000}]);
+  health=await run(older,{answer:(order,ref,created,hints)=>{
+    assert.equal(ref,REF);assert.equal(created,NOW-40*86400000);assert.deepEqual(hints,['600']);
+    const transactions=hints.includes('600')?[tx({transactionStatus:'settledSuccessfully'})]:[];
+    return {...anet.reconcileAnetTransactions(order,transactions,ref),transactions};
+  }});
+  assert.equal(health.settled,1,'the saved capture survives the 30-day invoice-list boundary');
+  assert.equal(saved(older,ORDER.id).state,'settled');
+  let manualCalls=0;
+  overrides={'./payments':{paymentEnvironment:()=>LIVE,createPaymentAdapter:()=>({verifyPayment:async(order,ref,hints,created)=>{
+    manualCalls++;assert.deepEqual(hints,['600']);assert.equal(created,NOW-40*86400000);
+    return {...anet.reconcileAnetTransactions(order,[tx({transactionStatus:'settledSuccessfully'})],ref),transactions:[tx({transactionStatus:'settledSuccessfully'})]};
+  }})}};
+  let manual;try{manual=load('lib/payment-verify.ts');}finally{overrides={};}
+  await manual.recheckPaidOrder({DB:older},ORDER.id,NOW);
+  assert.equal(manualCalls,1);assert.equal(saved(older,ORDER.id).state,'settled');
+  assert.equal(older.raw.prepare('SELECT status FROM orders WHERE id=?').get(ORDER.id).status,'paid');
+  const changed=fixture([{id:ORDER.id,total:29254,status:'paid',data:{...base},ref:REF,paymentRef:'600'}]);
+  await run(changed,{answer:()=>{changed.raw.prepare('UPDATE orders SET payment_ref=? WHERE id=?').run('601',ORDER.id);return paidResult('settledSuccessfully',292.54);}});
+  assert.equal(saved(changed,ORDER.id),undefined,'a changed capture reference wins over an in-flight check');
 
   // --- Every way a paid order can turn out not to be paid. ---
   const failures=[

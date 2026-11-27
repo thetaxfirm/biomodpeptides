@@ -41,7 +41,7 @@ const HEALTH_KEY = 'payment_verify_health_v1';
  * something other than settled. A settled payment is finished — the money is in the account and no
  * later question can change that, so it is never asked about again.
  */
-const DUE = `SELECT id,total,status,data,created,checkout_ref FROM orders
+const DUE = `SELECT id,total,status,data,created,checkout_ref,payment_ref FROM orders
     WHERE status IN ('paid','labeling','shipped','delivered')
       AND json_extract(data,'$.internalTest') IS NULL
       AND created > ?
@@ -52,9 +52,12 @@ const DUE = `SELECT id,total,status,data,created,checkout_ref FROM orders
  * Only this one field moves, and `updated` deliberately does not: that column is the grace period
  * automatic label purchase measures from, so a verification must never postpone a parcel.
  */
-const SAVE = `UPDATE orders SET data=json_set(data,'$.paymentVerified',json(?)) WHERE id=? AND status=? AND total=? AND data=?`;
+const SAVE = `UPDATE orders SET data=json_set(data,'$.paymentVerified',json(?)) WHERE id=? AND status=? AND total=? AND data=? AND payment_ref IS ?`;
 
-type DueRow = { id: string; total: number; status: string; data: string; created: number; checkout_ref: string | null };
+type DueRow = { id: string; total: number; status: string; data: string; created: number; checkout_ref: string | null; payment_ref: string | null };
+
+/** A saved capture ID remains queryable even when its invoice has left the recent batch list. */
+const paymentHints = (row: DueRow) => row.payment_ref && /^\d{1,20}$/.test(row.payment_ref) ? [row.payment_ref] : [];
 
 /** The provider's answer about an order already marked paid, reduced to a verdict. */
 export function verdictFor(result: { state: string; providerReference?: string | null; noPaymentFound?: boolean; underReview?: boolean; message?: string; transactions?: unknown[] }): Omit<PaymentVerification, 'at'> {
@@ -123,7 +126,7 @@ export async function runPaymentVerification(env: PaymentVerifyEnvironment, now 
         if (data.environment !== environment) { health.foreign += 1; continue; }
 
         let result;
-        try { result = await adapter.verifyPayment({ id: row.id, totalCents: row.total, currency: 'USD' }, row.checkout_ref, [], row.created); }
+        try { result = await adapter.verifyPayment({ id: row.id, totalCents: row.total, currency: 'USD' }, row.checkout_ref, paymentHints(row), row.created); }
         catch {
             // The provider being unreachable says nothing about the money. Record no verdict at all:
             // a wrong red flag on a good payment is worse than asking again in a few hours.
@@ -139,7 +142,7 @@ export async function runPaymentVerification(env: PaymentVerifyEnvironment, now 
         // A newer manual check, changed total, hold or fulfilment write wins this race.
         // Alert only after saving the verdict we actually observed.
         try {
-            const saved = await env.DB.prepare(SAVE).bind(JSON.stringify(record), row.id, row.status, row.total, row.data).run();
+            const saved = await env.DB.prepare(SAVE).bind(JSON.stringify(record), row.id, row.status, row.total, row.data, row.payment_ref).run();
             if (!saved.meta.changes) continue;
         } catch { continue; }
         if (tell) {
@@ -158,19 +161,19 @@ export async function runPaymentVerification(env: PaymentVerifyEnvironment, now 
 
 /** Staff-requested provider read. No capture, refund, inventory change or outbound message. */
 export async function recheckPaidOrder(env: PaymentVerifyEnvironment, id: string, now = Date.now()) {
-    const row = await env.DB.prepare('SELECT id,total,status,data,created,checkout_ref FROM orders WHERE id=?').bind(id).first<DueRow>();
+    const row = await env.DB.prepare('SELECT id,total,status,data,created,checkout_ref,payment_ref FROM orders WHERE id=?').bind(id).first<DueRow>();
     if (!row || !['paid', 'labeling', 'shipped', 'delivered'].includes(row.status)) throw new Error('Choose an order with a recorded payment.');
     const data = JSON.parse(row.data);
     if (data.internalTest) throw new Error('Internal tests are not live payment checks.');
     if (data.environment !== paymentEnvironment(env)) throw new Error('This order belongs to a different payment environment. Check its original provider account.');
     if (row.created < now - HORIZON_MS) throw new Error('This payment is outside the online verification window. Review the original provider record; its saved payment status has not changed.');
     // A provider outage throws before any evidence is changed.
-    const result = await createPaymentAdapter(env).verifyPayment({ id, totalCents: row.total, currency: 'USD' }, row.checkout_ref, [], row.created);
+    const result = await createPaymentAdapter(env).verifyPayment({ id, totalCents: row.total, currency: 'USD' }, row.checkout_ref, paymentHints(row), row.created);
     const previous = savedPaymentVerification(data.paymentVerified);
     const verified = { at: now, ...verdictFor(result), ...(Number.isFinite(previous?.alertedAt) ? { alertedAt: previous!.alertedAt } : {}) };
     const { paymentCheck } = await import('./payment-check');
-    const saved = await env.DB.prepare(`UPDATE orders SET data=json_set(data,'$.paymentVerified',json(?),'$.paymentCheck',json(?)) WHERE id=? AND status=? AND total=? AND data=?`)
-        .bind(JSON.stringify(verified), JSON.stringify(result.transactions ? paymentCheck(result.transactions, now) : data.paymentCheck || null), id, row.status, row.total, row.data).run();
+    const saved = await env.DB.prepare(`UPDATE orders SET data=json_set(data,'$.paymentVerified',json(?),'$.paymentCheck',json(?)) WHERE id=? AND status=? AND total=? AND data=? AND payment_ref IS ?`)
+        .bind(JSON.stringify(verified), JSON.stringify(result.transactions ? paymentCheck(result.transactions, now) : data.paymentCheck || null), id, row.status, row.total, row.data, row.payment_ref).run();
     if (!saved.meta.changes) throw new Error('This order changed during the provider check. Refresh and recheck; no payment was collected.');
     return { status: row.status, verification: verified, message: verified.state === 'failed' ? 'The provider still cannot confirm this payment. Fulfillment remains blocked.' : 'Payment ' + verified.state + ' confirmed by the provider. No money was collected by this check.' };
 }
