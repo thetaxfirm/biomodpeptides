@@ -201,3 +201,12 @@ export const legacyRoutes: Record<string, string> = {
   'es/tag/supplier-verification': '/choosing-a-research-supplier',
   'es/tag/mitochondrial-targeted-peptide': '/compounds',
 };
+
+// Addresses the catch-all page answers with a permanent redirect: the table above, and the two
+// renamed pages it redirects itself (/about-biomod to /about, /coa to /testing).
+// A redirect must not carry a noindex header. Google files such an address under "Excluded by
+// noindex" instead of following it, so nothing the old address earned reaches the new page.
+export const movedPermanently = (pathname: string) => {
+  const route = pathname.replace(/^\/+|\/+$/g, '');
+  return Object.hasOwn(legacyRoutes, route) || route === 'about-biomod' || route === 'coa';
+};

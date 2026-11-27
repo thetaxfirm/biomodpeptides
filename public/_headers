@@ -11,3 +11,28 @@
   X-Robots-Tag: noindex, nofollow
 /certificates/TB-500_10-mg.pdf
   X-Robots-Tag: noindex, nofollow
+# Each report an indexable product links names this site's copy as the canonical one. The same
+# file is still reachable on the retired host, and without this Google reports the copy here as
+# a duplicate with no chosen canonical.
+/certificates/AOD-9604_10-mg.pdf
+  Link: <https://trybiomod.com/certificates/AOD-9604_10-mg.pdf>; rel="canonical"
+/certificates/BPC-157_10-mg.pdf
+  Link: <https://trybiomod.com/certificates/BPC-157_10-mg.pdf>; rel="canonical"
+/certificates/CJC-1295-no-DAC_10-mg.pdf
+  Link: <https://trybiomod.com/certificates/CJC-1295-no-DAC_10-mg.pdf>; rel="canonical"
+/certificates/DSIP_10-mg.pdf
+  Link: <https://trybiomod.com/certificates/DSIP_10-mg.pdf>; rel="canonical"
+/certificates/GHK-Cu_50-mg.pdf
+  Link: <https://trybiomod.com/certificates/GHK-Cu_50-mg.pdf>; rel="canonical"
+/certificates/GLUTATHIONE.pdf
+  Link: <https://trybiomod.com/certificates/GLUTATHIONE.pdf>; rel="canonical"
+/certificates/Kisspeptin_10-mg.pdf
+  Link: <https://trybiomod.com/certificates/Kisspeptin_10-mg.pdf>; rel="canonical"
+/certificates/MOTS-C_10-mg.pdf
+  Link: <https://trybiomod.com/certificates/MOTS-C_10-mg.pdf>; rel="canonical"
+/certificates/PT-141_10-mg.pdf
+  Link: <https://trybiomod.com/certificates/PT-141_10-mg.pdf>; rel="canonical"
+/certificates/SS-31_10-mg.pdf
+  Link: <https://trybiomod.com/certificates/SS-31_10-mg.pdf>; rel="canonical"
+/certificates/Thymosin-Alpha-1_10-mg.pdf
+  Link: <https://trybiomod.com/certificates/Thymosin-Alpha-1_10-mg.pdf>; rel="canonical"

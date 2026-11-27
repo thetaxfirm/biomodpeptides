@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { database, runtime } from './lib/runtime';
 import { canonicalRedirect, mayIndex, seoConfig, privatePath } from './lib/seo-policy';
 import { linkSlugCandidate, partnerCodeForSlug, partnerSlots } from './lib/restaurant-partners';
+import { movedPermanently } from './lib/legacy-routes';
 
 /**
  * A restaurant partner's own address: trybiomod.com/mariospizza15, which is that slot's discount
@@ -38,7 +39,9 @@ export async function proxy(request: NextRequest) {
   if (partner) return NextResponse.redirect(partner, 302);
   const response = NextResponse.next();
   const correctHost = config.enabled && request.nextUrl.origin === config.publicOrigin;
-  if (!correctHost || !mayIndex(request.nextUrl.pathname, request.nextUrl.searchParams, config)) response.headers.set('X-Robots-Tag', correctHost && !privatePath(request.nextUrl.pathname) ? 'noindex, follow' : 'noindex, nofollow');
+  // An old address that the page redirects permanently is left to say only that: where it moved.
+  const moved = correctHost && movedPermanently(request.nextUrl.pathname);
+  if (!moved && (!correctHost || !mayIndex(request.nextUrl.pathname, request.nextUrl.searchParams, config))) response.headers.set('X-Robots-Tag', correctHost && !privatePath(request.nextUrl.pathname) ? 'noindex, follow' : 'noindex, nofollow');
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   response.headers.set('X-Content-Type-Options', 'nosniff');
   return response;
