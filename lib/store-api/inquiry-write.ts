@@ -5,6 +5,7 @@ import { enqueueCoaRequest, enqueueRequestAlert, processCoaOutbox } from '@/lib/
 import { PROMO_COOKIE } from '@/lib/promotions';
 import { textOfferSignup } from '@/lib/text-offer';
 import { emailOfferSignup } from '@/lib/email-offer';
+import { rememberPopupEmail } from '@/lib/checkout-contact';
 import { after } from 'next/server';
 import { cookies } from 'next/headers';
 import { z } from 'zod';
@@ -62,9 +63,9 @@ export async function inquiryWrite(context: StorePostContext) {
     if (action === 'email-offer') {
         await rateLimit('email-offer:' + (req.headers.get('cf-connecting-ip') || s.id), 5);
         const result = await emailOfferSignup(database(), { email: b.email, consent: b.consent, path: b.path, trap: b.company }, timestamp(), crypto.randomUUID());
-        const applied = !await currentPromoCode();
-        if (applied) (await cookies()).set(PROMO_COOKIE, result.code, { httpOnly: true, secure, sameSite: 'lax', path: '/', maxAge: 2592000 });
-        return j({ code: result.code, percentOff: result.percentOff, applied });
+        // Checkout starts with this email filled in. Losing that convenience must not fail the sign-up.
+        if (result.saved) await rememberPopupEmail(database(), s.id, result.email, timestamp(), uid()).catch(() => undefined);
+        return j({ saved: true });
     }
     if (action === 'text-offer') {
         await rateLimit('text-offer-strict:' + (req.headers.get('cf-connecting-ip') || s.id), 5);

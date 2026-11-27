@@ -1,0 +1,27 @@
+/* First checkout screen. Fields, labels and the button come from the store's own .store-form styles. */
+.help { margin: -13px 0 0; font-size: 13px; line-height: 1.45; color: var(--bm-secondary, #5c5c5c); }
+.boxes { display: grid; gap: 10px; }
+.boxes :global(.check) { margin: 0; }
+.note { display: block; margin-top: 3px; font-size: 12px; line-height: 1.45; color: var(--bm-secondary, #5c5c5c); }
+.error { margin: 0; font-size: 14px; line-height: 1.5; color: #963725; }
+.form :global(.muted) { margin: 0; font-size: 14px; }
+.form :global(.muted) a { text-decoration: underline; text-underline-offset: 3px; }
+/* The store's unticked box is a pale outline. At checkout a box the buyer has to find gets a clear edge. */
+.column :global(.check [data-slot='checkbox'][aria-checked='false']) { border-color: #8a8290; background: #fff; }
+
+.column { display: flex; flex-direction: column; gap: 30px; min-width: 0; }
+
+.summary { max-width: 720px; }
+.summary h2 { margin: 10px 0 0; }
+.line { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 6px 0 0; font-size: 15px; }
+.line span { min-width: 0; overflow-wrap: anywhere; }
+.change { flex: none; min-height: 44px; padding: 10px 0; border: 0; background: none; color: inherit; font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.change:focus-visible { outline: 2px solid var(--bm-ink, #2b1030); outline-offset: 2px; }
+
+/* What comes next, shown quietly until the contact details are saved. */
+.later { margin: 10px 0 0; color: #b5aeb8; }
+
+:global(html[data-theme='dark']) .help, :global(html[data-theme='dark']) .note { color: #b4b4b9; }
+:global(html[data-theme='dark']) .error { color: #f0a090; }
+:global(html[data-theme='dark']) .later { color: #6f6675; }
+:global(html[data-theme='dark']) .column :global(.check [data-slot='checkbox'][aria-checked='false']) { border-color: #9d94a1; background: transparent; }

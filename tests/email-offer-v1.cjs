@@ -1,7 +1,9 @@
-/* Email sign-up offer: address checks, consent, the stored consent wording, re-sign-up, the bot trap,
- * the owner's off switch, unsubscribe and the staff list. Also checks the panel never runs on buying,
- * account or staff pages. In-memory database; no network, email or production data. Addresses use
- * the reserved example.com domain. */
+/* Leaving pop-up sign-ups: address checks, consent, the stored consent wording, re-sign-up, the bot
+ * trap, unsubscribe and the staff list. No discount code is given (owner, Nov 27 2026): a sign-up never
+ * creates, returns or applies one, and an existing INSIDER10 stored promo is left exactly as it is.
+ * Also checks when the panel may appear: never on buying, account or staff pages, no timer, no
+ * back-button interception, and the phone flick signal. In-memory database; no network, email or
+ * production data. Addresses use the reserved example.com domain. */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -37,10 +39,10 @@ const rows = () => sql.prepare('SELECT * FROM email_signups ORDER BY email').all
   await assert.rejects(e.emailOfferSignup(db, { email: 'a@example.com', consent: 'yes' }, NOW, T1), /press the button/);
   assert.equal(rows().length, 0);
 
-  // First sign-up creates the offer code, stores the consent wording and the page, and returns the code.
+  // First sign-up stores the consent wording and the page. No promo code is created or returned.
   const first = await e.emailOfferSignup(db, { email: 'A@Example.com', consent: true, path: '/shop?q=x#top' }, NOW, T1);
-  assert.deepEqual(first, { code: 'INSIDER10', percentOff: 10, saved: true });
-  assert(promos.normalizeStoredPromos(JSON.parse(sql.prepare("SELECT value FROM settings WHERE key=?").get(promos.PROMO_CODES_KEY).value)).some(p => p.code === 'INSIDER10' && p.percentOff === 10 && p.active));
+  assert.deepEqual(first, { saved: true, email: 'a@example.com' });
+  assert.equal(sql.prepare('SELECT COUNT(*) n FROM settings').get().n, 0, 'a sign-up creates no promo code');
   let [row] = rows();
   assert.equal(row.email, 'a@example.com');
   assert.equal(row.source_path, '/shop');
@@ -78,10 +80,26 @@ const rows = () => sql.prepare('SELECT * FROM email_signups ORDER BY email').all
   assert.deepEqual(list.map(x => x.email).sort(), ['a@example.com', 'b@example.com']);
   assert.equal(e.unsubscribeUrl('https://trybiomod.com/', T1), 'https://trybiomod.com/api/email-offer/unsubscribe?token=' + T1);
 
-  // The owner turning the code off in Promo codes ends the offer.
-  const stored = promos.normalizeStoredPromos(JSON.parse(sql.prepare('SELECT value FROM settings WHERE key=?').get(promos.PROMO_CODES_KEY).value));
+  // INSIDER10 was shown to the first visitors on Nov 27. It stays a working stored promo: a sign-up
+  // neither changes it nor depends on it, so the owner can switch it off without stopping sign-ups.
+  await promos.saveStoredPromo(db, 'INSIDER10', 10, 'Email sign-up offer');
+  const before = sql.prepare('SELECT value FROM settings WHERE key=?').get(promos.PROMO_CODES_KEY).value;
+  await e.emailOfferSignup(db, { email: 'c@example.com', consent: true }, NOW, '55555555-5555-4555-8555-555555555555');
+  assert.equal(sql.prepare('SELECT value FROM settings WHERE key=?').get(promos.PROMO_CODES_KEY).value, before);
+  const stored = promos.normalizeStoredPromos(JSON.parse(before));
+  assert(stored.some(p => p.code === 'INSIDER10' && p.percentOff === 10 && p.active));
   sql.prepare('UPDATE settings SET value=? WHERE key=?').run(JSON.stringify(stored.map(p => ({ ...p, active: false }))), promos.PROMO_CODES_KEY);
-  await assert.rejects(e.emailOfferSignup(db, { email: 'c@example.com', consent: true }, NOW, '55555555-5555-4555-8555-555555555555'), /ended/);
+  assert.deepEqual(await e.emailOfferSignup(db, { email: 'd@example.com', consent: true }, NOW, '66666666-6666-4666-8666-666666666666'), { saved: true, email: 'd@example.com' });
+
+  // Phone leaving signal: a fast flick back up, only on a page that was read well down.
+  const vh = 800, flick = [{ t: 0, y: 2400 }, { t: 100, y: 2300 }, { t: 200, y: 2150 }, { t: 300, y: 2050 }];
+  assert.equal(w.flickedUp(flick, vh, 2400), true, '350px up in 300ms after reading down');
+  assert.equal(w.flickedUp(flick, vh, 1000), false, 'the page was never scrolled a screen and a half down');
+  assert.equal(w.flickedUp([{ t: 0, y: 2400 }, { t: 300, y: 2250 }], vh, 2400), false, 'a slow scroll back up is reading, not leaving');
+  assert.equal(w.flickedUp([{ t: 0, y: 2400 }, { t: 900, y: 1900 }], vh, 2400), false, 'too slow to be a flick');
+  assert.equal(w.flickedUp([{ t: 0, y: 1800 }, { t: 200, y: 2300 }], vh, 2400), false, 'scrolling down never counts');
+  assert.equal(w.flickedUp([{ t: 0, y: 2400 }], vh, 2400), false);
+  assert(w.EMAIL_OFFER_CART_QUIET_MS >= 30000 && w.EMAIL_OFFER_EXIT_HOLD_MS >= 300 && w.EMAIL_OFFER_AWAY_MS >= 3000);
 
   // The panel never runs where it could interrupt buying, accounts or staff work.
   for (const p of ['/cart', '/checkout', '/checkout/review', '/payment/return', '/account', '/account/orders', '/admin', '/admin/contacts', '/login', '/register', '/forgot-password', '/reset-password', '/auth/callback', '/affiliates', '/verify'])
@@ -89,12 +107,26 @@ const rows = () => sql.prepare('SELECT * FROM email_signups ORDER BY email').all
   for (const p of ['/', '/shop', '/product/bpc-157-10mg', '/collections', '/faq', '/accounting-guide'])
     assert.equal(w.emailOfferBlockedPath(p), false, p);
 
-  // Wiring: the panel mounts on storefront pages only, stays away for signed-in shoppers, guests and staff,
-  // and the privacy policy describes what is stored.
-  const chrome = read('components/store/store-chrome.tsx'), panel = read('components/store/email-offer.tsx');
+  // Wiring: the panel mounts on storefront pages only and stays away for signed-in shoppers, guests,
+  // anyone who already gave an email, and staff. The privacy policy describes what is stored.
+  const chrome = read('components/store/store-chrome.tsx'), panel = read('components/store/email-offer.tsx'), code = panel.replace(/\/\/.*$/gm, '');
   assert.match(chrome, /<Footer\/><EmailOffer\/>/);
-  assert.match(panel, /!store\.customer && !store\.guest && !store\.admin && !emailOfferBlockedPath\(path\)/);
+  assert.match(panel, /!store\.customer && !store\.guest && !store\.contact\?\.email && !store\.admin && !emailOfferBlockedPath\(path\)/);
   assert.match(read('components/store/content.tsx'), /If you sign up for sale emails/);
-  assert(!/peptide/i.test(w.EMAIL_CONSENT_TEXT + panel.replace(/\/\/.*$/gm, '')), 'no peptide wording in the panel');
-  console.log('PASS: email sign-up validation, consent record, bot trap, re-sign-up, unsubscribe, off switch, staff list, blocked pages and wiring');
+  // No discount: nothing about a code or a percentage in the panel, its wording or its API handler.
+  const wording = [w.EMAIL_OFFER_TITLE, w.EMAIL_OFFER_LEAD, w.EMAIL_OFFER_DONE, w.EMAIL_CONSENT_TEXT].join(' ');
+  assert(!/%|\bcode\b|INSIDER|\boff\b/i.test(wording), 'the wording promises no discount');
+  assert(!/INSIDER|PERCENT|applied|promo/i.test(code), 'the panel shows and applies no code');
+  const api = read('lib/store-api/inquiry-write.ts');
+  const handler = api.slice(api.indexOf("action === 'email-offer'"), api.indexOf("action === 'text-offer'"));
+  assert(handler.includes('emailOfferSignup(') && handler.includes('rememberPopupEmail(') && !/PROMO_COOKIE|cookies\(\)|currentPromoCode/.test(handler), 'the sign-up handler sets no promo cookie');
+  // Leaving, not a timer: the 40-second phone timer is gone, the cursor has to stay out, the cart has
+  // to be quiet, phones need an empty cart, and the back button is never intercepted.
+  assert(!/TOUCH_DELAY|40000|setInterval/.test(code), 'no timed pop-up');
+  assert(code.includes('EMAIL_OFFER_EXIT_HOLD_MS') && code.includes("addEventListener('mouseover', back)"), 'brushing the top edge is cancelled when the cursor comes back');
+  assert(code.includes('EMAIL_OFFER_CART_QUIET_MS') && code.includes('(touch && !now.empty)') && code.includes('occupied()'), 'held back after cart changes, with items in a phone cart, and while typing or a dialog is open');
+  assert(code.includes('flickedUp(') && code.includes("'visibilitychange'") && code.includes('EMAIL_OFFER_AWAY_MS'), 'phone signals: flick up or coming back');
+  assert(!/popstate|pushState|replaceState|history\./.test(code), 'the back button is never intercepted');
+  assert(!/peptide/i.test(wording + code), 'no peptide wording in the panel');
+  console.log('PASS: leaving pop-up sign-up validation, consent record, no discount code, bot trap, re-sign-up, unsubscribe, staff list, blocked pages, leaving signals and wiring');
 })().catch(err => { console.error(err); process.exit(1); });

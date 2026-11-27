@@ -8,6 +8,7 @@ import { authLink, safeAuthReturn } from '@/lib/auth-return';
 import { useEffect, useRef, useState, FormEvent } from 'react';
 import { PromoCode } from './promo-code';
 import { TextOffer } from './text-offer';
+import { CheckoutContact, CheckoutColumn, type SavedContact } from './checkout-contact';
 import type { ShippingOption } from '@/lib/shipping-options';
 import { shippingTerms } from '@/lib/shipping-terms';
 import { Eye, EyeOff, Trash2, Minus, Plus } from 'lucide-react';
@@ -160,9 +161,11 @@ export function Cart() {
     </>;
 }
 const US_STATES: [string, string][] = [['AL','Alabama'],['AK','Alaska'],['AZ','Arizona'],['AR','Arkansas'],['CA','California'],['CO','Colorado'],['CT','Connecticut'],['DE','Delaware'],['DC','District of Columbia'],['FL','Florida'],['GA','Georgia'],['HI','Hawaii'],['ID','Idaho'],['IL','Illinois'],['IN','Indiana'],['IA','Iowa'],['KS','Kansas'],['KY','Kentucky'],['LA','Louisiana'],['ME','Maine'],['MD','Maryland'],['MA','Massachusetts'],['MI','Michigan'],['MN','Minnesota'],['MS','Mississippi'],['MO','Missouri'],['MT','Montana'],['NE','Nebraska'],['NV','Nevada'],['NH','New Hampshire'],['NJ','New Jersey'],['NM','New Mexico'],['NY','New York'],['NC','North Carolina'],['ND','North Dakota'],['OH','Ohio'],['OK','Oklahoma'],['OR','Oregon'],['PA','Pennsylvania'],['RI','Rhode Island'],['SC','South Carolina'],['SD','South Dakota'],['TN','Tennessee'],['TX','Texas'],['UT','Utah'],['VT','Vermont'],['VA','Virginia'],['WA','Washington'],['WV','West Virginia'],['WI','Wisconsin'],['WY','Wyoming'],['AA','Armed Forces Americas'],['AE','Armed Forces Europe'],['AP','Armed Forces Pacific']];
-export function AddressFields({ initial = {} }: {
+export function AddressFields({ initial = {}, carriedPhone }: {
     initial?: Record<string, string>;
-}) { return <><Field label="Full name" name="name" defaultValue={initial.name}/><Field label="Street address" name="line1" defaultValue={initial.line1}/><Field label="Apartment, suite or unit (if any)" name="line2" defaultValue={initial.line2} required={false}/><div className="form-row"><Field label="City" name="city" defaultValue={initial.city}/><Field label="State" name="state"><select name="state" required defaultValue={initial.state || ''}><option value="" disabled>Choose</option>{US_STATES.map(([code, name]) => <option key={code} value={code}>{name}</option>)}</select></Field><Field label="ZIP code" name="zip" defaultValue={initial.zip}/></div><Field label="Phone" name="phone" type="tel" defaultValue={initial.phone}/><input type="hidden" name="country" value="US"/><p className="muted">United States delivery only.</p></>; }
+    /** A guest's number from the first checkout screen. It travels with the address, so it is not asked twice. */
+    carriedPhone?: string;
+}) { return <><Field label="Full name" name="name" defaultValue={initial.name}/><Field label="Street address" name="line1" defaultValue={initial.line1}/><Field label="Apartment, suite or unit (if any)" name="line2" defaultValue={initial.line2} required={false}/><div className="form-row"><Field label="City" name="city" defaultValue={initial.city}/><Field label="State" name="state"><select name="state" required defaultValue={initial.state || ''}><option value="" disabled>Choose</option>{US_STATES.map(([code, name]) => <option key={code} value={code}>{name}</option>)}</select></Field><Field label="ZIP code" name="zip" defaultValue={initial.zip}/></div>{carriedPhone === undefined ? <Field label="Phone" name="phone" type="tel" defaultValue={initial.phone}/> : <input type="hidden" name="phone" value={carriedPhone}/>}<input type="hidden" name="country" value="US"/><p className="muted">United States delivery only.</p></>; }
 export function Checkout() {
     const { store, ready, loadError, cartSync = 'current', cartUpdating = false, refresh, measureShopping, observeShoppingView, validShoppingQuote, validShoppingHandoff } = useStore();
     useEffect(() => observeShoppingView?.('checkout_form_view'), [observeShoppingView, store, ready, loadError]);
@@ -199,6 +202,22 @@ export function Checkout() {
     const promoBusy = Boolean(activePromo && current(activePromo));
     const promoUnapplied = Boolean(activePromoDraft && current(activePromoDraft));
     const { retrying, retryLoad } = useStoreLoadRetry(refresh);
+    // Guest contact step (owner, Nov 27 2026): email and mobile number first, saved on Continue. The
+    // saved contact arrives with the store state; one saved a moment ago is shown without waiting for it.
+    const [contactStep, setContactStep] = useState<{ tenure: number; contact: SavedContact | null; editing: boolean }>({ tenure: -1, contact: null, editing: false });
+    const addressForm = useRef<HTMLFormElement | null>(null);
+    const focusAddress = useRef(false);
+    const stepNow = contactStep.tenure === scope.tenure ? contactStep : null;
+    const contact: SavedContact | null = guestCheckout ? stepNow?.contact || (store.contact?.complete ? store.contact : null) : null;
+    const editingContact = Boolean(stepNow?.editing);
+    useEffect(() => {
+        if (!focusAddress.current || !contact || editingContact) return;
+        focusAddress.current = false;
+        // Keep the buyer moving: the cursor lands in the first address box.
+        const name = addressForm.current?.querySelector<HTMLInputElement>('[name=name]');
+        name?.focus();
+        name?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+    }, [contact, editingContact]);
     useEffect(() => {
         scope.active = true;
         scope.lifetime += 1;
@@ -242,6 +261,17 @@ export function Checkout() {
         unappliedPromo.current = next ? request : null;
         setActivePromoDraft(previous => next ? previous && current(previous) ? previous : request : null);
         if (next && !wasUnapplied) invalidateDelivery();
+    }
+    function contactSaved(saved: SavedContact) {
+        if (!current({ scope, lifetime: renderedLifetime })) return;
+        focusAddress.current = true;
+        setContactStep({ tenure: scope.tenure, contact: saved, editing: false });
+        // The number is part of the address a delivery quote was priced for.
+        invalidateDelivery();
+        void refresh().catch(() => undefined);
+    }
+    function editContact() {
+        if (current({ scope, lifetime: renderedLifetime })) setContactStep({ tenure: scope.tenure, contact, editing: true });
     }
     function setAccepted(next: boolean) {
         if (!current({ scope, lifetime: renderedLifetime })) return;
@@ -350,21 +380,20 @@ export function Checkout() {
     return <><div className="page-heading"><h1>Checkout</h1></div>
         {store.payment.state === 'sandbox' && <p className="notice">Test checkout only. This payment environment does not accept real payments.</p>}
         <div className="cart-layout">
-            <form key={scope.tenure} className="store-form" onSubmit={submit} onChange={invalidateDelivery}>
-                {guestCheckout && <>
-                    <h2>Contact</h2>
-                    <p className="muted">No membership needed. Already a member? <a href="/login?returnTo=%2Fcheckout">Sign in</a></p>
-                    <Field label="Email address" name="guestEmail" type="email" defaultValue={store.guest?.email}/>
-                    <Field label="Type of research organization" name="guestBusinessType"><select name="guestBusinessType" required defaultValue=""><option value="" disabled>Choose one</option>{Object.entries(BUSINESS_TYPES).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field>
-                </>}
-                <h2>Delivery address</h2><AddressFields initial={{ name: store.customer?.name || '' }}/>
+            <CheckoutColumn>
+                {guestCheckout && <CheckoutContact key={'contact-' + scope.tenure} contact={contact} prefill={{ email: contact?.email || store.contact?.email || store.guest?.email || '', phone: contact?.phone || store.contact?.phone || '' }} editing={editingContact} onSaved={contactSaved} onEdit={editContact}/>}
+                {(!guestCheckout || contact) && <form key={scope.tenure} ref={addressForm} className="store-form" onSubmit={submit} onChange={invalidateDelivery}>
+                {guestCheckout && contact && <input type="hidden" name="guestEmail" value={contact.email}/>}
+                <h2>Delivery address</h2><AddressFields initial={{ name: store.customer?.name || '' }} carriedPhone={guestCheckout ? contact?.phone : undefined}/>
+                {guestCheckout && <Field label="Type of research organization" name="guestBusinessType"><select name="guestBusinessType" required defaultValue=""><option value="" disabled>Choose one</option>{Object.entries(BUSINESS_TYPES).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field>}
                 {guestCheckout && <Check checked={accepted} onChange={setAccepted}>{ATTESTATION_TEXT} I agree to the <a href="/terms-of-sale">terms of sale</a> and the <a href="/research-use-only">research use policy</a>.</Check>}
                 {addressProblem && <div className="notice address-check" role="alert">
                     <p>{addressProblem.message}</p>
                     <Check checked={addressConfirmed} onChange={setAddressConfirmed}>{addressProblem.status === 'unit_missing' ? 'There is no apartment or unit number at this address.' : 'My address is correct as I typed it.'} We will double-check it before your order ships.</Check>
                 </div>}
                 <button className="button button-dark" disabled={busy || promoBusy || promoUnapplied || cartUpdating || (guestCheckout && !accepted)}>{busy ? 'Calculating…' : 'Calculate delivery and tax'}</button>
-            </form>
+                </form>}
+            </CheckoutColumn>
             <aside className="order-summary"><h2>Your order</h2>{hasPreorder(q?.items) && <p className="preorder-checkout-notice">{preorderOrderNotice}</p>}
                 {q?.items.map((l: any, i: number) => <p className="summary-product" key={i}><span>{l.product.name} × {l.quantity}{l.product.activePreorder && <small className="preorder-line-note">Preorder · {l.product.activePreorder.percentOff}% off included · Estimated dispatch {l.product.activePreorder.ships}</small>}</span><strong>{money(l.lineTotal ?? l.product.price * l.quantity)}</strong></p>)}
                 <PromoCode key={scope.tenure} disabled={busy || cartUpdating} onBusyChange={changePromoBusy} onUnappliedChange={changeUnappliedPromo} onChange={invalidateDelivery}/>

@@ -6,6 +6,7 @@ import { currentCart, currentProductId, currentSelection } from '@/lib/catalog-v
 import { catalog, config, quote, validateLines } from '@/lib/commerce';
 import { all, one, run, timestamp, parse, runtime, database } from '@/lib/runtime';
 import { readGuest, type GuestShopper } from '@/lib/guest-checkout';
+import { readCheckoutContact } from '@/lib/checkout-contact';
 import { getPaymentStatus } from '@/lib/payments';
 import { permissionsFor } from '@/lib/staff';
 import type { StoreGetContext } from '@/lib/store-api/context';
@@ -67,7 +68,7 @@ export async function stateRead(context: StoreGetContext) {
         const packOwner = u ? 'customer:' + u.id : 'guest:' + s.id;
         if(u) await run('UPDATE saved_packs SET owner=? WHERE owner=?',packOwner,'guest:'+s.id);
         const savedPacks = (await all<{id:string;name:string;products:string;updated:number}>('SELECT id,name,products,updated FROM saved_packs WHERE owner=? ORDER BY updated DESC',packOwner)).map(p=>({...p,products:parse(p.products,[])})).filter(p=>currentSelection(p.products)).map(p=>presentationData(p));
-        return j({ products: ps, config: cfg, cart, cartConflict, wishlist, savedPacks, customer: u, guest: u ? null : await readGuest(database(), s.id) as GuestShopper | null, authReady: authReady(), googleReady: authReady() && runtime().GOOGLE_SIGNIN_ENABLED === 'true', payment: { state: payment.state, enabled: payment.checkoutEnabled }, totals, cartError, cartNotice, campaigns: (await all<{
+        return j({ products: ps, config: cfg, cart, cartConflict, wishlist, savedPacks, customer: u, guest: u ? null : await readGuest(database(), s.id) as GuestShopper | null, contact: u ? null : await readCheckoutContact(database(), s.id).catch(() => null), authReady: authReady(), googleReady: authReady() && runtime().GOOGLE_SIGNIN_ENABLED === 'true', payment: { state: payment.state, enabled: payment.checkoutEnabled }, totals, cartError, cartNotice, campaigns: (await all<{
                 id: string;
                 data: string;
                 active: number;

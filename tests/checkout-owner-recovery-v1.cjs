@@ -19,7 +19,7 @@ function harness(component){const h={slots:[],effectFns:[],cleanups:[],cursor:0,
  unmount(){this.cleanups.forEach(fn=>fn?.());this.cleanups=[];},};h.render();hosts.push(h);return h;}
 let providerHost,hosts=[],errors=[];
 const noop=()=>null;
-function Check(){}function Blank(){}function Promo(){}
+function Check(){}function Blank(){}function Promo(){}function Contact(){}function Column(){}
 const cache=new Map();
 function load(relative){if(cache.has(relative))return cache.get(relative).exports;const filename=path.join(root,relative),mod=new Module(filename,module);mod.filename=filename;mod.paths=Module._nodeModulePaths(root);cache.set(relative,mod);
  mod.require=id=>{
@@ -31,6 +31,7 @@ function load(relative){if(cache.has(relative))return cache.get(relative).export
   if(id==='sonner')return{toast:{success:noop,error:value=>errors.push(value),info:noop},Toaster:noop};
   if(id==='lucide-react')return new Proxy({}, {get:()=>noop});
   if(relative.startsWith('components/')&&id==='./provider')return{...load('components/store/provider.tsx'),useStore:()=>providerHost.tree.props.value};
+  if(id==='./checkout-contact')return{CheckoutContact:Contact,CheckoutColumn:Column}; /* The contact form has its own test; here it is a marker with its real props. */
   if(id==='./text-offer')return{TextOffer:()=>null};if(id==='./promo-code')return{PromoCode:Promo};if(id==='./product-image')return{ProductImage:noop};if(relative.startsWith('components/')&&id==='./catalog')return{ProductCard:noop};
   if(id==='./primitives')return{Field:noop,Check,Blank,Choice:noop,formData:form=>form.fields};
   if(id.startsWith('@/lib/')||id.startsWith('.')){
@@ -79,6 +80,7 @@ function fresh(options={}){
   return Promise.resolve().then(async()=>{
    let data;if(action==='auth-refresh')data={};else if(action==='state'){if(stateError)throw stateError;data=structuredClone(state);}
    else if(action==='cart'){if(cartError)throw cartError;state.cart=body.cart;state.totals=totals(body.cart);data={cart:structuredClone(body.cart),totals:state.totals};}
+   else if(action==='guest-start')data={guest:{id:'guest:isolated',email:body.email,name:'',guest:true}};
    else if(action==='delivery')data=await deliveryImpl(body);else if(action==='checkout')data=await checkoutImpl(body);else throw Error('Unapproved action '+action);
    return{ok:true,json:async()=>data};
   });
@@ -139,7 +141,13 @@ function blocked(h){assert.equal(button(h,'Continue to secure payment').props.di
   assert.equal(count('delivery_quote_confirmed'),0);assert.equal(checkoutCalls().length,0);
   if(transition==='aba'||transition==='effect-replay'){h.render();blocked(h);}
   // Signing out lands on a fresh guest checkout (guest checkout, Nov 14 2026): the member's quote and address are gone.
-  if(transition==='signed-out'){h.render();assert(nodes(h.tree).some(n=>n.props?.name==='guestEmail'),'guest contact fields shown');blocked(h);}
+  // Since Nov 27 2026 a guest gives an email and number first: until then no address form or research
+  // statement is offered and payment stays locked. Saving the contact opens a fresh, unaccepted form.
+  if(transition==='signed-out'){h.render();const step=find(h,n=>n.type===Contact);assert.equal(step.props.contact,null,'no contact carried over from the member');assert.equal(step.props.editing,false);
+   assert(!nodes(h.tree).some(n=>n.type==='form'),'no address form before the contact is saved');assert.equal(button(h,'Continue to secure payment').props.disabled,true);assert(text(h.tree).includes('Pending address'));
+   step.props.onSaved({email:'guest@example.invalid',phone:'(702) 555-0101',complete:true,emailOptIn:true,textConsent:false});await flush();h.render();blocked(h);
+   assert(nodes(h.tree).some(n=>n.type==='input'&&n.props.name==='guestEmail'&&n.props.value==='guest@example.invalid'),'email carried into the address form');
+   assert(nodes(h.tree).some(n=>n.props?.carriedPhone==='(702) 555-0101'),'number carried into the address');}
  }
  // Every new owner tenure gets a new idempotency key and fresh acceptance.
  h=await forOwner();await quoteFor(h);checkoutImpl=async()=>{throw Error('Isolated stopped handoff');};button(h,'Continue to secure payment').props.onClick();await flush();h.render();const firstKey=checkoutCalls()[0].body.requestKey;
@@ -189,9 +197,30 @@ function blocked(h){assert.equal(button(h,'Continue to secure payment').props.di
   if(failure==='error')gate.reject(Error('Isolated rate failure'));else gate.resolve(shipQuote(failure==='wrong-choice'?standard:overnight));
   await flush();h.render();assert.equal(button(h,'Continue to secure payment').props.disabled,true,failure);assert(!nodes(h.tree).some(n=>n.type==='input'&&n.props.name==='deliveryOption'),failure);assert.equal(checkoutCalls().length,0);
  }
+ // Guest contact step (Nov 27 2026). A saved contact opens the address at once with the email and number
+ // carried forward and the guest record still saved before the first quote. Change keeps the address
+ // form mounted, and a changed number drops a quote that was priced for the old one.
+ const savedContact={email:'saved@example.invalid',phone:'(702) 555-0102',complete:true,emailOptIn:false,textConsent:false};
+ await loaded({pathname:'/checkout',store:{customer:null,contact:savedContact}});h=harness(Checkout);
+ assert.deepEqual(find(h,n=>n.type===Contact).props.contact,savedContact);assert.equal(find(h,n=>n.type===Contact).props.editing,false);
+ const guestForm=form(h);assert(nodes(h.tree).some(n=>n.props?.carriedPhone==='(702) 555-0102'));assert(!nodes(h.tree).some(n=>n.props?.name==='phone'&&n.type!=='input'),'no second phone box for a guest');
+ find(h,n=>n.type===Check).props.onChange(true);h.render();
+ await form(h).props.onSubmit({preventDefault(){},currentTarget:{fields:{...fields,phone:'(702) 555-0102',guestEmail:'saved@example.invalid',guestBusinessType:'laboratory'}}});h.render();
+ assert.deepEqual(apiCalls.find(call=>call.action==='guest-start').body,{email:'saved@example.invalid',businessType:'laboratory',attested:true});
+ assert.equal(deliveryCalls().at(-1).body.address.phone,'(702) 555-0102');assert.equal(deliveryCalls().at(-1).body.address.guestEmail,undefined,'guest fields never travel inside the address');
+ assert.equal(button(h,'Continue to secure payment').props.disabled,false);
+ find(h,n=>n.type===Contact).props.onEdit();h.render();assert.equal(find(h,n=>n.type===Contact).props.editing,true);assert.equal(form(h).key,guestForm.key,'the address form stays mounted while the contact is changed');assert.equal(button(h,'Continue to secure payment').props.disabled,false);
+ find(h,n=>n.type===Contact).props.onSaved({...savedContact,phone:'(702) 555-0103'});await flush();h.render();
+ assert.equal(find(h,n=>n.type===Contact).props.editing,false);assert(nodes(h.tree).some(n=>n.props?.carriedPhone==='(702) 555-0103'));
+ assert.equal(button(h,'Continue to secure payment').props.disabled,true,'a changed number needs a fresh quote');assert(text(h.tree).includes('Pending address'));assert.equal(checkoutCalls().length,0);
+ // A guest with only a pop-up email starts on the contact screen with that email filled in.
+ await loaded({pathname:'/checkout',store:{customer:null,contact:{email:'popup@example.invalid',phone:'',complete:false,emailOptIn:false,textConsent:false}}});h=harness(Checkout);
+ assert.equal(find(h,n=>n.type===Contact).props.contact,null);assert.deepEqual(find(h,n=>n.type===Contact).props.prefill,{email:'popup@example.invalid',phone:''});assert(!nodes(h.tree).some(n=>n.type==='form'));
+ // A signed-in member never sees the contact step and keeps the phone box in the address.
+ h=await forOwner();assert(!nodes(h.tree).some(n=>n.type===Contact));assert(nodes(h.tree).some(n=>n.type==='form'));assert(!nodes(h.tree).some(n=>n.props&&'carriedPhone' in n.props&&n.props.carriedPhone!==undefined));
  // Current free-standard settings drive cart copy, including explicit off and zero.
  await loaded({store:{config:{freeShippingAt:0,shippingOptions:{freeStandardEnabled:false}}}});h=harness(Cart);assert(!text(h.tree).includes('Standard free'));
  await update({config:{freeShippingAt:0,shippingOptions:{freeStandardEnabled:true}}});h.render();assert(text(h.tree).includes('Standard free; upgrades at checkout'));
  hosts.forEach(h=>h.unmount());
- console.log('PASS actual Checkout owner/lifecycle isolation: normal single-flight flow; reset quote/address/acceptance/key and form boundaries; owner A-B-A/signout; stale quote/handoff/error/promo callbacks; unmount/replay; preserved cart/address invalidation. Isolated fixtures only.');
+ console.log('PASS actual Checkout owner/lifecycle isolation: normal single-flight flow; reset quote/address/acceptance/key and form boundaries; owner A-B-A/signout; stale quote/handoff/error/promo callbacks; unmount/replay; preserved cart/address invalidation; guest contact step first, carried forward, and re-quoted when the number changes. Isolated fixtures only.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

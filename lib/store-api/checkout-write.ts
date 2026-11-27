@@ -1,11 +1,12 @@
 import { z } from 'zod';
-import { customer } from '@/lib/auth';
+import { customer, rateLimit } from '@/lib/auth';
 import { unavailableOrder } from '@/lib/catalog-visibility';
 import { catalog, validateLines } from '@/lib/commerce';
 import { mixesPreorder, preorderSeparateMessage } from '@/lib/preorders';
 import { one, uid, timestamp, parse, runtime, database } from '@/lib/runtime';
 import { checkout, reconcile, issueQuote, AddressCheckError } from '@/lib/checkout';
 import { readGuestRecord, saveGuest, guestOrderRecord } from '@/lib/guest-checkout';
+import { saveCheckoutContact, subscribeFromCheckout } from '@/lib/checkout-contact';
 import { paymentEnvironment } from '@/lib/payments';
 import type { StorePostContext } from '@/lib/store-api/context';
 import { j, str } from '@/lib/store-api/shared';
@@ -13,7 +14,7 @@ import { cartImports, requireShopper, shopperCart, currentPromoCode } from '@/li
 import { captureContact } from '@/lib/store-api/contact-capture';
 
 export async function checkoutWrite(context: StorePostContext) {
-    const { action, b, s } = context;
+    const { req, action, b, s } = context;
     if (action === 'delivery') {
         const u = await requireShopper(s.id);
         // A choice refers only to a rate in this customer's stored quote.
@@ -29,6 +30,17 @@ export async function checkoutWrite(context: StorePostContext) {
             if (e instanceof AddressCheckError) return j({ error: e.message, addressProblem: e.addressProblem }, 422);
             throw e;
         }
+    }
+    // First checkout screen (owner, Nov 27 2026): a guest's email and mobile number are saved before the address.
+    if (action === 'checkout-contact') {
+        if (await customer()) return j({ message: 'You are signed in.' });
+        await rateLimit('checkout-contact:' + (req.headers.get('cf-connecting-ip') || s.id), 10);
+        if (!validateLines(parse(s.cart, [])).length) throw new Error('Your cart is empty.');
+        const contact = await saveCheckoutContact(database(), s.id, { email: b.email, phone: b.phone, emailOptIn: b.emailOptIn, textConsent: b.textConsent }, timestamp(), uid());
+        // The list and the shared contact book are secondary: a failure there must not stop checkout.
+        if (contact.emailOptIn) await subscribeFromCheckout(database(), contact.email, timestamp(), crypto.randomUUID()).catch(() => false);
+        await captureContact({ email: contact.email, owner: null, phone: contact.phone, source: 'order' });
+        return j({ contact });
     }
     if (action === 'guest-start') {
         if (await customer()) return j({ message: 'You are signed in.' });

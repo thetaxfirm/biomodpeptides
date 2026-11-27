@@ -28,6 +28,8 @@ type Store = {
     } | null;
     /** A guest who agreed to the research statement in this browser session. Checkout only. */
     guest?: { id: string; email: string; name: string } | null;
+    /** Email and mobile number a visitor who is not signed in has already given (leaving pop-up or first checkout screen). */
+    contact?: { email: string; phone: string; complete: boolean; emailOptIn: boolean; textConsent: boolean } | null;
     authReady: boolean;
     googleReady: boolean;
     admin: boolean;
