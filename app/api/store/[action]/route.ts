@@ -44,7 +44,8 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
         if ('response' in input) return input.response;
         const secure = req.nextUrl.protocol === 'https:';
         const s = await session(secure);
-        await rateLimit(action + ':' + (req.headers.get('cf-connecting-ip') || s.id), action.startsWith('auth') ? 12 : 120);
+        // Routine page navigation refreshes an existing session; credential attempts keep the lower budget.
+        await rateLimit(action + ':' + (req.headers.get('cf-connecting-ip') || s.id), action.startsWith('auth') && action !== 'auth-refresh' ? 12 : 120);
         const context = { req, action, b: input.body, secure, s };
         for (const handle of [cartWrite, authWrite, inquiryWrite, accountWrite, checkoutWrite, adminWrite]) {
             const response = await handle(context);

@@ -1,11 +1,11 @@
 // Real transport + domain modules. Every outside service is isolated and unexpected calls fail.
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),Module=require('node:module'),ts=require('typescript');
-const root=path.resolve(__dirname,'..'),calls=[];let authorized=false;
+const root=path.resolve(__dirname,'..'),calls=[];let authorized=false, budgetCheck=null;
 const database={fixture:'database'},audited={fixture:'audited-database'};
 class Reply extends Response{static json(value,init={}){return new Reply(JSON.stringify(value),{...init,headers:{'content-type':'application/json',...init.headers}});}}
 const deps={
- 'next/server':{NextResponse:Reply},zod:require('zod'),
- '@/lib/auth':{customer:async()=>{calls.push(['customer']);return null;},session:async()=>{calls.push(['session']);return{id:'fixture-session'};},rateLimit:async(...args)=>calls.push(['rateLimit',...args]),requireStaff:async permission=>{calls.push(['staff',permission]);if(!authorized)throw Error('Fixture access denied');return{email:'fixture@example.invalid',role:'owner'};}},
+ 'next/server':{NextResponse:Reply},'next/headers':{cookies:async()=>({get:()=>undefined})},zod:require('zod'),
+ '@/lib/auth':{customer:async()=>{calls.push(['customer']);return null;},session:async()=>{calls.push(['session']);return{id:'fixture-session'};},rateLimit:async(...args)=>{calls.push(['rateLimit',...args]);if(budgetCheck)await budgetCheck(...args);},requireStaff:async permission=>{calls.push(['staff',permission]);if(!authorized)throw Error('Fixture access denied');return{email:'fixture@example.invalid',role:'owner'};}},
  '@/lib/runtime':{runtime:()=>({DB:database}),database:()=>database},
  '@/lib/change-history':{withAuditDb:(db,actor)=>{assert.equal(db,database);calls.push(['audit',actor]);return audited;}},
  '@/lib/preorder-plan-save':{savePreorderPlan:async(db,input,actor)=>{assert.equal(db,audited);calls.push(['plan',input,actor]);return{message:'Fixture plan saved'};}},
@@ -38,5 +38,18 @@ async function post(action,body='{}',headers={}){calls.length=0;const response=a
  response=await post('unknown');assert.equal(response.status,404);assert.equal(calls.length,2);
  const getReq={nextUrl:new URL('https://fixture.invalid/api/store/unknown')};calls.length=0;response=await m.exports.GET(getReq,{params:Promise.resolve({action:'unknown'})});assert.equal(response.status,404);assert.deepEqual(calls,[['customer']]);
  calls.length=0;response=await m.exports.GET(getReq,{params:Promise.resolve({action:'admin-orders'})});assert.equal(response.status,405);assert.deepEqual(calls,[['customer']],'legacy GET queue never reads order data');
+ // Use the real SQL limiter: routine no-token refreshes cannot consume credential-attempt budgets.
+ const {DatabaseSync}=require('node:sqlite'),db=new DatabaseSync(':memory:');db.exec('CREATE TABLE rate_limits(key TEXT PRIMARY KEY,count INTEGER,expires INTEGER)');
+ const authExports={},authCode=ts.transpileModule(fs.readFileSync(path.join(root,'lib/auth.ts'),'utf8'),{compilerOptions:{target:9,module:1}}).outputText;
+ new Function('exports','require',authCode)(authExports,id=>id==='./runtime'?{timestamp:Date.now,one:async(sql,...values)=>db.prepare(sql).get(...values)}:{});
+ budgetCheck=authExports.rateLimit;
+ for(let i=0;i<40;i++)assert.equal((await post('auth-refresh')).status,200,'normal navigation refresh '+i+' remains available beyond twelve');
+ assert.equal(db.prepare("SELECT count FROM rate_limits WHERE key='auth-refresh:fixture-session'").get().count,40);
+ for(const action of ['auth-login','auth-register','auth-recover','auth-reset']){
+  for(let i=0;i<12;i++){const attempt=await post(action);assert.equal(attempt.status,400);assert(!JSON.stringify(await attempt.json()).includes('Too many requests'));}
+  const limited=await post(action);assert.equal(limited.status,400);assert.match((await limited.json()).error,/Too many requests/);
+ }
+ db.prepare("UPDATE rate_limits SET count=120 WHERE key='auth-refresh:fixture-session'").run();const limited=await post('auth-refresh');assert.equal(limited.status,400);assert.match((await limited.json()).error,/Too many requests/);db.close();
+ console.log('PASS: real SQL rate limits allow forty routine refreshes, retain twelve credential attempts per action, and still bound refresh at120 per ten minutes.');
  console.log('PASS: extracted store dispatcher preserves byte/JSON/origin guards, bridge boundary, every admin permission, authenticated audit context, legacy denials and unknown URLs. No network or real records.');
 })().catch(error=>{console.error(error);process.exitCode=1;});
