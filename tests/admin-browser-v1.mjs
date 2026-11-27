@@ -114,7 +114,8 @@ try {
             && (!custom || url.searchParams.get('from') === reportDates.from && url.searchParams.get('to') === reportDates.to && !url.searchParams.has('days'));
     });
     async function customDraft(section, label = 'Reporting period') {
-        await section.getByLabel(label, { exact: true }).selectOption('custom');
+        // Native select labels contain their option text in Playwright's label matcher.
+        await section.getByLabel(new RegExp('^' + label)).selectOption('custom');
         await section.getByLabel('First date', { exact: true }).fill(reportDates.from);
         await section.getByLabel('Last date (inclusive)', { exact: true }).fill(reportDates.to);
         await section.getByLabel('Reporting time zone', { exact: true }).fill(reportDates.timeZone);
@@ -334,14 +335,14 @@ try {
     });
     await step('mobile custom report forms fit in daylight and night mode',async()=>{
         await customSales();let section=reportSection('Sales diagnostics');await reportControlsFit(section);await shot('mobile-report-sales');
-        await page.getByRole('switch',{name:'Night mode',exact:true}).click();assert.equal(await page.locator('html').getAttribute('data-theme'),'dark');
+        await admin('settings','Mix-and-match discounts');await page.getByRole('switch',{name:'Night mode',exact:true}).click();assert.equal(await page.locator('html').getAttribute('data-theme'),'dark');
         try{
-            await reportControlsFit(section);await shot('mobile-night-report-sales');
+            await customSales();section=reportSection('Sales diagnostics');await reportControlsFit(section);await shot('mobile-night-report-sales');
             for(const [tab,title,label] of [['overview','Today','Sales comparison period'],['promos','Affiliate & promo code totals','Reporting period'],['traffic','Traffic diagnostics','Traffic reporting period']]){
                 await admin(tab);section=reportSection(title);await customDraft(section,label);await reportControlsFit(section);await shot('mobile-night-report-'+tab);
             }
             section=reportSection('Shopping stages');await customDraft(section,'Shopping reporting period');await reportControlsFit(section);await shot('mobile-night-report-shopping');
-        }finally{if(await page.locator('html').getAttribute('data-theme')==='dark')await page.getByRole('switch',{name:'Night mode',exact:true}).click();}
+        }finally{if(await page.locator('html').getAttribute('data-theme')==='dark'){await admin('settings','Mix-and-match discounts');await page.getByRole('switch',{name:'Night mode',exact:true}).click();}}
     });
     await step('mobile keyboard navigation',async()=>{await admin('promos','Promo codes');await page.getByRole('tab',{name:'Promo codes',exact:true}).focus();await page.keyboard.press('Tab');assert(await page.evaluate(()=>document.activeElement?.tagName!=='BODY'),'Keyboard focus reaches a real control');});
     assert(providerCalls.every(c=>c.method==='GET'&&c.url==='https://auth.example.invalid/auth/v1/user'),'Only the isolated auth provider was called');
