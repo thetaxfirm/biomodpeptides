@@ -1,6 +1,7 @@
 // The deployed five-minute cron releasing an unpaid checkout, against the built Worker and a local
 // D1. Synthetic orders only; the payment provider is intercepted and reports no payment.
 import { migrationStatements } from './sql-migration-fixture.mjs';
+import { sourceHistoryFixtureResponse } from './source-history-fixture.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -41,6 +42,7 @@ const mf = new Miniflare({
   d1Persist: path.join(temporary, 'd1'),
   // The provider is asked, and truthfully answers that it is holding nothing for these orders.
   outboundService: async request => {
+    const source = sourceHistoryFixtureResponse(request); if (source) return source;
     if (request.url === 'https://api.authorize.net/xml/v1/request.api' && request.method === 'POST') {
       const body = await request.json(), kind = Object.keys(body)[0];
       if (kind === 'getUnsettledTransactionListRequest') { lookups++; return Response.json({ messages: { resultCode: 'Ok' }, transactions: [] }); }

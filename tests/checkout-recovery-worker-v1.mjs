@@ -1,4 +1,5 @@
 import { migrationStatements } from './sql-migration-fixture.mjs';
+import { sourceHistoryFixtureResponse } from './source-history-fixture.mjs';
 // Built production Worker, local D1 and intercepted providers. No real sends/payments.
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -12,6 +13,7 @@ const paths=(await fs.readdir(built,{recursive:true})).filter(n=>/\.(?:m?js)$/.t
 const bindings={AUTHORIZENET_ENVIRONMENT:'live',AUTHORIZENET_API_LOGIN_ID:'fixtureLogin',AUTHORIZENET_TRANSACTION_KEY:'A'.repeat(16),AUTHORIZENET_SIGNATURE_KEY:'B'.repeat(128),AUTHORIZENET_RETURN_URL:'https://trybiomod.com/payment/return',AUTHORIZENET_CONNECTION_VERIFIED:'true',COMMERCE_MODE:'live',COMMERCE_FULFILLMENT_VERIFIED:'true',RESEND_API_KEY:'fixture',FIXED_TAX_RATE:'8.375'};
 const sends=[],reads=[];
 const mf=new Miniflare({name:'isolated-recovery',cf:false,unsafeTriggerHandlers:true,modules:[config.main,...paths.filter(n=>n!==config.main)].map(n=>({type:'ESModule',path:path.join(built,n)})),modulesRoot:built,compatibilityDate:config.compatibility_date,compatibilityFlags:config.compatibility_flags,bindings,d1Databases:{DB:'isolated-recovery'},d1Persist:path.join(temporary,'d1'),outboundService:async req=>{
+ const source=sourceHistoryFixtureResponse(req);if(source)return source;
  if(req.url==='https://api.authorize.net/xml/v1/request.api'){
   const body=await req.json(),kind=Object.keys(body)[0];reads.push(kind);
   assert(['getUnsettledTransactionListRequest','getSettledBatchListRequest'].includes(kind),'No payment or hosted-form creation permitted');

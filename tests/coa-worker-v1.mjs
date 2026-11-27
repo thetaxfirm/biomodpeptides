@@ -1,4 +1,5 @@
 import { migrationStatements } from './sql-migration-fixture.mjs';
+import { sourceHistoryFixtureResponse } from './source-history-fixture.mjs';
 // Actual built Worker + isolated Miniflare D1. Every outbound request is intercepted.
 // Only synthetic inquiry records, unmistakable synthetic PDF bytes and fixture mail addresses are used; no real mail.
 import assert from 'node:assert/strict';
@@ -40,6 +41,7 @@ const mf = new Miniflare({
   bindings: { RESEND_API_KEY: fixtureKey, ORDER_EMAIL_FROM: sender },
   d1Databases: { DB: 'isolated-coa-database' }, d1Persist: path.join(temporary, 'd1'),
   outboundService: async request => {
+    const source = sourceHistoryFixtureResponse(request); if (source) return source;
     if (request.url !== 'https://api.resend.com/emails' || request.method !== 'POST') {
       forbiddenOutbound++; throw Error('Non-fixture outbound request is forbidden.');
     }
