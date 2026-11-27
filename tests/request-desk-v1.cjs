@@ -365,13 +365,13 @@ async function main(){
   liveHost.unmount();liveHost=null;assert.equal(scheduled.size,0);
 
   {
-   const queueCalls=[],old=request('old-queue-record'),older=request('other-page');let second=false;
+   const queueCalls=[],old=request('old-queue-record'),older=request('other-page');let second=false,queueFails=false;
    const counts={todo:151,waiting:0,followup:0,done:0,pitch:0,spam:0,deleted:0,all:151};
-   const h=mount({...readonlyProps,onLoadQueue:async input=>{queueCalls.push(input);const r=second?older:old;return {requests:[r],pageIds:[r.id],counts,total:151,offset:input.offset,limit:50,hasMore:true};},onRefreshReplies:async list=>{assert(list.length<=51);return {replies:{}};}});
+   const h=mount({...readonlyProps,onLoadQueue:async input=>{queueCalls.push(input);if(queueFails)throw Error('Fixture queue unavailable');const r=second?older:old;return {requests:[r],pageIds:[r.id],counts,total:151,offset:input.offset,limit:50,hasMore:true};},onRefreshReplies:async list=>{assert(list.length<=51);return {replies:{}};}});
    await nextTick();await flush(h);assert.deepEqual(ids(h),['old-queue-record']);assert(text(h.tree).includes('1–50 of 151'));
    openRow(h,old.id);type(h,'replyBody','Preserve this unsaved reply');await nextTick();await flush(h);
    second=true;button(h.tree,'Next').props.onClick();h.render();await nextTick();await flush(h);assert.equal(queueCalls.at(-1).offset,50);assert.deepEqual(ids(h),['other-page']);
-   query(h,'rare historical word');await nextTick();await flush(h);assert.equal(queueCalls.at(-1).offset,0);assert.equal(queueCalls.at(-1).query,'rare historical word');
+   queueFails=true;query(h,'rare historical word');assert.deepEqual(ids(h),[],'old page disappears immediately when query changes');await nextTick();await flush(h);assert.deepEqual(ids(h),[],'a failed new-view read cannot leave old actionable rows under the new search');assert(text(h.tree).includes('This view could not load'));queueFails=false;await nextTick();await flush(h);assert.equal(queueCalls.at(-1).offset,0);assert.equal(queueCalls.at(-1).query,'rare historical word');
    second=false;query(h,'');await nextTick();await flush(h);if(!nodes(h.tree).some(n=>n.props.id==='request-reply-'+old.id))openRow(h,old.id);assert.equal(field(h,'replyBody').props.value,'Preserve this unsaved reply');h.unmount();assert.equal(scheduled.size,0);
   }
 

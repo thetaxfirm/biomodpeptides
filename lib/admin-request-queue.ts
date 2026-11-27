@@ -8,7 +8,7 @@ export type RequestQueueResult={requests:QueuedRequest[];counts:Record<RequestQu
 const cte=`WITH evidence AS (
  SELECT r.*,d.status draft_status,d.reason draft_reason,d.approved_at,i.issue,
  w.assignee,w.next_action,w.due_at,w.resolution,w.triage,w.version,w.updated work_updated,w.updated_by,
- MAX(CASE WHEN COALESCE(json_extract(r.data,'$.origin'),'')='order' THEN 0 ELSE r.created END,COALESCE((SELECT MAX(m.created) FROM request_reply_messages m WHERE m.request_id=r.id AND m.direction='incoming' AND NOT (COALESCE(json_extract(r.data,'$.origin'),'')='order' AND m.id LIKE 'original:%')),0)) last_in,
+ MAX(CASE WHEN COALESCE(json_extract(CASE WHEN json_valid(r.data) THEN r.data ELSE '{}' END,'$.origin'),'')='order' THEN 0 ELSE r.created END,COALESCE((SELECT MAX(m.created) FROM request_reply_messages m WHERE m.request_id=r.id AND m.direction='incoming' AND NOT (COALESCE(json_extract(CASE WHEN json_valid(r.data) THEN r.data ELSE '{}' END,'$.origin'),'')='order' AND m.id LIKE 'original:%')),0)) last_in,
  MAX(COALESCE((SELECT MAX(m.created) FROM request_reply_messages m WHERE m.request_id=r.id AND m.direction='outgoing'),0),COALESCE((SELECT MAX(e.sent_at) FROM request_external_replies e WHERE e.request_id=r.id AND (e.source='manual' OR e.recorded_by='Jarvis exact conversation check')),0)) last_out,
  COALESCE((SELECT MAX(e.sent_at) FROM request_external_replies e WHERE e.request_id=r.id AND (e.source='manual' OR e.recorded_by='Jarvis exact conversation check')),0) outside_at,
  EXISTS(SELECT 1 FROM request_reply_messages m WHERE m.request_id=r.id AND m.direction='incoming' AND m.id NOT LIKE 'original:%') has_incoming
@@ -22,7 +22,7 @@ const cte=`WITH evidence AS (
  WHEN triage='vendor' OR (COALESCE(triage,'unreviewed')='unreviewed' AND issue='vendor') THEN 'pitch'
  WHEN last_out>0 AND last_in<last_out AND (status!='in_progress' OR outside_at>last_in) THEN CASE WHEN status='resolved' THEN 'done' ELSE 'waiting' END
  WHEN status='resolved' AND NOT(last_out>0 AND last_in>=last_out) THEN 'done'
- WHEN COALESCE(json_extract(data,'$.origin'),'')='order' AND has_incoming=0 THEN 'followup'
+ WHEN COALESCE(json_extract(CASE WHEN json_valid(data) THEN data ELSE '{}' END,'$.origin'),'')='order' AND has_incoming=0 THEN 'followup'
  ELSE 'todo' END queue_stage FROM evidence)`;
 const decode=(r:Record<string,any>):QueuedRequest=>{let data:Record<string,unknown>={};try{const parsed=JSON.parse(r.data);if(parsed&&typeof parsed==='object'&&!Array.isArray(parsed))data=parsed;}catch{/* retained record remains visible */}return {id:r.id,kind:r.kind,status:r.status,created:r.created,data,queueStage:r.queue_stage,work:{assignee:r.assignee||null,nextAction:r.next_action||'',dueAt:r.due_at??null,resolution:r.resolution||'',triage:r.triage||'unreviewed',version:r.version||0,updated:r.work_updated??null,updatedBy:r.updated_by||null}};};
 export async function requestQueue(db:D1Database,input:Record<string,unknown>):Promise<RequestQueueResult>{

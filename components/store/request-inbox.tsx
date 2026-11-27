@@ -201,6 +201,9 @@ export function RequestInbox({ requests: initialRequests, activeTab = true, auto
   const [offset, setOffset] = useState(0), [assignee, setAssignee] = useState(''), [overdue, setOverdue] = useState(false);
   const [queuePage, setQueuePage] = useState<RequestQueueResult | null>(null), [queueLoading, setQueueLoading] = useState(Boolean(onLoadQueue));
   const [workRevision, setWorkRevision] = useState(0);
+  const [loadedQueueKey, setLoadedQueueKey] = useState('');
+  const queueKey = JSON.stringify([filter, query, offset, assignee, overdue]);
+  const queueReady = Boolean(queuePage && loadedQueueKey === queueKey);
   const [listening, setListening] = useState<string | null>(null);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [newRule, setNewRule] = useState('');
@@ -297,7 +300,7 @@ export function RequestInbox({ requests: initialRequests, activeTab = true, auto
           const page = onLoadQueue ? await onLoadQueue({ queue: filter, query, offset, focusId: focus, assignee, overdue }) : null;
           const fresh = await onRefreshReplies(page ? page.requests.map(r => r.id) : ids.slice(0, 200), focus);
           if (!stopped && mounted.current) {
-            if (page) { setQueuePage(page); setQueueLoading(false); setSnapshot({ base: initialRequests, requests: page.requests, focus }); }
+            if (page) { setQueuePage(page); setLoadedQueueKey(queueKey); setQueueLoading(false); setSnapshot({ base: initialRequests, requests: page.requests, focus }); }
             else if (fresh.requests) setSnapshot({ base: initialRequests, requests: fresh.requests, focus });
             setLiveReplies(fresh.replies || {});
             if (fresh.forwards) setForwards(fresh.forwards);
@@ -390,7 +393,7 @@ export function RequestInbox({ requests: initialRequests, activeTab = true, auto
     setSelected(current => { const row = current ? rows.find(r => r.request.id === current) : null; return row && inView(row.stage, view) ? current : null; });
   }
   const needle = query.trim().toLowerCase();
-  const shown = onLoadQueue && queuePage ? rows.filter(row => queuePage.pageIds.includes(row.request.id)) : rows.filter(row => inView(row.stage, filter)
+  const shown = onLoadQueue ? (queueReady && queuePage ? rows.filter(row => queuePage.pageIds.includes(row.request.id)) : []) : rows.filter(row => inView(row.stage, filter)
     && (!needle || [row.request.id, row.request.kind, ...Object.values(row.request.data).filter(value => typeof value === 'string')].join(' ').toLowerCase().includes(needle)))
     // To reply: oldest first, so nothing waits behind newer mail. Everything else: newest first.
     .sort((a, b) => filter === 'todo' ? a.since - b.since : b.since - a.since);
@@ -581,13 +584,13 @@ export function RequestInbox({ requests: initialRequests, activeTab = true, auto
     {onLoadQueue && <div className={styles.queueControls}>
       <label>Assignment<select value={assignee} onChange={e => { setAssignee(e.target.value); setOffset(0); }}><option value="">Everyone</option><option value="unassigned">Unassigned</option>{workTeam.map(m => <option key={m.email} value={m.email}>{m.name || m.email}</option>)}</select></label>
       <label><input type="checkbox" checked={overdue} onChange={e => { setOverdue(e.target.checked); setOffset(0); }}/> Overdue only</label>
-      <span role="status">{queueLoading ? 'Loading requests…' : queuePage ? `${queuePage.total ? queuePage.offset + 1 : 0}–${Math.min(queuePage.offset + queuePage.limit, queuePage.total)} of ${queuePage.total} matching requests` : 'Queue unavailable'}</span>
+      <span role="status">{queueLoading ? 'Loading requests…' : queueReady && queuePage ? `${queuePage.total ? queuePage.offset + 1 : 0}–${Math.min(queuePage.offset + queuePage.limit, queuePage.total)} of ${queuePage.total} matching requests` : 'Queue unavailable'}</span>
       <button type="button" className={styles.link} disabled={queueLoading || offset === 0} onClick={() => setOffset(Math.max(0, offset - 50))}>Previous</button>
-      <button type="button" className={styles.link} disabled={queueLoading || !queuePage?.hasMore} onClick={() => setOffset(offset + 50)}>Next</button>
+      <button type="button" className={styles.link} disabled={queueLoading || !queueReady || !queuePage?.hasMore} onClick={() => setOffset(offset + 50)}>Next</button>
     </div>}
     <div className={styles.desk} data-open={active ? 'true' : 'false'}>
       <div className={styles.list} role="list" aria-label="Requests">
-        {!grouped.length ? <p className={styles.empty}>{requests.length ? (filter === 'todo' ? 'Nothing waiting for a reply.' : filter === 'done' ? 'Nothing archived yet. Requests move here once a reply is sent or you archive them.' : 'No requests here.') : 'No customer requests yet.'}</p> : grouped.map(row => {
+        {!grouped.length ? <p className={styles.empty}>{onLoadQueue && !queueReady ? (refreshError ? 'This view could not load. Retrying automatically.' : 'Loading this view…') : requests.length ? (filter === 'todo' ? 'Nothing waiting for a reply.' : filter === 'done' ? 'Nothing archived yet. Requests move here once a reply is sent or you archive them.' : 'No requests here.') : 'No customer requests yet.'}</p> : grouped.map(row => {
           const { request, reply } = row;
           const name = text(request.data.name) || text(request.data.email) || 'Customer';
           const form = coaFormDetails(request);

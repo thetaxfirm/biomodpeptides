@@ -3,12 +3,15 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const {DatabaseSync}=require('node:sqlite'),root=path.resolve(__dirname,'..'),cache={};
 global.fetch=async()=>{throw Error('External calls forbidden');};
 function load(file){if(cache[file])return cache[file].exports;const m=new Module(path.join(root,file),module);cache[file]=m;m.filename=path.join(root,file);m.require=id=>id.startsWith('./')?load(path.join(path.dirname(file),id+'.ts')):require(id);m._compile(ts.transpileModule(fs.readFileSync(m.filename,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,m.filename);return m.exports;}
+// Index creation must tolerate malformed records that predate JSON validation.
+const legacy=new DatabaseSync(':memory:');legacy.exec("CREATE TABLE requests(id TEXT PRIMARY KEY,status TEXT,created INTEGER,data TEXT);CREATE TABLE orders(id TEXT PRIMARY KEY,status TEXT,created INTEGER,data TEXT);CREATE TABLE rewards(id TEXT PRIMARY KEY,owner TEXT,created INTEGER);INSERT INTO requests VALUES('legacy','new',1,'not json');INSERT INTO orders VALUES('legacy','paid',1,'not json');");legacy.exec(fs.readFileSync(path.join(root,'drizzle/0040_admin_customer_work.sql'),'utf8'));legacy.close();
 const sql=new DatabaseSync(':memory:');for(const f of fs.readdirSync(path.join(root,'drizzle')).filter(f=>f.endsWith('.sql')).sort())sql.exec(fs.readFileSync(path.join(root,'drizzle',f),'utf8'));
 const stmt=(q,args=[])=>({bind:(...a)=>stmt(q,a),first:async()=>sql.prepare(q).get(...args)||null,all:async()=>({results:sql.prepare(q).all(...args)}),run:async()=>({meta:sql.prepare(q).run(...args)})});const db={prepare:stmt,batch:async ss=>{sql.exec('BEGIN');try{const r=[];for(const s of ss)r.push(await s.run());sql.exec('COMMIT');return r;}catch(e){sql.exec('ROLLBACK');throw e;}}};
 const id=n=>`10000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const seed=(n,status='new',data={})=>sql.prepare('INSERT INTO requests(id,kind,status,data,created) VALUES(?,?,?,?,?)').run(id(n),'contact',status,JSON.stringify({name:'Fixture '+n,email:'fixture@example.invalid',message:'Synthetic question',...data}),n);
 const message=(n,direction,created,body='Synthetic message')=>sql.prepare('INSERT INTO request_reply_messages(id,request_id,direction,body,created,provider_message_id,sender,recipient) VALUES(?,?,?,?,?,?,?,?)').run(crypto.randomUUID(),id(n),direction,body,created,crypto.randomUUID(),'fixture@example.invalid','staff@example.invalid');
 (async()=>{
+ const schema=load('db/schema.ts'),{getTableConfig}=require('drizzle-orm/sqlite-core');for(const [key,name] of [['requestWork','request_work'],['rewardAdjustments','reward_adjustments'],['orderPaymentObservations','order_payment_observations']])assert.equal(getTableConfig(schema[key]).name,name);
  const {requestQueue}=load('lib/admin-request-queue.ts'),{saveRequestWork}=load('lib/admin-request-work.ts');
  for(let n=1;n<=251;n++)seed(n,n===1?'new':'resolved');
  let page=await requestQueue(db,{queue:'todo'});assert.equal(page.total,1);assert.equal(page.requests[0].id,id(1),'oldest unanswered request remains visible past 200 newer records');assert.equal(page.counts.done,250);
@@ -29,6 +32,7 @@ const message=(n,direction,created,body='Synthetic message')=>sql.prepare('INSER
  seed(254);message(254,'outgoing',500);page=await requestQueue(db,{queue:'done'});assert(page.pageIds.includes(id(254)));message(254,'incoming',600);page=await requestQueue(db,{queue:'todo'});assert(page.pageIds.includes(id(254)),'new customer reply returns to queue');
  seed(255,'new',{origin:'order'});page=await requestQueue(db,{queue:'followup'});assert(page.pageIds.includes(id(255)));
  seed(256);sql.prepare('UPDATE requests SET data=? WHERE id=?').run('null',id(256));page=await requestQueue(db,{queue:'all',focusId:id(256)});assert.deepEqual(page.requests.find(r=>r.id===id(256)).data,{});
+ seed(257);sql.prepare('UPDATE requests SET data=? WHERE id=?').run('malformed legacy JSON',id(257));page=await requestQueue(db,{queue:'todo'});assert(page.pageIds.includes(id(257)));assert.deepEqual(page.requests.find(r=>r.id===id(257)).data,{});
  const events=sql.prepare("SELECT actor,changes,summary FROM change_events WHERE entity_id=? AND action='request.work'").all(id(253));assert.equal(events.length,3);assert(events.every(e=>e.actor===actor.email));assert(events.every(e=>!JSON.stringify(e).includes('Review vendor terms')),'audit excludes note contents');
  console.log('PASS: complete request queues/counts/search/messages/pages/focus, exact conversation reply transitions, correction-friendly triage, guarded assignment/work saves and private audit metadata.');
 })().catch(e=>{console.error(e);process.exitCode=1});

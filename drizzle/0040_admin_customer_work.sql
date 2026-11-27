@@ -15,9 +15,9 @@ CREATE INDEX IF NOT EXISTS request_work_due ON request_work(assignee,due_at);
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS requests_status_created ON requests(status,created DESC,id DESC);
 --> statement-breakpoint
-CREATE INDEX IF NOT EXISTS requests_email ON requests(lower(trim(json_extract(data,'$.email'))));
+CREATE INDEX IF NOT EXISTS requests_email ON requests(lower(trim(json_extract(CASE WHEN json_valid(data) THEN data ELSE '{}' END,'$.email'))));
 --> statement-breakpoint
-CREATE INDEX IF NOT EXISTS orders_customer_email ON orders(lower(trim(json_extract(data,'$.email'))),created DESC,id DESC);
+CREATE INDEX IF NOT EXISTS orders_customer_email ON orders(lower(trim(json_extract(CASE WHEN json_valid(data) THEN data ELSE '{}' END,'$.email'))),created DESC,id DESC);
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS rewards_owner_created ON rewards(owner,created DESC,id DESC);
 --> statement-breakpoint
