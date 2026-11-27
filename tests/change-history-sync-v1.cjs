@@ -33,5 +33,37 @@ const DB={prepare(sql){const statement=(values=[])=>({bind:(...args)=>statement(
   assert(!preferred.events.some(e=>e.action==='source_observed'),'Default view prefers richer source evidence without deleting observations');
   const count=db.prepare('SELECT COUNT(*) n FROM change_events').get().n;
   await syncRuntimeHistory(env,now+7200000,request);assert.equal(db.prepare('SELECT COUNT(*) n FROM change_events').get().n,count,'later scheduled runs duplicate neither evidence record');
+  const atom = (entries) => `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">${entries.map(({sha,date})=>`<entry><id>tag:github.com,2008:Grit::Commit/${sha}</id><link type="text/html" rel="alternate" href="https://github.com/thetaxfirm/biomodpeptides/commit/${sha}"/><updated>${date}</updated><title>PRIVATE_TITLE</title><author><email>PRIVATE_EMAIL</email></author></entry>`).join('')}</feed>`;
+  const fallbackSha='b'.repeat(40),date=new Date(now-2000).toISOString();
+  const health=()=>db.prepare("SELECT state,description FROM change_history_sync WHERE source='github_recent'").get();
+  const release=()=>db.prepare("UPDATE change_history_sync SET synced_at=0 WHERE source='source_poll'").run();
+  let fallbackCalls=[];release();
+  await syncRuntimeHistory({DB},now+8000000,async(url,options)=>{
+    fallbackCalls.push(url);assert.equal(options.redirect,'error');assert(!options.headers.Authorization);
+    return url.startsWith('https://api.github.com/')?new Response('PRIVATE_API_BODY',{status:403,headers:{'x-ratelimit-remaining':'0'}}):new Response(atom([{sha:fallbackSha,date}]),{headers:{'content-type':'application/atom+xml'}});
+  });
+  assert.equal(fallbackCalls.length,2);assert.equal(health().state,'active');assert.match(health().description,/Atom fallback \(REST API HTTP 403 \(rate limited\)\)/);
+  assert.equal(db.prepare('SELECT occurred_at FROM change_events WHERE entity_id=?').get(fallbackSha).occurred_at,now-2000);
+  assert(!JSON.stringify(db.prepare('SELECT * FROM change_events').all()).includes('PRIVATE_'));
+  const afterFallback=db.prepare('SELECT COUNT(*) n FROM change_events').get().n;
+  for(const invalid of [
+    atom([{sha:'c'.repeat(40),date},{sha:'not-a-sha',date}]),
+    atom([{sha:'c'.repeat(40),date:'2026-02-30T00:00:00Z'}]),
+    atom([{sha:'c'.repeat(40),date}]).replace('/thetaxfirm/biomodpeptides/commit/','/other/repository/commit/'),
+    atom(Array.from({length:21},()=>({sha:'c'.repeat(40),date}))),
+    atom([{sha:'c'.repeat(40),date}]).replace('<feed','<!DOCTYPE feed [<!ENTITY x "PRIVATE_ENTITY">]><feed'),
+    'x'.repeat(256*1024+1),
+  ]){
+    release();await syncRuntimeHistory({DB},now+9000000,async url=>url.startsWith('https://api.github.com/')?Response.json([{sha:'bad',commit:{committer:{date}}}]):new Response(invalid));
+    assert.equal(health().state,'unavailable');assert.match(health().description,/REST API metadata validation failed; Atom feed/);
+    assert.equal(db.prepare('SELECT COUNT(*) n FROM change_events').get().n,afterFallback,'invalid feed cannot persist an earlier valid entry');
+  }
+  release();await syncRuntimeHistory({DB},now+10000000,async url=>url.startsWith('https://api.github.com/')?new Response('PRIVATE_FAILURE',{status:429}):new Response('PRIVATE_FAILURE',{status:503}));
+  assert.match(health().description,/REST API HTTP 429 \(rate limited\); Atom feed HTTP 503/);assert(!health().description.includes('PRIVATE'));
+  release();await syncRuntimeHistory({DB},now+11000000,async()=>{throw Error('PRIVATE_NETWORK_MESSAGE');});
+  assert.match(health().description,/REST API network request failed; Atom feed network request failed/);assert(!health().description.includes('PRIVATE'));
+  const broken={prepare(sql){if(sql.startsWith('INSERT OR IGNORE INTO change_events'))return{bind(){return{run:async()=>{throw Error('PRIVATE_DATABASE_MESSAGE');}}}};return DB.prepare(sql);}};
+  release();let saveFetches=0;await syncRuntimeHistory({DB:broken},now+12000000,async()=>{saveFetches++;return Response.json([{sha:'d'.repeat(40),commit:{committer:{date}}}]);});
+  assert.equal(saveFetches,1,'persistence errors do not retry a different source');assert.match(health().description,/Source history persistence failed/);assert(!health().description.includes('PRIVATE'));
   console.log('PASS: scheduled source sync, metadata minimization, bounded polling, retries, executing version evidence, immutable existing history.');
 })().catch(e=>{console.error(e);process.exitCode=1;}).finally(()=>db.close());

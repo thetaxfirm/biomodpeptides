@@ -1,4 +1,5 @@
 import { recordChange } from './change-history';
+import { recentSourceRevisions, sourceFailureDescription } from './change-history-source';
 
 const repository = 'thetaxfirm/biomodpeptides';
 const HOUR = 3600000;
@@ -28,31 +29,25 @@ export async function syncRuntimeHistory(env: Environment, now = Date.now(), req
     ON CONFLICT(source) DO UPDATE SET synced_at=excluded.synced_at
     WHERE change_history_sync.synced_at<=?`).bind(now, now - HOUR).run();
   if (!lease.meta.changes) return;
+  let stage: 'read' | 'save' = 'read';
   try {
-    const response = await request(`https://api.github.com/repos/${repository}/commits?sha=main&per_page=100`, {
-      headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'TryBiomod-history' },
-      redirect: 'error', signal: AbortSignal.timeout(15000),
-    });
-    if (!response.ok) throw Error('Source unavailable');
-    const rows: unknown = await response.json();
-    if (!Array.isArray(rows)) throw Error('Source unavailable');
+    const { revisions, detail } = await recentSourceRevisions(request);
+    stage = 'save';
     // These are bounded observations, distinct from the richer importer events. Reusing the
     // importer's immutable ID would prevent it later recording author, changed paths and signatures.
-    for (const row of rows) {
-      if (!/^[a-f0-9]{40}$/i.test(row?.sha)) throw Error('Invalid source identity');
-      const timestamp = Date.parse(row?.commit?.committer?.date);
-      if (!Number.isSafeInteger(timestamp) || timestamp < 0) throw Error('Invalid source time');
+    for (const { sha, timestamp } of revisions) {
       // Avoid copying commit messages, emails or raw provider payloads into operational history.
-      await recordChange(env.DB, { id: 'github:observed-source:' + row.sha, occurredAt: timestamp, source: 'github', actor: 'GitHub main',
-        actorType: 'provider', action: 'source_observed', entityType: 'source', entityId: row.sha,
+      await recordChange(env.DB, { id: 'github:observed-source:' + sha, occurredAt: timestamp, source: 'github', actor: 'GitHub main',
+        actorType: 'provider', action: 'source_observed', entityType: 'source', entityId: sha,
         summary: 'Source revision recorded on main.', status: 'observed',
         changes: [{ field: 'Attribution limit', before: null, after: 'See the source record for author metadata; a source revision does not prove deployment.' }],
-        evidenceUrl: `https://github.com/${repository}/commit/${row.sha}`, evidenceRef: row.sha,
+        evidenceUrl: `https://github.com/${repository}/commit/${sha}`, evidenceRef: sha,
       });
     }
-    await sync(env.DB, 'github_recent', now, 'active', `Scheduled read of the newest ${rows.length} main revisions. Earlier imported history remains available; this feed does not refresh build checks or claim complete historical coverage.`);
-  } catch {
-    await sync(env.DB, 'github_recent', now, 'unavailable', 'The scheduled source read failed. Previously recorded revisions remain intact; retry is scheduled.');
+    await sync(env.DB, 'github_recent', now, 'active', `${detail}: newest ${revisions.length} main revisions checked. Earlier imported history remains available; this feed does not refresh build checks or claim complete historical coverage.`);
+  } catch (error) {
+    const reason = stage === 'read' ? sourceFailureDescription(error) : 'Source history persistence failed';
+    await sync(env.DB, 'github_recent', now, 'unavailable', `${reason}. Previously recorded revisions remain intact; retry is scheduled.`);
     await env.DB.prepare("UPDATE change_history_sync SET synced_at=? WHERE source='source_poll'").bind(now - 45 * 60000).run();
   }
 }
