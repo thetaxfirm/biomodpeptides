@@ -17,6 +17,8 @@ const stmt=(q,args=[])=>({bind:(...a)=>stmt(q,a),first:async()=>sql.prepare(q).g
  await assert.rejects(rewards.addRewardAdjustment(db,actor,{...input,requestKey:crypto.randomUUID()},1002),/balance changed/);
  assert.throws(()=>sql.prepare("UPDATE rewards SET points=999 WHERE id='reward-0000'").run(),/immutable/);
  assert.throws(()=>sql.prepare("DELETE FROM rewards WHERE id='reward-0000'").run(),/immutable/);
+ assert.throws(()=>sql.prepare("INSERT OR REPLACE INTO rewards(id,owner,points,reason,created) VALUES('reward-0000','member',999,'overwrite',1)").run(),/immutable/);
+ assert.throws(()=>sql.prepare("INSERT OR REPLACE INTO reward_adjustments(request_key,reward_id,actor,created) SELECT request_key,reward_id,'other',created FROM reward_adjustments LIMIT 1").run(),/immutable/);
  assert.equal((await rewards.rewardCustomers(db,'fixture@example.invalid'))[0].balance,140);
  for(let n=0;n<27;n++)sql.prepare('INSERT INTO orders(id,owner,request_key,status,data,total,created,updated) VALUES(?,?,?,?,?,?,?,?)').run('order-'+n,'member','order-'+n,'paid',JSON.stringify({email:n===0?'prior@example.invalid':'fixture@example.invalid',environment:'authorizenet:live',items:[{product:{name:'Fixture product'},quantity:1}]}),1000,n+1,n+1);
  sql.prepare('INSERT INTO requests(id,owner,kind,data,status,created) VALUES(?,?,?,?,?,?)').run(crypto.randomUUID(),'member','contact',JSON.stringify({email:'fixture@example.invalid',subject:'Fixture question',message:'Testing only'}),'new',3);
@@ -25,6 +27,7 @@ const stmt=(q,args=[])=>({bind:(...a)=>stmt(q,a),first:async()=>sql.prepare(q).g
  sql.prepare("INSERT INTO requests(id,kind,data,status,created) VALUES(?,'text_offer',?,'new',2)").run(crypto.randomUUID(),JSON.stringify({phone:'+17025550101'}));
  sql.prepare("INSERT INTO requests(id,kind,data,status,created) VALUES(?,'text_offer',?,'new',2)").run(crypto.randomUUID(),JSON.stringify({phone:'+12025550199'}));
  const view=await customers.customerWorkspace(db,{email:'fixture@example.invalid'});assert.equal(view.orders.total,27,'account-linked prior email orders included');assert.equal(view.orders.items.length,25);assert.equal(view.orders.recordedPaidCents,1000,'legacy live alias with receipt is included');assert.equal(view.preferences.textMarketing.length,1,'only canonical matching customer phone is returned');assert.equal(view.orders.items[0].items,'Item × 1','legacy null item cannot break the customer workspace');assert.equal(view.rewards[0].balance,140);assert.equal(view.preferences.emailMarketing.state,'unsubscribed');assert.equal(view.conversations.total,1);
+ sql.prepare("UPDATE orders SET data='malformed legacy JSON' WHERE id='order-2'").run();assert.equal((await rewards.rewardCustomers(db,'Fixture'))[0].id,'member','legacy malformed order does not break reward customer lookup');
  const older=await customers.customerWorkspace(db,{email:'fixture@example.invalid',ordersBefore:view.orders.nextCursor});assert.equal(older.orders.items.length,2);
  assert(view.activity.every(a=>!('body' in a)),'activity does not duplicate message bodies');
  const route=fs.readFileSync(path.join(root,'app/api/admin/customers/route.ts'),'utf8');assert.match(route,/requireStaff\('reports:read'\)/);assert.match(route,/get\('origin'\)!==req.nextUrl.origin/);

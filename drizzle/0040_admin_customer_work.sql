@@ -45,3 +45,10 @@ CREATE TRIGGER IF NOT EXISTS audit_request_work_update AFTER UPDATE ON request_w
  INSERT INTO change_events(id,occurred_at,recorded_at,source,actor,actor_type,action,entity_type,entity_id,summary,status,changes)
  VALUES(lower(hex(randomblob(16))),NEW.updated,NEW.updated,COALESCE((SELECT source FROM change_context WHERE id=1),'system'),COALESCE((SELECT actor FROM change_context WHERE id=1),'Unattributed database change'),COALESCE((SELECT actor_type FROM change_context WHERE id=1),'unknown'),'request.work','request',NEW.request_id,'Request assignment, next action or resolution updated','succeeded',json_array(json_object('field','Assignee','before',OLD.assignee,'after',NEW.assignee),json_object('field','Triage','before',OLD.triage,'after',NEW.triage),json_object('field','Due date','before',OLD.due_at,'after',NEW.due_at)));
 END;
+
+--> statement-breakpoint
+CREATE TRIGGER IF NOT EXISTS rewards_no_replace BEFORE INSERT ON rewards WHEN EXISTS(SELECT 1 FROM rewards WHERE id=NEW.id)
+BEGIN SELECT RAISE(ABORT,'Reward entries are immutable. Add a correcting entry.'); END;
+--> statement-breakpoint
+CREATE TRIGGER IF NOT EXISTS reward_adjustments_no_replace BEFORE INSERT ON reward_adjustments WHEN EXISTS(SELECT 1 FROM reward_adjustments WHERE request_key=NEW.request_key OR reward_id=NEW.reward_id)
+BEGIN SELECT RAISE(ABORT,'Reward attribution is immutable.'); END;

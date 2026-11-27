@@ -7,10 +7,10 @@ export async function rewardCustomers(db: D1Database, query: unknown) {
  const q = typeof query === 'string' ? query.trim().slice(0,120) : '';
  if(q.length<2) return [];
  const term='%'+q.replace(/[\\%_]/g,'\\$&')+'%';
- return (await db.prepare(`SELECT p.id,p.name,COALESCE(c.email,(SELECT json_extract(o.data,'$.email') FROM orders o WHERE o.owner=p.id ORDER BY created DESC LIMIT 1),'') email,
+ return (await db.prepare(`SELECT p.id,p.name,COALESCE(c.email,(SELECT json_extract(CASE WHEN json_valid(o.data) THEN o.data ELSE '{}' END,'$.email') FROM orders o WHERE o.owner=p.id ORDER BY created DESC LIMIT 1),'') email,
  COALESCE((SELECT SUM(points) FROM rewards WHERE owner=p.id),0) balance FROM profiles p
  LEFT JOIN crm_contacts c ON c.email=(SELECT email FROM crm_contacts WHERE owner=p.id ORDER BY last_seen DESC LIMIT 1)
- WHERE p.id=? OR p.name LIKE ? ESCAPE '\\' OR c.email LIKE ? ESCAPE '\\' OR EXISTS(SELECT 1 FROM orders o WHERE o.owner=p.id AND json_extract(o.data,'$.email') LIKE ? ESCAPE '\\')
+ WHERE p.id=? OR p.name LIKE ? ESCAPE '\\' OR c.email LIKE ? ESCAPE '\\' OR EXISTS(SELECT 1 FROM orders o WHERE o.owner=p.id AND json_extract(CASE WHEN json_valid(o.data) THEN o.data ELSE '{}' END,'$.email') LIKE ? ESCAPE '\\')
  ORDER BY p.name,p.id LIMIT 30`).bind(q,term,term,term).all<{id:string;name:string;email:string;balance:number}>()).results;
 }
 export async function rewardLedger(db: D1Database, rawOwner: unknown, before?: unknown) {
