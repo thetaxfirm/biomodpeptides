@@ -1,4 +1,5 @@
 import { diagnosticWindow } from './sales-diagnostics';
+import type { ReportOptionsInput } from './report-window';
 import { commissionEligibility, type CommissionEvidence } from './affiliate-commission-policy';
 export type FinancialAmount = { cents: number; knownOrders: number; missingOrders: number };
 type RefundTotal = { transactions: number; cents: number; missingAmounts: number; conflictingAmounts: number };
@@ -20,8 +21,8 @@ const live = `json_extract(${safeData},'$.environment') IN ('live','authorizenet
 const field = (path: string) => `json_extract(${safeData},'$.${path}')`;
 const financialFields = `o.id,o.created,o.status,o.total,o.payment_ref,o.notification_id,${field('subtotal')} subtotal,${field('discount')} discount,${field('tax')} tax,${field('shipping')} shipping,${field('shipment.shipmentId')} shipment_id,${field('shipment.costCents')} carrier_cost,${field('paidAt')} paid_at,p.recorded_at,${field('paymentCheck.attempts')} attempts,${field('paymentCheck.at')} checked_at`;
 /** All cohorts are scanned in bounded pages. No record identifiers or provider references leave this module. */
-export async function financialReport(db: D1Database, days: string | null, now = Date.now()): Promise<FinancialReport> {
-  const window = diagnosticWindow(days, now);
+export async function financialReport(db: D1Database, days: string | null, now = Date.now(), options: ReportOptionsInput = {}): Promise<FinancialReport> {
+  const window = diagnosticWindow(days, now, options);
   const result: FinancialReport = { asOf: now, window, liveOrders: 0, recordedPaymentOrders: 0, missingPaymentReferences: 0,
     amounts: { gross: amount(), subtotal: amount(), discount: amount(), tax: amount(), customerShipping: amount(), carrierCost: amount() },
     carrierCoverage: { labelsRecorded: 0, withoutLabel: 0 }, paymentDates: { knownOrders: 0, unknownOrders: 0, recordedDuringWindow: 0, recordedOutsideWindow: 0 },

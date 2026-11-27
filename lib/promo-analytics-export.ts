@@ -1,4 +1,5 @@
 import type { PromoAnalyticsReport } from './promo-analytics';
+import { reportDate } from './report-window';
 
 const columns = ['record_type', 'code', 'percent_off', 'active', 'environment', 'classification', 'orders_started', 'payment_recorded', 'gross_cents', 'promo_discount_cents', 'missing_payment_records', 'missing_amount_records', 'missing_discount_records', 'metadata_key', 'metadata_value'] as const;
 type ExportRow = Partial<Record<typeof columns[number], string | number>>;
@@ -20,6 +21,8 @@ export function promoAnalyticsExport(report: PromoAnalyticsReport) {
   metadata('window_start_utc_inclusive', report.window.start === null ? 'All available order history' : iso(report.window.start));
   metadata('window_end_utc_exclusive', iso(report.window.end));
   metadata('time_zone', report.window.timeZone);
+  metadata('first_calendar_date',report.window.days==='all'?'All available order history':reportDate(report.window.start,report.window.timeZone));
+  metadata('last_calendar_date',reportDate(report.window.end-1,report.window.timeZone));
   metadata('includes_partial_today', String(report.window.includesPartialToday));
   metadata('currency', 'USD');
   metadata('classification', report.classification);

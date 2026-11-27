@@ -1,6 +1,7 @@
 import type { SalesDiagnosticsReport } from './sales-diagnostics';
+import { reportDate } from './report-window';
 
-const columns = ['record_type', 'day_utc', 'environment', 'status_or_kind', 'classification', 'orders', 'payment_recorded', 'gross_cents', 'missing_payment_records', 'records', 'oldest_created_utc', 'metadata_key', 'metadata_value'] as const;
+const columns = ['record_type', 'day_utc', 'environment', 'status_or_kind', 'classification', 'orders', 'payment_recorded', 'gross_cents', 'missing_payment_records', 'records', 'oldest_created_utc', 'metadata_key', 'metadata_value', 'day_in_report_timezone'] as const;
 type ExportRow = Partial<Record<typeof columns[number], string | number>>;
 const iso = (value: number) => new Date(value).toISOString();
 
@@ -21,10 +22,12 @@ export function salesDiagnosticsExport(report: SalesDiagnosticsReport) {
   metadata('window_start_utc_inclusive', iso(report.window.start));
   metadata('window_end_utc_exclusive', iso(report.window.end));
   metadata('time_zone', report.window.timeZone);
+  metadata('first_calendar_date',reportDate(report.window.start,report.window.timeZone));
+  metadata('last_calendar_date',reportDate(report.window.end-1,report.window.timeZone));
   metadata('currency', 'USD');
   metadata('classification', report.classification);
   metadata('measurement_scope', 'Existing order and request records only. No visitor, people, traffic-source or conversion-rate measurements.');
-  metadata('window_scope', 'Order and request counts use complete UTC days; the current partial day is excluded.');
+  metadata('window_scope', 'Order and request counts use complete '+report.window.timeZone+' calendar days; the current partial day is excluded.');
   metadata('order_cohort', 'Orders are grouped by creation date, with payment status as of this export. Payment completion dates are not recorded separately; these are not daily sales.');
   metadata('customer_test_classification', 'Orders explicitly marked as internal tests are excluded. Remaining orders are unclassified as customer purchases or internal tests. A live payment can still be an internal test.');
   metadata('payment_evidence', 'Payment recorded requires a paid or fulfillment status plus both payment and verification references. Missing-reference orders are excluded from recorded payment totals.');
@@ -32,8 +35,8 @@ export function salesDiagnosticsExport(report: SalesDiagnosticsReport) {
   metadata('request_scope', 'Repeated delivery calculations can issue multiple quotes for one account. Failed quotes are not recorded. Request counts cannot establish quote-to-purchase conversion or distinguish internal tests.');
   metadata('unresolved_scope', 'Unresolved orders and cart conflicts include all dates, including today. They are outstanding records, not confirmed abandoned checkouts or active shoppers.');
   metadata('empty_sections', 'No rows in an orders, requests or unresolved_orders section means no matching records in the report, not unavailable visitor data.');
-  for (const row of report.orders) rows.push({ record_type: 'orders', day_utc: row.dayUtc, environment: row.environment, status_or_kind: row.status, classification: report.classification, orders: row.orders, payment_recorded: row.paymentRecorded, gross_cents: row.grossCents, missing_payment_records: row.missingPaymentRecords });
-  for (const row of report.requests) rows.push({ record_type: 'requests', day_utc: row.dayUtc, status_or_kind: row.kind, classification: report.classification, records: row.records });
+  for (const row of report.orders) rows.push({ record_type: 'orders', day_utc: report.window.timeZone==='UTC'?row.dayUtc:undefined, day_in_report_timezone:row.day??row.dayUtc, environment: row.environment, status_or_kind: row.status, classification: report.classification, orders: row.orders, payment_recorded: row.paymentRecorded, gross_cents: row.grossCents, missing_payment_records: row.missingPaymentRecords });
+  for (const row of report.requests) rows.push({ record_type: 'requests', day_utc: report.window.timeZone==='UTC'?row.dayUtc:undefined, day_in_report_timezone:row.day??row.dayUtc, status_or_kind: row.kind, classification: report.classification, records: row.records });
   for (const row of report.unresolvedOrders) rows.push({ record_type: 'unresolved_orders', environment: row.environment, status_or_kind: row.status, classification: report.classification, records: row.records, oldest_created_utc: iso(row.oldestCreated) });
   rows.push({ record_type: 'cart_conflicts', classification: report.classification, records: report.cartConflicts.records, oldest_created_utc: report.cartConflicts.oldestCreated === null ? '' : iso(report.cartConflicts.oldestCreated) });
   return {

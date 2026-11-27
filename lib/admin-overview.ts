@@ -8,6 +8,7 @@ import { tabForOrder, isArchived } from './order-queue';
 import { overdueCustomers } from './reply-overdue';
 import type { CoaEnvironment } from './coa-outbox';
 import type { ShippingOptionsConfig } from './shipping-options';
+import { calendarReportWindow, reportOptions, reportDate, reportDayStart, reportDateLabel, type ReportOptionsInput } from './report-window';
 
 const DAY = 86400000;
 const PAID = new Set(['paid', 'labeling', 'shipped', 'delivered']);
@@ -16,7 +17,7 @@ export type Attention = { id: string; tab: string; count: number; title: string;
 export type SalesCohort = { orders: number; paymentRecorded: number; grossCents: number; missingPaymentRecords: number };
 // Retain the original fields for already-open admin bundles during deployment.
 export type SalesWindow = { label: string; orders: number; revenue: number; live: SalesCohort; sandbox: SalesCohort; unknown: SalesCohort };
-export type Overview = { generatedAt: number; attention: Attention[]; sales: SalesWindow[] | null; setup: Attention[] };
+export type Overview = { generatedAt: number; timeZone?: string; attention: Attention[]; sales: SalesWindow[] | null; setup: Attention[] };
 export type OverviewOrderSummary = { toShip: { count: number; oldest: number; labels: number; coaBlocked: number }; review: number; backorder: { count: number; oldest: number }; sales: SalesWindow[]; coaProductIds: number[] };
 export type OverviewAccess = { orders: boolean; requests: boolean; reports: boolean; store: boolean };
 
@@ -56,7 +57,16 @@ export function productAttention(products: Product[], waitingOrders: { items: un
     return out;
 }
 
-export function salesWindows(orders: OverviewOrder[], now: number): SalesWindow[] {
+export function overviewSalesPeriods(now: number, input: ReportOptionsInput = {}) {
+    const options = reportOptions(input), timeZone = options.timeZone!;
+    const periods = [
+        {label:`Today (${timeZone}, partial)`,from:reportDayStart(reportDate(now,timeZone),timeZone),end:now+1},
+        ...[7,30].map(days=>{const window=calendarReportWindow(String(days),now,{timeZone},{defaultDays:7,allowedDays:[7,30]});return {label:`Last ${days} complete days (${timeZone})`,from:window.start,end:window.end};}),
+    ];
+    if(options.from!=null||options.to!=null){const window=calendarReportWindow(null,now,options,{defaultDays:7,allowedDays:[7,30]});periods.push({label:reportDateLabel(window),from:window.start,end:window.end});}
+    return periods;
+}
+export function salesWindows(orders: OverviewOrder[], now: number, options: ReportOptionsInput = {}): SalesWindow[] {
     // Match Sales diagnostics: fulfillment holds do not undo a recorded payment.
     // The saved environment is authoritative; today's configured provider cannot reclassify history.
     const paid = orders.filter(o => PAID.has(o.status) && !o.data?.internalTest && Number.isSafeInteger(o.created) && o.created <= now);
@@ -80,8 +90,7 @@ export function salesWindows(orders: OverviewOrder[], now: number): SalesWindow[
         window.revenue = window.live.grossCents;
         return window;
     };
-    const midnight = Math.floor(now / DAY) * DAY;
-    return [since('Today (UTC, partial)', midnight), since('Last 7 complete days (UTC)', midnight - 7 * DAY, midnight), since('Last 30 complete days (UTC)', midnight - 30 * DAY, midnight)];
+    return overviewSalesPeriods(now,options).map(window=>since(window.label,window.from,window.end));
 }
 
 export function setupAttention(shipping: ShippingOptionsConfig, environment: string | undefined): Attention[] {
@@ -92,7 +101,7 @@ export function setupAttention(shipping: ShippingOptionsConfig, environment: str
     return out;
 }
 
-export async function adminOverview(env: CoaEnvironment, input: { orders: OverviewOrder[]; orderSummary?: OverviewOrderSummary; products: Product[]; shipping: ShippingOptionsConfig; environment: string | undefined; access: OverviewAccess; now?: number }): Promise<Overview> {
+export async function adminOverview(env: CoaEnvironment, input: { orders: OverviewOrder[]; orderSummary?: OverviewOrderSummary; products: Product[]; shipping: ShippingOptionsConfig; environment: string | undefined; access: OverviewAccess; now?: number; reportOptions?: ReportOptionsInput }): Promise<Overview> {
     const now = input.now ?? Date.now();
     const attention: Attention[] = [];
     if (input.access.orders) attention.push(...(input.orderSummary ? summarizedOrderAttention(input.orderSummary, now) : orderAttention(input.orders, input.products, now)));
@@ -105,5 +114,5 @@ export async function adminOverview(env: CoaEnvironment, input: { orders: Overvi
     if (input.access.store) attention.push(...productAttention(input.products, input.orders.filter(o => !isArchived(o) && tabForOrder(o, now) === 'to_ship').map(o => ({ items: o.data?.items })), input.orderSummary?.coaProductIds));
     // Urgent first, then the order work happens in.
     attention.sort((a, b) => (a.tone === b.tone ? 0 : a.tone === 'urgent' ? -1 : 1));
-    return { generatedAt: now, attention, sales: input.access.reports ? (input.orderSummary?.sales || salesWindows(input.orders, now)) : null, setup: input.access.store ? setupAttention(input.shipping, input.environment) : [] };
+    return { generatedAt: now, timeZone: reportOptions(input.reportOptions).timeZone!, attention, sales: input.access.reports ? (input.orderSummary?.sales || salesWindows(input.orders, now, input.reportOptions)) : null, setup: input.access.store ? setupAttention(input.shipping, input.environment) : [] };
 }

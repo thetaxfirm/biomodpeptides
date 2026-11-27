@@ -1,9 +1,13 @@
 import type { FinancialReport } from './admin-finance';
+import { reportDate } from './report-window';
 /** Aggregate-only export. A missing amount is a separate count, never silently treated as evidence of zero. */
 export function financialCsv(report: FinancialReport) {
-  const start = new Date(report.window.start).toISOString().slice(0,10), end = new Date(report.window.end-1).toISOString().slice(0,10);
+  const start = reportDate(report.window.start,report.window.timeZone), end = reportDate(report.window.end-1,report.window.timeZone);
   const rows: (string | number)[][] = [['section','metric','records','known_amount_cents','missing_amount_records','basis'],
-    ['period',start+' through '+end,'','','','Complete UTC days; order-start cohort; current evidence'],
+    ['period',start+' through '+end,'','','','Complete calendar days in '+report.window.timeZone+'; order-start cohort; current evidence'],
+    ['period','time_zone','','','',report.window.timeZone],
+    ['period','window_start_utc_inclusive','','','',new Date(report.window.start).toISOString()],
+    ['period','window_end_utc_exclusive','','','',new Date(report.window.end).toISOString()],
     ['coverage','live_orders',report.liveOrders,'','','Excludes sandbox and marked internal tests'],
     ['coverage','recorded_payments',report.recordedPaymentOrders,'','','Current paid or fulfillment status with payment references'],
     ['coverage','missing_payment_references',report.missingPaymentReferences,'','','Excluded from recorded-payment amounts']];

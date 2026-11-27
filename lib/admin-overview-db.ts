@@ -3,11 +3,13 @@ import { orderQueueCte, readAllOrderWork } from './order-queue-db';
 import { COA_REQUIRED_TO_SHIP, hasCoa } from './coa-shipping';
 import type { Product } from './catalog';
 import type { OverviewOrderSummary, SalesCohort } from './admin-overview';
+import { overviewSalesPeriods } from './admin-overview';
+import type { ReportOptionsInput } from './report-window';
 
-const DAY = 86400000;
 const empty = (): SalesCohort => ({ orders: 0, paymentRecorded: 0, grossCents: 0, missingPaymentRecords: 0 });
 
-export async function readAdminOverviewOrderSummary(db: D1Database, products: Product[], now = Date.now()): Promise<OverviewOrderSummary> {
+export async function readAdminOverviewOrderSummary(db: D1Database, products: Product[], now = Date.now(), options: ReportOptionsInput = {}): Promise<OverviewOrderSummary> {
+    const windows = overviewSalesPeriods(now, options);
     const summary: OverviewOrderSummary = { toShip: { count: 0, oldest: now, labels: 0, coaBlocked: 0 }, review: 0, backorder: { count: 0, oldest: now }, sales: [], coaProductIds: [] };
     const work = (await db.prepare(`${orderQueueCte(now)} SELECT work,count(*) count,min(created) oldest,
         sum(CASE WHEN json_extract(data,'$.shipment') IS NOT NULL THEN 1 ELSE 0 END) labels
@@ -33,15 +35,9 @@ export async function readAdminOverviewOrderSummary(db: D1Database, products: Pr
         summary.coaProductIds = [...blockedProducts];
     }
 
-    const midnight = Math.floor(now / DAY) * DAY;
-    const windows = [
-        { label: 'Today (UTC, partial)', from: midnight, end: now + 1 },
-        { label: 'Last 7 complete days (UTC)', from: midnight - 7 * DAY, end: midnight },
-        { label: 'Last 30 complete days (UTC)', from: midnight - 30 * DAY, end: midnight },
-    ];
     summary.sales = windows.map(w => ({ label: w.label, orders: 0, revenue: 0, live: empty(), sandbox: empty(), unknown: empty() }));
     const validPayment = "typeof(payment_ref)='text' AND length(trim(payment_ref))>0 AND typeof(notification_id)='text' AND length(trim(notification_id))>0";
-    const rows = (await db.prepare(`WITH windows(position,start,end) AS (VALUES (0,?,?),(1,?,?),(2,?,?)),
+    const rows = (await db.prepare(`WITH windows(position,start,end) AS (VALUES ${windows.map((_,index)=>`(${index},?,?)`).join(',')}),
         source AS (SELECT created,status,total,payment_ref,notification_id,CASE WHEN json_valid(data) THEN data ELSE '{}' END data FROM orders),
         sales AS (SELECT position,total,payment_ref,notification_id,
             CASE WHEN json_extract(data,'$.environment') IN ('live','authorizenet:live') THEN 'live'
