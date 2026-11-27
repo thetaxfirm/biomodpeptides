@@ -50,6 +50,8 @@ if (!require.extensions['.ts']) require.extensions['.ts'] = (m, f) => m._compile
 const realNormalizeLot = require('../lib/coa-delivery.ts').normalizeLot, realHasInvalidLabelLot = require('../lib/coa-delivery.ts').hasInvalidLabelLot;
 const coaDeliveryStrict = new Proxy({}, { get: (_, key) => key === '__esModule' ? true : key === 'normalizeLot' ? realNormalizeLot : key === 'hasInvalidLabelLot' ? realHasInvalidLabelLot : forbidden('@/lib/coa-delivery:' + String(key)) });
 const dependencies = {
+  '@/lib/settings-version': {settingsSnapshot:async(db,key)=>{checkedAdmin();assert.equal(db,env.DB);assert.equal(key,'store');return {version:'fixture-settings-version'};}},
+  '@/lib/presale-campaigns': {listPresaleCampaigns:async db=>{checkedAdmin();assert.equal(db,env.DB);return [];}},
   '@/lib/coa-delivery': coaDeliveryStrict,
   // Contact capture is best-effort and recorded only; it is not COA delivery.
   '@/lib/contacts': { recordContact: async (db, input) => { note('contact:' + input.source); } },
