@@ -9,7 +9,16 @@ export function savedPreorder(value: unknown): SavedPreorder | null {
 export function orderHasPreorder(data: { items?: unknown } | undefined): boolean {
     return Array.isArray(data?.items) && data.items.some(item => Boolean(savedPreorder(item?.product?.activePreorder)));
 }
-export function orderPreorderNotice(data: { items?: unknown } | undefined): string {
+/** Purchase terms stay immutable. This separate staff confirmation releases current packing work. */
+export type PreorderRelease = { at: number; by: string; note: string };
+export function preorderReleased(data: { preorderRelease?: unknown } | undefined): boolean {
+    const r = data?.preorderRelease as Partial<PreorderRelease> | undefined;
+    return typeof r?.at === 'number' && Number.isFinite(r.at) && r.at > 0 && typeof r.by === 'string' && Boolean(r.by.trim()) && typeof r.note === 'string' && Boolean(r.note.trim());
+}
+export function preorderAwaitingRelease(data: { items?: unknown; preorderRelease?: unknown } | undefined): boolean {
+    return orderHasPreorder(data) && !preorderReleased(data);
+}
+export function orderPreorderNotice(data: { items?: unknown; preorderRelease?: unknown } | undefined): string {
     if (!Array.isArray(data?.items)) return '';
     const estimates = [...new Set(data.items.map(item => savedPreorder(item?.product?.activePreorder)?.ships).filter((value): value is string => Boolean(value)))];
     if (!estimates.length) return '';
@@ -17,7 +26,7 @@ export function orderPreorderNotice(data: { items?: unknown } | undefined): stri
 }
 
 /** Payment status is not proof of physical dispatch. Shared by admin and customer views. */
-export type FulfillmentOrder = { status: string; data?: { items?: unknown; internalTest?: boolean; shipment?: { status?: string; checkedAt?: number; sweptAt?: number; readFails?: number }; tracking?: string; hold?: unknown; labelCreatedAt?: number; paidAt?: number; dismissed?: { at?: number; by?: string; note?: string; carrierStatus?: string }; handoff?: { at?: number; by?: string }; labelApproval?: { cents?: number; limitCents?: number; at?: number } } };
+export type FulfillmentOrder = { status: string; data?: { items?: unknown; preorderRelease?: PreorderRelease; internalTest?: boolean; shipment?: { status?: string; checkedAt?: number; sweptAt?: number; readFails?: number }; tracking?: string; hold?: unknown; labelCreatedAt?: number; paidAt?: number; dismissed?: { at?: number; by?: string; note?: string; carrierStatus?: string }; handoff?: { at?: number; by?: string }; labelApproval?: { cents?: number; limitCents?: number; at?: number } } };
 /** A label quoted above the automatic ceiling, waiting for a person to approve the cost. */
 export function awaitingLabelApproval(order: FulfillmentOrder): boolean {
     return Boolean(order.data?.labelApproval && !order.data?.shipment);
@@ -115,7 +124,7 @@ export function backOrdered(order: FulfillmentOrder): boolean {
     if (carrier && (moving.has(carrier) || carrier === 'delivered' || problems.has(carrier))) return false;
     if (order.status === 'delivered') return false;
     const hold = order.data?.hold as { issue?: unknown } | undefined;
-    return (Boolean(hold) && hold?.issue === 'out_of_stock') || orderHasPreorder(order.data);
+    return (Boolean(hold) && hold?.issue === 'out_of_stock') || preorderAwaitingRelease(order.data);
 }
 export function fulfillmentLabel(order: FulfillmentOrder): string {
     if (order.data?.internalTest) return 'Internal test: not a customer sale';
@@ -277,7 +286,7 @@ export function orderShipmentStatus(order: FulfillmentOrder): OrderStateLabel {
     if (order.data?.shipment) return { label: 'Label ready', tone: 'action', detail: 'No handoff recorded' };
     if (awaitingLabelApproval(order)) return { label: 'Label approval needed', tone: 'problem' };
     if (order.status === 'labeling') return { label: 'Preparing label', tone: 'progress' };
-    if (['paid'].includes(order.status)) return { label: orderHasPreorder(order.data) ? 'Preorder waiting' : 'Not dispatched', tone: 'waiting' };
+    if (['paid'].includes(order.status)) return { label: preorderAwaitingRelease(order.data) ? 'Preorder waiting' : 'Not dispatched', tone: 'waiting' };
     return { label: 'No dispatch recorded', tone: 'muted' };
 }
 

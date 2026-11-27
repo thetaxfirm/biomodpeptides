@@ -2,7 +2,7 @@
 // table, the order panel and the reply desk. Owner, Nov 8 2026: "there is no way to look and see
 // the labels and if they have been delivered. add that for all customers."
 // Read-only. It reports what the store and the carrier recorded and never claims more.
-import { carrierWords, orderShipmentStatus, type FulfillmentOrder } from './fulfillment';
+import { carrierWords, paymentVerificationFailed, preorderAwaitingRelease, orderShipmentStatus, type FulfillmentOrder } from './fulfillment';
 
 type Order = FulfillmentOrder & { id?: string; data?: FulfillmentOrder['data'] & Record<string, any> };
 
@@ -50,6 +50,8 @@ export function nextStepWords(order: Order): string {
     const d = (order.data || {}) as Record<string, any>, label = labelSummary(order);
     if (d.internalTest) return 'Internal test. Nothing to do';
     if (['refunded', 'cancelled', 'canceled'].includes(order.status)) return 'Closed. Nothing to do';
+    if (paymentVerificationFailed(order)) return 'Recheck the payment before fulfillment';
+    if (preorderAwaitingRelease(d)) return 'Confirm stock and release the preorder for packing';
     if (d.hold) return 'On hold. Solve the problem, then clear the hold';
     if (!PAID.has(order.status)) return order.status === 'review' ? 'Review the payment' : 'Payment not confirmed. Check payment';
     if (label.state === 'missing') return order.status === 'paid' ? 'Buy the label and ship' : 'Find the label or tracking for this order';

@@ -38,6 +38,8 @@ const stubs = {
 };
 const filename = path.join(root, 'app/api/admin/order-reship/route.ts'), m = new Module(filename, module);
 m.filename = filename; m.paths = Module._nodeModulePaths(root);
+function loadReal(file) { const name=path.join(root,file),m=new Module(name,module);m.filename=name;m.paths=Module._nodeModulePaths(root);m.require=id=>id.startsWith('./')?loadReal(path.join(path.dirname(file),id+'.ts')):require(id);m._compile(ts.transpileModule(fs.readFileSync(name,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,name);return m.exports; }
+stubs['@/lib/fulfillment-eligibility']=loadReal('lib/fulfillment-eligibility.ts');
 m.require = id => stubs[id] || (() => { throw Error('Unexpected import ' + id); })();
 m._compile(ts.transpileModule(fs.readFileSync(filename, 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText, filename);
 
@@ -148,6 +150,13 @@ const post = async (body, origin) => { events = []; asked = []; const res = awai
     assert.deepEqual(asked, [], why + ' never reaches the carrier');
   }
   assert.equal((await post({ orderId: '11111111-2222-4333-8444-555555555555', tracking: NEW })).status, 404);
+
+  // The shared eligibility guard applies before a carrier call on the replacement path too.
+  for (const blocked of [{paymentVerified:{at:1,state:'failed'}},{hold:{issue:'shipping'}},{items:[{product:{activePreorder:{percentOff:10,basePrice:1000,ships:'November 2026'}}}]}]) {
+    seed('paid'); db.prepare('UPDATE orders SET data=? WHERE id=?').run(JSON.stringify({...stored(),...blocked}),ID);
+    const prior=row().data; const response=await post({orderId:ID,tracking:NEW});
+    assert.equal(response.status,409);assert.deepEqual(asked,[]);assert.equal(row().data,prior);
+  }
 
   // --- Repeating it is a no-op, and does not re-ask the carrier ---
   seed('shipped'); tracker = ok('delivered');

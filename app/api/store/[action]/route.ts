@@ -1,8 +1,12 @@
 import { settingsSnapshot, saveSettingsSnapshot, SettingsConflict } from '@/lib/settings-version';
+import { queryOrderPage } from '@/lib/order-queue-db';
+import { fulfillmentBlock, fulfillmentEligibleSql } from '@/lib/fulfillment-eligibility';
+import { releasePreorder } from '@/lib/preorder-release';
+import { recheckPaidOrder } from '@/lib/payment-verify';
 import { replyBridgeRoute } from '@/lib/request-reply-route';
 import { recordContact } from '@/lib/contacts';
 import { shareContact } from '@/lib/crm-capture';
-import { queryOrders, scanLimit, orderBucket, canArchive, isArchived } from '@/lib/order-queue';
+import { scanLimit, orderBucket, canArchive, isArchived, tabForOrder } from '@/lib/order-queue';
 import { publicCatalog } from '@/lib/public-catalog';
 import { batchRecordsFor, batchStatus, batchPath } from '@/lib/testing';
 import { externalRepliesFor, markReplied } from '@/lib/request-external';
@@ -49,7 +53,7 @@ import { adminOverview } from '@/lib/admin-overview';
 export const dynamic = 'force-dynamic';
 // What each admin write needs. An admin action missing here requires the owner.
 const adminActionPermission: Record<string, StaffPermission> = {
-    'admin-orders': 'orders:read', 'admin-order': 'orders:fulfill', 'admin-order-archive': 'orders:fulfill', 'admin-order-handoff': 'orders:fulfill', 'admin-reconcile': 'orders:reconcile',
+    'admin-orders': 'orders:read', 'admin-order': 'orders:fulfill', 'admin-order-archive': 'orders:fulfill', 'admin-order-handoff': 'orders:fulfill', 'admin-reconcile': 'orders:reconcile', 'admin-preorder-release': 'orders:fulfill',
     'admin-request': 'requests:write', 'admin-request-reply': 'requests:write', 'admin-reply-attachments': 'requests:write', 'admin-reply-desk': 'requests:write', 'admin-request-replies': 'requests:write', 'admin-reply-rule': 'requests:write', 'admin-retire-reply-drafts': 'requests:write', 'admin-request-forward': 'requests:write', 'admin-order-conversation': 'requests:write', 'admin-order-hold': 'requests:write', 'admin-win-back': 'requests:write', 'admin-mark-replied': 'requests:write', 'admin-win-back-preview': 'requests:write', 'admin-request-issue': 'requests:write', 'admin-case-log': 'requests:write', 'admin-coa-process': 'requests:write',
     'admin-config': 'store:write', 'admin-product': 'catalog:write', 'admin-campaign': 'store:write', 'admin-reward': 'store:write', 'admin-coa-config': 'store:write',
     'admin-staff': 'team:manage', 'admin-staff-site-updates': 'team:manage',
@@ -570,18 +574,10 @@ export async function POST(req: NextRequest, { params }: {
             const auditEnv = () => ({ ...runtime(), DB: withAuditDb(database(), auditActor) } as ReturnType<typeof runtime>);
             const run = (sql: string, ...values: (string | number | null)[]) => auditRun(database(), auditActor, sql, ...values);
             if (action === 'admin-orders') {
-                // Paged, searchable order queue. Counts cover the whole scanned history, not just one page.
-                // A POST so the search term — an email, phone or street address — stays out of the URL,
-                // and therefore out of every request log and browser history in front of this app.
-                const rows = (await all<{ id: string; owner: string; status: string; total: number; data: string; created: number }>('SELECT id,owner,status,total,data,created FROM orders ORDER BY created DESC LIMIT ?', scanLimit + 1)).map(o => ({ ...o, data: adminOrderView(parse(o.data, {})) }));
-                const text = (v: unknown) => typeof v === 'string' ? v.slice(0, 200) : null;
-                const result = queryOrders(rows, { tab: text(b.tab), q: text(b.q), offset: text(b.offset) ?? (typeof b.offset === 'number' ? String(b.offset) : null), id: text(b.id) });
-                // Products without a COA for the current lot cannot be mailed; flag waiting orders and list the products.
+                const result = await queryOrderPage(database(), b);
                 const products = await catalog(false, true);
-                const waiting = rows.filter(o => o.status === 'paid' && !o.data?.shipment).map(o => ({ items: o.data?.items }));
-                // Who was emailed and when, for each order on this page (owner, Oct 15 2026).
                 const messages = await orderMessageLogs(runtime() as any, result.orders as any);
-                return j({ ...result, orders: result.orders.map((o: any) => ({ ...o, messages: messages[o.id] || { count: 0, last: null, items: [] }, coaMissing: ['paid', 'labeling'].includes(o.status) && !o.data?.shipment ? coaBlockedItems(o.data?.items, products) : [] })), noCoa: noCoaProducts(products, waiting) });
+                return j({ ...result, orders: result.orders.map((o: any) => ({ ...o, data: adminOrderView(o.data), messages: messages[o.id] || { count: 0, last: null, items: [] }, coaMissing: ['paid', 'labeling'].includes(o.status) && !o.data?.shipment ? coaBlockedItems(o.data?.items, products) : [] })), noCoa: noCoaProducts(products) });
             }
             if (action === 'admin-order-archive') {
                 // Files a finished order out of the working tabs, or puts it back. Changes nothing else:
@@ -596,9 +592,14 @@ export async function POST(req: NextRequest, { params }: {
                     await run("UPDATE orders SET data=json_remove(data,'$.archivedAt','$.archivedBy'),updated=? WHERE id=?", timestamp(), order.id);
                     return j({ message: number + ' restored.' });
                 }
-                if (!canArchive(orderBucket({ status: order.status, data }))) return j({ error: number + ' still needs work, so it cannot be archived.' }, 409);
-                await run("UPDATE orders SET data=json_set(data,'$.archivedAt',?,'$.archivedBy',?),updated=? WHERE id=?", Date.now(), actor.email, timestamp(), order.id);
+                if (!canArchive(orderBucket({ status: order.status, data })) || ['review', 'backorder'].includes(tabForOrder({ status: order.status, data }))) return j({ error: number + ' still needs work, so it cannot be archived.' }, 409);
+                const archived = await run("UPDATE orders SET data=json_set(data,'$.archivedAt',?,'$.archivedBy',?),updated=? WHERE id=? AND status=? AND data=?", Date.now(), actor.email, timestamp(), order.id, order.status, order.data);
+                if (!archived.meta.changes) return j({ error: 'This order changed. Refresh before archiving.' }, 409);
                 return j({ message: number + ' archived.' });
+            }
+            if (action === 'admin-preorder-release') {
+                const input = z.object({ orderId: z.string().uuid(), note: z.string().trim().min(10).max(500), expectedVersion: z.string().regex(/^[a-f0-9]{64}$/) }).parse(b);
+                return j(await releasePreorder(auditEnv().DB, input, actor.email));
             }
             if (action === 'admin-order-handoff') {
                 // Records who handed the parcel to the carrier and when. Changes no status and emails
@@ -612,8 +613,11 @@ export async function POST(req: NextRequest, { params }: {
                     await run("UPDATE orders SET data=json_remove(data,'$.handoff'),updated=? WHERE id=?", timestamp(), order.id);
                     return j({ message: 'Drop-off cleared for ' + number + '.' });
                 }
+                const blocked = fulfillmentBlock({ status: order.status, data });
+                if (blocked) return j({ error: blocked }, 409);
                 if (!data.shipment?.tracking || !['paid', 'shipped'].includes(order.status)) return j({ error: number + ' has no label to drop off.' }, 409);
-                await run("UPDATE orders SET data=json_set(data,'$.handoff',json(?)),updated=? WHERE id=? AND json_extract(data,'$.handoff') IS NULL", JSON.stringify({ at: Date.now(), by: actor.email }), timestamp(), order.id);
+                const saved = await run(`UPDATE orders SET data=json_set(data,'$.handoff',json(?)),updated=? WHERE id=? AND status IN ('paid','shipped') AND json_extract(data,'$.shipment.tracking') IS NOT NULL AND json_extract(data,'$.handoff') IS NULL AND ${fulfillmentEligibleSql} AND data=?`, JSON.stringify({ at: Date.now(), by: actor.email }), timestamp(), order.id, order.data);
+                if (!saved.meta.changes) return j({ error: 'This order changed or was already marked dropped off. Refresh its current record.' }, 409);
                 return j({ message: number + ' marked dropped off. It moves to Shipped when the carrier scans it.' });
             }
             if (action === 'admin-staff') {
@@ -847,11 +851,10 @@ export async function POST(req: NextRequest, { params }: {
                 return j({ ok: true, id, status, message: 'Request status updated.' });
             }
             if (action === 'admin-reconcile') {
-                const o = await one<{
-                    owner: string;
-                }>('SELECT owner FROM orders WHERE id=?', str(b.id, 50));
+                const o = await one<{ owner: string; status: string }>('SELECT owner,status FROM orders WHERE id=?', str(b.id, 50));
                 if (!o)
                     throw new Error('Order not found.');
+                if (['paid', 'labeling', 'shipped', 'delivered'].includes(o.status)) return j(await recheckPaidOrder(auditEnv(), str(b.id, 50)));
                 return j(await reconcile(o.owner, b.id, [], auditActor));
             }
             // Owner only (not in adminActionPermission): approve or decline a payment Authorize.net's fraud
@@ -887,8 +890,8 @@ export async function POST(req: NextRequest, { params }: {
                 }>('SELECT data,status FROM orders WHERE id=?', orderId);
                 if (!o || !['paid', 'shipped'].includes(o.status))
                     throw new Error('Only verified paid orders may be fulfilled.');
-                if (parse<Record<string, any>>(o.data, {}).hold)
-                    throw new Error('This order is on hold for a reported problem. Clear the hold before marking it shipped.');
+                const blocked = fulfillmentBlock({ status: o.status, data: parse<Record<string, any>>(o.data, {}) });
+                if (blocked) throw new Error(blocked);
                 // A tracked parcel is delivered when the carrier says so, never by hand: a store claim
                 // over a parcel the carrier never scanned is how a lost box goes unnoticed.
                 const carrierShipment = parse<Record<string, any>>(o.data, {}).shipment;
@@ -900,7 +903,7 @@ export async function POST(req: NextRequest, { params }: {
                 }
                 // Targeted write, guarded on the status we read. A carrier update or a bought label that
                 // landed in between is preserved, and a lost race is reported rather than announced as success.
-                const saved = await run("UPDATE orders SET status=?,data=json_set(data,'$.tracking',?),updated=? WHERE id=? AND status=?", status, str(b.tracking, 200), timestamp(), orderId, o.status);
+                const saved = await run(`UPDATE orders SET status=?,data=json_set(data,'$.tracking',?),updated=? WHERE id=? AND status=? AND ${fulfillmentEligibleSql} AND data=?`, status, str(b.tracking, 200), timestamp(), orderId, o.status, o.data);
                 if (!saved.meta.changes) throw new Error('This order changed while you were working on it. Refresh and try again.');
                 return j({ message: 'Order updated.' });
             }

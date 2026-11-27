@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { fulfillmentBlock } from '@/lib/fulfillment-eligibility';
 import { requireStaff } from '@/lib/auth';
 import { easypostReady } from '@/lib/easypost';
 import { readTrackingCode } from '@/lib/easypost-tracker';
@@ -56,6 +57,8 @@ export async function POST(req: NextRequest) {
         // order has no parcel to replace, and recording one would assert a sale that never happened.
         if (!['paid', 'shipped', 'delivered'].includes(order.status))
             return j({ error: number + ' is not a paid order, so it has no parcel to replace.' }, 409);
+        const blocked = fulfillmentBlock({ status: order.status, data });
+        if (blocked) return j({ error: blocked }, 409);
         const previous = data.shipment && typeof data.shipment === 'object' ? data.shipment as Record<string, any> : null;
         if (previous && String(previous.tracking || '').toUpperCase() === asked)
             return j({ message: number + ' already carries that tracking number.' });
@@ -96,8 +99,8 @@ export async function POST(req: NextRequest) {
         // there: a carrier update or a second reship that landed in between is preserved and the
         // lost race is reported, rather than this quietly overwriting it.
         const saved = await run(
-            "UPDATE orders SET status=?,data=json_set(json_set(data,'$.previousShipment',COALESCE(json_extract(data,'$.shipment'),json('null'))),'$.shipment',json(?),'$.tracking',?),updated=? WHERE id=? AND status=? AND COALESCE(json_extract(data,'$.shipment.tracking'),'')=?",
-            next, JSON.stringify(shipment), tracked.tracking, timestamp(), order.id, order.status, String(previous?.tracking || ''));
+            "UPDATE orders SET status=?,data=json_set(json_set(data,'$.previousShipment',COALESCE(json_extract(data,'$.shipment'),json('null'))),'$.shipment',json(?),'$.tracking',?),updated=? WHERE id=? AND status=? AND COALESCE(json_extract(data,'$.shipment.tracking'),'')=? AND data=?",
+            next, JSON.stringify(shipment), tracked.tracking, timestamp(), order.id, order.status, String(previous?.tracking || ''), order.data);
         if (!saved.meta.changes) {
             await record('failed', number + ' changed while this was being saved. Nothing was written.');
             return j({ error: 'This order changed while you were working on it. Refresh and try again.' }, 409);

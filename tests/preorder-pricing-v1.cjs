@@ -21,13 +21,13 @@ assert.equal(affected.length,18);
 assert.deepEqual(affected.map(p=>p.id).sort((a,b)=>a-b),[...initialRunIds].sort((a,b)=>a-b));
 for(const p of affected){
  const current={...p,price:17900,packPrices:{3:48330,5:76075,10:143200}};
- const discounted=applySale(current);
+ const discounted=applySale(current, Date.parse('2026-10-20T00:00:00Z'));
  assert.equal(discounted.price,15215);
  assert.equal(discounted.activePreorder.ships,'early November 2026');
  assert.equal(fixedPackPrice(discounted,3),41081);
  assert.equal(fixedPackPrice(discounted,5),64664);
  assert.equal(fixedPackPrice(discounted,10),121720);
- assert.deepEqual(applySale(discounted),discounted,'Never apply preorder twice');
+ assert.deepEqual(applySale(discounted, Date.parse('2026-10-20T00:00:00Z')),discounted,'Never apply preorder twice');
  assert.equal(applySale({...discounted,preorder:{...current.preorder,enabled:false}}).price,17900);
  const sale={enabled:true,percentOff:50,starts:'2020-01-01T00:00:00Z',ends:'2099-01-01T00:00:00Z'};
  assert.equal(applySale({...current,sale}).price,15215,'Preorder replaces sale, does not combine it');

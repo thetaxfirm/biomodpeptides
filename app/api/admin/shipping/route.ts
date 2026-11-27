@@ -1,3 +1,4 @@
+import { fulfillmentBlock, labelClaimSql } from '@/lib/fulfillment-eligibility';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireStaff } from '@/lib/auth';
 import { buyLabel, easypostReady, sendTrackingEmail, shippingConnection, readShipmentTracking } from '@/lib/easypost';
@@ -123,8 +124,9 @@ export async function POST(req: NextRequest) {
         if (coaBlocked.length) return j({ error: coaBlockMessage(coaBlocked) + ' No label was bought.' }, 409);
         await record('shipping.label_purchase', 'attempted', 'Requested a carrier label purchase.');
         // Claim the order first so a double click cannot buy two labels.
-        if (data.hold) return j({ error: 'This order is on hold for a reported problem. Clear the hold before buying a label.' }, 409);
-        const claim = await run("UPDATE orders SET status='labeling',updated=? WHERE id=? AND status='paid' AND json_extract(data,'$.shipment') IS NULL AND json_extract(data,'$.hold') IS NULL", timestamp(), id);
+        const blocked = fulfillmentBlock({ status: order.status, data });
+        if (blocked) return j({ error: blocked }, 409);
+        const claim = await run(labelClaimSql, timestamp(), id, order.data);
         if (!claim.meta.changes) {
             await outcome('shipping.label_purchase', 'failed', 'Label purchase stopped because the order was not eligible. No provider purchase was attempted.');
             return j({ error: data.shipment ? 'A label was already bought for this order.' : 'Only paid orders without a label can have a label purchased.' }, 409);

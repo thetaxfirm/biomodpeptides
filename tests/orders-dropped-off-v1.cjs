@@ -17,6 +17,8 @@ function load(file){const name=path.join(root,file),m=new Module(name,module);m.
   if(id==='./primitives')return{Field:()=>null};
   if(id==='@/components/ui/sheet')return Object.fromEntries(['Sheet','SheetContent','SheetTitle','SheetDescription'].map(name=>[name,({children})=>React.createElement('div',null,children)]));
   if(id==='@/lib/catalog')return{money:n=>'$'+(n/100).toFixed(2)};
+  if(id==='@/lib/fulfillment-eligibility')return load('lib/fulfillment-eligibility.ts');
+  if(id==='./order-resolution')return{OrderResolution:()=>null};
   if(id==='@/lib/fulfillment')return load('lib/fulfillment.ts');
   if(id==='@/lib/order-queue')return load('lib/order-queue.ts');
   if(id==='@/lib/ship-cutoff')return load('lib/ship-cutoff.ts'); /* Cutoff tracker has its own suite (ship-cutoff-v1). */

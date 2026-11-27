@@ -15,7 +15,7 @@ export function applySale(product: Product, now = Date.now()): Product {
         const discount = (price: number) => Math.max(1, Math.round(price * (100 - preorder.percentOff) / 100));
         return { ...p, price: discount(p.price),
             packPrices: p.packPrices && Object.fromEntries(Object.entries(p.packPrices).map(([n, price]) => [n, price == null ? null : discount(price)])),
-            activePreorder: { percentOff: preorder.percentOff, ships: preorder.ships, basePrice: p.price, basePackPrices: p.packPrices } };
+            activePreorder: { percentOff: preorder.percentOff, ships: currentDispatchEstimate(preorder.ships, now), basePrice: p.price, basePackPrices: p.packPrices } };
     }
     const s = p.sale;
     if (!s?.enabled || !Number.isFinite(s.percentOff) || s.percentOff <= 0 || s.percentOff >= 100 ||
@@ -25,4 +25,18 @@ export function applySale(product: Product, now = Date.now()): Product {
     return { ...p, price: discount(p.price),
         packPrices: p.packPrices && Object.fromEntries(Object.entries(p.packPrices).map(([n, price]) => [n, price == null ? null : discount(price)])),
         activeSale: { percentOff: s.percentOff, ends: s.ends, basePrice: p.price, basePackPrices: p.packPrices } };
+}
+
+/** Interpret only explicit calendar estimates. Unparseable estimates are left for staff review. */
+export function currentDispatchEstimate(value: string, now = Date.now()): string {
+    const text = value.trim();
+    const months = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+    const named = /^(?:(early|mid|late)\s+)?([A-Za-z]+)\s+(20\d{2})$/i.exec(text);
+    let deadline: number | null = null;
+    if (named) {
+        const month = months.indexOf(named[2].toLowerCase());
+        if (month >= 0) deadline = named[1]?.toLowerCase() === 'early' ? Date.UTC(Number(named[3]), month, 11)
+            : named[1]?.toLowerCase() === 'mid' ? Date.UTC(Number(named[3]), month, 21) : Date.UTC(Number(named[3]), month + 1, 1);
+    } else if (/^20\d{2}-\d{2}-\d{2}$/.test(text)) deadline = Date.parse(text + 'T00:00:00Z') + 86400000;
+    return deadline !== null && Number.isFinite(deadline) && now >= deadline ? 'Awaiting confirmed dispatch date' : text;
 }

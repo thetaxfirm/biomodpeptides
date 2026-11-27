@@ -178,7 +178,7 @@ const telegram={};
   const sql=fs.readFileSync(path.join(root,'lib/payment-verify.ts'),'utf8');
   assert.match(sql,/UPDATE orders SET data=json_set\(data,'\$\.paymentVerified',json\(\?\)\) WHERE id=\?/,'one field only');
   assert(!/paymentVerified[\s\S]{0,200}updated=/.test(sql),'updated is never touched: it is the grace period automatic labels measure from');
-  assert(!/SET status|status=\?/.test(sql),'verification never changes an order status');
+  assert(!/UPDATE orders SET[^;`]*?\bstatus=/.test(sql.split('WHERE').join(';')),'verification never changes an order status');
 
   // --- Wiring. ---
   const workerSource=fs.readFileSync(path.join(root,'worker.ts'),'utf8');

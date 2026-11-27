@@ -1,6 +1,7 @@
+import { printableOrders } from '@/lib/order-queue-db';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireStaff } from '@/lib/auth';
-import { all, one, parse, timestamp } from '@/lib/runtime';
+import { database, one, parse, timestamp } from '@/lib/runtime';
 import { pickEntries, pickEntry, canPick, renderPickList, type PickOrder } from '@/lib/pick-list';
 export const dynamic = 'force-dynamic';
 // Read-only printable pick sheets. Buys nothing, sends nothing and changes no order.
@@ -26,7 +27,9 @@ export async function GET(req: NextRequest) {
         if (!canPick(order)) return notice('This order is not waiting to be picked. Open it in administration to see its current status.', 409);
         return page(renderPickList([pickEntry(order)], timestamp(), true));
     }
-    // The To ship queue: paid, nothing picked or labelled yet. Capped so one sheet cannot run away.
-    const rows = await all<Row>("SELECT id,status,data,created FROM orders WHERE status IN ('paid','labeling','shipped') ORDER BY created ASC LIMIT 300");
-    return page(renderPickList(pickEntries(rows.map(toPickOrder)), timestamp()));
+    const offset = Math.max(0, Number.parseInt(req.nextUrl.searchParams.get('offset') || '0', 10) || 0);
+    const { orders, total } = await printableOrders(database(), 'pick', offset, 300);
+    const next = offset + orders.length;
+    const batchNotice = `<p style="font:15px Arial;padding:16px">Orders ${orders.length ? offset + 1 : 0}-${next} of ${total} eligible orders.${next < total ? ` <a href="/api/admin/pick-list?offset=${next}">Print next batch</a> before marking orders dropped off.` : ' All eligible orders are included through this batch.'}</p>`;
+    return page(renderPickList(pickEntries(orders), timestamp()).replace('<body>', '<body>' + batchNotice));
 }

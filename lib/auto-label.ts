@@ -1,3 +1,4 @@
+import { fulfillmentEligibleSql, labelClaimSql } from './fulfillment-eligibility';
 // Automatic label purchase, and the recovery that makes it safe to run unattended.
 //
 // Two jobs share this file because they are two halves of one guarantee. Buying a label is an
@@ -102,7 +103,7 @@ const DUE = `SELECT id, data, coalesce(json_extract(data,'$.labelAttempts'),0) A
     WHERE status='paid'
       AND json_extract(data,'$.shipment') IS NULL
       AND json_extract(data,'$.hold') IS NULL
-      AND json_extract(data,'$.internalTest') IS NULL
+      AND ${fulfillmentEligibleSql}
       AND coalesce(json_extract(data,'$.labelApproval.cents'),0) <= ?
       AND updated <= ?
     ORDER BY created ASC
@@ -121,7 +122,7 @@ const BLOCK = `UPDATE orders SET data=json_set(data,'$.hold',json(?)),updated=? 
  */
 const ADDRESS_HOLD = `UPDATE orders SET data=json_set(data,'$.hold',json(?),'$.addressCheck',json(?),'$.addressHeldAt',?),updated=? WHERE id=? AND status='paid' AND json_extract(data,'$.hold') IS NULL`;
 /** An order paid before checkout checked addresses gets its check now. Bookkeeping: leaves `updated` alone. */
-const SAVE_CHECK = `UPDATE orders SET data=json_set(data,'$.addressCheck',json(?)) WHERE id=?`;
+const SAVE_CHECK = `UPDATE orders SET data=json_set(data,'$.addressCheck',json(?)) WHERE id=? AND data=? RETURNING data`;
 /**
  * A label that costs more than the ceiling. Deliberately not a hold: a hold blocks the Buy button,
  * and buying it by hand is exactly the approval being asked for. This marker moves the order into
@@ -129,8 +130,7 @@ const SAVE_CHECK = `UPDATE orders SET data=json_set(data,'$.addressCheck',json(?
  */
 const NEEDS_APPROVAL = `UPDATE orders SET data=json_set(data,'$.labelApproval',json(?)),updated=? WHERE id=?`;
 /** The same claim the admin button takes, so the two can never buy for one order at the same time. */
-const CLAIM = `UPDATE orders SET status='labeling',updated=? WHERE id=? AND status='paid'
-    AND json_extract(data,'$.shipment') IS NULL AND json_extract(data,'$.hold') IS NULL`;
+const CLAIM = labelClaimSql;
 
 /**
  * The reply address the tracking email must carry. sendTrackingEmail refuses to send without a
@@ -237,7 +237,11 @@ export async function runAutoLabels(env: AutoLabelEnvironment, now = Date.now())
                 const fresh = await verifyShipAddress(env as never, data.address, now);
                 if (fresh.status !== 'unavailable' || !check) {
                     check = check?.confirmed ? { ...fresh, confirmed: true } : fresh;
-                    try { await env.DB.prepare(SAVE_CHECK).bind(JSON.stringify(check), row.id).run(); } catch { /* bookkeeping only */ }
+                    try {
+                        const checked = await env.DB.prepare(SAVE_CHECK).bind(JSON.stringify(check), row.id, row.data).first<{ data: string }>();
+                        if (!checked) { health.skipped += 1; continue; }
+                        row.data = checked.data;
+                    } catch { health.failed += 1; continue; }
                 }
             }
             // A check that still cannot run never stops shipping: an outage is not a bad address.
@@ -251,7 +255,7 @@ export async function runAutoLabels(env: AutoLabelEnvironment, now = Date.now())
         }
 
         let claimed = false;
-        try { claimed = Boolean((await env.DB.prepare(CLAIM).bind(now, row.id).run()).meta.changes); }
+        try { claimed = Boolean((await env.DB.prepare(CLAIM).bind(now, row.id, row.data).run()).meta.changes); }
         catch { health.failed += 1; continue; }
         if (!claimed) { health.skipped += 1; continue; }
 

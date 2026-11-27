@@ -1,4 +1,6 @@
 'use client';
+import { fulfillmentBlock } from '@/lib/fulfillment-eligibility';
+import { preorderAwaitingRelease } from '@/lib/fulfillment';
 // Admin Orders tab: status tabs with counts, one search box, a compact table with one next step
 // per order, and the full order in a side panel. Paging and search run on the server.
 import { FormEvent, useEffect, useRef, useState } from 'react';
@@ -18,6 +20,7 @@ import { ShippingLabel, post as shippingPost } from './shipping-admin';
 import { OrderDetails } from './order-admin';
 import { LabelCell, CustomerOrders } from './customer-orders';
 import { OrderTracking } from './order-tracking';
+import { OrderResolution } from './order-resolution';
 import { paymentLine, paymentAdvice, savedPaymentCheck } from '@/lib/payment-check';
 import styles from './orders-admin.module.css';
 
@@ -75,7 +78,8 @@ const money2 = (c: number | null) => c === null ? '' : money(c);
 /** Every card attempt on this order as Authorize.net reported it, what to do, and the owner's Approve/Decline. */
 function PaymentPanel({ order, owner, busy, change }: { order: QueueRow; owner: boolean; busy: boolean; change: Props['change'] }) {
     const check = savedPaymentCheck(order.data?.paymentCheck);
-    if (!check || ['paid', 'labeling', 'shipped', 'delivered'].includes(order.status)) return null;
+    if (!check) return null;
+    const canDecide = owner && !['paid', 'labeling', 'shipped', 'delivered'].includes(order.status);
     const decide = (transId: string, decision: 'approve' | 'decline') => {
         const ask = typeof window === 'undefined' ? undefined : window.confirm;
         const question = decision === 'approve'
@@ -86,18 +90,18 @@ function PaymentPanel({ order, owner, busy, change }: { order: QueueRow; owner: 
     };
     return <div className={styles.messageLog}>
         <h3>Payment at Authorize.net</h3>
-        <p>{paymentAdvice(check)}</p>
+        <p>{['paid', 'labeling', 'shipped', 'delivered'].includes(order.status) ? 'Saved provider evidence. Check payment again to verify the current amount and collection status before fulfilling.' : paymentAdvice(check)}</p>
         {check.attempts.length ? <ul>{check.attempts.map(a => <li key={a.transId}>
             <span><strong>{a.words}</strong>{a.amountCents !== null ? ' · ' + money2(a.amountCents) : ''}</span>
             <span className={styles.sub}>{[a.card, a.submittedAt ? new Date(a.submittedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '', 'Transaction ' + a.transId].filter(Boolean).join(' · ')}</span>
             {a.filters.length > 0 && <span className={styles.sub}>Flagged by: {a.filters.map(f => f.name + (f.action ? ' (' + f.action + ')' : '')).join(', ')}</span>}
             {(a.avs || a.cvv) && <span className={styles.sub}>{[a.avs, a.cvv].filter(Boolean).join(' · ')}</span>}
             {a.reason && <span className={styles.sub}>Bank: {a.reason}</span>}
-            {a.kind === 'held' && owner && <span className={styles.nextGroup}>
+            {a.kind === 'held' && canDecide && <span className={styles.nextGroup}>
                 <button type="button" className="button button-dark" disabled={busy} onClick={() => decide(a.transId, 'approve')}>Approve payment</button>
                 <button type="button" className="text-button" disabled={busy} onClick={() => decide(a.transId, 'decline')}>Decline</button>
             </span>}
-            {a.kind === 'held' && !owner && <span className={styles.sub}>Only an owner can approve or decline a held payment.</span>}
+            {a.kind === 'held' && !canDecide && <span className={styles.sub}>Only an owner can approve or decline a held payment.</span>}
         </li>)}</ul> : null}
         <p className={styles.sub}>Checked {new Date(check.at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}. Press Check payment for the latest.</p>
     </div>;
@@ -105,7 +109,7 @@ function PaymentPanel({ order, owner, busy, change }: { order: QueueRow; owner: 
 
 /** A bought label not yet handed over can be marked dropped off straight from the queue. */
 export const canMarkDroppedOff = (o: QueueRow, allowed: (permission: string) => boolean) =>
-    allowed('orders:fulfill') && !paymentVerificationFailed(o) && o.bucket === 'label' && ['paid', 'shipped'].includes(o.status) && !o.data?.handoff;
+    allowed('orders:fulfill') && !fulfillmentBlock(o) && o.bucket === 'label' && ['paid', 'shipped'].includes(o.status) && !o.data?.handoff;
 
 /**
  * Records that the parcel left the building. Changes no status and emails nobody: the order moves to
@@ -150,6 +154,7 @@ export function OrdersAdmin({ reloadToken, viewRequest, checkoutRecovery, allowe
     const sequence = useRef(0);
     const viewKey = JSON.stringify([tab, input.trim(), reloadToken]);
     const activeView = useRef(viewKey);
+    const [releaseNote, setReleaseNote] = useState('');
     activeView.current = viewKey;
     // A changed tab/search must never relabel the previous view's actionable rows.
     const viewReady = Boolean(result && loadedKey === viewKey && input.trim() === q);
@@ -180,6 +185,16 @@ export function OrdersAdmin({ reloadToken, viewRequest, checkoutRecovery, allowe
     }
     useEffect(() => { void fetchPage(0); }, [tab, q, reloadToken]);
 
+    // Customer workspace links use the full ID, independently of the current page or work queue.
+    useEffect(() => {
+        if (typeof window === 'undefined' || !window.location?.href) return;
+        const id = new URL(window.location.href).searchParams.get('order');
+        if (!id || !/^[a-f0-9-]{36}$/i.test(id)) return;
+        let live = true;
+        query({ id }).then(page => { if (live) { if (page.orders[0]) setSelected(page.orders[0]); else toast.error('This order could not be found.'); } }).catch(() => { if (live) toast.error('The linked order could not load. Search its order number or refresh.'); });
+        return () => { live = false; };
+    }, []);
+
     // Keep the open panel current after an action, even when the order moves to another tab.
     useEffect(() => {
         if (!selected) return;
@@ -189,7 +204,7 @@ export function OrdersAdmin({ reloadToken, viewRequest, checkoutRecovery, allowe
     }, [reloadToken]);
 
     const reconcile = (o: QueueRow) => change('reconcile', { id: o.id }, d => toast.info(d.message || d.status));
-    const canReconcile = (o: QueueRow) => allowed('orders:reconcile') && !['paid', 'shipped', 'delivered'].includes(o.status) && !o.data?.shipment;
+    const canReconcile = (o: QueueRow) => allowed('orders:reconcile') && !o.data?.internalTest && !['refunded', 'cancelled', 'canceled', 'failed'].includes(o.status);
 
     function nextStep(o: QueueRow) {
         const s = o.data?.shipment;
@@ -226,7 +241,7 @@ export function OrdersAdmin({ reloadToken, viewRequest, checkoutRecovery, allowe
         if (!allowed('orders:fulfill')) return null;
         const number = orderNumber(o.id);
         if (isArchived(o)) return <button type="button" className="text-button" disabled={busy} onClick={() => void change('order-archive', { orderId: o.id, restore: true }, r => toast.success(r.message || number + ' restored.'))}>Restore</button>;
-        if (!canArchive(o.bucket)) return null;
+        if (!canArchive(o.bucket) || tabForOrder(o) === 'review' || tabForOrder(o) === 'backorder') return null;
         return <button type="button" className="text-button" disabled={busy} onClick={() => void change('order-archive', { orderId: o.id }, r => toast.success(r.message || number + ' archived.'))}>Archive</button>;
     }
     function mainStep(o: QueueRow, s: any) {
@@ -234,7 +249,7 @@ export function OrdersAdmin({ reloadToken, viewRequest, checkoutRecovery, allowe
         const noCoa = (o as QueueRow & { coaMissing?: string[] }).coaMissing || [];
         if (noCoa.length && (o.bucket === 'to_ship' || o.bucket === 'label')) return <span className={styles.coaHold}>Can't ship: no COA for {noCoa.join(', ')}</span>;
         // Buying it is the approval, so the button stays right next to the price that needs approving.
-        if (awaitingLabelApproval(o)) return <span className={styles.nextGroup}>
+        if (awaitingLabelApproval(o) && !fulfillmentBlock(o)) return <span className={styles.nextGroup}>
             <span className={styles.coaHold}>{money(Number(o.data?.labelApproval?.cents) || 0)} label · over your {money(Number(o.data?.labelApproval?.limitCents) || 0)} limit</span>
             {allowed('orders:fulfill') ? <ShippingLabel order={o} onDone={reload} compact/> : null}
         </span>;
@@ -262,7 +277,7 @@ export function OrdersAdmin({ reloadToken, viewRequest, checkoutRecovery, allowe
                     {/* A download, not a tab: it returns a zip of one borderless 4x6 PDF per parcel,
                         in a folder named for today (owner, Nov 16 2026). */}
                     {allowed('orders:fulfill') && <a className="button button-gold" href="/api/admin/labels" download>Download waiting labels</a>}
-                    <span>Labels download as 4&times;6 PDFs in a dated folder. Printing changes nothing.</span>
+                    <span>Each label batch includes a manifest listing skipped files and the next batch. Printing changes nothing.</span>
                 </div></div>
             <label className={styles.search}>Search orders
                 <input type="search" value={input} onChange={e => setInput(e.target.value)} placeholder="Name, email, order number or tracking"/>
@@ -341,7 +356,7 @@ export function OrdersAdmin({ reloadToken, viewRequest, checkoutRecovery, allowe
                 {selected && <>
                     <div className={styles.panelHead}><SheetTitle asChild><h2>Order {orderNumber(selected.id)}</h2></SheetTitle></div>
                     <SheetDescription className={styles.panelMeta}>{new Date(selected.created).toLocaleString()} · {money(Number(selected.total) || 0)}</SheetDescription>
-                    <div className={styles.stateSummary}><p><strong>Payment: {orderPaymentStatus(selected).label}</strong><span className={styles.sub}>{orderPaymentStatus(selected).detail}</span></p><p><strong>Shipment: {orderShipmentStatus(selected).label}</strong><span className={styles.sub}>{orderShipmentStatus(selected).detail}</span></p></div>
+                    <OrderResolution order={selected}/>
                     {orderAttentionReason(selected) && <p className={styles.attentionReason}>{orderAttentionReason(selected)}</p>}
                     {statusLine(selected) && <p className={styles.statusLine}>{statusLine(selected)}</p>}
                     {/* Beside the shipment state, not at the foot of the panel. It used to sit below
@@ -367,6 +382,10 @@ export function OrdersAdmin({ reloadToken, viewRequest, checkoutRecovery, allowe
                     {recoveryJobs(selected.id).map((j: any) => <p key={j.order_id}>Recovery email: {j.status === 'accepted' ? 'Accepted by mail provider' : j.status === 'review' ? 'Needs manual review' : j.status}. {String(j.reason || '').replaceAll('_', ' ')}{j.accepted_at ? ' · ' + new Date(j.accepted_at).toLocaleString() : ''}</p>)}
                     <div className={styles.actions}>
                         <h3>Actions</h3>
+                        {allowed('orders:fulfill') && preorderAwaitingRelease(selected.data) && !selected.data?.hold && !paymentVerificationFailed(selected) && ['paid', 'shipped'].includes(selected.status) && <form onSubmit={event => { event.preventDefault(); const order = selected; if (!window.confirm('Confirm the ordered preorder stock is physically available and ready to pack? This releases automatic label purchase after the configured delay. No message is sent.')) return; void change('preorder-release', { orderId: order.id, expectedVersion: order.version, note: releaseNote }, result => { setReleaseNote(''); toast.success(result.message); }); }}>
+                            <label>Confirm preorder stock is ready<input value={releaseNote} onChange={event => setReleaseNote(event.target.value)} minLength={10} maxLength={500} required placeholder="Record the stock/lot check and who confirmed it"/></label>
+                            <button className="button button-dark" disabled={busy || releaseNote.trim().length < 10}>Release preorder for packing</button>
+                        </form>}
                         {paymentVerificationFailed(selected) && <p className={styles.coaHold}>Resolve the payment verification issue before buying a label or confirming shipment. Fulfillment controls are unavailable while this payment needs review.</p>}
                         {onWinBack && selected.bucket === 'unpaid' && selected.data?.email && <label className={styles.otherViews}>Prepare a follow-up after checking history
                             <select value="" disabled={busy} onChange={e => { if (e.target.value) onWinBack(selected, e.target.value); }} aria-label="Prepare a follow-up draft">
@@ -386,8 +405,8 @@ export function OrdersAdmin({ reloadToken, viewRequest, checkoutRecovery, allowe
                         </form>}
                         {onEmailCustomer && selected.data?.email && <button type="button" className="button button-dark" disabled={busy} onClick={() => { const order = selected; setSelected(null); onEmailCustomer(order); }}>Open customer history &amp; reply</button>}
                         {canReconcile(selected) && <button type="button" className="button button-dark" disabled={busy} onClick={() => reconcile(selected)}>Check payment status</button>}
-                        {allowed('orders:fulfill') && !selected.data?.hold && !paymentVerificationFailed(selected) && <ShippingLabel order={selected} onDone={reload}/>}
-                        {allowed('orders:fulfill') && !selected.data?.hold && !paymentVerificationFailed(selected) && ['paid', 'shipped'].includes(selected.status) && (selected.data?.shipment
+                        {allowed('orders:fulfill') && !fulfillmentBlock(selected) && <ShippingLabel order={selected} onDone={reload}/>}
+                        {allowed('orders:fulfill') && !fulfillmentBlock(selected) && ['paid', 'shipped'].includes(selected.status) && (selected.data?.shipment
                             ? <details className={styles.manual}><summary>Manual confirmation: your own statement, not checked with the carrier (use only if EasyPost cannot read the number)</summary><ManualForm order={selected} formGeneration={formGeneration} submit={submit} markDraft={markDraft} busy={busy}/></details>
                             : <ManualForm order={selected} formGeneration={formGeneration} submit={submit} markDraft={markDraft} busy={busy}/>)}
                         {!allowed('orders:fulfill') && !canReconcile(selected) && <p className={styles.panelMeta}>No actions available for your role on this order.</p>}

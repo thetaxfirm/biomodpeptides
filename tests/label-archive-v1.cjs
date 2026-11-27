@@ -132,8 +132,9 @@ assert.match(route, /requireStaff\('orders:fulfill'\)/);
 // and it calls none of the writing helpers.
 const code = route.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '');
 const queries = code.match(/"(?:SELECT|INSERT|UPDATE|DELETE)[\s\S]*?"/gi) || [];
-assert.equal(queries.length, 1, 'it runs exactly one query');
-assert(/^"SELECT /i.test(queries[0]) && !/\b(INSERT|UPDATE|DELETE|DROP)\b/i.test(queries[0]), 'and that query only reads');
+assert.match(code, /printableOrders\(database\(\), 'labels'/, 'selection is delegated to the complete eligible database queue');
+assert.equal(queries.length, 0, 'the route does not issue ad-hoc writes or limited queries');
+assert.match(route, /Label download manifest v1\.txt/);
 assert(!/\brun\(|\bauditRun\(|\brecordChange\(/.test(code), 'it calls no writing helper: printing a label never changes an order');
 assert.match(route, /\/\^https:\\\/\\\/\[\^\\s\]\+\$\/i\.test\(entry\.labelUrl\)/, 'only the carrier own https file is ever fetched');
 const ui = fs.readFileSync(path.join(root, 'components/store/orders-admin.tsx'), 'utf8');
@@ -141,3 +142,30 @@ assert.match(ui, /href="\/api\/admin\/labels" download/, 'the button downloads')
 assert.doesNotMatch(ui, /href="\/api\/admin\/labels" target/, 'and no longer opens a print page');
 
 console.log('PASS: waiting labels download as one dated folder of borderless 4x6 PDFs; the archive is read back entry by entry with every checksum re-derived from Node\'s own crc32, repeated names are numbered rather than overwritten, names built from customer data cannot escape the folder, binary survives byte for byte, an empty archive is still valid, and the route stays read-only. No network.');
+
+// Exercise the actual route with deterministic carrier responses. The manifest must disclose every
+// omitted file and remaining batch inside the downloaded artifact, including a complete outage.
+(async()=>{
+  class NextResponse extends Response { static json(v,init){return new NextResponse(JSON.stringify(v),init);} }
+  let calls=[], unavailable=false, permitted=true;
+  const filename=path.join(root,'app/api/admin/labels/route.ts'),m=new Module(filename,module);m.filename=filename;
+  const fixture=[1,2,3].map(n=>({id:'fixture-'+n,created:1,status:'paid',data:{address:{name:'Fixture '+n},shipment:{status:'pre_transit',labelUrl:'https://carrier.invalid/'+n,tracking:'FIXTURE'+n}}}));
+  m.require=id=>({
+    'next/server':{NextResponse},'@/lib/auth':{requireStaff:async p=>{assert.equal(p,'orders:fulfill');if(!permitted)throw Error('denied');}},
+    '@/lib/runtime':{database:()=>null,timestamp:()=>NOON_PACIFIC},
+    '@/lib/order-queue-db':{printableOrders:async(_db,kind,offset,limit)=>{calls.push({kind,offset,limit});return{orders:fixture,total:65};}},
+    '@/lib/label-pdf':{labelPdf:bytes=>bytes},
+  }[id]||load(id.replace(/^@\//,'')+'.ts'));
+  m._compile(ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{module:1,target:9}}).outputText,filename);
+  global.fetch=async url=>{assert.match(url,/^https:\/\/carrier\.invalid\/[123]$/);return new Response('%PDF-fixture',{status:unavailable||url.endsWith('/2')?503:200});};
+  const request={nextUrl:new URL('https://trybiomod.com/api/admin/labels?offset=60')};
+  const response=await m.exports.GET(request);assert.equal(response.status,200);assert.deepEqual(calls,[{kind:'labels',offset:60,limit:60}]);
+  let entries=readZip(new Uint8Array(await response.arrayBuffer()));
+  let manifest=new TextDecoder().decode(entries.find(e=>e.name.endsWith('.txt')).data);
+  assert.equal(response.headers.get('X-Label-Count'),'2');assert.equal(response.headers.get('X-Label-Skipped'),'1');assert.equal(response.headers.get('X-Label-Total'),'65');
+  assert.match(manifest,/Batch 61-63 of 65/);assert.match(manifest,/labels\?offset=63/);assert.match(manifest,/#FIXTURE-: carrier file could not be downloaded or converted/);
+  unavailable=true;const outage=await m.exports.GET(request);entries=readZip(new Uint8Array(await outage.arrayBuffer()));
+  assert.equal(entries.length,1,'all-file failure still returns the manifest');manifest=new TextDecoder().decode(entries[0].data);assert.match(manifest,/0 labels prepared/);assert.equal((manifest.match(/carrier file could not/g)||[]).length,3);
+  permitted=false;calls=[];assert.equal((await m.exports.GET(request)).status,403);assert.deepEqual(calls,[]);
+  console.log('PASS: actual label route includes failed files and continuation counts in the ZIP manifest; an all-provider outage returns an explicit zero-label manifest; unauthorized requests read nothing. No network.');
+})().catch(error=>{console.error(error);process.exitCode=1;});

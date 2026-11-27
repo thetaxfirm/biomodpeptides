@@ -52,7 +52,7 @@ const DUE = `SELECT id,total,status,data,created,checkout_ref FROM orders
  * Only this one field moves, and `updated` deliberately does not: that column is the grace period
  * automatic label purchase measures from, so a verification must never postpone a parcel.
  */
-const SAVE = `UPDATE orders SET data=json_set(data,'$.paymentVerified',json(?)) WHERE id=?`;
+const SAVE = `UPDATE orders SET data=json_set(data,'$.paymentVerified',json(?)) WHERE id=? AND status=? AND total=? AND data=?`;
 
 type DueRow = { id: string; total: number; status: string; data: string; created: number; checkout_ref: string | null };
 
@@ -135,17 +135,42 @@ export async function runPaymentVerification(env: PaymentVerifyEnvironment, now 
         // The owner is told once per order. A payment that keeps failing is the same news each time.
         const alreadyTold = Number.isFinite(previous?.alertedAt);
         const tell = verdict.state === 'failed' && !alreadyTold;
-        let alertedAt = previous?.alertedAt;
+        const record: PaymentVerification = { at: now, ...verdict, ...(Number.isFinite(previous?.alertedAt) ? { alertedAt: previous!.alertedAt } : {}) };
+        // A newer manual check, changed total, hold or fulfilment write wins this race.
+        // Alert only after saving the verdict we actually observed.
+        try {
+            const saved = await env.DB.prepare(SAVE).bind(JSON.stringify(record), row.id, row.status, row.total, row.data).run();
+            if (!saved.meta.changes) continue;
+        } catch { continue; }
         if (tell) {
             try {
-                if (await sendTelegramText(env as never, alertText(row.id, verdict.why), deps)) { alertedAt = now; health.alerted += 1; }
-            } catch { /* an unreachable chat must not stop the verdict being recorded */ }
+                if (await sendTelegramText(env as never, alertText(row.id, verdict.why), deps)) {
+                    health.alerted += 1;
+                    await env.DB.prepare("UPDATE orders SET data=json_set(data,'$.paymentVerified.alertedAt',?) WHERE id=? AND json_extract(data,'$.paymentVerified.at')=? AND json_extract(data,'$.paymentVerified.state')='failed'").bind(now, row.id, now).run();
+                }
+            } catch { /* an unreachable chat must not stop the recorded verdict */ }
         }
-        const record: PaymentVerification = { at: now, ...verdict, ...(Number.isFinite(alertedAt) ? { alertedAt: alertedAt as number } : {}) };
-        try { await env.DB.prepare(SAVE).bind(JSON.stringify(record), row.id).run(); }
-        catch { continue; }
         health[verdict.state === 'settled' ? 'settled' : verdict.state === 'captured' ? 'captured' : 'failed'] += 1;
     }
     await saveHealth(env, health, 'completed');
     return health;
+}
+
+/** Staff-requested provider read. No capture, refund, inventory change or outbound message. */
+export async function recheckPaidOrder(env: PaymentVerifyEnvironment, id: string, now = Date.now()) {
+    const row = await env.DB.prepare('SELECT id,total,status,data,created,checkout_ref FROM orders WHERE id=?').bind(id).first<DueRow>();
+    if (!row || !['paid', 'labeling', 'shipped', 'delivered'].includes(row.status)) throw new Error('Choose an order with a recorded payment.');
+    const data = JSON.parse(row.data);
+    if (data.internalTest) throw new Error('Internal tests are not live payment checks.');
+    if (data.environment !== paymentEnvironment(env)) throw new Error('This order belongs to a different payment environment. Check its original provider account.');
+    if (row.created < now - HORIZON_MS) throw new Error('This payment is outside the online verification window. Review the original provider record; its saved payment status has not changed.');
+    // A provider outage throws before any evidence is changed.
+    const result = await createPaymentAdapter(env).verifyPayment({ id, totalCents: row.total, currency: 'USD' }, row.checkout_ref, [], row.created);
+    const previous = savedPaymentVerification(data.paymentVerified);
+    const verified = { at: now, ...verdictFor(result), ...(Number.isFinite(previous?.alertedAt) ? { alertedAt: previous!.alertedAt } : {}) };
+    const { paymentCheck } = await import('./payment-check');
+    const saved = await env.DB.prepare(`UPDATE orders SET data=json_set(data,'$.paymentVerified',json(?),'$.paymentCheck',json(?)) WHERE id=? AND status=? AND total=? AND data=?`)
+        .bind(JSON.stringify(verified), JSON.stringify(result.transactions ? paymentCheck(result.transactions, now) : data.paymentCheck || null), id, row.status, row.total, row.data).run();
+    if (!saved.meta.changes) throw new Error('This order changed during the provider check. Refresh and recheck; no payment was collected.');
+    return { status: row.status, verification: verified, message: verified.state === 'failed' ? 'The provider still cannot confirm this payment. Fulfillment remains blocked.' : 'Payment ' + verified.state + ' confirmed by the provider. No money was collected by this check.' };
 }

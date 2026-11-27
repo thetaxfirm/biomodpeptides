@@ -1,7 +1,7 @@
 import { savedBatch } from './batch-snapshot';
 import { savedShippingOption } from './shipping-options';
 import { products } from './catalog';
-import { savedPreorder } from './fulfillment';
+import { savedPreorder, preorderReleased } from './fulfillment';
 import type { CartLine } from './commerce';
 
 const currentProducts = new Map(products.map(product => [product.id, product]));
@@ -27,13 +27,18 @@ export function orderView(data: Record<string, any>) {
       product: { id: item.id, name: product?.name || 'Archived product', price: item.product?.price, ...(savedBatch(item.product?.soldBatch) ? { soldBatch: savedBatch(item.product.soldBatch) } : {}), ...(savedPreorder(item.product?.activePreorder) ? { activePreorder: savedPreorder(item.product.activePreorder) } : {}) },
     };
   });
-  return { ...(data.internalTest === true ? {internalTest:true} : {}), ...(data.recovery ? {recovery:{savings:data.recovery.savings,appliedAt:data.recovery.appliedAt}} : {}), items, subtotal: data.subtotal, discount: data.discount, shipping: data.shipping, shippingService: typeof data.shippingService === 'string' ? data.shippingService.slice(0,160) : undefined, ...(savedShippingOption(data.shippingOption) ? { shippingOption: savedShippingOption(data.shippingOption) } : {}), tax: data.tax, total: data.total, address: data.address, tracking: data.tracking, ...(data.shipment ? { shipment: { status: data.shipment.status, checkedAt: data.shipment.checkedAt } } : {}), catalogUnavailable: unavailableOrder(data) };
+  return { ...(preorderReleased(data) ? {preorderRelease:{at:data.preorderRelease.at,by:'Store team',note:'Stock confirmed ready'}} : {}), ...(data.internalTest === true ? {internalTest:true} : {}), ...(data.recovery ? {recovery:{savings:data.recovery.savings,appliedAt:data.recovery.appliedAt}} : {}), items, subtotal: data.subtotal, discount: data.discount, shipping: data.shipping, shippingService: typeof data.shippingService === 'string' ? data.shippingService.slice(0,160) : undefined, ...(savedShippingOption(data.shippingOption) ? { shippingOption: savedShippingOption(data.shippingOption) } : {}), tax: data.tax, total: data.total, address: data.address, tracking: data.tracking, ...(data.shipment ? { shipment: { status: data.shipment.status, checkedAt: data.shipment.checkedAt } } : {}), catalogUnavailable: unavailableOrder(data) };
 }
 // Administrator copy: everything needed to pick, pack and ship the order, including the customer email, chosen service, promo and label.
 export function adminOrderView(data: Record<string, any>) {
   return {
     ...orderView(data),
     email: data.email || '',
+    paymentVerified: data.paymentVerified,
+    paymentCheck: data.paymentCheck,
+    labelApproval: data.labelApproval,
+    addressCheck: data.addressCheck,
+    preorderRelease: data.preorderRelease,
     packDiscount: data.packDiscount,
     promoDiscount: data.promoDiscount,
     promo: data.promo ? { code: data.promo.code, savings: data.promo.savings } : null,

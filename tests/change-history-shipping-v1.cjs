@@ -45,6 +45,7 @@ const shipping = {
 function loadReal(file) {
   const name = path.join(root, file), mod = new Module(name, module);
   mod.filename = name; mod.paths = Module._nodeModulePaths(root);
+  mod.require = id => id.startsWith('./') ? loadReal(path.join(path.dirname(file), id + '.ts')) : require(id);
   mod._compile(ts.transpileModule(fs.readFileSync(name, 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText, name);
   return mod.exports;
 }
@@ -63,6 +64,7 @@ m.filename = filename; m.require = name => {
   if (name === '@/lib/coa-shipping') return {coaBlockedItems: () => [], coaBlockMessage: names => 'blocked ' + names.join(',')};
   if (name === '@/lib/shipping-options') return {savedShippingOption:()=>null,goodsValueCents:()=>null};
   // The real rules, not a stub: whether a flag may be dismissed is the whole point of that branch.
+  if (name === '@/lib/fulfillment-eligibility') return loadReal('lib/fulfillment-eligibility.ts');
   if (name === '@/lib/fulfillment') return loadReal('lib/fulfillment.ts');
   throw Error('Unexpected import ' + name);
 };

@@ -17,6 +17,7 @@
 // and then takes whatever the carrier says, so it can record that a parcel arrived but can never
 // claim one did. That is why it is a separate control from the manual confirmation form below it,
 // which is a person's own statement and is kept only for numbers EasyPost cannot read at all.
+import { fulfillmentBlock } from '@/lib/fulfillment-eligibility';
 import { FormEvent, useState } from 'react';
 import { toast } from 'sonner';
 import { carrierWords } from '@/lib/fulfillment';
@@ -67,7 +68,7 @@ export function OrderTracking({ order, allowed, busy, onDone }: { order: any; al
     const live = parcelOf(order?.data?.shipment);
     const previous = parcelOf(order?.data?.previousShipment);
     const number = '#' + String(order?.id || '').slice(0, 8).toUpperCase();
-    const canRecord = allowed('orders:fulfill') && ['paid', 'shipped', 'delivered'].includes(String(order?.status || ''));
+    const canRecord = allowed('orders:fulfill') && !fulfillmentBlock(order) && ['paid', 'shipped', 'delivered'].includes(String(order?.status || ''));
 
     async function submit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();

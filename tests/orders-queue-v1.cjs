@@ -220,7 +220,7 @@ const postBlock = route.slice(route.indexOf("action === 'admin-orders'", route.i
 assert.match(route, /'admin-orders': 'orders:read'/, 'the queue is gated on orders:read');
 assert.match(route, /requireStaff\(adminActionPermission\[action\]/, 'every admin POST is gated before it runs');
 assert.match(postBlock, /adminOrderView/);
-assert.match(postBlock, /queryOrders\(rows, \{ tab: text\(b\.tab\), q: text\(b\.q\)/, 'the search term arrives in the body');
+assert.match(postBlock, /queryOrderPage\(database\(\), b\)/, 'the search term arrives in the body');
 const admin = fs.readFileSync(path.join(root, 'components/store/admin.tsx'), 'utf8');
 assert.match(admin, /<OrdersAdmin /);
 const ui = fs.readFileSync(path.join(root, 'components/store/orders-admin.tsx'), 'utf8');

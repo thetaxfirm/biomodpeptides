@@ -37,8 +37,8 @@ export function tabForOrder(order: FulfillmentOrder, now = Date.now()): QueueTab
         : order.status === 'refunded' ? 'refunded' : order.status === 'failed' ? 'failed' : 'cancelled';
     // Waiting on stock outranks the work queues: it is neither a decision to make nor a box to
     // pack, and leaving it in either one is what made both lists untrustworthy.
-    if (backOrdered(order)) return 'backorder';
     if (paymentVerificationFailed(order)) return 'review';
+    if (backOrdered(order)) return 'backorder';
     // A card the bank declined or held is an unpaid checkout, not fulfilment work. It joins the
     // other unpaid ones rather than standing in Needs attention, where every other row is a parcel
     // somebody can actually act on (owner, Nov 23 2026: "anything that is not paid for needs to go
@@ -52,7 +52,7 @@ export function tabForOrder(order: FulfillmentOrder, now = Date.now()): QueueTab
 }
 
 export type QueueOrder = { id: string; owner?: string; status: string; total: number; created: number; data: Record<string, any> };
-export type QueueRow = QueueOrder & { bucket: OrderBucket };
+export type QueueRow = QueueOrder & { version?: string; bucket: OrderBucket };
 export type NoCoaRow = { id: number; name: string; lot: string | null; waitingOrders: number };
 export type QueueResult = { noCoa?: NoCoaRow[]; orders: (QueueRow & { coaMissing?: string[] })[]; counts: Record<QueueTab, number>; total: number; offset: number; limit: number; hasMore: boolean; scanned: number; truncated: boolean; mustGoOut: { today: number; late: number } };
 
