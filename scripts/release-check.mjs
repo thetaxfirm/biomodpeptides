@@ -10,7 +10,7 @@ if (major < 22 || (major === 22 && minor < 13)) {
 }
 const tests = [
   "admin-fulfillment-safety-v1.cjs", "admin-contact-integrity-v1.cjs", "admin-customer-ledger-v1.cjs", "admin-request-queue-v1.cjs", "change-history-sync-v1.cjs", "provider-history-sync-v1.cjs", "admin-section-reads-v1.cjs", "store-api-dispatch-v1.cjs", "admin-finance-v1.cjs",
-  "report-window-v1.cjs", "report-cohorts-v1.cjs",
+  "report-window-v1.cjs", "report-cohorts-v1.cjs", "traffic-calendar-report-v1.cjs",
   "affiliate-program-v1.cjs", "affiliate-route-v1.cjs", "affiliate-onboarding-v1.cjs", "affiliate-invitation-terms-v1.cjs",
   "product-batch-v1.cjs", "label-lot-reports-v1.cjs", "product-batch-admin-v1.cjs", "product-batch-history-v1.cjs", "product-batch-order-v1.cjs", "public-batch-consumers-v1.cjs",
   "pack-price-admin-v1.cjs",
