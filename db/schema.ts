@@ -71,6 +71,9 @@ export const changeEvents=sqliteTable('change_events',{
 export const changeHistorySync=sqliteTable('change_history_sync',{
  source:text('source').primaryKey(),syncedAt:integer('synced_at').notNull(),state:text('state').notNull(),description:text('description').notNull(),
 });
+export const providerHistoryPoll=sqliteTable('provider_history_poll',{
+ source:text('source').primaryKey(),checkpoint:text('checkpoint').notNull().default('{}'),leaseId:text('lease_id').notNull(),leaseUntil:integer('lease_until').notNull().default(0),nextAttemptAt:integer('next_attempt_at').notNull().default(0),updated:integer('updated').notNull(),
+},t=>[check('provider_history_checkpoint_json',sql`json_valid(${t.checkpoint})`)]);
 // A singleton row exists only inside each audit transaction, never across network calls.
 export const changeContext=sqliteTable('change_context',{
  id:integer('id').primaryKey(),actor:text('actor').notNull(),actorType:text('actor_type').notNull(),source:text('source').notNull(),action:text('action'),summary:text('summary'),

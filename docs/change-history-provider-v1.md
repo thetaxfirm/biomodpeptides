@@ -37,11 +37,27 @@ Event IDs are deterministic and imports use a parameterized `INSERT ... SELECT .
 
 Run the import after a release and from the authorized local monitoring workflow. The page exposes the last provider-sync time and coverage. It does not claim instant provider capture or continuous unattended execution merely because the command exists. If a monitoring run cannot authenticate, it should report the missing coverage rather than changing access permissions. On a machine that is asleep or offline, the local monitor cannot run.
 
-An eventual server-side integration should use a dedicated, least-privilege provider reader and a narrowly protected ingestion endpoint. Do not copy a developer's broad OAuth token into the Worker. That expansion is not part of this release.
+### Scheduled provider reader
+
+Migration `0046_provider_history_poll.sql` adds only pagination checkpoints and short leases. Apply it before deploying the scheduled reader. It does not modify customer data or rewrite existing history. The Worker keeps the existing daily retention and five-minute operational timers; a separate `7,22,37,52 * * * *` timer performs provider reads without running fulfillment, correspondence or payment jobs.
+
+Each feed claims a four-minute lease. GitHub source history reads at most one 100-row page per invocation, anchored to the first commit SHA so new commits do not shift later pages. Check polling examines the newest 20 main revisions, at most five 100-row check pages per invocation. Large histories resume from the saved page on a later timer. Cloudflare deployment, version and audit feeds each read at most one 100-row page per invocation. Completed history scans wait an hour; incomplete scans and transient failures retry after at least 15 minutes. Rate-limit headers can extend that delay up to a day. GitHub check coverage deliberately remains the recent 20 commits, not all historical checks.
+
+GitHub metadata and check runs work against the public repository without a token. `HISTORY_GITHUB_READ_TOKEN` is optional if public rate limits are insufficient. If supplied, use a repository-restricted fine-grained token with only **Contents: read** and **Checks: read**, and the provider's required Metadata read access. Do not copy the existing GitHub CLI login into the Worker. The original public recent-source REST/Atom fallback and runtime-version observations remain independent.
+
+Cloudflare requires a dedicated optional secret binding named `HISTORY_CLOUDFLARE_READ_TOKEN`. No such binding existed in the verified production configuration when this reader was prepared. The existing Wrangler login does not become a Worker credential. The current official endpoint permission lists accept **Workers Metadata Read-Only** for deployment/version metadata and **Audit Logs Read** for account audit. Restrict the token to the verified TryBiomod account; if the provider offers an individual-Worker metadata permission, narrow the Worker read to `biomod-peptides`. The API also accepts the broader read permissions **Workers Scripts Read** and **Account Settings Read** where the narrower permissions are not available. No write, D1 query, token-management, DNS edit or secret-read permission is required by this poller. Provision and verify any token through the approved provider interface; never paste it into this repository, a document, a chat or a log.
+
+Missing token, HTTP 401/403, rate limiting, malformed metadata and persistence failures are separate unavailable coverage states. A missing Cloudflare reader does not stop public GitHub polling. Cloudflare audit access previously returned HTTP 403 and remains unverified until the dedicated reader succeeds. Account-wide audit pages are filtered before storage to exact TryBiomod Worker/database resource paths or the exact `trybiomod.com` zone, and only mutations are retained. The initial audit scan covers the retained last 30 days; later scans overlap the previous completed window by an hour. Provider retention and late events outside that overlap remain explicit limits.
+
+Events, checkpoint movement and coverage updates commit atomically in D1. A stale lease cannot overwrite another run. HTTP redirects use Workerd-supported `manual` mode and are rejected by status; credentials are sent only to the fixed provider host. Response bodies are bounded and discarded after selecting allowed metadata. Automatic source records use their own immutable IDs so a later CLI import can add exact safe source paths; the history view prefers the richer imported record without deleting either record. Separate scheduled coverage rows preserve the provenance of previous CLI imports.
+
+The default successful runtime observations do not prove that credentials exist or provider polling succeeded. Verify the five scheduled coverage rows after a normal provider timer: `github_commits_scheduled`, `github_checks_scheduled`, `cloudflare_scheduled`, `cloudflare_versions_scheduled`, and `cloudflare_audit_scheduled`. A partial page scan must remain labelled partial until it traverses the available pages. Do not invoke the five-minute business cron as a history smoke test.
 
 ## Verification
 
 `node tests/change-history-import-v1.mjs` exercises the actual transformation/import code with isolated SQLite and mocked provider responses: resource boundaries, evidence URLs, attribution labels, exclusion of raw/provider secret data, idempotence, bound SQL parameters, timestamp preservation, and denied-provider coverage. Dry-run output reports only aggregate counts and coverage descriptions.
+
+`node tests/provider-history-sync-v1.cjs` exercises the scheduled implementation with isolated SQLite, fixed public metadata and fixture-only read tokens: anchored pagination, separate check transitions, missing/denied access, retry leases, atomic cursor writes, immutable duplicates, size and redirect bounds, and metadata privacy. No real provider request is made by this test.
 
 ## Source documentation
 
@@ -50,3 +66,7 @@ An eventual server-side integration should use a dedicated, least-privilege prov
 - [Cloudflare Workers Builds API](https://developers.cloudflare.com/workers/ci-cd/builds/api-reference/)
 - [Cloudflare D1 query and batch API](https://developers.cloudflare.com/api/resources/d1/subresources/database/methods/query/)
 - [GitHub commits API](https://docs.github.com/en/rest/commits/commits)
+- [GitHub check-runs API and read permissions](https://docs.github.com/en/rest/checks/runs)
+- [Cloudflare deployment metadata API permissions and pagination](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/deployments/methods/list/)
+- [Cloudflare version metadata API permissions and pagination](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/versions/methods/list/)
+- [Cloudflare audit v2 API permissions and cursor pagination](https://developers.cloudflare.com/api/resources/accounts/subresources/logs/subresources/audit/methods/list/)

@@ -33,7 +33,7 @@ const localBindingConfig = {
   } : {}),
   main: "./worker.ts",
   version_metadata: { binding: "CF_VERSION_METADATA" },
-  ...(production ? { triggers: { crons: ["0 9 * * *", "*/5 * * * *"] } } : {}),
+  ...(production ? { triggers: { crons: ["0 9 * * *", "*/5 * * * *", "7,22,37,52 * * * *"] } } : {}),
   compatibility_flags: ["nodejs_compat"],
   d1_databases: d1
     ? [

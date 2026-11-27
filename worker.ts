@@ -13,6 +13,7 @@ import { keepRequestAlive } from './lib/request-lifetime';
 import { publishOnSchedule } from './lib/shared-crm';
 import { contactList } from './lib/contacts';
 import { syncRuntimeHistory } from './lib/change-history-sync';
+import { syncProviderHistory, PROVIDER_HISTORY_CRON } from './lib/provider-history-sync';
 
 type TrafficWorkerEnvironment = CoaEnvironment;
 
@@ -22,6 +23,7 @@ export default {
   ...storefront,
   fetch: keepRequestAlive(storefront.fetch.bind(storefront)),
   async scheduled(controller: ScheduledController, env: TrafficWorkerEnvironment) {
+    if (controller.cron === PROVIDER_HISTORY_CRON) { await syncProviderHistory(env); return; }
     // Await the sweep so failure reaches the platform's scheduled-event status.
     // The helper records nonidentifying cleanup health without logging request data.
     if (controller.cron === '0 9 * * *') await cleanupTraffic(withAuditDb(env.DB, { source: 'system', actor: 'Traffic retention scheduler', actorType: 'system' }), Date.now());
