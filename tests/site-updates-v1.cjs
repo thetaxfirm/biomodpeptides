@@ -149,8 +149,8 @@ const id = n => '00000000-0000-4000-8000-' + String(n).padStart(12, '0');
   assert.match(store, /permissions: \[\.\.\.permissionsFor\(role\), \.\.\.\(siteRequests \? \['site:request'\] : \[\]\)\]/);
   assert.match(store, /role: z\.enum\(assignableRoles\)/, 'every assignable role, including Catalog, can be saved from the Team tab');
   // Admin wiring and the rules document.
-  const admin = read('components/store/admin.tsx'), team = read('components/store/team-admin.tsx');
-  assert.match(admin, /\['updates', 'Website updates'\]/); assert.match(admin, /<TabsContent value="updates">\{activeTab === 'updates' && <SiteUpdates/);
+  const admin = read('components/store/admin.tsx') + read('lib/admin-navigation.ts'), team = read('components/store/team-admin.tsx');
+  assert.match(admin, /\['updates', 'Website updates'\]/); assert.match(admin, /<TabsContent value="updates">[\s\S]{0,120}\{activeTab === 'updates' && <SiteUpdates/);
   assert.match(team, /Website updates for ' \+ member\.email/);
   const lane = read('docs/site-updates-lane-v1.md');
   for (const phrase of ['Prices, pack prices, sales', 'never followed', 'lot\n   printed on the vial label', 'requesterHasGrant', 'website-change-rule-v1.md']) assert(lane.includes(phrase), 'lane rule: ' + phrase);

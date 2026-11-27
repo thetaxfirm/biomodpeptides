@@ -205,8 +205,8 @@ const slots = () => JSON.parse(db.prepare("SELECT value FROM settings WHERE key=
   // Its own page in the side nav, under the Affiliates dropdown -- not a fold in the middle of
   // the affiliate page, which is where it started (owner, Nov 13 2026). The address stays
   // ?tab=restaurants so links already saved keep working; only the label changed.
-  const shell = fs.readFileSync(path.join(root, 'components/store/admin.tsx'), 'utf8');
-  assert.match(shell, /<TabsContent value="restaurants">\{activeTab === 'restaurants' && <RestaurantPartners\/>\}<\/TabsContent>/, 'Businesses is a page of its own');
+  const shell = fs.readFileSync(path.join(root, 'components/store/admin.tsx'), 'utf8') + fs.readFileSync(path.join(root,'lib/admin-navigation.ts'),'utf8');
+  assert.match(shell, /<TabsContent value="restaurants">[\s\S]{0,120}\{activeTab === 'restaurants' && <RestaurantPartners\/>\}/, 'Businesses is a page of its own');
   assert.match(shell, /\{ label: 'Affiliates', tabs: \['affiliates', 'restaurants'\] \}/, 'reached from the Affiliates section');
   assert.match(shell, /tab !== 'restaurants' \|\| role === 'owner'/, 'and stays the owner\'s page');
   const tab = fs.readFileSync(path.join(root, 'components/store/affiliate-program.tsx'), 'utf8');
