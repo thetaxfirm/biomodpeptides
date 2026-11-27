@@ -29,6 +29,8 @@ const DB={prepare(sql){const statement=(values=[])=>({bind:(...args)=>statement(
   assert(canonical,'a prior scheduled observation cannot reserve the richer importer identity');
   assert.equal(canonical.actor,'Fixture author');assert.match(canonical.changes,/lib\/fixture\.ts/);assert.match(canonical.changes,/Signature verified/);
   const observed=db.prepare('SELECT * FROM change_events WHERE id=?').get('github:observed-source:'+sha);assert.equal(observed.action,'source_observed');
+  const preferred=await changeHistory(DB,new URLSearchParams(),now+4500000);
+  assert(!preferred.events.some(e=>e.action==='source_observed'),'Default view prefers richer source evidence without deleting observations');
   const count=db.prepare('SELECT COUNT(*) n FROM change_events').get().n;
   await syncRuntimeHistory(env,now+7200000,request);assert.equal(db.prepare('SELECT COUNT(*) n FROM change_events').get().n,count,'later scheduled runs duplicate neither evidence record');
   console.log('PASS: scheduled source sync, metadata minimization, bounded polling, retries, executing version evidence, immutable existing history.');

@@ -52,7 +52,7 @@ const products = fs.readFileSync(path.join(root, 'components/store/admin-product
 for (const name of ['preorderPercent', 'preorderShips', 'stockQuantity', 'maxQuantity']) assert.match(products, new RegExp('name="' + name + '" readOnly=\\{limited\\}'));
 assert.match(products, /disabled=\{busy \|\| limited\} onChange=\{\(\) => status\(state\.value\)\}/);
 const admin = fs.readFileSync(path.join(root, 'components/store/admin.tsx'), 'utf8');
-assert.match(admin, /<TabsContent value="products">\{allowed\('catalog:write'\) && <AdminProducts/, 'Catalog users see the product editor, not an empty tab');
+assert.match(admin, /<TabsContent value="products">[\s\S]{0,120}\{allowed\('catalog:write'\) && <AdminProducts/, 'Catalog users see the product editor, not an empty tab');
 assert.match(admin, /limited=\{data\.role === 'catalog'\}/);
 assert.match(admin, /visibleTabs\[0\]\?\.\[0\]/, 'A role without Orders opens on its first visible tab');
 console.log('PASS: Catalog role holds catalog:write only and sees Products only; owners/managers keep it; 0034 keeps staff rows, history triggers and the owner guard; dashboard hides orders from Catalog; editor locks stock and availability.');

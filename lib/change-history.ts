@@ -65,7 +65,10 @@ export async function changeHistory(db:D1Database,params:URLSearchParams,now=Dat
     // explicit failed outcome. A current health summary below covers failed scheduler runs
     // whose generic settings-write event was recorded as a successful database write.
     const routine = "(entity_type='setting' AND entity_id IN ('auto_label_health_v1','checkout_expiry_health_v1','tracking_sweep_health_v1','payment_verify_health_v1','coa_scheduler_health_v1','checkout_recovery_health_v1','crm_sync_health_v1') AND status IN ('succeeded','observed'))";
-    if (activity === 'business') clauses.push('NOT ' + routine);
+    if (activity === 'business') {
+        clauses.push('NOT ' + routine);
+        clauses.push("NOT (action='source_observed' AND EXISTS (SELECT 1 FROM change_events rich WHERE rich.id='github:commit:' || change_events.entity_id))");
+    }
     if (activity === 'routine') clauses.push(routine);
     if(source){clauses.push('source=?');values.push(source);}
     if(q){clauses.push("(actor LIKE ? ESCAPE '\\' OR summary LIKE ? ESCAPE '\\' OR entity_id LIKE ? ESCAPE '\\' OR action LIKE ? ESCAPE '\\')");const term='%'+q.replace(/[\\%_]/g,'\\$&')+'%';values.push(term,term,term,term);}
