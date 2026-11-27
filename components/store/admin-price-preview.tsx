@@ -2,6 +2,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { money } from '@/lib/catalog';
 import type { CustomerPricePreview } from '@/lib/customer-price-preview';
+import styles from './admin-price-preview.module.css';
 type Choice = { id: number; name: string; sizes: string[] };
 export function AdminPricePreview({ products: supplied }: { products?: Choice[] }) {
     const [products, setProducts] = useState(supplied || []);
@@ -26,7 +27,7 @@ export function AdminPricePreview({ products: supplied }: { products?: Choice[] 
         } catch (e) { setError(e instanceof Error ? e.message : 'The price could not be calculated.'); } finally { setBusy(false); }
     }
     return <details className="account-record"><summary>Preview customer pricing</summary><p>Uses saved products, current offers and checkout rules. Shipping, tax and reward redemption are calculated later in checkout.</p>
-        <form className="store-form" onSubmit={preview} onChange={() => setResult(null)}><fieldset disabled={busy} style={{ minWidth: 0 }}><legend>Build a price preview</legend>
+        <form className={'store-form ' + styles.form} onSubmit={preview} onChange={() => setResult(null)}><fieldset disabled={busy} style={{ minWidth: 0 }}><legend>Build a price preview</legend>
             <label className="field">Purchase type<select value={mode} onChange={e => setMode(e.target.value)}><option value="single">Single items</option><option value="fixed">Fixed pack</option><option value="mixed">Mix-and-match pack</option></select></label>
             {mode !== 'single' && <label className="field">Pack size<select value={size} onChange={e => setSize(e.target.value)}>{[3,5,10].map(n => <option key={n}>{n}</option>)}</select></label>}
             {(mode === 'fixed' ? rows.slice(0, 1) : rows).map((row, index) => <div className="form-row" key={index}><label className="field">Product {index + 1}<select required value={row.id} onChange={e => changeRow(index, { id: e.target.value })}><option value="">Choose a product</option>{products.map(p => <option key={p.id} value={p.id}>{p.name} · {p.sizes.join(' · ')}</option>)}</select></label>{mode !== 'fixed' && <label className="field">Quantity<input required type="number" min="1" max="100" value={row.quantity} onChange={e => changeRow(index, { quantity: e.target.value })}/></label>}{index > 0 && <button type="button" className="text-button" onClick={() => { setRows(rows.filter((_, i) => i !== index)); setResult(null); }}>Remove</button>}</div>)}
