@@ -59,6 +59,14 @@ export async function changeHistory(db:D1Database,params:URLSearchParams,now=Dat
     const source=params.get('source')||'',q=(params.get('q')||'').trim();if(q.length>120)throw Error('Search is limited to 120 characters.');if(source&&!['admin','system','github','cloudflare'].includes(source))throw Error('Choose a recorded source.');
     const from=utcDay(params.get('from')),to=utcDay(params.get('to'),true);if(from!=null&&to!=null&&from>=to)throw Error('The start date must be on or before the end date.');
     const clauses:string[]=[],values:(string|number)[]=[];
+    const activity = params.get('activity') || 'business';
+    if (!['business', 'routine', 'all'].includes(activity)) throw Error('Choose business changes, routine health, or all activity.');
+    // Filter before pagination. Keep the append-only source records, and never hide an
+    // explicit failed outcome. A current health summary below covers failed scheduler runs
+    // whose generic settings-write event was recorded as a successful database write.
+    const routine = "(entity_type='setting' AND entity_id IN ('auto_label_health_v1','checkout_expiry_health_v1','tracking_sweep_health_v1','payment_verify_health_v1','coa_scheduler_health_v1','checkout_recovery_health_v1','crm_sync_health_v1') AND status IN ('succeeded','observed'))";
+    if (activity === 'business') clauses.push('NOT ' + routine);
+    if (activity === 'routine') clauses.push(routine);
     if(source){clauses.push('source=?');values.push(source);}
     if(q){clauses.push("(actor LIKE ? ESCAPE '\\' OR summary LIKE ? ESCAPE '\\' OR entity_id LIKE ? ESCAPE '\\' OR action LIKE ? ESCAPE '\\')");const term='%'+q.replace(/[\\%_]/g,'\\$&')+'%';values.push(term,term,term,term);}
     if(from!=null){clauses.push('occurred_at>=?');values.push(from);}if(to!=null){clauses.push('occurred_at<?');values.push(to);}
@@ -71,5 +79,18 @@ export async function changeHistory(db:D1Database,params:URLSearchParams,now=Dat
         const state=stale&&row.state==='active'?'partial':row?.state||(key==='system'?'partial':'unavailable');
         return {source:key,label,state,description:(row?.description||fallback)+(stale?' This source has not synced in over two hours.':''),...(row?{lastSyncedAt:row.synced_at}:{})};
     });
-    return {events:page.map(r=>({id:r.id,occurredAt:r.occurred_at,recordedAt:r.recorded_at,source:r.source,actor:r.actor,actorType:r.actor_type,action:r.action,entityType:r.entity_type,entityId:r.entity_id,summary:r.summary,status:r.status,changes:parseChanges(r.changes),...(safeEvidence(r.evidence_url||'')?{evidenceUrl:safeEvidence(r.evidence_url||'')} : {}),...(r.evidence_ref?{evidenceRef:r.evidence_ref}:{})})),nextCursor:rows.length>limit&&last?last.occurred_at+':'+last.id:null,coverage,timeZone:'UTC'};
+    const healthLabels: Record<string, string> = {auto_label_health_v1:'Automatic shipping',checkout_expiry_health_v1:'Checkout release',tracking_sweep_health_v1:'Parcel tracking',payment_verify_health_v1:'Payment verification'};
+    let automationHealth: {label:string;state:string;checkedAt:number|null;failures:number}[] | null = null;
+    try {
+        const healthRows = (await db.prepare("SELECT key,value FROM settings WHERE key IN ('auto_label_health_v1','checkout_expiry_health_v1','tracking_sweep_health_v1','payment_verify_health_v1')").all<{key:string;value:string}>()).results;
+        automationHealth = Object.entries(healthLabels).map(([key,label]) => {
+            const row = healthRows.find(r=>r.key===key); let value:Record<string,unknown>={};
+            try { const parsed=JSON.parse(row?.value||'{}'); if(parsed && typeof parsed==='object' && !Array.isArray(parsed)) value=parsed; } catch { /* unavailable is explicit */ }
+            const checkedAt=typeof value.checkedAt==='number'&&Number.isSafeInteger(value.checkedAt)&&value.checkedAt>=0?value.checkedAt:null;
+            const failures=['failed','unreachable'].reduce((n,k)=>n+(typeof value[k]==='number'&&Number.isSafeInteger(value[k])?Math.max(0,value[k] as number):0),0);
+            const state=!checkedAt?'Not recorded':now-checkedAt>30*60000?'Stale':failures>0||/unreadable|unconfigured|failed/.test(String(value.status))?'Needs attention':value.status==='disabled'?'Disabled':'Current';
+            return {label,state,checkedAt,failures};
+        });
+    } catch { /* Older deployments without settings access remain readable. */ }
+    return {activity,automationHealth,events:page.map(r=>({id:r.id,occurredAt:r.occurred_at,recordedAt:r.recorded_at,source:r.source,actor:r.actor,actorType:r.actor_type,action:r.action,entityType:r.entity_type,entityId:r.entity_id,summary:r.summary,status:r.status,changes:parseChanges(r.changes),...(safeEvidence(r.evidence_url||'')?{evidenceUrl:safeEvidence(r.evidence_url||'')} : {}),...(r.evidence_ref?{evidenceRef:r.evidence_ref}:{})})),nextCursor:rows.length>limit&&last?last.occurred_at+':'+last.id:null,coverage,timeZone:'UTC'};
 }

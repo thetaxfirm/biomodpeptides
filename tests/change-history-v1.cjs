@@ -163,6 +163,19 @@ const safe = () => { const text = JSON.stringify(sqlite.prepare('SELECT * FROM c
     let coverage = (await history.changeHistory(qdb, new URLSearchParams(), end)).coverage; assert.equal(coverage.find(c => c.source === 'github').state, 'unavailable');
     await qdb.prepare('INSERT INTO change_history_sync VALUES(?,?,?,?)').bind('github', end - 3 * 3600000, 'active', 'Imported verified commits.').run();
     coverage = (await history.changeHistory(qdb, new URLSearchParams(), end)).coverage; assert.equal(coverage.find(c => c.source === 'github').state, 'partial'); assert.match(coverage.find(c => c.source === 'github').description, /over two hours/);
+    const heartbeatTime=Date.now()+1000;
+    for (let i=0;i<60;i++) await history.recordChange(qdb,{...input('heartbeat-'+i,heartbeatTime+1+i,'system'),entityType:'setting',entityId:'auto_label_health_v1',status:'succeeded'});
+    await history.recordChange(qdb,{...input('actual-failure',heartbeatTime+100,'system'),entityType:'setting',entityId:'auto_label_health_v1',status:'failed'});
+    const business=await history.changeHistory(qdb,new URLSearchParams({limit:'2'}),end+200);
+    assert.equal(business.events[0].id,'actual-failure','Explicit failures remain in the default view');
+    assert(!business.events.some(e=>e.id.startsWith('heartbeat-')),'Routine events filtered before pagination');
+    const routine=await history.changeHistory(qdb,new URLSearchParams({activity:'routine',limit:'100'}),end+200);
+    assert.equal(routine.events.length,60);
+    assert.equal(qs.prepare("SELECT count(*) n FROM change_events WHERE id LIKE 'heartbeat-%'").get().n,60,'Filtering never deletes audit records');
+    await assert.rejects(history.changeHistory(qdb,new URLSearchParams({activity:'invalid'}),end));
+    qs.prepare('INSERT INTO settings(key,value) VALUES(?,?)').run('auto_label_health_v1',JSON.stringify({checkedAt:end,failed:1,status:'completed'}));
+    const health=(await history.changeHistory(qdb,new URLSearchParams(),end+100)).automationHealth;
+    assert.equal(health.find(h=>h.label==='Automatic shipping').state,'Needs attention','Failed scheduler counters remain visible even when the settings write succeeded');
   } finally { qs.close(); }
   console.log('PASS: real SQLite history triggers, actor isolation, atomic rollback, immutable rows, safe projections, legacy provenance, no-op suppression, wrapper attribution, and bounded date/filter/cursor queries. All fixtures isolated.');
 })().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => sqlite.close());

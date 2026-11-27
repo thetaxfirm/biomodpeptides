@@ -12,9 +12,10 @@ type ChangeEvent = {
     evidenceUrl?: string; evidenceRef?: string;
 };
 type Coverage = { source: string; label: string; state: 'active' | 'partial' | 'unavailable'; description: string; lastSyncedAt?: number };
-type ChangeReport = { events: ChangeEvent[]; nextCursor: string | null; coverage: Coverage[]; timeZone: 'UTC' };
-type Filters = { q: string; source: string; from: string; to: string };
-const emptyFilters: Filters = { q: '', source: '', from: '', to: '' };
+type Health = { label: string; state: string; checkedAt: number | null; failures: number };
+type ChangeReport = { events: ChangeEvent[]; nextCursor: string | null; coverage: Coverage[]; timeZone: 'UTC'; automationHealth?: Health[] | null };
+type Filters = { q: string; source: string; from: string; to: string; activity: string };
+const emptyFilters: Filters = { q: '', source: '', from: '', to: '', activity: '' };
 const sourceNames: Record<string, string> = { admin: 'Store administration', system: 'Automated store activity', github: 'GitHub', cloudflare: 'Cloudflare hosting' };
 const actorNames = { staff: 'Staff account', system: 'Automated action', provider: 'Provider identity', git: 'Commit author', unknown: 'Actor not verified' };
 const outcomeNames = { succeeded: 'Succeeded', failed: 'Failed', observed: 'Observed', attempted: 'Attempted' };
@@ -51,6 +52,7 @@ export function ChangeHistory() {
     const [filterError, setFilterError] = useState('');
     const [localDates, setLocalDates] = useState(false);
     const [lastLoadedAt, setLastLoadedAt] = useState<number | null>(null);
+    const [health, setHealth] = useState<Health[] | null>(null);
     useEffect(() => {
         let active = true;
         const query = new URLSearchParams({ limit: '50' });
@@ -66,6 +68,7 @@ export function ChangeHistory() {
                 return [...existing, ...incoming];
             });
             setCoverage(report.coverage);
+            setHealth(report.automationHealth ?? null);
             setNextCursor(report.nextCursor || null);
             setLoaded(true);
             setLastLoadedAt(Date.now());
@@ -91,6 +94,10 @@ export function ChangeHistory() {
     return <section className="change-history" aria-labelledby="change-history-heading">
         <div className="change-history-heading"><div><h2 id="change-history-heading">Changes</h2><p>A shared history of recorded storefront, pricing, function and hosting changes.</p></div><button type="button" className="button button-dark" disabled={loading} onClick={() => load(request.filters)}>{loading && !request.append ? 'Loading changes…' : 'Refresh changes'}</button></div>
         <p className="change-history-explanation">Each entry shows who made or reported the change, when it happened, and its recorded outcome. Coverage below explains the limits. An absent entry is not proof that nothing changed.</p>
+        <details className="change-coverage"><summary>Current automation health{health?.some(item=>['Needs attention','Stale'].includes(item.state)) ? ' · Needs attention' : ''}</summary>
+            {health ? <ul>{health.map(item=><li key={item.label}><strong>{item.label}: {item.state}</strong>{item.checkedAt && <> · <EventTime value={item.checkedAt} local={localDates}/></>}{item.failures>0 && <> · {item.failures} failed or unreachable checks</>}</li>)}</ul> : <p>Automation health is unavailable. This does not confirm the jobs are healthy.</p>}
+            <p>Routine health updates stay in the audit record. Choose Routine health below to read them; business changes and explicit failures are shown by default.</p>
+        </details>
         <details className="change-coverage">
             <summary>Source coverage{coverage.some(item => item.state !== 'active') ? ' · Some sources are incomplete' : ''}</summary>
             {coverage.length ? <ul>{coverage.map(item => <li key={item.source}><div className="change-coverage-label"><h3>{item.label}</h3><strong data-coverage={item.state}>{coverageNames[item.state]}</strong></div><p>{item.description}</p>{item.lastSyncedAt !== undefined && <p className="change-source-sync">Last source sync: <EventTime value={item.lastSyncedAt} local={localDates}/></p>}</li>)}</ul> : <p>{loading ? 'Loading coverage details…' : 'Coverage details are unavailable.'}</p>}
@@ -99,6 +106,7 @@ export function ChangeHistory() {
         <form className="change-history-filters" onSubmit={applyFilters}>
             <label className="field change-search">Search changes<input type="search" value={draft.q} maxLength={120} placeholder="Product, setting, person or revision" onChange={event => setDraft(value => ({ ...value, q: event.target.value }))}/></label>
             <label className="field">Source<select value={draft.source} onChange={event => setDraft(value => ({ ...value, source: event.target.value }))}><option value="">All sources</option>{Object.entries(sourceNames).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
+            <label className="field">Activity<select value={draft.activity} onChange={event => setDraft(value => ({ ...value, activity: event.target.value }))}><option value="">Business changes and failures</option><option value="routine">Routine health</option><option value="all">All activity</option></select></label>
             <label className="field">From (UTC)<input type="date" value={draft.from} onChange={event => setDraft(value => ({ ...value, from: event.target.value }))}/></label>
             <label className="field">Through (UTC)<input type="date" value={draft.to} onChange={event => setDraft(value => ({ ...value, to: event.target.value }))}/></label>
             <div className="change-filter-actions"><button className="button button-dark" type="submit">Apply filters</button><button type="button" className="text-button" onClick={clearFilters}>Clear filters</button></div>
