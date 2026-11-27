@@ -132,6 +132,7 @@ function fixture(processor = async () => ({ processed: 0, accepted: 0, review: 0
   f = fixture(); f.config({}); let cleanup = 0;
   const http = { fetch: () => new Response('isolated fixture') };
   const worker = load('worker.ts', {
+    './lib/change-history-sync': { syncRuntimeHistory: async()=>{} },
     './lib/checkout-recovery': { runCheckoutRecovery: async()=>({}) },
     './lib/change-history': { withAuditDb: db=>db },
     'vinext/server/fetch-handler': http,
