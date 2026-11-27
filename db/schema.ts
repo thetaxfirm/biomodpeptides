@@ -43,6 +43,29 @@ export const shoppingDaily=sqliteTable('shopping_daily',{
   check('shopping_count',sql`typeof(${t.eventCount})='integer' AND ${t.eventCount} BETWEEN 1 AND 50000`),
 ]);
 
+// Anonymous minute buckets, alongside unchanged UTC daily history (migration 0045).
+// WITHOUT ROWID is specified by the SQL migration; this Drizzle version has no table option for it.
+export const trafficMinute=sqliteTable('traffic_minute',{
+  bucket:integer('bucket').notNull(),pageGroup:text('page_group').notNull(),sourceGroup:text('source_group').notNull(),eventCount:integer('event_count').notNull(),
+},t=>[primaryKey({columns:[t.bucket,t.pageGroup,t.sourceGroup]}),
+  check('traffic_minute_bucket',sql`typeof(${t.bucket})='integer' AND ${t.bucket}>=0 AND ${t.bucket}%60000=0`),
+  check('traffic_minute_page_group',sql`${t.pageGroup} IN ('home','catalog','product','documents','guide','about','locations','contact','policy')`),
+  check('traffic_minute_source_group',sql`${t.sourceGroup} IN ('search','ai','social','external_other','internal','direct_or_unavailable')`),
+  check('traffic_minute_count',sql`typeof(${t.eventCount})='integer' AND ${t.eventCount} BETWEEN 1 AND 50000`),
+]);
+export const shoppingMinute=sqliteTable('shopping_minute',{
+  bucket:integer('bucket').notNull(),stage:text('stage').notNull(),eventCount:integer('event_count').notNull(),
+},t=>[primaryKey({columns:[t.bucket,t.stage]}),
+  check('shopping_minute_bucket',sql`typeof(${t.bucket})='integer' AND ${t.bucket}>=0 AND ${t.bucket}%60000=0`),
+  check('shopping_minute_stage',sql`${t.stage} IN ('cart_add_confirmed','cart_view','checkout_signin_view','checkout_form_view','delivery_quote_confirmed','checkout_handoff_ready')`),
+  check('shopping_minute_count',sql`typeof(${t.eventCount})='integer' AND ${t.eventCount} BETWEEN 1 AND 50000`),
+]);
+export const metricsTimeCoverage=sqliteTable('metrics_time_coverage',{
+  kind:text('kind').primaryKey().notNull(),startedAt:integer('started_at').notNull(),
+},t=>[check('metrics_time_coverage_kind',sql`${t.kind} IN ('traffic','shopping')`),
+  check('metrics_time_coverage_start',sql`typeof(${t.startedAt})='integer' AND ${t.startedAt}>=0`),
+]);
+
 // Operational COA replies and request alerts; no credentials or original PDF bytes.
 export const coaDeliveryOutbox=sqliteTable('coa_delivery_outbox',{
  id:text('id').primaryKey(),requestId:text('request_id').notNull(),purpose:text('purpose').notNull(),status:text('status').notNull(),reason:text('reason').notNull(),recipient:text('recipient'),recipientHash:text('recipient_hash'),dedupeKey:text('dedupe_key'),duplicateOf:text('duplicate_of'),documentHash:text('document_hash'),attachmentName:text('attachment_name'),productName:text('product_name'),strength:text('strength'),lot:text('lot'),reportId:text('report_id'),templateVersion:text('template_version').notNull(),sender:text('sender'),replyTo:text('reply_to'),subject:text('subject'),body:text('body'),payloadHash:text('payload_hash'),idempotencyKey:text('idempotency_key').notNull(),attempts:integer('attempts').notNull().default(0),firstAttemptAt:integer('first_attempt_at'),nextAttemptAt:integer('next_attempt_at').notNull(),leaseToken:text('lease_token'),leaseUntil:integer('lease_until'),providerId:text('provider_id'),acceptedAt:integer('accepted_at'),created:integer('created').notNull(),updated:integer('updated').notNull(),
