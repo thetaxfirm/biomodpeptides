@@ -36,13 +36,15 @@ export async function syncRuntimeHistory(env: Environment, now = Date.now(), req
     if (!response.ok) throw Error('Source unavailable');
     const rows: unknown = await response.json();
     if (!Array.isArray(rows)) throw Error('Source unavailable');
+    // These are bounded observations, distinct from the richer importer events. Reusing the
+    // importer's immutable ID would prevent it later recording author, changed paths and signatures.
     for (const row of rows) {
       if (!/^[a-f0-9]{40}$/i.test(row?.sha)) throw Error('Invalid source identity');
       const timestamp = Date.parse(row?.commit?.committer?.date);
       if (!Number.isSafeInteger(timestamp) || timestamp < 0) throw Error('Invalid source time');
       // Avoid copying commit messages, emails or raw provider payloads into operational history.
-      await recordChange(env.DB, { id: 'github:commit:' + row.sha, occurredAt: timestamp, source: 'github', actor: 'GitHub main',
-        actorType: 'provider', action: 'source_commit', entityType: 'source', entityId: row.sha,
+      await recordChange(env.DB, { id: 'github:observed-source:' + row.sha, occurredAt: timestamp, source: 'github', actor: 'GitHub main',
+        actorType: 'provider', action: 'source_observed', entityType: 'source', entityId: row.sha,
         summary: 'Source revision recorded on main.', status: 'observed',
         changes: [{ field: 'Attribution limit', before: null, after: 'See the source record for author metadata; a source revision does not prove deployment.' }],
         evidenceUrl: `https://github.com/${repository}/commit/${row.sha}`, evidenceRef: row.sha,

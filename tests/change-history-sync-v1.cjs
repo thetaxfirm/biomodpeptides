@@ -22,5 +22,14 @@ const DB={prepare(sql){const statement=(values=[])=>({bind:(...args)=>statement(
   await syncRuntimeHistory(env,now+4500000,request);assert.equal(calls,2,'Failed read retries in fifteen minutes');
   const report=await changeHistory(DB,new URLSearchParams(),now+4500000);
   assert(report.events.some(e=>e.action==='runtime_observed'));
+  const {commitEvent,insertStatement}=await import('../scripts/change-history-import-v1.mjs');
+  const imported=commitEvent({sha,commit:{committer:{date:new Date(now-1000).toISOString(),name:'Fixture committer'},author:{name:'Fixture author'},verification:{verified:true}}},['lib/fixture.ts'],now);
+  const statement=insertStatement(imported);db.prepare(statement.sql).run(...statement.params);
+  const canonical=db.prepare('SELECT * FROM change_events WHERE id=?').get('github:commit:'+sha);
+  assert(canonical,'a prior scheduled observation cannot reserve the richer importer identity');
+  assert.equal(canonical.actor,'Fixture author');assert.match(canonical.changes,/lib\/fixture\.ts/);assert.match(canonical.changes,/Signature verified/);
+  const observed=db.prepare('SELECT * FROM change_events WHERE id=?').get('github:observed-source:'+sha);assert.equal(observed.action,'source_observed');
+  const count=db.prepare('SELECT COUNT(*) n FROM change_events').get().n;
+  await syncRuntimeHistory(env,now+7200000,request);assert.equal(db.prepare('SELECT COUNT(*) n FROM change_events').get().n,count,'later scheduled runs duplicate neither evidence record');
   console.log('PASS: scheduled source sync, metadata minimization, bounded polling, retries, executing version evidence, immutable existing history.');
 })().catch(e=>{console.error(e);process.exitCode=1;}).finally(()=>db.close());
