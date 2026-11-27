@@ -15,28 +15,31 @@ async function call(body?: unknown) {
         headers: body ? { 'Content-Type': 'application/json' } : undefined,
         body: body ? JSON.stringify(body) : undefined,
     });
-    const data = await response.json().catch(() => ({})) as { slots?: PartnerSlot[]; message?: string; error?: string };
+    const data = await response.json().catch(() => ({})) as { slots?: PartnerSlot[]; version?: string; message?: string; error?: string };
     if (!response.ok) throw new Error(data.error || 'Request failed.');
     return data;
 }
 
 export function RestaurantPartners() {
     const [slots, setSlots] = useState<PartnerSlot[] | null>(null);
-    const [draft, setDraft] = useState<Record<number, { name: string; percentOff: string }>>({});
+    const [draft, setDraft] = useState<Record<number, { name: string; percentOff: string; version: string }>>({});
+    const [version, setVersion] = useState('');
+    const [reload, setReload] = useState(0);
     const [busy, setBusy] = useState(0);
     const [error, setError] = useState('');
 
     useEffect(() => {
         let live = true;
-        call().then(d => { if (live) { setSlots(d.slots || []); setDraft({}); } }).catch(e => { if (live) setError(e.message); });
+        call().then(d => { if (live) { setSlots(d.slots || []); setVersion(d.version || ''); setDraft({}); setError(''); } }).catch(e => { if (live) setError(e.message); });
         return () => { live = false; };
-    }, []);
+    }, [reload]);
 
     async function send(body: Record<string, unknown>, slot: number) {
+        if (busy) return;
         setBusy(slot); setError('');
         try {
-            const d = await call(body);
-            setSlots(d.slots || []);
+            const d = await call({ ...body, version: draft[slot]?.version || version });
+            setSlots(d.slots || []); setVersion(d.version || '');
             setDraft(current => { const next = { ...current }; delete next[slot]; return next; });
             toast.success(d.message || 'Saved.');
         }
@@ -44,7 +47,7 @@ export function RestaurantPartners() {
         finally { setBusy(0); }
     }
 
-    if (error && !slots) return <p className="notice">{error}</p>;
+    if (error && !slots) return <p className="notice" role="alert">{error} <button onClick={() => setReload(v => v + 1)}>Retry</button></p>;
     if (!slots) return <p>Loading business slots…</p>;
 
     const filled = slots.filter(s => s.name).length;
@@ -53,15 +56,15 @@ export function RestaurantPartners() {
     return <section aria-label="Business partners">
         <p>{filled} of {PARTNER_SLOTS} slots filled · {live} live. Works for any business &mdash; restaurant, med spa, clinic, gym. Type its name and the slot writes its own link and discount code. Nothing is discounted until you switch a slot on.</p>
         <p className="notice">A link only gives a business credit once that business is an approved affiliate with an accepted agreement and schedule. Until then the link still applies the discount, but the sale is credited to nobody.</p>
-        {error && <p className="notice">{error}</p>}
+        {error && <p className="notice" role="alert">{error} <button className="text-button" disabled={Boolean(busy)} onClick={() => setReload(v => v + 1)}>Reload slots and discard local edits</button></p>}
         {slots.map(slot => {
-            const edit = draft[slot.slot] ?? { name: slot.name, percentOff: slot.percentOff ? String(slot.percentOff) : '' };
+            const edit = draft[slot.slot] ?? { name: slot.name, percentOff: slot.percentOff ? String(slot.percentOff) : '', version };
             const changed = edit.name !== slot.name || edit.percentOff !== (slot.percentOff ? String(slot.percentOff) : '');
             // Shown before saving so the owner sees what the name will produce. The discount is part
             // of the code, so typing a percentage changes the preview as well as the price.
             const previewCode = edit.name ? codeFromName(edit.name, slot.slot, Number(edit.percentOff) || 0) : '';
             const previewSlug = slugFromCode(previewCode);
-            const working = busy === slot.slot;
+            const working = busy !== 0;
             const set = (patch: Partial<typeof edit>) => setDraft(c => ({ ...c, [slot.slot]: { ...edit, ...patch } }));
             return <article className="account-record" key={slot.slot}>
                 <h4>Slot {slot.slot}{slot.name ? ' · ' + slot.name : ' · empty'}{slot.active ? ' · LIVE' : ''}</h4>

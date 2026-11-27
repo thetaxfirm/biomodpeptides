@@ -43,7 +43,7 @@ m.require = id => stubs[id] || (id.startsWith('@/lib/') ? loadReal('lib/' + id.s
 m._compile(ts.transpileModule(fs.readFileSync(filename, 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText, filename);
 
 const request = (body, origin = 'https://trybiomod.com') => { const r = new Request('https://trybiomod.com/api/admin/restaurant-partners', { method: 'POST', headers: { origin, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); r.nextUrl = new URL(r.url); return r; };
-const post = async (body, origin) => { const res = await m.exports.POST(request(body, origin)); return { status: res.status, body: await res.json() }; };
+const post = async (body, origin) => { const value=db.prepare("SELECT value FROM settings WHERE key='restaurant_partners_v1'").get()?.value??null;body={version:require('node:crypto').createHash('sha256').update(value===null?'missing':'value:'+value).digest('hex'),...body};const res = await m.exports.POST(request(body, origin)); return { status: res.status, body: await res.json() }; };
 const promos = () => JSON.parse(db.prepare("SELECT value FROM settings WHERE key='promo_codes_v1'").get()?.value || '[]');
 const slots = () => JSON.parse(db.prepare("SELECT value FROM settings WHERE key='restaurant_partners_v1'").get()?.value || '[]');
 
@@ -66,12 +66,14 @@ const slots = () => JSON.parse(db.prepare("SELECT value FROM settings WHERE key=
   assert.equal(slots().length, 20, 'all twenty slots are stored');
 
   // Switching it on is what creates the discount.
+  const staleVersion=r.body.version;
   r = await post({ slot: 3, active: true });
   assert.equal(r.status, 200);
   assert.match(r.body.message, /live at 12% off/); assert.match(r.body.message, /trybiomod\.com\/mariospizza12/);
   assert.deepEqual(r.body.live, ['MARIOSPIZZA12']);
   assert.deepEqual(promos().map(p => [p.code, p.percentOff, p.active]), [['MARIOSPIZZA12', 12, true]]);
   assert.equal(promos()[0].by, 'logan@example.invalid');
+  const stale=await post({slot:3,percentOff:40,version:staleVersion});assert.equal(stale.status,409,'a completed competing edit invalidates the old form');assert.equal(promos()[0].percentOff,12);
 
   // A name the storefront already serves is refused outright, rather than yielding a dead link.
   const clash = await post({ slot: 7, name: 'Shop' });
@@ -101,6 +103,10 @@ const slots = () => JSON.parse(db.prepare("SELECT value FROM settings WHERE key=
   assert.equal(promos().find(p => p.code === 'VIXEN15').active, true, 'an unrelated code keeps working');
   assert.equal(promos().find(p => p.code === 'KEGANDGRILL10').percentOff, 10);
 
+  const prior=JSON.stringify(slots());
+  r=await post({slot:6,name:'Unversioned edit',version:null});assert.equal(r.status,409);assert.equal(JSON.stringify(slots()),prior);
+  r=await post({slot:6,name:'Claim old code',code:'MARIOSPIZZA12',percentOff:12});assert.equal(r.status,409,'another slot cannot claim a retired code');
+
   // Switching a slot off takes its code down with it.
   r = await post({ slot: 5, active: false });
   assert.equal(r.status, 200); assert.deepEqual(r.body.retired, ['KEGANDGRILL10']);
@@ -118,8 +124,8 @@ const slots = () => JSON.parse(db.prepare("SELECT value FROM settings WHERE key=
   assert(events.some(e => /is on at 12% with code MARIOSPIZZA12/.test(e.summary)));
 
   // A slot changed underneath the page loses the race rather than clobbering it.
-  const stale = slots();
-  db.prepare("UPDATE settings SET value=? WHERE key='restaurant_partners_v1'").run(JSON.stringify(stale.map(s => s.slot === 9 ? { ...s, name: 'Someone Else' } : s)));
+  const beforeConcurrent = slots();
+  db.prepare("UPDATE settings SET value=? WHERE key='restaurant_partners_v1'").run(JSON.stringify(beforeConcurrent.map(s => s.slot === 9 ? { ...s, name: 'Someone Else' } : s)));
   // The route re-reads, so a concurrent edit to a DIFFERENT slot is preserved, not overwritten.
   r = await post({ slot: 10, name: 'Tenth Place', percentOff: 5 });
   assert.equal(r.status, 200);

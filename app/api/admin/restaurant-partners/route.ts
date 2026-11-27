@@ -15,12 +15,12 @@ const j = (value: unknown, status = 200) => NextResponse.json(value, { status, h
 /** The twenty business slots. Filling one in names a link and a code; the switch decides whether
  * it prices anything. Kept apart from the general promo code list on purpose (owner, Nov 13 2026). */
 export async function GET() {
+    try { await requireStaff('store:write'); } catch { return j({ error: 'Administrator sign-in required.' }, 403); }
     try {
-        await requireStaff('store:write');
-        const { rows } = await readPartners(runtime().DB);
-        return j({ slots: rows, maxPercentOff: MAX_PERCENT_OFF, total: PARTNER_SLOTS });
+        const snapshot = await settingsSnapshot(runtime().DB, BUSINESS_PARTNERS_KEY);
+        return j({ slots: parsePartners(snapshot.value), version: snapshot.version, maxPercentOff: MAX_PERCENT_OFF, total: PARTNER_SLOTS });
     }
-    catch { return j({ error: 'Administrator sign-in required.' }, 403); }
+    catch { return j({ error: 'Business settings could not load. Please retry.' }, 503); }
 }
 
 export async function POST(req: NextRequest) {
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     try {
         const env = runtime();
         const context = { source: 'admin' as const, actor: actor.email, actorType: 'staff' as const };
-        const body = await req.json().catch(() => ({})) as { slot?: unknown; name?: unknown; slug?: unknown; code?: unknown; percentOff?: unknown; active?: unknown; clear?: unknown };
+        const body = await req.json().catch(() => ({})) as { slot?: unknown; name?: unknown; slug?: unknown; code?: unknown; percentOff?: unknown; active?: unknown; clear?: unknown; version?: unknown };
 
         const slot = Number(body.slot);
         if (!Number.isInteger(slot) || slot < 1 || slot > PARTNER_SLOTS)
@@ -40,7 +40,8 @@ export async function POST(req: NextRequest) {
 
         // Read, change, write back only if the row is byte-for-byte what was read. Two people
         // filling slots at once would otherwise silently drop one of the two businesses.
-        const [partnerSnapshot, promoSnapshot] = await Promise.all([settingsSnapshot(env.DB, BUSINESS_PARTNERS_KEY), settingsSnapshot(env.DB, PROMO_CODES_KEY)]);
+        if (typeof body.version !== 'string') throw new SettingsConflict();
+        const [partnerSnapshot, promoSnapshot] = await Promise.all([settingsSnapshot(env.DB, BUSINESS_PARTNERS_KEY, body.version), settingsSnapshot(env.DB, PROMO_CODES_KEY)]);
         const current = parsePartners(partnerSnapshot.value);
         const promoRows = normalizeStoredPromos(JSON.parse(promoSnapshot.value || '[]'));
         const existing = current[slot - 1];
@@ -75,14 +76,14 @@ export async function POST(req: NextRequest) {
         if (saved.name && !saved.code)
             return j({ error: 'That name matches a built-in store code. Edit the code for this slot so it is different.' }, 409);
 
-        const existingCodes = new Set(current.flatMap(row => [row.code, ...row.previous]));
+        const existingCodes = new Set([existing.code, ...existing.previous]);
         if (saved.code && !existingCodes.has(saved.code)) {
             const managed = (await promoOwners(env.DB))[saved.code];
             if (managed || promoRows.some(row => row.code === saved.code)) return j({ error: 'This code already belongs to another promotion or affiliate. Choose a different business name.' }, 409);
         }
         const sync = partnerPromoChanges(next, promoRows, actor.email);
         // Slot state and checkout pricing either both save or neither does.
-        await saveRawSettingsSnapshots(env.DB, [
+        const [version] = await saveRawSettingsSnapshots(env.DB, [
             { before: partnerSnapshot, value: JSON.stringify(next) },
             { before: promoSnapshot, value: JSON.stringify(sync.rows) },
         ], context);
@@ -97,7 +98,7 @@ export async function POST(req: NextRequest) {
         } catch { /* the slot is saved; a missing history row must not suggest otherwise */ }
 
         return j({
-            slots: next, live: sync.live, retired: sync.retired,
+            slots: next, version, live: sync.live, retired: sync.retired,
             message: body.clear === true ? 'Slot ' + slot + ' cleared. Its code is switched off and kept in the promo list.'
                 : saved.active ? saved.name + ' is live at ' + saved.percentOff + '% off. Link: trybiomod.com/' + saved.slug + ' · code ' + saved.code
                 : 'Saved. ' + (saved.name || 'Slot ' + slot) + ' is switched off, so nothing is discounted yet.',

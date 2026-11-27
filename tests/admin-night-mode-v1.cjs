@@ -81,7 +81,7 @@ const settings = admin.slice(admin.indexOf('<TabsContent value="settings">'));
 const control = settings.indexOf('role="switch"'), form = settings.indexOf('<form');
 assert(control >= 0 && form >= 0 && control < form, 'the switch is outside the settings form');
 assert.match(admin, /aria-checked=\{night === 'dark'\}/, 'and reports its state to assistive technology');
-assert.match(admin, /onSubmit=\{e => submit\(e, 'config', d => \(\{ \.\.\.flags, packDiscounts/, 'the settings save is unchanged');
+assert.match(admin, /onSubmit=\{e => submit\(e, 'config', d => \(\{ \.\.\.flags, expectedVersion: data\.settingsVersion, packDiscounts/, 'the settings save keeps its draft payload and version guard');
 assert.doesNotMatch(admin, /'config'[^)]*night/, 'and never carries the preference');
 // Read once on open, applied immediately, so the choice survives a reload.
 assert.match(admin, /useEffect\(\(\) => \{ const saved = readTheme\(\); setNight\(saved\); applyTheme\(saved\); \}, \[\]\)/);

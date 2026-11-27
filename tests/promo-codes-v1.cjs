@@ -89,11 +89,11 @@ assert.equal(KEY,'promo_codes_v1');
   await assert.rejects(codes.storedPromotions({prepare(){throw Error('down');}}), /down/);
 
   // --- The real endpoint. ---
-  const history=[];
+  const history=[]; let routeDb;
   // `raceWith` lands a competing save in the row after the route has read it and before it writes,
   // which is the only way to exercise the compare-and-set from outside.
   function routeFor(db,{email='owner@example.invalid',allow=true,raceWith=null,role='manager'}={}){
-    const responses=[];let raced=false;
+    routeDb=db; const responses=[];let raced=false;
     overrides={
       'next/server':{NextResponse:{json:(value,init)=>({status:init?.status||200,async json(){return value;}})}},
       '@/lib/auth':{requireStaff:async scope=>{if(!allow)throw Error('denied');responses.push(scope);return{email,role};}},
@@ -108,7 +108,7 @@ assert.equal(KEY,'promo_codes_v1');
     };
     try{return{...load('app/api/admin/promo-codes/route.ts'),scopes:responses};}finally{overrides={};}
   }
-  const request=body=>({headers:{get:()=>'https://trybiomod.com'},nextUrl:{origin:'https://trybiomod.com'},async json(){return body;}});
+  const request=body=>({headers:{get:()=>'https://trybiomod.com'},nextUrl:{origin:'https://trybiomod.com'},async json(){const key=codes.builtInCodes().includes(String(body.code).toUpperCase())?codes.BUILTIN_PROMO_OVERRIDES_KEY:KEY;const value=routeDb.raw?.prepare('SELECT value FROM settings WHERE key=?').get(key)?.value??null;return {version:require('node:crypto').createHash('sha256').update(value===null?'missing':'value:'+value).digest('hex'),...body};}});
 
   db=database();
   let route=routeFor(db);
@@ -133,6 +133,7 @@ assert.equal(KEY,'promo_codes_v1');
   const afterClash=await codes.storedPromotions(db);
   assert.equal(promos.promotion('BM10',afterClash).percentOff,10,'and BM10 is untouched');
 
+  res=await routeFor(db).POST(request({code:'SPRING15',percentOff:40,version:null}));assert.equal(res.status,409,'unversioned editors must refresh');
   // Bounds and shape are refused with a sentence, and nothing is written.
   for(const [body,status] of [[{code:'AB',percentOff:10},400],[{code:'SPRING16',percentOff:0},400],[{code:'SPRING16',percentOff:91},400],[{code:'SPRING16',percentOff:'lots'},400]]){
     res=await routeFor(db).POST(request(body));

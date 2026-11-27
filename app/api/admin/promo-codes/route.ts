@@ -33,6 +33,7 @@ export async function POST(req: NextRequest) {
         const context = { source: 'admin' as const, actor: actor.email, actorType: 'staff' as const };
         const body = await req.json().catch(() => ({})) as { code?: unknown; percentOff?: unknown; active?: unknown; remove?: unknown; expiresAt?: unknown; reason?: unknown; version?: unknown };
 
+        if (typeof body.version !== 'string') throw new SettingsConflict();
         const code = cleanPromoCode(body.code);
         if (!code) return j({ error: 'A code is 3 to 40 letters and digits, no spaces or punctuation.' }, 400);
         const managed = (await promoOwners(env.DB))[code];
